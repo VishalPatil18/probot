@@ -116,4 +116,24 @@ This includes avoiding paid APIs, paid database tiers, premium cloud storage, or
 
 ---
 
+## 9. Prompt History Logging
+
+> Every user prompt must be recorded — no exceptions.
+
+Starting from Stage 1 of the main task execution, before doing any other work in response to a user message:
+
+- **Append** the user's verbatim prompt to [`./claude/prompts.md`](./claude/prompts.md).
+- Use the format defined at the top of that file:
+  ```
+  ## [YYYY-MM-DD HH:MM] — Stage <N>: <short label>
+  <verbatim user prompt>
+  ```
+- Do **not** paraphrase, summarize, or redact the prompt. Copy it exactly.
+- Do **not** skip logging for "small" or "trivial" prompts. Every prompt is logged.
+- If the stage number is ambiguous, infer it from `./claude/plan.md` or ask.
+
+This log is the canonical record of the build conversation and must stay complete and in order.
+
+---
+
 These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, clarifying questions come before implementation rather than after mistakes, and the user understands the codebase and RAG/GenAI concepts hands-on without unexpected costs.
