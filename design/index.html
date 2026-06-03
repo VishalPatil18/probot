@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProBot — Your AI Digital Recruiter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { 'brand':'oklch(0.55 0.193 251.78)','brand-light':'oklch(0.62 0.17 248)','brand-deep':'oklch(0.40 0.13 258)','ink':'oklch(0.19 0.02 261)','muted':'oklch(0.46 0.02 262)','bg-app':'oklch(0.985 0.004 264)','border-base':'oklch(0.90 0.008 264)','success':'oklch(0.62 0.16 150)' },
+  fontFamily: { 'display':['Bricolage Grotesque','sans-serif'], 'sans':['Inter Tight','sans-serif'] },
+}}}
+</script>
+<link rel="stylesheet" href="assets/probot.css">
+<style>/* icon-flash-guard */ .material-symbols-outlined{font-size:0 !important;line-height:0;color:transparent;}</style>
+</head>
+<body class="font-sans bg-bg-app text-ink">
+
+<!-- ============ HEADER ============ -->
+<header class="sticky top-0 z-50 w-full bg-bg-app/85 backdrop-blur-md border-b border-border-base">
+  <div class="mx-auto max-w-[1180px] h-16 px-6 flex items-center gap-8">
+    <a href="index.html" class="flex items-center gap-2.5 shrink-0">
+      <svg width="30" height="30" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="16" fill="oklch(0.55 0.193 251.78)"/><circle cx="20" cy="20" r="16" fill="url(#nav-orb)"/><circle cx="14" cy="20" r="3.4" fill="#fff"/><circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65"/><defs><radialGradient id="nav-orb" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#fff" stop-opacity="0.35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs></svg>
+      <span class="font-display text-xl font-extrabold tracking-tight">ProBot</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-1 text-sm font-medium">
+      <a href="#how" class="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors">How it works</a>
+      <a href="#features" class="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors">Features</a>
+      <a href="#opensource" class="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors">Open source</a>
+      <a href="docs.html" class="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors">Docs</a>
+      <a href="chat.html" class="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors">Live demo</a>
+    </nav>
+    <div class="hidden md:flex items-center gap-2 ml-auto">
+      <a href="#" class="btn btn-secondary"><span class="material-symbols-outlined !text-lg">code</span>Star on GitHub <span class="text-muted font-normal">2.4k</span></a>
+      <a href="login.html" class="btn btn-ghost">Log in</a>
+      <a href="bot-factory.html" class="btn btn-primary">Create your bot</a>
+    </div>
+    <button id="mtrig" class="md:hidden ml-auto size-9 grid place-items-center rounded-lg border border-border-base"><span class="material-symbols-outlined !text-xl">menu</span></button>
+  </div>
+  <div id="mmenu" class="hidden md:hidden border-t border-border-base bg-bg-app px-6 py-4 flex-col gap-1">
+    <a href="#how" class="py-2 font-medium">How it works</a>
+    <a href="#features" class="py-2 font-medium">Features</a>
+    <a href="#opensource" class="py-2 font-medium">Open source</a>
+    <a href="docs.html" class="py-2 font-medium">Docs</a>
+    <a href="chat.html" class="py-2 font-medium">Live demo</a>
+    <div class="flex gap-2 mt-3"><a href="login.html" class="btn btn-secondary flex-1">Log in</a><a href="bot-factory.html" class="btn btn-primary flex-1">Create bot</a></div>
+  </div>
+</header>
+
+<main>
+<!-- ============ HERO ============ -->
+<section class="dot-pattern border-b border-border-base">
+  <div class="mx-auto max-w-[1180px] px-6 py-16 lg:py-24 grid lg:grid-cols-2 gap-12 items-center">
+    <div class="flex flex-col gap-6 rise">
+      <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-brand text-xs font-bold w-fit border border-blue-100">
+        <span class="size-1.5 rounded-full bg-brand"></span> Open source · Bring your own API key
+      </span>
+      <h1 class="font-display text-5xl lg:text-[64px] font-extrabold tracking-tight leading-[1.02] text-balance">Don't just send a resume. Send a representative.</h1>
+      <p class="text-muted text-lg leading-relaxed max-w-md">ProBot turns your resume, LinkedIn, and portfolio into a personal AI chatbot that answers recruiters' questions — powered by <strong class="text-ink">your own LLM</strong> (Claude, Gemini, DeepSeek &amp; more), with keys stored locally.</p>
+      <div class="flex flex-wrap gap-3">
+        <a href="bot-factory.html" class="btn btn-primary !px-6 !py-3 !text-base">Create your bot in 2 min<span class="material-symbols-outlined !text-lg">arrow_forward</span></a>
+        <a href="chat.html" class="btn btn-secondary !px-6 !py-3 !text-base"><span class="material-symbols-outlined !text-lg">play_circle</span>See a live demo</a>
+      </div>
+      <div class="flex items-center gap-6 pt-2 text-sm text-muted">
+        <span class="flex items-center gap-1.5"><span class="material-symbols-outlined !text-base text-success">check_circle</span>100% open source</span>
+        <span class="flex items-center gap-1.5"><span class="material-symbols-outlined !text-base text-success">check_circle</span>Your keys stay local</span>
+      </div>
+    </div>
+
+    <!-- Live bot card -->
+    <div class="relative rise" style="animation-delay:.1s">
+      <div class="absolute -inset-4 bg-brand/5 rounded-[2rem] blur-2xl"></div>
+      <div class="relative bg-white rounded-2xl border border-border-base shadow-floating overflow-hidden">
+        <div class="flex items-center gap-3 px-5 py-4 border-b border-border-base">
+          <div class="size-10 rounded-full brand-blue-gradient grid place-items-center text-white shrink-0"><span class="material-symbols-outlined !text-xl">smart_toy</span></div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-bold leading-tight">Vishal's AI Recruiter</p>
+            <p class="text-[11px] text-success font-semibold flex items-center gap-1"><span class="size-1.5 rounded-full bg-success"></span>Online now · usually replies instantly</p>
+          </div>
+          <span class="text-[10px] font-mono text-muted">probot.com/u/vishal</span>
+        </div>
+        <div class="px-5 py-5 space-y-3 bg-bg-app/40">
+          <div class="bubble-bot px-3.5 py-2.5 text-sm w-fit max-w-[85%]">What's Vishal's experience with AI and RAG?</div>
+          <div class="bubble-user px-3.5 py-2.5 text-sm w-fit max-w-[88%] ml-auto">He's an AI Software Engineer Intern at UMD building production RAG chatbots with LangChain &amp; Pinecone, and shipped an ML phishing detector at <strong>96% accuracy</strong>. 🎯</div>
+          <div class="bubble-bot px-3.5 py-2.5 text-sm w-fit max-w-[85%]">Is he authorized to work in the US?</div>
+          <div class="flex items-center gap-1.5 px-1"><div class="typing"><span></span><span></span><span></span></div><span class="text-[11px] text-muted">ProBot is typing…</span></div>
+        </div>
+        <div class="px-5 py-4 border-t border-border-base">
+          <div class="flex items-center gap-2 border border-border-base rounded-xl px-3.5 py-2.5 bg-white">
+            <span class="text-sm text-muted flex-1">Ask anything about Vishal…</span>
+            <button class="size-7 grid place-items-center rounded-lg brand-blue-gradient text-white"><span class="material-symbols-outlined !text-base">arrow_upward</span></button>
+          </div>
+          <p class="text-[10px] text-muted text-center mt-2">Powered by your own LLM key · <span class="text-brand font-semibold">stored locally</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRUST STRIP ============ -->
+<section class="border-b border-border-base bg-white">
+  <div class="mx-auto max-w-[1180px] px-6 py-8 grid grid-cols-2 md:grid-cols-4 divide-x divide-border-base">
+    <div class="px-4 text-center"><p class="font-display text-3xl font-extrabold">2 min</p><p class="text-xs text-muted mt-1">From resume to live bot</p></div>
+    <div class="px-4 text-center"><p class="font-display text-3xl font-extrabold">Any LLM</p><p class="text-xs text-muted mt-1">Claude, Gemini, DeepSeek…</p></div>
+    <div class="px-4 text-center"><p class="font-display text-3xl font-extrabold">$0</p><p class="text-xs text-muted mt-1">Free &amp; self-hostable</p></div>
+    <div class="px-4 text-center"><p class="font-display text-3xl font-extrabold">100%</p><p class="text-xs text-muted mt-1">Local key storage</p></div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section id="how" class="border-b border-border-base">
+  <div class="mx-auto max-w-[1180px] px-6 py-20">
+    <div class="max-w-2xl mb-14">
+      <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-3">How it works</p>
+      <h2 class="font-display text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.05]">Live in three steps. No code required.</h2>
+    </div>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="bg-white rounded-2xl border border-border-base p-7 shadow-soft">
+        <div class="flex items-center justify-between mb-5"><div class="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand"><span class="material-symbols-outlined">upload_file</span></div><span class="font-display text-5xl font-extrabold text-border-base">01</span></div>
+        <h3 class="font-display text-xl font-bold mb-2">Upload your career data</h3>
+        <p class="text-sm text-muted leading-relaxed">Drop in your resume PDF, paste your LinkedIn URL, or type a bio. Up to 5 files, any combination.</p>
+      </div>
+      <div class="bg-white rounded-2xl border border-border-base p-7 shadow-soft">
+        <div class="flex items-center justify-between mb-5"><div class="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand"><span class="material-symbols-outlined">network_intelligence</span></div><span class="font-display text-5xl font-extrabold text-border-base">02</span></div>
+        <h3 class="font-display text-xl font-bold mb-2">Plug in your own LLM</h3>
+        <p class="text-sm text-muted leading-relaxed">Add your API key for Claude, Gemini, DeepSeek, or any supported model. ProBot indexes your data into a private vector store — your key stays on your machine.</p>
+      </div>
+      <div class="bg-white rounded-2xl border border-border-base p-7 shadow-soft">
+        <div class="flex items-center justify-between mb-5"><div class="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand"><span class="material-symbols-outlined">share</span></div><span class="font-display text-5xl font-extrabold text-border-base">03</span></div>
+        <h3 class="font-display text-xl font-bold mb-2">Share a link or embed it</h3>
+        <p class="text-sm text-muted leading-relaxed">Get a personal URL and a one-line widget snippet for your portfolio, email signature, or LinkedIn.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES (BENTO) ============ -->
+<section id="features" class="dot-pattern border-b border-border-base">
+  <div class="mx-auto max-w-[1180px] px-6 py-20">
+    <div class="max-w-2xl mb-14">
+      <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-3">Features</p>
+      <h2 class="font-display text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.05]">Everything your bot needs to land you the interview.</h2>
+    </div>
+    <div class="grid md:grid-cols-12 gap-6">
+      <!-- big: RAG -->
+      <div class="md:col-span-7 bg-white rounded-2xl border border-border-base overflow-hidden shadow-soft flex flex-col">
+        <div class="p-8 pb-0">
+          <div class="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4"><span class="material-symbols-outlined">manage_search</span></div>
+          <h3 class="font-display text-2xl font-bold mb-2">RAG-powered, never made-up</h3>
+          <p class="text-sm text-muted leading-relaxed max-w-md">Each question is embedded and matched against the top-3 most relevant chunks of your data. If it's not in your history, the bot says so and points to you directly.</p>
+        </div>
+        <div class="mt-6 mx-8 mb-8 rounded-xl border border-border-base bg-bg-app/50 p-4 font-mono text-[11px] space-y-1.5">
+          <p class="text-muted">// recruiter: "Has he led a team?"</p>
+          <p class="text-brand">→ retrieve top-3 chunks · namespace: vishal</p>
+          <p class="text-ink">matched: positions_of_responsibility (0.91)</p>
+          <p class="text-success">"Yes — GDSC Lead &amp; Community of Coders core team…"</p>
+        </div>
+      </div>
+      <!-- security -->
+      <div class="md:col-span-5 brand-deep-gradient dot-pattern-light rounded-2xl border border-brand-deep/30 overflow-hidden text-white p-8 flex flex-col">
+        <div class="size-11 rounded-xl bg-white/10 grid place-items-center mb-4 border border-white/10"><span class="material-symbols-outlined">shield_lock</span></div>
+        <h3 class="font-display text-2xl font-bold mb-2">Security-hardened by default</h3>
+        <p class="text-sm text-white/60 leading-relaxed mb-6">Inherits a battle-tested defense stack: 40+ prompt-injection patterns, unicode homoglyph normalization, output sanitization, and per-bot rate limiting. Your LLM key never leaves your machine.</p>
+        <div class="mt-auto grid grid-cols-2 gap-2 text-[11px]">
+          <span class="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10">Identity lock</span>
+          <span class="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10">Prompt protection</span>
+          <span class="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10">Output scanning</span>
+          <span class="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10">Rate limiting</span>
+        </div>
+      </div>
+      <!-- widget -->
+      <div class="md:col-span-4 bg-white rounded-2xl border border-border-base p-8 shadow-soft">
+        <div class="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4"><span class="material-symbols-outlined">code</span></div>
+        <h3 class="font-display text-xl font-bold mb-2">One-line embed widget</h3>
+        <p class="text-sm text-muted leading-relaxed mb-4">Drop a floating chat bubble on any site. Shadow-DOM isolated, &lt;50KB, zero CSS conflicts.</p>
+        <code class="block text-[10px] bg-ink text-blue-200 rounded-lg p-3 font-mono break-all">&lt;script src="probot.com/widget.js" data-bot-id="…"&gt;&lt;/script&gt;</code>
+      </div>
+      <!-- leads -->
+      <div class="md:col-span-4 bg-white rounded-2xl border border-border-base p-8 shadow-soft">
+        <div class="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4"><span class="material-symbols-outlined">contact_mail</span></div>
+        <h3 class="font-display text-xl font-bold mb-2">Automatic lead capture</h3>
+        <p class="text-sm text-muted leading-relaxed">After a few messages, the bot politely asks recruiters for their email — and notifies you, with full context.</p>
+      </div>
+      <!-- model / BYO key -->
+      <div class="md:col-span-4 bg-white rounded-2xl border border-border-base p-8 shadow-soft">
+        <div class="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4"><span class="material-symbols-outlined">hub</span></div>
+        <h3 class="font-display text-xl font-bold mb-2">Bring your own model</h3>
+        <p class="text-sm text-muted leading-relaxed mb-4">Pick Claude Opus, Haiku, Gemini, DeepSeek, GPT — whatever you prefer. Your API key is stored locally and <strong class="text-ink">never tracked by ProBot</strong>.</p>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="px-2 py-1 rounded-md bg-neutral-100 text-[11px] font-semibold">Claude</span>
+          <span class="px-2 py-1 rounded-md bg-neutral-100 text-[11px] font-semibold">Gemini</span>
+          <span class="px-2 py-1 rounded-md bg-neutral-100 text-[11px] font-semibold">DeepSeek</span>
+          <span class="px-2 py-1 rounded-md bg-neutral-100 text-[11px] font-semibold">GPT</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ OPEN SOURCE ============ -->
+<section id="opensource" class="border-b border-border-base">
+  <div class="mx-auto max-w-[1180px] px-6 py-20">
+    <div class="grid lg:grid-cols-2 gap-12 items-center">
+      <div>
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-3">Open source</p>
+        <h2 class="font-display text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.05] mb-4">Free forever. Yours to run.</h2>
+        <p class="text-muted leading-relaxed mb-6 max-w-md">ProBot is fully open source. Use the hosted version for free, or self-host the whole stack on your own infrastructure. No paywalls, no usage meters — you bring the LLM key, you stay in control.</p>
+        <ul class="space-y-3 mb-8">
+          <li class="flex gap-3 text-sm"><span class="material-symbols-outlined !text-xl text-success">check_circle</span><span><strong class="text-ink">Bring your own API key.</strong> Claude, Gemini, DeepSeek, GPT &amp; more — swap any time from config.</span></li>
+          <li class="flex gap-3 text-sm"><span class="material-symbols-outlined !text-xl text-success">check_circle</span><span><strong class="text-ink">Keys stored locally.</strong> Your credentials live on your machine and are <em>never</em> sent to or tracked by ProBot.</span></li>
+          <li class="flex gap-3 text-sm"><span class="material-symbols-outlined !text-xl text-success">check_circle</span><span><strong class="text-ink">Self-host in minutes.</strong> Clone the repo, set your config, deploy anywhere.</span></li>
+        </ul>
+        <div class="flex flex-wrap gap-3">
+          <a href="#" class="btn btn-primary !px-6 !py-3 !text-base"><span class="material-symbols-outlined !text-lg">code</span>View on GitHub</a>
+          <a href="docs.html#config" class="btn btn-secondary !px-6 !py-3 !text-base">Read the setup guide</a>
+        </div>
+      </div>
+      <div class="relative">
+        <div class="absolute -inset-4 bg-brand/5 rounded-[2rem] blur-2xl"></div>
+        <div class="relative bg-ink rounded-2xl border border-ink shadow-floating overflow-hidden">
+          <div class="flex items-center gap-2 px-4 py-3 border-b border-white/10">
+            <span class="size-3 rounded-full bg-red-400/80"></span><span class="size-3 rounded-full bg-yellow-400/80"></span><span class="size-3 rounded-full bg-green-400/80"></span>
+            <span class="text-[11px] text-white/40 font-mono ml-2">probot.config.json</span>
+          </div>
+          <pre class="p-5 font-mono text-[12px] leading-relaxed text-blue-200 overflow-x-auto thin-scroll"><span class="text-white/40">// Your key never leaves this machine</span>
+{
+  <span class="text-blue-300">"provider"</span>: <span class="text-green-300">"anthropic"</span>,
+  <span class="text-blue-300">"model"</span>: <span class="text-green-300">"claude-opus-4"</span>,
+  <span class="text-blue-300">"apiKey"</span>: <span class="text-green-300">"sk-ant-••••  (local only)"</span>,
+  <span class="text-blue-300">"storage"</span>: <span class="text-green-300">"local"</span>,
+  <span class="text-blue-300">"telemetry"</span>: <span class="text-orange-300">false</span>
+}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA BAND ============ -->
+<section class="px-6 py-16">
+  <div class="mx-auto max-w-[1180px] brand-blue-gradient dot-pattern-light rounded-3xl overflow-hidden">
+    <div class="grid lg:grid-cols-2">
+      <div class="p-10 lg:p-14 text-white">
+        <h2 class="font-display text-4xl font-extrabold tracking-tight leading-[1.05] mb-3">Don't just apply.<br>Be available.</h2>
+        <p class="text-white/70 leading-relaxed mb-4">Open-source AI recruiters created by job seekers worldwide</p>
+        <p class="font-display text-5xl font-extrabold tracking-tighter" id="counter">142,985</p>
+      </div>
+      <div class="p-10 lg:p-14 grid place-items-center bg-white/5 backdrop-blur border-t lg:border-t-0 lg:border-l border-white/10">
+        <a href="bot-factory.html" class="btn bg-white text-brand !px-7 !py-3.5 !text-base font-bold w-full lg:w-auto">Create your bot for free<span class="material-symbols-outlined !text-lg">arrow_forward</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="border-t border-border-base bg-white">
+  <div class="mx-auto max-w-[1180px] px-6 pt-14 pb-8">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-8">
+      <div class="col-span-2 md:col-span-1">
+        <a href="index.html" class="flex items-center gap-2.5 mb-3">
+          <svg width="26" height="26" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="16" fill="oklch(0.55 0.193 251.78)"/><circle cx="14" cy="20" r="3.4" fill="#fff"/><circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65"/></svg>
+          <span class="font-display text-lg font-extrabold tracking-tight">ProBot</span>
+        </a>
+        <p class="text-xs text-muted leading-relaxed">Your AI digital recruiter. Available 24/7.</p>
+      </div>
+      <div><p class="text-sm font-bold mb-3">Product</p><ul class="space-y-2 text-sm text-muted"><li><a href="#features" class="hover:text-ink">Features</a></li><li><a href="#opensource" class="hover:text-ink">Open source</a></li><li><a href="chat.html" class="hover:text-ink">Live demo</a></li><li><a href="bot-factory.html" class="hover:text-ink">Create a bot</a></li></ul></div>
+      <div><p class="text-sm font-bold mb-3">Developers</p><ul class="space-y-2 text-sm text-muted"><li><a href="docs.html" class="hover:text-ink">Documentation</a></li><li><a href="docs.html#config" class="hover:text-ink">Models &amp; API keys</a></li><li><a href="docs.html#embed" class="hover:text-ink">Embed widget</a></li><li><a href="#" class="hover:text-ink">GitHub</a></li></ul></div>
+      <div><p class="text-sm font-bold mb-3">Account</p><ul class="space-y-2 text-sm text-muted"><li><a href="login.html" class="hover:text-ink">Log in</a></li><li><a href="dashboard.html" class="hover:text-ink">Dashboard</a></li><li><a href="settings.html" class="hover:text-ink">Settings</a></li></ul></div>
+      <div><p class="text-sm font-bold mb-3">Company</p><ul class="space-y-2 text-sm text-muted"><li><a href="#" class="hover:text-ink">About</a></li><li><a href="#" class="hover:text-ink">Privacy</a></li><li><a href="#" class="hover:text-ink">Terms</a></li></ul></div>
+    </div>
+    <div class="mt-12 pt-6 border-t border-border-base flex flex-col sm:flex-row items-center justify-between gap-3">
+      <p class="text-xs text-muted">© 2026 ProBot · Open source, MIT licensed. Built on the VAi engine.</p>
+      <div class="flex gap-3 text-muted">
+        <a href="#" class="hover:text-ink"><span class="material-symbols-outlined !text-lg">public</span></a>
+        <a href="#" class="hover:text-ink"><span class="material-symbols-outlined !text-lg">alternate_email</span></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // mobile menu
+  const t=document.getElementById('mtrig'),m=document.getElementById('mmenu');
+  t&&t.addEventListener('click',()=>{m.classList.toggle('hidden');m.classList.toggle('flex')});
+  // animated counter
+  const c=document.getElementById('counter');
+  if(c){let n=142985;setInterval(()=>{n+=Math.floor(Math.random()*3)+1;c.textContent=n.toLocaleString();},2400);}
+</script>
+<script src="assets/icons.js"></script>
+</body>
+</html>

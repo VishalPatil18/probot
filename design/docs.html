@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Docs · ProBot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { 'brand':'oklch(0.55 0.193 251.78)','brand-light':'oklch(0.62 0.17 248)','brand-deep':'oklch(0.40 0.13 258)','ink':'oklch(0.19 0.02 261)','muted':'oklch(0.46 0.02 262)','bg-app':'oklch(0.985 0.004 264)','border-base':'oklch(0.90 0.008 264)','success':'oklch(0.62 0.16 150)' },
+  fontFamily: { 'display':['Bricolage Grotesque','sans-serif'], 'sans':['Inter Tight','sans-serif'], 'mono':['JetBrains Mono','monospace'] },
+}}}
+</script>
+<link rel="stylesheet" href="assets/probot.css">
+<style>/* icon-flash-guard */ .material-symbols-outlined{font-size:0 !important;line-height:0;color:transparent;}</style>
+<style>
+  .doc-content h2 { scroll-margin-top: 84px; }
+  .doc-content h3 { scroll-margin-top: 84px; }
+  .doc-content p { color: var(--muted); line-height: 1.7; margin: 0.75rem 0; }
+  .doc-content ul { list-style: disc; padding-left: 1.4rem; color: var(--muted); margin: 0.75rem 0; }
+  .doc-content li { margin: 0.35rem 0; }
+  .doc-content code:not(pre code){ background: oklch(0.95 0.004 264); padding: .12em .4em; border-radius: .35em; font-family: 'JetBrains Mono', monospace; font-size: .85em; color: var(--brand-deep); }
+  pre { background: oklch(0.17 0.02 262); color: oklch(0.85 0.04 248); border-radius: .75rem; padding: 1rem 1.1rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: .8rem; line-height: 1.6; }
+  pre .c { color: oklch(0.6 0.02 262); }
+  pre .s { color: oklch(0.78 0.13 150); }
+  pre .k { color: oklch(0.72 0.15 25); }
+  pre .b { color: oklch(0.72 0.13 248); }
+</style>
+</head>
+<body class="font-sans bg-bg-app text-ink">
+
+<!-- top nav -->
+<header class="sticky top-0 z-50 bg-white border-b border-border-base">
+  <div class="h-14 px-5 flex items-center gap-4">
+    <a href="index.html" class="flex items-center gap-2.5 shrink-0">
+      <svg width="26" height="26" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="16" fill="oklch(0.55 0.193 251.78)"/><circle cx="14" cy="20" r="3.4" fill="#fff"/><circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65"/></svg>
+      <span class="font-display text-lg font-extrabold tracking-tight">ProBot</span>
+      <span class="text-xs font-bold text-muted bg-neutral-100 px-1.5 py-0.5 rounded ml-1">docs</span>
+    </a>
+    <div class="hidden md:flex items-center gap-2 ml-6 px-3 py-1.5 rounded-lg bg-neutral-100 text-muted text-sm flex-1 max-w-xs">
+      <span class="material-symbols-outlined !text-lg">search</span><span>Search docs…</span><span class="ml-auto text-[10px] border border-border-base rounded px-1 bg-white">⌘K</span>
+    </div>
+    <nav class="ml-auto flex items-center gap-1 text-sm font-medium">
+      <a href="index.html" class="px-3 py-2 rounded-lg hover:bg-neutral-100 hidden sm:block">Home</a>
+      <a href="index.html#opensource" class="px-3 py-2 rounded-lg hover:bg-neutral-100 hidden sm:block">Open source</a>
+      <a href="dashboard.html" class="btn btn-primary !py-1.5">Dashboard</a>
+    </nav>
+  </div>
+</header>
+
+<div class="max-w-[1400px] mx-auto grid lg:grid-cols-[240px_1fr_200px] gap-0">
+
+  <!-- LEFT NAV -->
+  <aside class="hidden lg:block border-r border-border-base sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto thin-scroll py-6 px-4">
+    <nav class="space-y-6 text-sm">
+      <div>
+        <p class="text-[11px] font-bold text-muted uppercase tracking-widest mb-2 px-2">Getting started</p>
+        <a href="#intro" class="dl block px-2 py-1.5 rounded-lg text-brand bg-blue-50 font-semibold">Introduction</a>
+        <a href="#quickstart" class="dl block px-2 py-1.5 rounded-lg hover:bg-neutral-100 text-muted">Quick start</a>
+        <a href="#bot-factory" class="dl block px-2 py-1.5 rounded-lg hover:bg-neutral-100 text-muted">Creating a bot</a>
+        <a href="#config" class="dl block px-2 py-1.5 rounded-lg hover:bg-neutral-100 text-muted">Models &amp; API keys</a>
+      </div>
+      <div>
+        <p class="text-[11px] font-bold text-muted uppercase tracking-widest mb-2 px-2">Deploy</p>
+        <a href="#embed" class="dl block px-2 py-1.5 rounded-lg hover:bg-neutral-100 text-muted">Embed the widget</a>
+        <a href="#share" class="dl block px-2 py-1.5 rounded-lg hover:bg-neutral-100 text-muted">Direct link &amp; signature</a>
+      </div>
+      <div>
+        <p class="text-[11px] font-bold text-muted uppercase tracking-widest mb-2 px-2">Reference</p>
+        <a href="#api" class="dl block px-2 py-1.5 rounded-lg hover:bg-neutral-100 text-muted">REST API</a>
+        <a href="#ratelimits" class="dl block px-2 py-1.5 rounded-lg hover:bg-neutral-100 text-muted">Rate limits</a>
+        <a href="#security" class="dl block px-2 py-1.5 rounded-lg hover:bg-neutral-100 text-muted">Security model</a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- CONTENT -->
+  <main class="doc-content px-6 lg:px-12 py-10 max-w-3xl min-w-0">
+    <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2">Getting started</p>
+    <h1 class="font-display text-4xl font-extrabold tracking-tight mb-3">Documentation</h1>
+    <p class="!text-base">Everything you need to build, deploy, and embed your ProBot — your personal AI digital recruiter.</p>
+
+    <section class="mt-12">
+      <h2 id="intro" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Introduction</h2>
+      <p>ProBot turns your résumé, LinkedIn, and portfolio into a personal AI chatbot that answers recruiter questions 24/7. It's <strong class="text-ink">fully open source</strong> and runs on <strong class="text-ink">your own LLM API key</strong> — use the hosted version or self-host. Under the hood it uses a <strong class="text-ink">Retrieval-Augmented Generation (RAG)</strong> pipeline: your data is chunked, embedded, and stored in a private vector namespace, then the most relevant chunks are retrieved to ground every answer.</p>
+      <div class="my-5 p-4 rounded-xl bg-blue-50/50 border border-blue-100 flex gap-3">
+        <span class="material-symbols-outlined text-brand">lightbulb</span>
+        <p class="!my-0 !text-sm">New here? Jump to the <a href="#quickstart" class="text-brand font-semibold">Quick start</a> to get a live bot in two minutes.</p>
+      </div>
+    </section>
+
+    <section class="mt-12">
+      <h2 id="quickstart" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Quick start</h2>
+      <p>Three steps from sign-up to a shareable bot:</p>
+      <ul>
+        <li><strong class="text-ink">Sign up</strong> with email or OAuth (Google, GitHub, LinkedIn) and claim your username — it becomes your bot URL.</li>
+        <li><strong class="text-ink">Add your model key</strong> — Claude, Gemini, DeepSeek, or GPT. Stored locally, never tracked.</li>
+        <li><strong class="text-ink">Upload</strong> your résumé PDF, paste a LinkedIn/portfolio URL, or type a bio in the Bot Factory.</li>
+        <li><strong class="text-ink">Deploy</strong> — share <code>probot.com/u/your-name</code> or drop the embed snippet on your site.</li>
+      </ul>
+      <pre><span class="c"># Your bot is live at:</span>
+https://probot.com/u/<span class="b">vishal</span></pre>
+    </section>
+
+    <section class="mt-12">
+      <h2 id="bot-factory" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Creating a bot</h2>
+      <p>The <a href="bot-factory.html" class="text-brand font-semibold">Bot Factory</a> is a 4-step wizard: <strong class="text-ink">Identity</strong> (name, headline, photo), <strong class="text-ink">Knowledge base</strong> (PDF / URL / text), <strong class="text-ink">Personality</strong> (tone preset, theme color, custom instructions), and <strong class="text-ink">Deploy</strong>. Supported knowledge sources:</p>
+      <ul>
+        <li>PDF — up to 5 files, max 10MB each</li>
+        <li>URL — LinkedIn profile or portfolio site</li>
+        <li>Free text — up to 50,000 characters</li>
+      </ul>
+    </section>
+
+    <section class="mt-12">
+      <h2 id="config" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Models &amp; API keys</h2>
+      <p>ProBot doesn't ship its own LLM — you <strong class="text-ink">bring your own API key</strong> and choose the model that fits your budget and quality needs. Supported providers:</p>
+      <ul>
+        <li><strong class="text-ink">Anthropic</strong> — Claude Opus 4, Sonnet 4, Haiku 4</li>
+        <li><strong class="text-ink">Google</strong> — Gemini 2.5 Pro, Flash, Flash-Lite</li>
+        <li><strong class="text-ink">DeepSeek</strong> — DeepSeek-V3, DeepSeek-R1</li>
+        <li><strong class="text-ink">OpenAI</strong> — GPT-4o, GPT-4o mini, o3-mini</li>
+      </ul>
+      <div class="my-5 p-4 rounded-xl bg-blue-50/50 border border-blue-100 flex gap-3">
+        <span class="material-symbols-outlined text-brand">lock</span>
+        <p class="!my-0 !text-sm"><strong class="text-ink">Your key is stored locally and never tracked by ProBot.</strong> It's saved to your browser/self-hosted config and used only to call the provider directly — it never passes through or is logged by ProBot's servers.</p>
+      </div>
+      <p>Set it in <a href="settings.html#model" class="text-brand font-semibold">Settings → AI model &amp; key</a>, the Bot Factory wizard, or via config when self-hosting:</p>
+<pre><span class="c">// probot.config.json — never committed, never sent</span>
+{
+  <span class="b">"provider"</span>: <span class="s">"anthropic"</span>,      <span class="c">// anthropic | google | deepseek | openai</span>
+  <span class="b">"model"</span>: <span class="s">"claude-opus-4"</span>,
+  <span class="b">"apiKey"</span>: <span class="s">"sk-ant-..."</span>,     <span class="c">// read from local env / secure store</span>
+  <span class="b">"storage"</span>: <span class="s">"local"</span>,
+  <span class="b">"telemetry"</span>: <span class="k">false</span>
+}</pre>
+      <p>Prefer not to hard-code it? Point <code>apiKey</code> at an environment variable (e.g. <code>process.env.ANTHROPIC_API_KEY</code>) and keep secrets out of your repo entirely.</p>
+    </section>
+
+    <section class="mt-12">
+      <h2 id="embed" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Embed the widget</h2>
+      <p>Add a floating chat bubble to any website with one line. The widget is Shadow-DOM isolated (no CSS conflicts) and under 50KB gzipped.</p>
+      <div class="relative my-4">
+        <button class="absolute top-2.5 right-2.5 text-[11px] text-blue-200/70 hover:text-white flex items-center gap-1"><span class="material-symbols-outlined !text-sm">content_copy</span>Copy</button>
+<pre><span class="c">&lt;!-- Paste before &lt;/body&gt; --&gt;</span>
+<span class="k">&lt;script</span> <span class="b">src</span>=<span class="s">"https://probot.com/widget.js"</span>
+        <span class="b">data-bot-id</span>=<span class="s">"vishal"</span><span class="k">&gt;&lt;/script&gt;</span></pre>
+      </div>
+      <p>Optional attributes:</p>
+      <div class="overflow-x-auto my-4 rounded-xl border border-border-base">
+        <table class="w-full text-sm">
+          <thead><tr class="bg-neutral-50 text-left text-[11px] uppercase tracking-wider text-muted"><th class="px-4 py-2.5 font-bold">Attribute</th><th class="px-4 py-2.5 font-bold">Default</th><th class="px-4 py-2.5 font-bold">Description</th></tr></thead>
+          <tbody class="divide-y divide-border-base">
+            <tr><td class="px-4 py-2.5 font-mono text-brand-deep text-xs">data-bot-id</td><td class="px-4 py-2.5 text-muted">—</td><td class="px-4 py-2.5 text-muted">Required. Your bot's ID/username.</td></tr>
+            <tr><td class="px-4 py-2.5 font-mono text-brand-deep text-xs">data-position</td><td class="px-4 py-2.5 text-muted">bottom-right</td><td class="px-4 py-2.5 text-muted">Bubble placement.</td></tr>
+            <tr><td class="px-4 py-2.5 font-mono text-brand-deep text-xs">data-color</td><td class="px-4 py-2.5 text-muted">#3461d6</td><td class="px-4 py-2.5 text-muted">Theme color (hex).</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="mt-12">
+      <h2 id="share" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Direct link &amp; signature</h2>
+      <p>Beyond the widget, share your bot via your direct URL, an email-signature badge, or your LinkedIn "Featured" / "Contact info" section.</p>
+      <pre><span class="c">&lt;!-- Email signature badge --&gt;</span>
+<span class="k">&lt;a</span> <span class="b">href</span>=<span class="s">"https://probot.com/u/vishal"</span><span class="k">&gt;</span>
+  💬 Chat with my AI recruiter
+<span class="k">&lt;/a&gt;</span></pre>
+    </section>
+
+    <section class="mt-12">
+      <h2 id="api" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">REST API</h2>
+      <p>The public chat endpoint powers both the widget and direct link. Authentication is not required for chat; dashboard endpoints require a session token.</p>
+      <div class="flex items-center gap-2 mt-4 mb-2"><span class="text-[11px] font-bold px-2 py-0.5 rounded bg-success/15 text-success">POST</span><code class="!text-sm">/api/chat/:botId</code></div>
+      <pre><span class="c">// request</span>
+{
+  <span class="b">"message"</span>: <span class="s">"Does Vishal have RAG experience?"</span>,
+  <span class="b">"session_id"</span>: <span class="s">"uuid-v4"</span>
+}
+
+<span class="c">// 200 OK</span>
+{
+  <span class="b">"reply"</span>: <span class="s">"Yes — he built a production RAG chatbot..."</span>,
+  <span class="b">"conversation_id"</span>: <span class="s">"uuid"</span>
+}</pre>
+      <p>Other endpoints (session required):</p>
+      <ul>
+        <li><code>GET /api/bots/:botId/analytics</code> — engagement summary</li>
+        <li><code>GET /api/bots/:botId/leads</code> — captured leads</li>
+        <li><code>POST /api/bots/:botId/knowledge</code> — ingest new data</li>
+      </ul>
+    </section>
+
+    <section class="mt-12">
+      <h2 id="ratelimits" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Rate limits</h2>
+      <p>Sensible defaults protect your bot — and your own LLM credits — from abuse. When self-hosting, every value is configurable in <code>probot.config.json</code>.</p>
+      <div class="overflow-x-auto my-4 rounded-xl border border-border-base">
+        <table class="w-full text-sm">
+          <thead><tr class="bg-neutral-50 text-left text-[11px] uppercase tracking-wider text-muted"><th class="px-4 py-2.5 font-bold">Limit</th><th class="px-4 py-2.5 font-bold">Default</th><th class="px-4 py-2.5 font-bold">Config key</th></tr></thead>
+          <tbody class="divide-y divide-border-base text-muted">
+            <tr><td class="px-4 py-2.5 text-ink font-medium">Per recruiter / min</td><td class="px-4 py-2.5">10</td><td class="px-4 py-2.5 font-mono text-xs">perMinute</td></tr>
+            <tr><td class="px-4 py-2.5 text-ink font-medium">Per bot / day</td><td class="px-4 py-2.5">200</td><td class="px-4 py-2.5 font-mono text-xs">perDay</td></tr>
+            <tr><td class="px-4 py-2.5 text-ink font-medium">Max message length</td><td class="px-4 py-2.5">8,000 chars</td><td class="px-4 py-2.5 font-mono text-xs">maxChars</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A <code>429</code> response returns <code>{ "error": "rate_limit" }</code> or <code>{ "error": "daily_limit" }</code>, and the widget shows a friendly "contact directly" fallback.</p>
+    </section>
+
+    <section class="mt-12 mb-16">
+      <h2 id="security" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Security model</h2>
+      <p>Every bot inherits a layered defense stack adapted from the VAi engine:</p>
+      <ul>
+        <li><strong class="text-ink">Input:</strong> 40+ prompt-injection patterns, unicode homoglyph normalization, zero-width stripping, 8,000-char limit.</li>
+        <li><strong class="text-ink">Prompt:</strong> immutable identity lock, context-only constraint, prompt-protection, override resistance.</li>
+        <li><strong class="text-ink">Output:</strong> system-marker detection, JSON/credential scanning, 1,500-char cap.</li>
+        <li><strong class="text-ink">Isolation:</strong> per-bot vector namespaces &amp; tenant-scoped queries.</li>
+        <li><strong class="text-ink">Credentials:</strong> your LLM API key is stored locally and never transmitted to or logged by ProBot.</li>
+      </ul>
+      <div class="my-5 p-4 rounded-xl bg-blue-50/50 border border-blue-100 flex gap-3">
+        <span class="material-symbols-outlined text-brand">shield</span>
+        <p class="!my-0 !text-sm">Your bot will <strong class="text-ink">never</strong> reveal its system prompt or invent facts not in your data — it points recruiters to you instead.</p>
+      </div>
+    </section>
+
+    <div class="flex justify-between border-t border-border-base pt-6">
+      <a href="bot-factory.html" class="btn btn-secondary">← Build a bot</a>
+      <a href="dashboard.html" class="btn btn-primary">Go to dashboard →</a>
+    </div>
+  </main>
+
+  <!-- RIGHT TOC -->
+  <aside class="hidden lg:block sticky top-14 h-[calc(100vh-3.5rem)] py-10 px-4 text-sm">
+    <p class="text-[11px] font-bold text-muted uppercase tracking-widest mb-3">On this page</p>
+    <nav class="space-y-2 border-l border-border-base">
+      <a href="#intro" class="block pl-3 -ml-px border-l-2 border-brand text-brand font-medium">Introduction</a>
+      <a href="#quickstart" class="block pl-3 -ml-px border-l-2 border-transparent text-muted hover:text-ink">Quick start</a>
+      <a href="#embed" class="block pl-3 -ml-px border-l-2 border-transparent text-muted hover:text-ink">Embed the widget</a>
+      <a href="#config" class="block pl-3 -ml-px border-l-2 border-transparent text-muted hover:text-ink">Models &amp; API keys</a>
+      <a href="#api" class="block pl-3 -ml-px border-l-2 border-transparent text-muted hover:text-ink">REST API</a>
+      <a href="#ratelimits" class="block pl-3 -ml-px border-l-2 border-transparent text-muted hover:text-ink">Rate limits</a>
+      <a href="#security" class="block pl-3 -ml-px border-l-2 border-transparent text-muted hover:text-ink">Security model</a>
+    </nav>
+  </aside>
+</div>
+
+<script>
+// active link highlight on scroll
+const links=[...document.querySelectorAll('.doc-content section')];
+const dl=document.querySelectorAll('.dl');
+const toc=document.querySelectorAll('aside:last-of-type nav a');
+const obs=new IntersectionObserver((es)=>{
+  es.forEach(e=>{ if(e.isIntersecting){
+    const id=e.target.querySelector('[id]')?.id;
+    dl.forEach(a=>{const on=a.getAttribute('href')==='#'+id; a.classList.toggle('text-brand',on); a.classList.toggle('bg-blue-50',on); a.classList.toggle('font-semibold',on); a.classList.toggle('text-muted',!on);});
+    toc.forEach(a=>{const on=a.getAttribute('href')==='#'+id; a.classList.toggle('border-brand',on); a.classList.toggle('text-brand',on); a.classList.toggle('font-medium',on); a.classList.toggle('border-transparent',!on); a.classList.toggle('text-muted',!on);});
+  }});
+},{rootMargin:'-80px 0px -70% 0px'});
+links.forEach(s=>obs.observe(s));
+</script>
+<script src="assets/icons.js"></script>
+</body>
+</html>

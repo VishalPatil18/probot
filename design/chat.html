@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat with Vishal's AI Recruiter · ProBot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { 'brand':'oklch(0.55 0.193 251.78)','brand-light':'oklch(0.62 0.17 248)','brand-deep':'oklch(0.40 0.13 258)','ink':'oklch(0.19 0.02 261)','muted':'oklch(0.46 0.02 262)','bg-app':'oklch(0.985 0.004 264)','border-base':'oklch(0.90 0.008 264)','success':'oklch(0.62 0.16 150)' },
+  fontFamily: { 'display':['Bricolage Grotesque','sans-serif'], 'sans':['Inter Tight','sans-serif'] },
+}}}
+</script>
+<link rel="stylesheet" href="assets/probot.css">
+<style>/* icon-flash-guard */ .material-symbols-outlined{font-size:0 !important;line-height:0;color:transparent;}</style>
+</head>
+<body class="font-sans bg-bg-app text-ink h-screen overflow-hidden flex flex-col">
+
+<!-- top mini bar -->
+<div class="h-10 bg-ink text-white/70 text-[11px] flex items-center justify-center gap-2 shrink-0">
+  <span class="material-symbols-outlined !text-sm text-brand-light">bolt</span>
+  This is a live ProBot demo. <a href="bot-factory.html" class="text-white font-semibold underline underline-offset-2 ml-1">Create your own →</a>
+</div>
+
+<!-- chat header -->
+<header class="bg-white border-b border-border-base shrink-0">
+  <div class="mx-auto max-w-3xl px-5 py-4 flex items-center gap-4">
+    <div class="relative shrink-0">
+      <div class="size-12 rounded-full brand-blue-gradient grid place-items-center text-white font-display font-extrabold text-lg">VP</div>
+      <div class="absolute -bottom-0.5 -right-0.5 size-5 rounded-full bg-white grid place-items-center"><span class="size-3 rounded-full bg-success"></span></div>
+    </div>
+    <div class="flex-1 min-w-0">
+      <h1 class="font-display text-lg font-bold leading-tight">Vishal Patil <span class="text-muted font-sans font-normal text-sm">· AI Recruiter</span></h1>
+      <p class="text-xs text-muted truncate">AI/ML Software Engineer · Masters @ UMD · Open to SWE / AI roles</p>
+    </div>
+    <a href="index.html" class="flex items-center gap-2 shrink-0">
+      <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="16" fill="oklch(0.55 0.193 251.78)"/><circle cx="14" cy="20" r="3.4" fill="#fff"/><circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65"/></svg>
+      <span class="hidden sm:block font-display text-sm font-extrabold">ProBot</span>
+    </a>
+  </div>
+</header>
+
+<!-- messages -->
+<div id="scroll" class="flex-1 overflow-y-auto thin-scroll dot-pattern">
+  <div class="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-4" id="stream">
+
+    <!-- intro -->
+    <div class="flex gap-3">
+      <div class="size-8 rounded-full brand-blue-gradient grid place-items-center text-white shrink-0 mt-0.5"><span class="material-symbols-outlined !text-base">smart_toy</span></div>
+      <div class="bubble-bot px-4 py-3 text-sm leading-relaxed max-w-[85%] shadow-soft">
+        👋 Hi! I'm Vishal's AI assistant. Ask me anything about his experience, skills, projects, or availability — I'll answer straight from his real career history.
+      </div>
+    </div>
+
+    <!-- suggested questions -->
+    <div id="suggestions" class="flex flex-wrap gap-2 pl-11">
+      <button class="sug px-3.5 py-2 rounded-full bg-white border border-border-base text-sm font-medium hover:border-brand hover:text-brand transition-colors shadow-soft">Who is Vishal Patil?</button>
+      <button class="sug px-3.5 py-2 rounded-full bg-white border border-border-base text-sm font-medium hover:border-brand hover:text-brand transition-colors shadow-soft">What are his top skills?</button>
+      <button class="sug px-3.5 py-2 rounded-full bg-white border border-border-base text-sm font-medium hover:border-brand hover:text-brand transition-colors shadow-soft">Tell me about his work experience</button>
+      <button class="sug px-3.5 py-2 rounded-full bg-white border border-border-base text-sm font-medium hover:border-brand hover:text-brand transition-colors shadow-soft">Is he authorized to work in the US?</button>
+      <button class="sug px-3.5 py-2 rounded-full bg-white border border-border-base text-sm font-medium hover:border-brand hover:text-brand transition-colors shadow-soft">How can I contact him?</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- input -->
+<div class="bg-white border-t border-border-base shrink-0">
+  <div class="mx-auto max-w-3xl px-5 py-4">
+    <form id="form" class="flex items-end gap-2 border border-border-base rounded-2xl px-3 py-2 focus-within:border-brand transition-colors bg-white">
+      <textarea id="input" rows="1" maxlength="8000" placeholder="Ask anything about Vishal…" class="flex-1 resize-none bg-transparent outline-none text-sm py-2 max-h-[120px] thin-scroll"></textarea>
+      <button type="submit" class="size-9 grid place-items-center rounded-xl brand-blue-gradient text-white shrink-0 disabled:opacity-40"><span class="material-symbols-outlined !text-xl">arrow_upward</span></button>
+    </form>
+    <p class="text-[10px] text-muted text-center mt-2">ProBot answers are grounded in Vishal's data and may be imperfect · <span id="count">0</span>/8000</p>
+  </div>
+</div>
+
+<script>
+const KB = [
+  { k:['who is','about vishal','tell me about vishal','who'], a:"<p><strong>Vishal Patil</strong> is an AI/ML Software Engineer currently pursuing his Master's at the University of Maryland (AI certificate, 3.66 GPA). He previously shipped secure APIs and automation as a Software Engineer I at BNY. He's passionate about RAG systems, full-stack development, and applied machine learning.</p>" },
+  { k:['skill','tech','stack','languages'], a:"<p>Vishal's strongest areas:</p><ul><li><strong>Languages:</strong> Python, JavaScript/TypeScript, C++, Java, SQL</li><li><strong>AI/ML:</strong> LangChain, RAG, PyTorch, CNNs, Scikit-Learn</li><li><strong>Frameworks:</strong> React, Next.js, Node.js, FastAPI, Docker</li><li><strong>Data:</strong> PostgreSQL, MongoDB, Neo4j, Redis, Pinecone</li></ul>" },
+  { k:['experience','work','job','where has he worked','employ'], a:"<p>A quick tour of his experience:</p><ul><li><strong>UMD</strong> — AI Software Engineer Intern (Oct 2025–present): building a production RAG chatbot &amp; a DocReview platform.</li><li><strong>BNY</strong> — Software Engineer I (Jul 2023–Dec 2024): secure APIs and automation pipelines.</li><li>Plus leadership roles at GDSC, Community of Coders, and PwC &amp; Google programs.</li></ul>" },
+  { k:['project','built','build','portfolio'], a:"<p>Some highlights from his 8+ projects:</p><ul><li><strong>Phish Detection ML</strong> — phishing classifier at ~96% accuracy</li><li><strong>DocuMind</strong> — document Q&amp;A with RAG</li><li><strong>VISKart / REcom</strong> — full-stack commerce &amp; recommendations</li></ul><p>Want details on any one of these?</p>" },
+  { k:['authoriz','visa','sponsor','work in the us','work authorization','f-1','f1'], a:"<p>Yes — Vishal is on an <strong>F-1 student visa and is CPT/OPT eligible</strong>, so he can work in the US <strong>without requiring financial sponsorship</strong>.</p>" },
+  { k:['contact','email','reach','get in touch','hire'], a:"<p>The best way to reach Vishal is by email — he typically replies within a day. Want to leave your email so he can get back to you? You can also connect on LinkedIn from his portfolio.</p>" },
+  { k:['fit','good fit','why hire','role','match','company'], a:"<p>Happy to help assess fit! If you share the <strong>role and company</strong>, I'll map Vishal's specific experience and projects to your requirements. In general he's a strong match for <strong>AI/ML engineering</strong> and <strong>full-stack SWE</strong> roles.</p>" },
+];
+const FALLBACK = "<p>I don't have that detail in Vishal's profile. The best move is to reach out to him directly — want to leave your email so he can follow up?</p>";
+
+const stream=document.getElementById('stream'), scroll=document.getElementById('scroll'),
+      input=document.getElementById('input'), form=document.getElementById('form'),
+      sugWrap=document.getElementById('suggestions'), count=document.getElementById('count');
+
+function scrollDown(){ scroll.scrollTop = scroll.scrollHeight; }
+input.addEventListener('input',()=>{ input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,120)+'px'; count.textContent=input.value.length; });
+
+function addUser(text){
+  const w=document.createElement('div'); w.className='flex justify-end';
+  w.innerHTML=`<div class="bubble-user px-4 py-3 text-sm leading-relaxed max-w-[85%] shadow-soft">${text.replace(/</g,'&lt;')}</div>`;
+  stream.appendChild(w); scrollDown();
+}
+function addTyping(){
+  const w=document.createElement('div'); w.className='flex gap-3'; w.id='typing';
+  w.innerHTML=`<div class="size-8 rounded-full brand-blue-gradient grid place-items-center text-white shrink-0 mt-0.5"><span class="material-symbols-outlined !text-base">smart_toy</span></div>
+    <div class="bubble-bot px-4 py-3.5 max-w-[85%] shadow-soft"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  stream.appendChild(w); scrollDown();
+}
+function addBot(html){
+  const w=document.createElement('div'); w.className='flex gap-3';
+  w.innerHTML=`<div class="size-8 rounded-full brand-blue-gradient grid place-items-center text-white shrink-0 mt-0.5"><span class="material-symbols-outlined !text-base">smart_toy</span></div>
+    <div class="bubble-bot md px-4 py-3 text-sm leading-relaxed max-w-[85%] shadow-soft">${html}</div>`;
+  stream.appendChild(w); scrollDown();
+}
+function answer(q){
+  const low=q.toLowerCase();
+  const hit=KB.find(e=>e.k.some(k=>low.includes(k)));
+  return hit?hit.a:FALLBACK;
+}
+function send(text){
+  if(!text.trim())return;
+  if(sugWrap){ sugWrap.remove(); }
+  addUser(text); input.value=''; input.style.height='auto'; count.textContent=0;
+  addTyping();
+  setTimeout(()=>{ document.getElementById('typing')?.remove(); addBot(answer(text)); }, 900+Math.random()*600);
+}
+form.addEventListener('submit',e=>{ e.preventDefault(); send(input.value); });
+input.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(input.value); } });
+document.querySelectorAll('.sug').forEach(b=>b.addEventListener('click',()=>send(b.textContent)));
+input.focus();
+</script>
+<script src="assets/icons.js"></script>
+</body>
+</html>

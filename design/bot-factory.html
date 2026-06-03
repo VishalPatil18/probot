@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bot Factory · ProBot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { 'brand':'oklch(0.55 0.193 251.78)','brand-light':'oklch(0.62 0.17 248)','brand-deep':'oklch(0.40 0.13 258)','ink':'oklch(0.19 0.02 261)','muted':'oklch(0.46 0.02 262)','bg-app':'oklch(0.985 0.004 264)','border-base':'oklch(0.90 0.008 264)','success':'oklch(0.62 0.16 150)' },
+  fontFamily: { 'display':['Bricolage Grotesque','sans-serif'], 'sans':['Inter Tight','sans-serif'] },
+}}}
+</script>
+<link rel="stylesheet" href="assets/probot.css">
+<style>/* icon-flash-guard */ .material-symbols-outlined{font-size:0 !important;line-height:0;color:transparent;}</style>
+</head>
+<body class="font-sans bg-bg-app text-ink min-h-screen flex flex-col">
+
+<!-- top bar with stepper -->
+<header class="bg-white border-b border-border-base sticky top-0 z-30">
+  <div class="px-6 h-16 flex items-center gap-4 max-w-[1280px] mx-auto w-full">
+    <a href="dashboard.html" class="flex items-center gap-2.5 shrink-0">
+      <svg width="28" height="28" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="16" fill="oklch(0.55 0.193 251.78)"/><circle cx="14" cy="20" r="3.4" fill="#fff"/><circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65"/></svg>
+      <span class="font-display text-lg font-extrabold tracking-tight hidden sm:block">ProBot</span>
+    </a>
+    <!-- stepper -->
+    <div class="flex-1 flex items-center justify-center gap-1 sm:gap-3" id="stepper">
+      <div class="step flex items-center gap-2" data-s="1"><span class="dot size-7 rounded-full grid place-items-center text-xs font-bold">1</span><span class="lbl text-sm font-semibold hidden md:block">Identity</span></div>
+      <div class="w-6 sm:w-10 h-px bg-border-base"></div>
+      <div class="step flex items-center gap-2" data-s="2"><span class="dot size-7 rounded-full grid place-items-center text-xs font-bold">2</span><span class="lbl text-sm font-semibold hidden md:block">Knowledge</span></div>
+      <div class="w-6 sm:w-10 h-px bg-border-base"></div>
+      <div class="step flex items-center gap-2" data-s="3"><span class="dot size-7 rounded-full grid place-items-center text-xs font-bold">3</span><span class="lbl text-sm font-semibold hidden md:block">Personality</span></div>
+      <div class="w-6 sm:w-10 h-px bg-border-base"></div>
+      <div class="step flex items-center gap-2" data-s="4"><span class="dot size-7 rounded-full grid place-items-center text-xs font-bold">4</span><span class="lbl text-sm font-semibold hidden md:block">AI Model</span></div>
+      <div class="w-6 sm:w-10 h-px bg-border-base"></div>
+      <div class="step flex items-center gap-2" data-s="5"><span class="dot size-7 rounded-full grid place-items-center text-xs font-bold">5</span><span class="lbl text-sm font-semibold hidden md:block">Deploy</span></div>
+    </div>
+    <a href="dashboard.html" class="text-sm text-muted hover:text-ink shrink-0 flex items-center gap-1"><span class="material-symbols-outlined !text-lg">close</span><span class="hidden sm:block">Exit</span></a>
+  </div>
+</header>
+
+<div class="flex-1 grid lg:grid-cols-[1fr_440px] max-w-[1280px] mx-auto w-full">
+  <!-- ============ FORM SIDE ============ -->
+  <div class="px-6 lg:px-12 py-10 overflow-y-auto">
+    <div class="max-w-lg">
+
+      <!-- STEP 1 -->
+      <section class="panel" data-p="1">
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2">Step 1 of 5</p>
+        <h1 class="font-display text-3xl font-extrabold tracking-tight mb-2">Who is your bot?</h1>
+        <p class="text-muted text-sm mb-8">This is how you'll appear to recruiters.</p>
+        <div class="space-y-5">
+          <div class="flex items-center gap-4">
+            <div class="size-16 rounded-full bg-neutral-100 border-2 border-dashed border-border-base grid place-items-center text-muted shrink-0"><span class="material-symbols-outlined">add_a_photo</span></div>
+            <div><button class="btn btn-secondary !py-2 text-xs">Upload photo</button><p class="text-[11px] text-muted mt-1.5">JPG/PNG/WEBP · max 2MB</p></div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5">Display name</label>
+            <input id="f-name" type="text" value="Vishal Patil" class="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand transition-colors">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5">Headline <span class="text-muted font-normal">· max 120 chars</span></label>
+            <input id="f-head" type="text" value="AI/ML Software Engineer · Open to SWE / AI roles" maxlength="120" class="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand transition-colors">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5">Bot URL</label>
+            <div class="flex items-center border border-border-base rounded-xl overflow-hidden focus-within:border-brand transition-colors">
+              <span class="pl-3 pr-1 text-sm text-muted">probot.com/u/</span>
+              <input type="text" value="vishal" class="flex-1 py-2.5 pr-3 text-sm outline-none bg-transparent">
+              <span class="material-symbols-outlined !text-lg text-success pr-3">check_circle</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 2 -->
+      <section class="panel hidden" data-p="2" id="knowledge">
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2">Step 2 of 5</p>
+        <h1 class="font-display text-3xl font-extrabold tracking-tight mb-2">Feed it your career.</h1>
+        <p class="text-muted text-sm mb-8">We chunk, embed &amp; index everything into a private vector store. Mix any sources.</p>
+        <div class="space-y-5">
+          <div class="border-2 border-dashed border-border-base rounded-2xl p-8 text-center hover:border-brand hover:bg-blue-50/30 transition-colors cursor-pointer">
+            <span class="material-symbols-outlined !text-4xl text-brand">upload_file</span>
+            <p class="text-sm font-semibold mt-2">Drop your resume PDF here</p>
+            <p class="text-xs text-muted mt-1">or click to browse · max 10MB, up to 5 files</p>
+          </div>
+          <!-- uploaded files -->
+          <div class="space-y-2">
+            <div class="flex items-center gap-3 p-3 rounded-xl border border-border-base bg-white">
+              <span class="size-9 rounded-lg bg-blue-50 grid place-items-center text-brand"><span class="material-symbols-outlined !text-lg">picture_as_pdf</span></span>
+              <div class="flex-1 min-w-0"><p class="text-sm font-medium truncate">Vishal_Patil_Resume.pdf</p><p class="text-[11px] text-success">Processed · 14 chunks indexed</p></div>
+              <span class="material-symbols-outlined !text-lg text-success">check_circle</span>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5">Add a URL <span class="text-muted font-normal">· LinkedIn, portfolio</span></label>
+            <div class="flex gap-2"><input type="text" placeholder="https://linkedin.com/in/…" class="flex-1 py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand"><button class="btn btn-secondary !px-4">Add</button></div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5">Anything else? <span class="text-muted font-normal">· max 50,000 chars</span></label>
+            <textarea rows="4" placeholder="Paste a bio, key wins, or anything recruiters should know…" class="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand resize-none thin-scroll"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 3 -->
+      <section class="panel hidden" data-p="3">
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2">Step 3 of 5</p>
+        <h1 class="font-display text-3xl font-extrabold tracking-tight mb-2">Give it a personality.</h1>
+        <p class="text-muted text-sm mb-8">Set the tone and how the chat looks.</p>
+        <div class="space-y-6">
+          <div>
+            <label class="block text-xs font-semibold mb-2">Tone preset</label>
+            <div class="grid grid-cols-3 gap-2" id="tones">
+              <button class="tone p-3 rounded-xl border-2 border-brand bg-blue-50/50 text-left" data-t="pro"><span class="material-symbols-outlined !text-xl text-brand">handshake</span><p class="text-sm font-bold mt-1">Professional</p><p class="text-[11px] text-muted">Clear &amp; concise</p></button>
+              <button class="tone p-3 rounded-xl border-2 border-border-base text-left hover:border-brand/40" data-t="creative"><span class="material-symbols-outlined !text-xl text-muted">palette</span><p class="text-sm font-bold mt-1">Creative</p><p class="text-[11px] text-muted">Warm &amp; expressive</p></button>
+              <button class="tone p-3 rounded-xl border-2 border-border-base text-left hover:border-brand/40" data-t="enth"><span class="material-symbols-outlined !text-xl text-muted">bolt</span><p class="text-sm font-bold mt-1">Enthusiastic</p><p class="text-[11px] text-muted">High energy</p></button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-2">Theme color</label>
+            <div class="flex gap-2">
+              <button class="size-8 rounded-full ring-2 ring-offset-2 ring-brand" style="background:oklch(0.55 0.193 251.78)"></button>
+              <button class="size-8 rounded-full" style="background:oklch(0.55 0.16 150)"></button>
+              <button class="size-8 rounded-full" style="background:oklch(0.55 0.18 300)"></button>
+              <button class="size-8 rounded-full" style="background:oklch(0.55 0.16 25)"></button>
+              <button class="size-8 rounded-full" style="background:oklch(0.4 0.02 262)"></button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5">Custom instructions <span class="text-muted font-normal">· optional, max 2000 chars</span></label>
+            <textarea rows="3" placeholder="e.g. Always mention I'm available for interviews next month." class="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand resize-none thin-scroll"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5">Suggested questions</label>
+            <div class="flex flex-wrap gap-2">
+              <span class="px-3 py-1.5 rounded-full bg-neutral-100 text-xs font-medium flex items-center gap-1.5">What are his top skills? <button class="text-muted">×</button></span>
+              <span class="px-3 py-1.5 rounded-full bg-neutral-100 text-xs font-medium flex items-center gap-1.5">Is he authorized to work in the US? <button class="text-muted">×</button></span>
+              <button class="px-3 py-1.5 rounded-full border border-dashed border-border-base text-xs font-medium text-muted">+ Add</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 4 · AI MODEL -->
+      <section class="panel hidden" data-p="4">
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2">Step 4 of 5</p>
+        <h1 class="font-display text-3xl font-extrabold tracking-tight mb-2">Choose your AI model.</h1>
+        <p class="text-muted text-sm mb-6">ProBot is open source and runs on <strong class="text-ink">your own LLM key</strong>. Pick a provider and paste your key — it's stored locally and never tracked by ProBot.</p>
+        <div class="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 flex gap-2.5 mb-6">
+          <span class="material-symbols-outlined text-brand !text-xl">lock</span>
+          <p class="text-[13px] text-ink leading-relaxed">Your key stays on this device. It's saved to local config and used only to call the model directly — <strong>never</strong> sent to or logged by ProBot.</p>
+        </div>
+        <div class="space-y-5">
+          <div>
+            <label class="block text-xs font-semibold mb-2">Provider</label>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="bf-providers">
+              <button class="bprov p-3 rounded-xl border-2 border-brand bg-blue-50/50 text-center" data-p="anthropic"><p class="text-sm font-bold">Anthropic</p><p class="text-[11px] text-muted">Claude</p></button>
+              <button class="bprov p-3 rounded-xl border-2 border-border-base text-center hover:border-brand/40" data-p="google"><p class="text-sm font-bold">Google</p><p class="text-[11px] text-muted">Gemini</p></button>
+              <button class="bprov p-3 rounded-xl border-2 border-border-base text-center hover:border-brand/40" data-p="deepseek"><p class="text-sm font-bold">DeepSeek</p><p class="text-[11px] text-muted">V3 / R1</p></button>
+              <button class="bprov p-3 rounded-xl border-2 border-border-base text-center hover:border-brand/40" data-p="openai"><p class="text-sm font-bold">OpenAI</p><p class="text-[11px] text-muted">GPT</p></button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5">Model</label>
+            <select id="bf-model" class="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand bg-white">
+              <option>Claude Opus 4 — most capable</option>
+              <option>Claude Sonnet 4 — balanced</option>
+              <option>Claude Haiku 4 — fastest &amp; cheapest</option>
+            </select>
+          </div>
+          <div>
+            <label id="bf-keylabel" class="block text-xs font-semibold mb-1.5">Anthropic API key</label>
+            <div class="flex items-center border border-border-base rounded-xl overflow-hidden focus-within:border-brand">
+              <span class="pl-3 text-muted"><span class="material-symbols-outlined !text-lg">key</span></span>
+              <input type="password" placeholder="sk-ant-api03-…" class="flex-1 py-2.5 px-2 text-sm outline-none bg-transparent font-mono">
+              <span class="material-symbols-outlined !text-lg text-success pr-3">check_circle</span>
+            </div>
+            <p class="text-[11px] text-muted mt-1.5 flex items-center gap-1"><span class="material-symbols-outlined !text-sm text-success">lock</span>Stored locally · never tracked by ProBot</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 5 -->
+      <section class="panel hidden" data-p="5">
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2">Step 5 of 5</p>
+        <h1 class="font-display text-3xl font-extrabold tracking-tight mb-2">Ready to deploy 🚀</h1>
+        <p class="text-muted text-sm mb-8">Your bot is built and indexed. Share it anywhere.</p>
+        <div class="space-y-5">
+          <div class="flex items-center gap-3 p-4 rounded-xl bg-success/10 border border-success/20">
+            <span class="material-symbols-outlined text-success">check_circle</span>
+            <div><p class="text-sm font-bold">Knowledge base indexed</p><p class="text-xs text-muted">14 chunks · ready for top-3 retrieval</p></div>
+          </div>
+          <div>
+            <label class="text-[11px] font-bold text-muted uppercase tracking-wider">Your bot link</label>
+            <div class="flex items-center gap-2 mt-1.5 border border-border-base rounded-xl px-3 py-2.5 bg-white">
+              <span class="text-sm font-mono flex-1 truncate">probot.com/u/vishal</span>
+              <button class="text-brand"><span class="material-symbols-outlined !text-lg">content_copy</span></button>
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] font-bold text-muted uppercase tracking-wider">Embed on your portfolio</label>
+            <code class="block text-[11px] bg-ink text-blue-200 rounded-xl p-3.5 font-mono mt-1.5 break-all leading-relaxed">&lt;script src="https://probot.com/widget.js" data-bot-id="vishal"&gt;&lt;/script&gt;</code>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <a href="chat.html" class="btn btn-secondary flex-1"><span class="material-symbols-outlined !text-lg">visibility</span>Preview bot</a>
+            <a href="dashboard.html" class="btn btn-primary flex-1">Go to dashboard<span class="material-symbols-outlined !text-lg">arrow_forward</span></a>
+          </div>
+        </div>
+      </section>
+
+      <!-- nav buttons -->
+      <div class="flex items-center justify-between mt-10 pt-6 border-t border-border-base">
+        <button id="back" class="btn btn-ghost invisible">Back</button>
+        <button id="next" class="btn btn-primary !px-6">Continue<span class="material-symbols-outlined !text-lg">arrow_forward</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ LIVE PREVIEW SIDE ============ -->
+  <div class="hidden lg:flex border-l border-border-base bg-white dot-pattern flex-col items-center justify-center p-8">
+    <p class="text-[11px] font-bold text-muted uppercase tracking-widest mb-4">Live preview</p>
+    <div class="w-full max-w-[340px] bg-white rounded-2xl border border-border-base shadow-floating overflow-hidden">
+      <div class="flex items-center gap-3 px-4 py-3.5 border-b border-border-base">
+        <div class="size-10 rounded-full brand-blue-gradient grid place-items-center text-white font-display font-bold">VP</div>
+        <div class="flex-1 min-w-0"><p id="p-name" class="text-sm font-bold leading-tight truncate">Vishal Patil</p><p id="p-head" class="text-[11px] text-muted truncate">AI/ML Software Engineer · Open to SWE / AI roles</p></div>
+      </div>
+      <div class="px-4 py-4 space-y-2.5 bg-bg-app/40 min-h-[220px]">
+        <div class="bubble-bot px-3 py-2 text-xs w-fit max-w-[85%]">👋 Hi! Ask me anything about Vishal.</div>
+        <div class="bubble-user px-3 py-2 text-xs w-fit max-w-[85%] ml-auto">What are his top skills?</div>
+        <div class="bubble-bot px-3 py-2 text-xs w-fit max-w-[88%]">Python, TypeScript, LangChain &amp; RAG, React/Next.js, plus AWS &amp; Postgres.</div>
+      </div>
+      <div class="px-4 py-3 border-t border-border-base flex items-center gap-2">
+        <span class="text-xs text-muted flex-1">Ask anything…</span>
+        <span class="size-6 grid place-items-center rounded-lg brand-blue-gradient text-white"><span class="material-symbols-outlined !text-sm">arrow_upward</span></span>
+      </div>
+    </div>
+    <p class="text-xs text-muted mt-4 text-center max-w-[300px]">Updates as you build. Recruiters see exactly this.</p>
+  </div>
+</div>
+
+<script>
+let step=1; const total=5;
+const panels=document.querySelectorAll('.panel'), steps=document.querySelectorAll('.step'),
+      back=document.getElementById('back'), next=document.getElementById('next');
+function render(){
+  panels.forEach(p=>p.classList.toggle('hidden', +p.dataset.p!==step));
+  steps.forEach(s=>{
+    const n=+s.dataset.s, dot=s.querySelector('.dot'), lbl=s.querySelector('.lbl');
+    dot.className='dot size-7 rounded-full grid place-items-center text-xs font-bold';
+    if(n<step){ dot.classList.add('bg-success','text-white'); dot.innerHTML='<span class="material-symbols-outlined !text-base">check</span>'; }
+    else if(n===step){ dot.style.background='oklch(0.55 0.193 251.78)'; dot.classList.add('text-white'); dot.textContent=n; }
+    else { dot.classList.add('bg-neutral-100','text-muted'); dot.style.background=''; dot.textContent=n; }
+    lbl&&(lbl.style.color = n<=step ? '' : 'var(--muted)');
+  });
+  back.classList.toggle('invisible', step===1);
+  next.innerHTML = step===total ? 'Finish &amp; deploy<span class="material-symbols-outlined !text-lg">rocket_launch</span>' : 'Continue<span class="material-symbols-outlined !text-lg">arrow_forward</span>';
+  window.scrollTo({top:0});
+}
+next.addEventListener('click',()=>{ if(step<total){step++;render();} else {window.location.href='dashboard.html';} });
+back.addEventListener('click',()=>{ if(step>1){step--;render();} });
+steps.forEach(s=>s.addEventListener('click',()=>{ step=+s.dataset.s; render(); }));
+// tone selection
+document.querySelectorAll('.tone').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tone').forEach(x=>{x.className='tone p-3 rounded-xl border-2 border-border-base text-left hover:border-brand/40'; x.querySelector('.material-symbols-outlined').classList.replace('text-brand','text-muted');});
+  b.className='tone p-3 rounded-xl border-2 border-brand bg-blue-50/50 text-left'; b.querySelector('.material-symbols-outlined').classList.replace('text-muted','text-brand');
+}));
+// live preview binding
+const fname=document.getElementById('f-name'), fhead=document.getElementById('f-head'),
+      pname=document.getElementById('p-name'), phead=document.getElementById('p-head');
+fname.addEventListener('input',()=>pname.textContent=fname.value||'Your name');
+fhead.addEventListener('input',()=>phead.textContent=fhead.value||'Your headline');
+// model provider selection (step 4)
+const BF_MODELS={
+  anthropic:['Claude Opus 4 — most capable','Claude Sonnet 4 — balanced','Claude Haiku 4 — fastest & cheapest'],
+  google:['Gemini 2.5 Pro','Gemini 2.5 Flash','Gemini 2.0 Flash-Lite'],
+  deepseek:['DeepSeek-V3','DeepSeek-R1 (reasoning)'],
+  openai:['GPT-4o','GPT-4o mini','o3-mini']
+};
+const BF_LABELS={anthropic:'Anthropic',google:'Google',deepseek:'DeepSeek',openai:'OpenAI'};
+const bfModel=document.getElementById('bf-model'), bfKeyLabel=document.getElementById('bf-keylabel');
+document.querySelectorAll('.bprov').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.bprov').forEach(x=>x.className='bprov p-3 rounded-xl border-2 border-border-base text-center hover:border-brand/40');
+  b.className='bprov p-3 rounded-xl border-2 border-brand bg-blue-50/50 text-center';
+  const p=b.dataset.p;
+  bfModel.innerHTML=BF_MODELS[p].map(m=>`<option>${m}</option>`).join('');
+  bfKeyLabel.textContent=BF_LABELS[p]+' API key';
+}));
+render();
+</script>
+<script src="assets/icons.js"></script>
+</body>
+</html>
