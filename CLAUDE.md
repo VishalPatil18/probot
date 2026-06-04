@@ -138,4 +138,19 @@ Skip the append only when no code, design, or architecture changed (e.g. a pure 
 
 ---
 
+## 10. Learnings Log (`learnings.md`)
+
+> [`./claude/learnings.md`](./claude/learnings.md) is the user's personal learning journal — the distilled "what / why / how it works under the hood" record of every concept taught while building this project. It pairs with §5 (Teach & Explain): every teaching moment becomes an entry here.
+
+**After every teaching moment** in a response (per §5 — whenever you explain how something works under the hood, the rationale for a technical choice, a non-obvious framework behavior, a RAG/GenAI concept, or a tradeoff):
+
+- Append a new entry to [`./claude/learnings.md`](./claude/learnings.md) capturing the same explanation in durable form.
+- Match the existing structure: a `###` heading for the topic (or extend an existing topic's section when the new teaching is a natural continuation), one or more `> Question framing?` lines, followed by prose that explains the mechanics, the *why*, the tradeoffs, and a concrete example where it clarifies.
+- Keep it self-contained — a future reader (the user, six months later) should be able to understand the concept without re-reading the surrounding conversation. Avoid references like "as we discussed above" or "in Task 1.4".
+- **Never edit past entries** — the log is append-only, same rule as `context.md` Session History. If a prior explanation turns out wrong or incomplete, correct it in a new entry.
+
+Skip the append only when the response contains no real teaching (e.g. a pure code edit with no explanation, or a clarifying question). When in doubt, append.
+
+---
+
 These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, clarifying questions come before implementation rather than after mistakes, and the user understands the codebase and RAG/GenAI concepts hands-on without unexpected costs.

@@ -43,7 +43,9 @@
 - **Styling:** Tailwind CSS 3.4 (utility-first per CLAUDE.md §8; no inline CSS)
 - **ORM:** Drizzle ORM 0.36 + `drizzle-kit` for migrations. Schema lives in `src/lib/db/schema.ts`; client in `src/lib/db/index.ts` (lazy `pg.Pool` + Drizzle instance).
 - **Database:** PostgreSQL (Supabase / Neon / local Postgres via `DATABASE_URL`)
-- **Auth:** NextAuth.js 4 (email/password in Stage 1; OAuth deferred to Stage 7). JWT session strategy, `bcryptjs@2.4` for password hashing at cost 10. Config in `src/lib/auth/auth.ts`; route handler at `src/app/api/auth/[...nextauth]/route.ts`; registration at `POST /api/auth/register`.
+- **Auth:** NextAuth.js 4 (email/password in Stage 1; OAuth deferred to Stage 7). JWT session strategy, `bcryptjs@2.4` for password hashing at cost 10. Config in `src/lib/auth/auth.ts`; route handler at `src/app/api/auth/[...nextauth]/route.ts`; registration at `POST /api/auth/register`. `SessionProvider` mounted in root layout. Login + register UI live in `src/app/(auth)/{login,register}/page.tsx` with shared `(auth)/layout.tsx` chrome.
+- **Fonts:** `Bricolage_Grotesque` (display) + `Inter_Tight` (sans) via `next/font/google`, exposed as CSS variables `--font-display` / `--font-sans` and wired to Tailwind's `fontFamily.display` / `fontFamily.sans`.
+- **Testing (UI):** Vitest with `@vitejs/plugin-react` for JSX transform, JSDOM env for `*.test.tsx`, `@testing-library/react` + `@testing-library/user-event` + `@testing-library/jest-dom`. `cleanup()` runs in `afterEach` via `src/test/setup.ts`.
 - **LLM clients:** Multi-provider BYO-key. `@anthropic-ai/sdk` and `openai` installed; Google Gemini and DeepSeek will be added as full adapters in Task 1.5 (files exist as stubs).
 - **Validation:** Zod 3
 - **Testing:** Vitest 2.1 + `@vitest/coverage-v8` (set up in Task 1.2; no tests yet — first tests land in Task 1.3).
@@ -336,5 +338,66 @@ _Architectural and product decisions, in chronological order. Each entry: date, 
 - Email-verification UX (when Stage 7 lands the email-send flow).
 - Auth-route rate limiting (Stage 7).
 - Apply the Drizzle migration before Task 1.4's UI can talk to a live `/api/auth/register`.
+
+---
+
+### 2026-06-04 10:30 — Stage 1 Task 1.4: Login + register UI ported from design/login.html
+
+**What was asked to do:** Port the login/register surface from `design/login.html` onto the existing `(auth)/login` and `(auth)/register` Next.js placeholders, wire the forms to the Task 1.3 backend (`POST /api/auth/register` + `signIn("credentials")`), and ship the design tokens (oklch palette + Bricolage Grotesque / Inter Tight fonts) into the project's Tailwind config — per `srs.md` FR-001 (email/password parts; OAuth + password-reset deferred to Stage 7).
+
+**What I did:**
+
+- Ported the design tokens from `design/login.html`'s inline `tailwind.config` and `design/assets/probot.css` into `tailwind.config.ts` (`theme.extend.colors` for the 8 oklch tokens, `theme.extend.fontFamily` pointing at CSS variables) and `src/app/globals.css` (`@layer components` with `.btn` family + `.brand-deep-gradient` + `.dot-pattern-light` + `.shadow-floating/soft`).
+- Wired `next/font/google` (`Bricolage_Grotesque` + `Inter_Tight`) in `src/app/layout.tsx`, exposed as CSS variables `--font-display` / `--font-sans` that Tailwind reads.
+- Mounted `SessionProvider` (new `src/lib/auth/session-provider.tsx`) in the root layout.
+- Built shared `(auth)/layout.tsx` (lg:grid-cols-2 chrome) + `BrandPanel.tsx` (left server component with brand copy + sample chat card + trust badges, all inline SVGs).
+- Built `OAuthDisabledRow.tsx` — Google + GitHub + LinkedIn buttons rendered `disabled` with absolute-positioned "SOON" badge (Q1=b).
+- Built `LoginForm.tsx` ("use client") — `signIn("credentials", { redirect: false })` → push `/dashboard` on success, alert on error. "Forgot?" greyed with Stage-7 tooltip.
+- Built `RegisterForm.tsx` ("use client") — POST `/api/auth/register` → auto `signIn` on 201 → push `/dashboard`. Surfaces server message on 409, first field error on 400, "Network error" on fetch reject; falls back to `/login` if auto-signin fails.
+- Replaced the `return null` placeholders in `(auth)/login/page.tsx` and `(auth)/register/page.tsx` with metadata exports + form renders.
+- Stood up the **component-test harness:** added `@vitejs/plugin-react`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, `jsdom` to devDeps; updated `vitest.config.ts` (`plugins: [react()]`, `environmentMatchGlobs` → JSDOM for `.tsx`); wrote `src/test/setup.ts` that loads jest-dom matchers and calls `cleanup()` in `afterEach`.
+- Wrote 10 component tests (4 for `LoginForm`, 6 for `RegisterForm`) — all green.
+- Hit one gotcha: tests passed individually but failed when run together (duplicated "Create account" buttons in DOM). Root cause: `@testing-library/react`'s auto-cleanup wasn't firing. Fixed by adding explicit `afterEach(cleanup)` in `src/test/setup.ts`.
+- Verified: `npm test` → **53 / 53 pass** across 6 files. `npm run typecheck` clean. `npm run build` green — `/login` 108 kB, `/register` 109 kB First Load JS, both under the 150 kB landing-page budget.
+
+**Files changed:**
+
+- `package.json` — update — added `@testing-library/jest-dom@^6.6.3`, `@testing-library/react@^16.1.0`, `@testing-library/user-event@^14.5.2`, `@vitejs/plugin-react@^4.3.4`, `jsdom@^25.0.1` to devDeps.
+- `tailwind.config.ts` — update — `theme.extend.colors` (8 oklch tokens) + `theme.extend.fontFamily` (display + sans → CSS variables).
+- `vitest.config.ts` — update — `plugins: [react()]`, `environmentMatchGlobs` for `.tsx` → jsdom, `setupFiles`, `src/test/**` in coverage exclude.
+- `src/test/setup.ts` — create — jest-dom matchers + `afterEach(cleanup)`.
+- `src/app/layout.tsx` — update — `next/font/google` (Bricolage Grotesque + Inter Tight) on `<html>`, body classes, `<SessionProvider>` wrap.
+- `src/app/globals.css` — update — appended design-system layer.
+- `src/lib/auth/session-provider.tsx` — create — `"use client"` `<NextAuthSessionProvider>` wrapper.
+- `src/app/(auth)/layout.tsx` — create — lg:grid-cols-2 chrome.
+- `src/components/auth/BrandPanel.tsx` — create — left panel + inline SVGs.
+- `src/components/auth/OAuthDisabledRow.tsx` — create — disabled OAuth buttons with SOON badges.
+- `src/components/auth/LoginForm.tsx` — create — client form, `signIn` flow.
+- `src/components/auth/RegisterForm.tsx` — create — client form, POST + auto-signIn.
+- `src/components/auth/LoginForm.test.tsx` — create — 4 specs.
+- `src/components/auth/RegisterForm.test.tsx` — create — 6 specs.
+- `src/app/(auth)/login/page.tsx` — update — metadata + `<LoginForm />`.
+- `src/app/(auth)/register/page.tsx` — update — metadata + `<RegisterForm />`.
+- `claude/context.md` — update — Tech Stack (Auth row extended, new Fonts and Testing-UI rows), this Session History entry.
+
+**Decisions made:**
+
+- **Two pages + shared `(auth)/layout.tsx`** (Q2=a). Real URLs + single chrome source.
+- **OAuth + Forgot disabled with SOON badge** (Q1=b) — surface looks complete without dead UI.
+- **`@testing-library/*` now** (Q3=a) — form-submit logic is where silent regressions hide.
+- **`next/font/google`** (Q4=yes) — self-hosted at build time; no FOUC, no DNS round-trip.
+- **Inline SVGs** (Q5=a) — no icon-lib payload tax.
+- **CSS-variable bridge for fonts:** `next/font` writes `--font-display`/`--font-sans`; Tailwind's `fontFamily` reads them. Decouples font loader from design tokens.
+- **Server-validation-only:** HTML5 attrs for trivial cases; rely on `/api/auth/register` 400 `details: parsed.error.flatten()` payload otherwise. No `react-hook-form` — KISS.
+- **Auto-sign-in after registration:** lands user in `/dashboard` without typing the password twice; falls back to `/login` if `signIn` fails post-201.
+- **Explicit `afterEach(cleanup)`** instead of relying on testing-library's "automatic" cleanup — more reliable across versions.
+- **No tests on the static `BrandPanel`:** per web/testing.md, visual regression > markup snapshots on highly visual chrome. Manual smoke-test via `npm run dev`.
+
+**Open questions / follow-ups:**
+
+- Apply the Drizzle migration before the live `/api/auth/register` path is end-to-end exercisable — still queued from Task 1.2/1.3.
+- `/dashboard` placeholder still returns null (Task 1.1) so the post-login redirect renders nothing. Cosmetic for now; Task 1.6 wires it.
+- OAuth + password reset wiring lands in Stage 7 — the disabled buttons + greyed "Forgot?" make the gap visible.
+- Visual regression / Playwright for auth surfaces — not in scope this turn; consider alongside chat UI tests in Task 1.7.
 
 ---
