@@ -1,0 +1,1 @@
+ALTER TABLE "bots" ADD COLUMN "loading_messages" jsonb DEFAULT '["Thinking…","Searching memory…","Drafting a response…","Almost ready…"]'::jsonb NOT NULL;

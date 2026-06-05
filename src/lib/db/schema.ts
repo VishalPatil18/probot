@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   jsonb,
@@ -44,6 +45,12 @@ export const bots = pgTable("bots", {
     .default("professional"),
   contextText: text("context_text").notNull(),
   suggestedQuestions: jsonb("suggested_questions").$type<string[]>(),
+  loadingMessages: jsonb("loading_messages")
+    .$type<string[]>()
+    .notNull()
+    .default(
+      sql`'["Thinking…","Searching memory…","Drafting a response…","Almost ready…"]'::jsonb`,
+    ),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
     .notNull()

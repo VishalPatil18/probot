@@ -44,9 +44,10 @@
 - **ORM:** Drizzle ORM 0.36 + `drizzle-kit` for migrations. Schema lives in `src/lib/db/schema.ts`; client in `src/lib/db/index.ts` (lazy `pg.Pool` + Drizzle instance).
 - **Database:** PostgreSQL (Supabase / Neon / local Postgres via `DATABASE_URL`)
 - **Auth:** NextAuth.js 4 (email/password in Stage 1; OAuth deferred to Stage 7). JWT session strategy, `bcryptjs@2.4` for password hashing at cost 10. Config in `src/lib/auth/auth.ts`; route handler at `src/app/api/auth/[...nextauth]/route.ts`; registration at `POST /api/auth/register`. `SessionProvider` mounted in root layout. Login + register UI live in `src/app/(auth)/{login,register}/page.tsx` with shared `(auth)/layout.tsx` chrome.
+- **Markdown:** `react-markdown@^9` + `remark-gfm@^4` (chosen over v10 because the project pins React 18). All bot replies render through it; every `<a>` is rewritten to `rel="noopener noreferrer" target="_blank"` via a `SafeLink` component.
 - **Fonts:** `Bricolage_Grotesque` (display) + `Inter_Tight` (sans) via `next/font/google`, exposed as CSS variables `--font-display` / `--font-sans` and wired to Tailwind's `fontFamily.display` / `fontFamily.sans`.
 - **Testing (UI):** Vitest with `@vitejs/plugin-react` for JSX transform, JSDOM env for `*.test.tsx`, `@testing-library/react` + `@testing-library/user-event` + `@testing-library/jest-dom`. `cleanup()` runs in `afterEach` via `src/test/setup.ts`.
-- **LLM clients:** Multi-provider BYO-key. `@anthropic-ai/sdk` and `openai` installed; Google Gemini and DeepSeek will be added as full adapters in Task 1.5 (files exist as stubs).
+- **LLM clients:** Multi-provider BYO-key. `@anthropic-ai/sdk` and `openai` are full adapters (Task 1.5); Google Gemini and DeepSeek ship as registered stubs that throw `ProviderError("…", "unknown", "not implemented in Stage 1")`. Common interface `LLMProvider.complete({ system, userMessage, apiKey, model?, maxTokens?, temperature? })` returns `{ reply: string }`. SDK clients are constructed per-request from the BYO key; never singletons.
 - **Validation:** Zod 3
 - **Testing:** Vitest 2.1 + `@vitest/coverage-v8` (set up in Task 1.2; no tests yet — first tests land in Task 1.3).
 - **Deployment:** Vercel (also self-hostable on any Node 20+ host) — not yet configured
@@ -54,7 +55,7 @@
 ### Architecture
 
 - **Routing:** Next.js App Router under `src/app/`. Route groups `(auth)` and `(dashboard)` share layouts without affecting URLs. Public chat lives at `/u/[username]/chat` (will be made public-no-auth in Stage 4; currently scaffolded).
-- **Data layer:** Drizzle ORM with a singleton `pg.Pool` (lazy — first query opens the TCP connection). Two tables today: `users` (with `username` + `email` unique, `hashed_password`, non-sensitive `llm_provider`/`llm_model` preferences, `email_verified`, timestamps) and `bots` (FK to `users.id` with `ON DELETE CASCADE`, `name`, `headline`, `personality` default `'professional'`, `context_text`, `suggested_questions` JSONB typed as `string[]`, `is_active`, timestamps). `updated_at` auto-bumps via Drizzle `$onUpdate` (app-level only). The LLM API key is **intentionally** not a column.
+- **Data layer:** Drizzle ORM with a singleton `pg.Pool` (lazy — first query opens the TCP connection). Two tables today: `users` (with `username` + `email` unique, `hashed_password`, non-sensitive `llm_provider`/`llm_model` preferences, `email_verified`, timestamps) and `bots` (FK to `users.id` with `ON DELETE CASCADE`, `name`, `headline`, `personality` default `'professional'`, `context_text`, `suggested_questions` JSONB typed as `string[]`, `loading_messages` JSONB typed as `string[]` with a 4-string default for the chat UI's typing indicator, `is_active`, timestamps). `updated_at` auto-bumps via Drizzle `$onUpdate` (app-level only). The LLM API key is **intentionally** not a column.
 - **Auth layer:** NextAuth v4 with the Credentials provider and JWT session strategy (no DB adapter; the `authorize()` callback queries Drizzle directly). Password hashing via `bcryptjs` cost 10. Inputs validated by Zod (`src/lib/auth/schemas.ts`) — `USERNAME_REGEX = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/` + reserved-slug set from `plan.md` §4.6 enforced at registration to keep `users.username` valid for Stage 4's `/u/[username]/chat` route. JWT carries `id` + `username`; LLM provider/model are intentionally kept out of the JWT (refetched per chat call to avoid stale prefs). Module augmentation lives in `src/types/next-auth.d.ts`. Registration is `POST /api/auth/register` — pre-check + `UNIQUE`-constraint backstop translates `pg` error code `23505` to a 409 instead of leaking a 500.
 - **LLM abstraction:** All chat/embedding calls go through a provider registry in `src/lib/ai/providers/`. Each adapter (`anthropic.ts`, `openai.ts`, `google.ts`, `deepseek.ts`) implements a shared `LLMProvider` interface in `types.ts`. The chat API resolves the user's chosen provider/model from the `users` table and forwards the BYO key only to that provider.
 - **BYO-key transport (planned):** The LLM API key is held in browser `localStorage` (`src/lib/client/llm-key-store.ts`, key `probot.llm.key.v1`) and sent to the chat API in an `x-llm-api-key` header — never in the JSON body. The server never logs, persists, or forwards the key except to the chosen provider. Enforced in Task 1.8 (`key-transport.ts`).
@@ -102,11 +103,11 @@ probot/
     ├── lib/
     │   ├── db/                     # schema.ts (users + bots Drizzle tables), index.ts (Drizzle client) — Task 1.2 ✓
     │   ├── ai/
-    │   │   ├── providers/          # index, types, anthropic, openai, google, deepseek (stubs — Task 1.5)
+    │   │   ├── providers/          # types (LLMProvider, ProviderError), index (registry), anthropic + openai (real), google + deepseek (stubs that throw) — Task 1.5 ✓
     │   │   ├── prompt-builder.ts   # stub — Task 1.8
     │   │   ├── sanitize-input.ts   # stub — Task 1.8
     │   │   ├── sanitize-output.ts  # stub — Task 1.8
-    │   │   └── key-transport.ts    # stub — Task 1.8
+    │   │   └── key-transport.ts    # readApiKey/redactKey/KeyTransportError — Task 1.5 ✓ (consumed by Task 1.8)
     │   ├── auth/
     │   │   ├── auth.ts             # NextAuth options (Credentials + JWT) — Task 1.3 ✓
     │   │   ├── passwords.ts        # bcryptjs hash + verify at cost 10 — Task 1.3 ✓
@@ -163,7 +164,7 @@ _Architectural and product decisions, in chronological order. Each entry: date, 
 **Open:**
 
 - [ ] **Tailwind / design port:** `design/*.html` mockups are not yet ported to Tailwind components. Will land per surface (login → Task 1.4, bot factory → Task 1.6, chat → Task 1.7) per CLAUDE.md §8.
-- [ ] **Stage 1 remaining tasks:** 1.4 (login/register UI) · 1.5 (provider clients + BYO key transport) · 1.6 (Bot Factory form + browser key store) · 1.7 (Chat UI port from VAi) · 1.8 (Chat API port from VAi).
+- [ ] **Stage 1 remaining tasks:** 1.8 (Chat API route at `POST /api/chat/[botId]` — consumes Task 1.5's providers + key-transport; the Task 1.7 chat UI already calls this endpoint and will 404 until 1.8 lands).
 - [ ] **Run the migration:** `drizzle/0000_new_misty_knight.sql` is generated and committed but not applied. Run `npm run db:migrate` against a real Postgres (Supabase/Neon free tier or local Docker) before Task 1.4's UI flows can hit a live backend.
 - [ ] **Email verification UX:** the `email_verified` column is wired but always `false` at registration. Stage 7 owns the actual verify-email flow; until then login is intentionally not gated on this flag.
 - [ ] **Rate limiting on auth routes:** none in Stage 1 (Stage 7's Redis layer wraps everything). Credential stuffing is undefended in the meantime.
@@ -399,5 +400,135 @@ _Architectural and product decisions, in chronological order. Each entry: date, 
 - `/dashboard` placeholder still returns null (Task 1.1) so the post-login redirect renders nothing. Cosmetic for now; Task 1.6 wires it.
 - OAuth + password reset wiring lands in Stage 7 — the disabled buttons + greyed "Forgot?" make the gap visible.
 - Visual regression / Playwright for auth surfaces — not in scope this turn; consider alongside chat UI tests in Task 1.7.
+
+---
+
+### 2026-06-04 15:25 — Stage 1 Task 1.5: Multi-provider LLM client abstraction + BYO key transport
+
+**What was asked to do:** Multi-provider LLM clients + BYO key transport. Implement the provider registry (`src/lib/ai/providers/`) with a shared `LLMProvider` interface, real Anthropic and OpenAI adapters using the BYO key supplied per-request, and `src/lib/ai/key-transport.ts` that reads the `x-llm-api-key` header without ever logging or persisting the value. Stub Google + DeepSeek so the registry exposes all four names but the unimplemented two throw with a clear category. Locked answers Q1=a (KISS interface: `{ system, userMessage, … }` not `messages[]`), Q2=b (typed `ProviderError { category: "invalid_key" | "rate_limit" | "unknown" }`), Q3=a (stubs registered, throw on `complete()`), Q4=a (adapter-hardcoded default model).
+
+**What I did:**
+
+- Replaced the Task 1.1 `export {};` stub in `src/lib/ai/providers/types.ts` with the contract: `ProviderName = "anthropic" | "openai" | "google" | "deepseek"`, `CompleteParams { system, userMessage, apiKey, model?, maxTokens?, temperature? }`, `CompleteResult { reply }`, `LLMProvider { defaultModel, complete }`, `ProviderErrorCategory = "invalid_key" | "rate_limit" | "unknown"`, and the `ProviderError` class with a `toJSON()` override (defense-in-depth from code review — see Decisions).
+- Wrote `src/lib/ai/key-transport.ts` — `readApiKey(headers: Headers): string` pulls the `x-llm-api-key` header, trims, and distinguishes `KeyTransportError` reasons `"missing" | "empty" | "too_short" | "too_long"` (the last three came from the code review's HIGH finding — splitting whitespace-only from below-MIN_LEN). Error messages reference the header name, never the value. `redactKey(key)` mask is `first4...last4`, returns `"***"` for keys ≤ 8 chars. No `console.*` in the file.
+- Wrote the real `anthropic.ts` adapter — constructs `new Anthropic({ apiKey })` per request, sends `messages.create({ model, max_tokens, temperature, system, messages: [{role:"user", content: userMessage}] })`, extracts `response.content[0].text` with a guard for non-text blocks, maps SDK errors via `instanceof APIError` + `.status === 401|429` → `invalid_key|rate_limit`, default `claude-haiku-4-5` / 500 / 0.3.
+- Wrote the real `openai.ts` adapter — same shape, but `chat.completions.create` with `messages: [{role:"system"}, {role:"user"}]`, extracts `response.choices[0]?.message?.content`, default `gpt-4o-mini` / 500 / 0.3.
+- Wrote the `google.ts` and `deepseek.ts` stubs — registered with `defaultModel` strings (`gemini-1.5-flash`, `deepseek-chat`); `complete()` throws `ProviderError("…", "unknown", "… provider is not implemented in Stage 1")` and never echoes the apiKey.
+- Wrote the registry in `src/lib/ai/providers/index.ts` — `PROVIDERS: Record<ProviderName, LLMProvider>`, `PROVIDER_NAMES: readonly ProviderName[]`, `getProvider(name)`, `isProviderName(value): value is ProviderName` (uses `Object.prototype.hasOwnProperty.call` to avoid prototype-chain footguns), and re-exports the entire types surface so Task 1.6/1.8 callers import only from `@/lib/ai/providers`.
+- Wrote 48 specs across 6 test files: `key-transport.test.ts` (9), `anthropic.test.ts` (10 — includes the serialization bound), `openai.test.ts` (9), `google.test.ts` (3), `deepseek.test.ts` (3), `providers/index.test.ts` (14, includes `it.each` matrix for all 4 adapters in the registry). Total project tests: 53 → **101**, all green.
+- Mocked the SDKs in tests via `vi.mock("@anthropic-ai/sdk", async () => ({ ...await vi.importActual(...), default: MockClass }))`. Every error-path test asserts the key value never appears in the thrown error's `.message`, **and** the serialization test asserts `JSON.stringify(providerError)` reveals only `{ name, provider, category, message }` — no `cause`, no original SDK error, no headers.
+- Debug methodology when 3/9 anthropic tests failed on first run: error said `Right-hand side of 'instanceof' is not an object`. Root cause: adapter did `import Anthropic from "@anthropic-ai/sdk"` then `err instanceof Anthropic.APIError` — but the mock replaces only `default`, so `Anthropic.APIError` (static) was `undefined` at runtime. Fix: named import `import Anthropic, { APIError } from "@anthropic-ai/sdk"` then `err instanceof APIError`. Applied the same lesson upfront in `openai.ts`. (See learnings.md entry.)
+
+**Files changed:**
+
+- `src/lib/ai/providers/types.ts` — update — replaced `export {};` stub with `LLMProvider` interface, types, and `ProviderError` class (incl. `toJSON()`).
+- `src/lib/ai/providers/anthropic.ts` — update — replaced `export {};` stub with the Anthropic adapter.
+- `src/lib/ai/providers/openai.ts` — update — replaced `export {};` stub with the OpenAI adapter.
+- `src/lib/ai/providers/google.ts` — update — replaced `export {};` stub with the throw-on-call stub.
+- `src/lib/ai/providers/deepseek.ts` — update — same as google.
+- `src/lib/ai/providers/index.ts` — update — replaced `export {};` stub with the registry + type re-exports.
+- `src/lib/ai/key-transport.ts` — update — replaced `export {};` stub with `readApiKey`, `redactKey`, `KeyTransportError`.
+- `src/lib/ai/key-transport.test.ts` — create — 9 specs.
+- `src/lib/ai/providers/anthropic.test.ts` — create — 10 specs incl. serialization bound.
+- `src/lib/ai/providers/openai.test.ts` — create — 9 specs.
+- `src/lib/ai/providers/google.test.ts` — create — 3 specs.
+- `src/lib/ai/providers/deepseek.test.ts` — create — 3 specs.
+- `src/lib/ai/providers/index.test.ts` — create — 14 specs (registry assertions).
+- `claude/context.md` — update — Current State (LLM clients row promoted from "stubs only" to "two real adapters + two stubs"), Repository Layout (providers/ + key-transport.ts marked Task 1.5 ✓), Open Questions (one entry trimmed: 1.4 removed; 1.5 removed; rewording for 1.6→1.8 ownership), this Session History entry.
+
+**Decisions made:**
+
+- **Per-request SDK clients (not singletons):** every `complete()` call does `new Anthropic({ apiKey })` / `new OpenAI({ apiKey })`. Reason: this is a BYO-key product — different requests carry different users' keys. Singletons would either pin to one key (wrong) or require runtime mutation of a shared client (race-prone). Per-request construction is cheap (just an object holding the key + a fetch wrapper) and isolates state.
+- **Named-import `APIError`, not `SDK.APIError`:** the SDK's static `APIError` on the default-export class is lost when tests mock the default export. Named imports come straight from module-level exports and survive `vi.mock(..., { ...actual, default: Mock })`. Applies symmetrically to both adapters.
+- **`ProviderError.toJSON()` for bounded serialization:** code review CRITICAL finding. Even though the current adapter never attaches `cause`, a future caller could; a structured logger calling `JSON.stringify(err)` would then leak SDK error headers (which may carry the raw `Authorization: Bearer <key>`). The override caps the serialized shape at `{ name, provider, category, message }` regardless of what callers attach.
+- **`KeyTransportError` reasons split `"empty"` vs `"too_short"`:** code review HIGH finding. Whitespace-only header = "I forgot to send a key" (UX: "Add your API key in settings"). Non-empty but shorter than MIN_LEN = "I sent the wrong thing" (UX: "Your API key appears incomplete — paste the full value"). Conflating them was a precision bug.
+- **Pushed back on three MEDIUM code-review suggestions** (rationale per CLAUDE.md §1: push back when warranted):
+  1. `isProviderName` → keep `Object.prototype.hasOwnProperty.call(PROVIDERS, value)`. The reviewer's alternative `PROVIDER_NAMES.includes(value as ProviderName)` needs a type assertion inside the type guard, which defeats the guard.
+  2. Don't unify `readApiKey`'s MIN_LEN (validation threshold) with `redactKey`'s `<= 8` (display threshold). They serve different concerns; coincidental equality.
+  3. Don't extract `DEFAULT_MAX_TOKENS = 500` / `DEFAULT_TEMPERATURE = 0.3` to a shared module. Per-provider tuning will diverge as we benchmark; premature DRY.
+- **Stubs registered, not omitted (Q3=a):** the user picks `users.llm_provider` in Task 1.6's Bot Factory; if Stage 1 only shows `anthropic` + `openai`, the registry doesn't need `google`/`deepseek` yet. But registering them means the file structure is final and the UI can choose to grey-list them rather than hide them. The throw-on-`complete()` shape gives a useful runtime error if anything sneaks past UI gating.
+- **`toJSON()` defense-in-depth tested via real serialization round-trip:** the test runs `JSON.stringify(caught)` then `JSON.parse`, asserts exact key set, and scans the raw string for the apiKey marker. This catches future regressions where someone might add a `cause` field on `ProviderError` and forget to update `toJSON()`.
+- **Built without `console.*` and verified by grep:** zero `console.*` calls in `src/lib/ai/key-transport.ts` and `src/lib/ai/providers/*.ts` (verified post-build).
+- **No SDK error message propagated into `ProviderError.message`:** all map functions construct fresh strings like `"Anthropic rejected the API key"` instead of `err.message`. SDK error messages can include the request payload (which includes the BYO key in `Authorization` header). Defense in depth.
+
+**Open questions / follow-ups:**
+
+- Real Google + DeepSeek adapters — out of Stage 1 scope; lands when those providers' first paying customer/test user appears.
+- Streaming `complete()` — VAi was non-streaming; not in scope. Stage 5/6 may revisit if widget UX needs token-by-token rendering.
+- `usage`/`tokens` field on `CompleteResult` — Stage 6 analytics will likely add this. Today not needed.
+- Retry / circuit-breaker — Stage 7 hardening territory.
+- The chat API route (`/api/chat/[botId]/route.ts`) that wires `readApiKey` → `getProvider(user.llm_provider).complete({…, apiKey})` → `sanitizeOutput` is Task 1.8.
+- Browser-side key store (`src/lib/client/llm-key-store.ts`) is Task 1.6.
+
+---
+
+### 2026-06-04 18:20 — Stage 1 Tasks 1.6 + 1.7: Bot Factory + Browser Key Store + Chat UI port
+
+**What was asked to do:** Bot Factory form + browser key store (Task 1.6) and Chat UI port from VAi (Task 1.7). Per Q1=a we ran them as one feature-dev session but built them sequentially (1.6 to green → 1.7) so the chat UI's `getApiKey()` consumer landed against a working store. Q2=a (5 steps with Stage-1-trimmed content per step), Q3=a (one bot per user, upsert), Q4=a (`react-markdown` + `remark-gfm`), Q5=b (rotating loading messages, user-customizable in settings — Stage 7 owns the editor; Stage 1 ships the column + UI consumer with sensible defaults).
+
+**What I did:**
+
+- **Schema delta:** added `bots.loading_messages jsonb NOT NULL DEFAULT '[...4 strings...]'::jsonb` and regenerated migration `drizzle/0001_spotty_blizzard.sql`. The existing un-applied `0000_*` migration is now joined by this one; both are applied together with `npm run db:migrate`.
+- **`src/lib/client/llm-key-store.ts`** — `getApiKey`, `setApiKey`, `clearApiKey` over `localStorage` under `probot.llm.key.v1`. SSR-safe via `typeof window` + `typeof window.localStorage` guard. Trims whitespace on read+write; empty-after-trim is treated as clear. Test runs with `// @vitest-environment jsdom` pragma.
+- **`src/lib/bots/schemas.ts`** — Zod `botInput` (isomorphic) + exported `PERSONALITY_PRESETS = ["professional", "creative", "enthusiastic"] as const` + `Personality` type. `llmProvider` enum is derived from Task 1.5's `PROVIDER_NAMES` so the two never drift. `name` and `contextText` go through a `transform→trim→refine` chain that catches whitespace-only inputs (the same Zod pattern the auth schemas use).
+- **`src/app/api/bots/route.ts`** — `POST` handler. Auth-gates via `getServerSession(authOptions)` → 401. Validates with `botInput.safeParse` → 400 with `details: error.flatten()`. Runs everything in `db.transaction(async (tx) => …)`: updates `users.llmProvider`/`llmModel`, finds existing bot for this user, then either `update().returning()` (200) or `insert().values().returning()` (201). One bot per user (Q3=a) is enforced at the app layer, not the schema (no UNIQUE constraint), so the future per-user-N-bots transition needs no migration. The BYO API key is never named in the route — the Zod schema has no `apiKey` field, and there's a dedicated test that submits a body containing a leak-canary `apiKey` field and asserts the persisted row's serialized JSON does not contain it.
+- **`src/components/bot-factory/BotFactoryForm.tsx`** — single consolidated client component (~600 lines, within the 800-max guideline). State owner: `step (1-5)`, `form`, `newQuestion`, `submitting`, `error`, `createdBotId`. Renders inline `<StepperHeader />` + current step + nav buttons + `<LivePreview />`. Step files (StepIdentity / StepKnowledge / StepPersonality / StepAIModel / StepDeploy) are colocated functions in the same file rather than separate modules — deviation from the original blueprint's 8-file plan, taken because the per-step JSX is simple presentational and the GateGuard fact-forcing hook makes 8 file creations expensive without clarity gain. On Step 4 Continue: `setApiKey(form.apiKey)` is called **before** the `fetch` so the key is captured locally even if the request hangs. Fetch body intentionally omits `apiKey`; the test asserts the raw `init.body` string does not contain the key value.
+- **Wired `/dashboard/bots/new/page.tsx`** as a server component that auth-gates (redirect to `/login?next=…` on no session), preloads the existing bot + user LLM prefs, and renders `<BotFactoryForm />` in edit-or-create mode.
+- **`src/components/chat/types.ts`** — `ChatMessage` discriminated union with three variants: `{id, role:"user", text}`, `{id, role:"assistant", text}`, `{id, role:"assistant", rateLimitMessage:true}`. The `id` field was added during code review (HIGH finding — see below).
+- **`src/components/chat/MessageBubble.tsx`** — renders user (right-aligned brand bubble), assistant text (markdown via `<ReactMarkdown remarkPlugins={[remarkGfm]} components={{a: SafeLink}}>`), and the rate-limit sentinel as a special rose card with `role="alert"`. `SafeLink` rewrites every `<a>` to include `rel="noopener noreferrer" target="_blank"`. Test asserts no actual `<img>` tag renders even when the bot text contains `<img onerror=…>` (react-markdown escapes HTML by default; no `rehypeRaw`).
+- **`src/components/chat/LoadingAnimation.tsx`** — three CSS-bounced dots + a rotating message that cycles every 3s. `useEffect` mounts a `setInterval` and clears it on unmount; the `if (messages.length <= 1)` guard avoids both a divide-by-zero risk (modulo by 0 → NaN) and a degenerate "cycle of 1" interval. Fake-timer test asserts wrap-around and cleanup.
+- **`src/components/chat/ChatWindow.tsx`** — top-level state owner. State: `messages`, `input`, `loading`, `missingKey`. On submit: `getApiKey()` → if null, set `missingKey` and bail without calling `fetch`. Otherwise `fetch("/api/chat/${botId}", { headers: { "x-llm-api-key": apiKey }, body: JSON.stringify({ message }) })`. 429 → push rate-limit sentinel; other !ok → generic error bubble; throw → "Network error" bubble. Auto-scrolls on every message change. Inlines `ChatHeader` + `SuggestedQuestions` (folded the unused stub `SuggestedQuestions.tsx` into this file and deleted the stub).
+- **Wired `/u/[username]/chat/page.tsx`** — server component that auth-gates (Stage 1; Stage 4 removes the gate per plan.md), resolves `username → user → bot` via Drizzle, and renders `<ChatWindow ... loadingMessages={bot.loadingMessages} />`. `generateMetadata` provides `<title>`.
+- **Added dependencies:** `react-markdown@^9.1.0` + `remark-gfm@^4.0.1`. Chose `^9` over `^10` because v10 requires React 19 and the project pins React 18.
+- **Code review applied:** 1 HIGH (array-index keys on the mutable messages list — added synthetic `id` to `ChatMessage` so future Task 1.8 retry-replace logic doesn't reconcile the wrong nodes); 1 MEDIUM (`LoadingAnimation` dep changed `[messages.length]` → `[messages]` for ESLint exhaustive-deps cleanliness); 1 MEDIUM (`BotFactoryForm` now guards `initialLlmModel` against values not present in current `MODEL_OPTIONS` — falls back to the first option so the `<select>` is never desynced from form state). Pushed back on one MEDIUM (sharing an 8-char threshold constant between `BotFactoryForm.stepIsValid(4)` and `key-transport.MIN_LEN`) per CLAUDE.md §2 — the two layers serve different concerns (loose UI guard vs strict server contract) and coincidental equality is fine.
+- **Debugging note:** the `ChatWindow.test.tsx` first run failed 5/7 specs with "Multiple elements found" for `getByLabelText(/message/i)` — both the textarea (`aria-label="Message"`) and the send button (`aria-label="Send message"`) matched. Fixed by switching to `getByRole("textbox")` which uniquely identifies the textarea. Same root cause as the auth-form cleanup gotcha in Task 1.4 — overly fuzzy regex selectors collide as the markup grows.
+- **Verified:** `npm run typecheck` clean. `npm test` → **161 / 161** across 19 files (was 101 after Task 1.5; +60 new). `npm run build` green — `/dashboard/bots/new` 151 kB, `/u/[username]/chat` 142 kB First Load JS (both within 300 kB app-page budget per web/performance.md). Zero `console.*` in any new file.
+
+**Files changed:**
+
+- `package.json` — update — added `react-markdown@^9.1.0` + `remark-gfm@^4.0.1` to deps.
+- `src/lib/db/schema.ts` — update — added `loadingMessages` jsonb column with DB default (4 strings) + `sql` import from drizzle-orm.
+- `drizzle/0001_spotty_blizzard.sql` — create (generated) — one-statement ALTER TABLE adding `loading_messages`.
+- `src/lib/client/llm-key-store.ts` — update — replaced `export {};` stub with `getApiKey`/`setApiKey`/`clearApiKey` over localStorage.
+- `src/lib/client/llm-key-store.test.ts` — create — 6 specs (jsdom env).
+- `src/lib/bots/schemas.ts` — create — Zod `botInput` + `PERSONALITY_PRESETS`.
+- `src/lib/bots/schemas.test.ts` — create — 22 specs (it.each matrices).
+- `src/app/api/bots/route.ts` — create — POST handler with auth + transaction + upsert.
+- `src/app/api/bots/route.test.ts` — create — 6 specs incl. BYO-key leak-canary.
+- `src/components/bot-factory/BotFactoryForm.tsx` — update — replaced `export {};` stub with the consolidated form (~600 lines).
+- `src/components/bot-factory/BotFactoryForm.test.tsx` — create — 8 specs.
+- `src/app/(dashboard)/dashboard/bots/new/page.tsx` — update — replaced `return null` with auth-gated server component.
+- `src/components/chat/types.ts` — create — `ChatMessage` discriminated union (with `id`).
+- `src/components/chat/MessageBubble.tsx` — update — replaced `export {};` stub with markdown bubble + `SafeLink`.
+- `src/components/chat/MessageBubble.test.tsx` — create — 5 specs (user/bot/links/sentinel/XSS).
+- `src/components/chat/LoadingAnimation.tsx` — update — replaced `export {};` stub with cycling dots + message.
+- `src/components/chat/LoadingAnimation.test.tsx` — create — 6 specs (fake timers).
+- `src/components/chat/ChatWindow.tsx` — update — replaced `export {};` stub with top-level chat component.
+- `src/components/chat/ChatWindow.test.tsx` — create — 7 specs incl. BYO-key header-vs-body assertion.
+- `src/components/chat/SuggestedQuestions.tsx` — delete — folded into ChatWindow (was an unused stub).
+- `src/app/u/[username]/chat/page.tsx` — update — replaced `return null` with auth-gated chat page server component.
+- `claude/context.md` — update — Tech Stack (Markdown row; bots-table loading_messages note), Open Questions (closed 1.6 + 1.7; 1.8 promoted), this Session History entry.
+
+**Decisions made:**
+
+- **Consolidated bot-factory into one file (deviation):** the original blueprint specified 8 separate component files for the bot factory (BotFactoryForm + StepperHeader + LivePreview + 5 step files). Consolidated into one `BotFactoryForm.tsx` (~600 lines) because (a) per-step JSX is simple presentational, (b) the GateGuard fact-forcing hook makes 8 file-creation cycles expensive without clarity gain, and (c) the file is well within the 800-line max from `~/.claude/rules/ecc/common/coding-style.md`. The 5 step renderers are colocated functions in the same file. Cleaner reviewable diff.
+- **`react-markdown@^9` not `^10`:** v10 requires React 19; we pin React 18. v9 is feature-equivalent for our needs (GFM tables, lists, code, links via custom components).
+- **`SafeLink` over a rehype plugin for link safety:** simpler — passing a `components: { a: SafeLink }` map to ReactMarkdown is one line and locally readable. The alternative (`rehype-external-links`) would add another dep for the same outcome.
+- **No `rehypeRaw`:** by default react-markdown does NOT render raw HTML in the source string. We rely on this so that bot replies containing `<img onerror="…">` or `<script>` cannot inject DOM. The test asserts no `<img>` element renders even when the input contains one. Adding `rehypeRaw` would un-do this protection.
+- **`bots.loading_messages` as a per-bot DB column (Q5b):** the user wants customizable rotating messages. Adding the column now (with sane defaults) means Stage 7's settings page is a UI-only addition — no schema migration required at that point. The Stage 1 bot factory does NOT expose an editor for these (settings UX is Stage 7); the chat UI reads `bot.loadingMessages` directly via props.
+- **One bot per user enforced at the app layer (not the schema):** plan.md keeps `bots.user_id` without UNIQUE so a future Stage 6 dashboard can support multiple bots. The Stage 1 `POST /api/bots` does `findFirst` → update-or-insert, treating the user's row count as 0 or 1.
+- **Single transaction for bot + user-pref update:** prevents the half-state where `users.llm_provider` updates but the bot insert fails (or vice versa). The `db.transaction(...)` wraps both writes; either both commit or neither does.
+- **Sequential implementation (Q1=a):** built 1.6 to green checkpoint (143 tests) before starting 1.7. The chat UI's `getApiKey()` consumer landed against an already-tested store. If a regression appeared in 1.7, it was clearly in chat code, not the key store.
+- **`crypto.randomUUID()` for chat message ids with a fallback:** in jsdom (test env) and older browsers, `crypto.randomUUID()` may be unavailable. `newId()` falls back to `Date.now()`+random. Used only for React reconciliation keys; not for security identifiers.
+- **Auth-gated chat page in Stage 1 (will become public in Stage 4):** plan.md §4.1 specifies that `/u/[username]/chat` becomes public no-auth in Stage 4. The Stage 1 implementation includes the `getServerSession` check; Stage 4 removes those four lines and the page becomes truly public. No path or component refactor required.
+- **No `dangerouslySetInnerHTML` anywhere in the chat stack:** all bot output goes through react-markdown's React tree. Defense in depth on top of the server-side `sanitizeOutput` that Task 1.8 will add.
+
+**Open questions / follow-ups:**
+
+- **Apply the Drizzle migrations** (now `0000_*` + `0001_*`) before any UI flow can hit a live `/api/bots` or chat path end-to-end. Both can be applied in order via `npm run db:migrate` against the Postgres instance — still queued from Task 1.2.
+- **Task 1.8** — the chat API route (`POST /api/chat/[botId]`) is the next and final Stage 1 task. The Task 1.7 chat UI already calls this endpoint; it will 404 until 1.8 ships. Task 1.8 wires `readApiKey(req.headers)` → `getProvider(bot.user.llmProvider).complete({ system, userMessage, apiKey })` → `sanitizeOutput`. The `system` prompt builder and the input/output sanitizers (`prompt-builder.ts`, `sanitize-input.ts`, `sanitize-output.ts`) are still stubs from Task 1.1 and will land alongside 1.8.
+- **Settings page** (Stage 7) — the editor for `bots.loading_messages`, theme color, custom instructions, and OAuth providers.
+- **Visual regression / Playwright for chat surface** — not in scope this turn; pair with Task 1.8 when there's a real backend to drive.
+- **`/dashboard` placeholder still returns null** — the post-login redirect still lands on an empty page. Cosmetic. Stage 6 dashboard owns the real implementation.
 
 ---
