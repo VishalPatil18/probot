@@ -1,0 +1,75 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  PERSONALITY_PROMPTS,
+  buildSystemPrompt,
+} from "./prompt-builder";
+
+const baseBot = {
+  name: "Jane Doe",
+  personality: "professional" as const,
+  contextText: "Jane is an ML engineer with 5 years at Acme building RAG.",
+};
+
+describe("buildSystemPrompt", () => {
+  it("includes the bot name in the identity line", () => {
+    const prompt = buildSystemPrompt({ bot: baseBot, ownerUsername: "jane" });
+    expect(prompt).toMatch(/Jane Doe/);
+  });
+
+  it("includes all 7 immutable rules", () => {
+    const prompt = buildSystemPrompt({ bot: baseBot, ownerUsername: "jane" });
+    const numberedLines = prompt.match(/^\s*\d+\.\s/gm) ?? [];
+    expect(numberedLines.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it("injects the personality prose block matching bot.personality", () => {
+    for (const personality of [
+      "professional",
+      "creative",
+      "enthusiastic",
+    ] as const) {
+      const prompt = buildSystemPrompt({
+        bot: { ...baseBot, personality },
+        ownerUsername: "jane",
+      });
+      expect(prompt).toContain(PERSONALITY_PROMPTS[personality]);
+    }
+  });
+
+  it("embeds the bot context verbatim under a ## CONTEXT header", () => {
+    const prompt = buildSystemPrompt({ bot: baseBot, ownerUsername: "jane" });
+    expect(prompt).toContain("## CONTEXT");
+    expect(prompt).toContain(baseBot.contextText);
+  });
+
+  it("never JSON-serializes the bot object (context stays plain text)", () => {
+    const prompt = buildSystemPrompt({ bot: baseBot, ownerUsername: "jane" });
+    expect(prompt).not.toMatch(/"contextText"\s*:/);
+    expect(prompt).not.toMatch(/^\s*\{\s*"/m);
+  });
+
+  it("puts identity → rules → personality → context in that order", () => {
+    const prompt = buildSystemPrompt({ bot: baseBot, ownerUsername: "jane" });
+    const identityIdx = prompt.indexOf("Jane Doe");
+    const rulesIdx = prompt.search(/^\s*1\.\s/m);
+    const personalityIdx = prompt.indexOf(PERSONALITY_PROMPTS.professional);
+    const contextIdx = prompt.indexOf("## CONTEXT");
+    expect(identityIdx).toBeGreaterThanOrEqual(0);
+    expect(identityIdx).toBeLessThan(rulesIdx);
+    expect(rulesIdx).toBeLessThan(personalityIdx);
+    expect(personalityIdx).toBeLessThan(contextIdx);
+  });
+});
+
+describe("PERSONALITY_PROMPTS", () => {
+  it("has a non-empty prose block for each preset", () => {
+    for (const personality of [
+      "professional",
+      "creative",
+      "enthusiastic",
+    ] as const) {
+      expect(PERSONALITY_PROMPTS[personality].length).toBeGreaterThan(20);
+    }
+  });
+});

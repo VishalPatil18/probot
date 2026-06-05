@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** Stage 1 / Task 1.1 of 8 complete — project scaffolded, no business logic yet.
+- **Status:** **Stage 1 complete** — all 8 tasks (1.1 scaffolding · 1.2 schema · 1.3 auth · 1.4 login/register UI · 1.5 multi-provider LLM clients + key transport · 1.6 bot factory + browser key store · 1.7 chat UI port · 1.8 chat API + sanitizers + rate limit) ship green. End-to-end loop: register → log in → build a bot (paste bio + pick provider + paste BYO key) → chat with it via the user's own LLM key.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers — each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -59,7 +59,10 @@
 - **Auth layer:** NextAuth v4 with the Credentials provider and JWT session strategy (no DB adapter; the `authorize()` callback queries Drizzle directly). Password hashing via `bcryptjs` cost 10. Inputs validated by Zod (`src/lib/auth/schemas.ts`) — `USERNAME_REGEX = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/` + reserved-slug set from `plan.md` §4.6 enforced at registration to keep `users.username` valid for Stage 4's `/u/[username]/chat` route. JWT carries `id` + `username`; LLM provider/model are intentionally kept out of the JWT (refetched per chat call to avoid stale prefs). Module augmentation lives in `src/types/next-auth.d.ts`. Registration is `POST /api/auth/register` — pre-check + `UNIQUE`-constraint backstop translates `pg` error code `23505` to a 409 instead of leaking a 500.
 - **LLM abstraction:** All chat/embedding calls go through a provider registry in `src/lib/ai/providers/`. Each adapter (`anthropic.ts`, `openai.ts`, `google.ts`, `deepseek.ts`) implements a shared `LLMProvider` interface in `types.ts`. The chat API resolves the user's chosen provider/model from the `users` table and forwards the BYO key only to that provider.
 - **BYO-key transport (planned):** The LLM API key is held in browser `localStorage` (`src/lib/client/llm-key-store.ts`, key `probot.llm.key.v1`) and sent to the chat API in an `x-llm-api-key` header — never in the JSON body. The server never logs, persists, or forwards the key except to the chosen provider. Enforced in Task 1.8 (`key-transport.ts`).
-- **Sanitization (planned):** `sanitize-input.ts` and `sanitize-output.ts` will port VAi's 40+ input-blocklist patterns and output-leakage detection (Task 1.8).
+- **Sanitization:** `src/lib/ai/sanitize-input.ts` does Unicode normalization (zero-width strip, fullwidth ASCII, Cyrillic homoglyph map, whitespace collapse) → 8000-char cap → ~35 blocked regex patterns covering prompt injection, role overrides, instruction markers, jailbreak handles, credential probes, social engineering, system-prompt extraction, and image/media generation. Returns `{ ok: true; message } | { ok: false; reason }`. Reason never echoes raw input. `src/lib/ai/sanitize-output.ts` does 4 leakage checks (rule-marker strings, JSON-dump regex, credential patterns, "system prompt" string) → 1500-char truncate with `…`. Fallback string never echoes the dirty input.
+- **Prompt builder:** `src/lib/ai/prompt-builder.ts` assembles identity → 7 immutable rules → personality prose block (`PERSONALITY_PROMPTS[bot.personality]`) → response style → unknown-answer template → `## CONTEXT` plain prose. Never JSON-serializes the bot row.
+- **Rate limiter:** `src/lib/ai/rate-limit.ts` is an in-memory two-tier sliding window per `botId`. Defaults 10/min + 50/day, env-overridable via `PROBOT_RATE_PER_MINUTE` / `PROBOT_RATE_PER_DAY`. Per-day rejection rolls back the per-minute slot it just consumed. Stage 7 swaps the in-memory `Map<botId, number[]>` storage for Upstash Redis without changing the call site shape.
+- **Chat route:** `POST /api/chat/[botId]` (`src/app/api/chat/[botId]/route.ts`) — 12-step orchestrator: content-type → BYO key header → body size cap (16 KB, measured from `request.text()` not the spoofable Content-Length header) → JSON parse → Zod validate → bot lookup (active only) → owner lookup → rate limit → sanitize input → build prompt → `getProvider(owner.llmProvider).complete({...})` → sanitize output → 200 `{ reply }`. Returns structured `{ error, ... }` bodies for every failure path. Intentionally NOT auth-gated — the chat *page* is gated in Stage 1; Stage 4 will make the page public with zero route changes.
 - **Testing:** Vitest with `@/*` alias mirrored from `tsconfig.json`. Default `node` environment; per-file `// @vitest-environment jsdom` override available for component tests later. `--passWithNoTests` is on so the script is safe with an empty suite.
 - **Path alias:** `@/*` → `./src/*` (configured in `tsconfig.json` and `vitest.config.ts`).
 
@@ -104,10 +107,11 @@ probot/
     │   ├── db/                     # schema.ts (users + bots Drizzle tables), index.ts (Drizzle client) — Task 1.2 ✓
     │   ├── ai/
     │   │   ├── providers/          # types (LLMProvider, ProviderError), index (registry), anthropic + openai (real), google + deepseek (stubs that throw) — Task 1.5 ✓
-    │   │   ├── prompt-builder.ts   # stub — Task 1.8
-    │   │   ├── sanitize-input.ts   # stub — Task 1.8
-    │   │   ├── sanitize-output.ts  # stub — Task 1.8
-    │   │   └── key-transport.ts    # readApiKey/redactKey/KeyTransportError — Task 1.5 ✓ (consumed by Task 1.8)
+    │   │   ├── prompt-builder.ts   # buildSystemPrompt + PERSONALITY_PROMPTS — Task 1.8 ✓
+    │   │   ├── sanitize-input.ts   # Unicode normalize + ~35 blocked patterns — Task 1.8 ✓
+    │   │   ├── sanitize-output.ts  # 4 leakage checks + 1500-char cap — Task 1.8 ✓
+    │   │   ├── rate-limit.ts       # per-bot two-tier sliding window — Task 1.8 ✓ (Stage 7 → Redis)
+    │   │   └── key-transport.ts    # readApiKey/redactKey/KeyTransportError — Task 1.5 ✓
     │   ├── auth/
     │   │   ├── auth.ts             # NextAuth options (Credentials + JWT) — Task 1.3 ✓
     │   │   ├── passwords.ts        # bcryptjs hash + verify at cost 10 — Task 1.3 ✓
@@ -164,7 +168,22 @@ _Architectural and product decisions, in chronological order. Each entry: date, 
 **Open:**
 
 - [ ] **Tailwind / design port:** `design/*.html` mockups are not yet ported to Tailwind components. Will land per surface (login → Task 1.4, bot factory → Task 1.6, chat → Task 1.7) per CLAUDE.md §8.
-- [ ] **Stage 1 remaining tasks:** 1.8 (Chat API route at `POST /api/chat/[botId]` — consumes Task 1.5's providers + key-transport; the Task 1.7 chat UI already calls this endpoint and will 404 until 1.8 lands).
+**Resolved 2026-06-04 (Task 1.8 / Stage 1 close-out):**
+
+- [x] ~~**Stage 1 task 1.8:** Chat API route + sanitizers + rate limit~~ — `/api/chat/[botId]` shipped, 226/226 tests green, build green. The end-to-end Stage 1 loop works.
+
+**Open (carried into Stage 2+):**
+
+- [ ] **Apply Drizzle migrations** (`0000_*` + `0001_*`) against a real Postgres before the live UI flow is end-to-end exercisable. Both can be applied in order via `npm run db:migrate`. Carried from Tasks 1.2/1.6.
+- [ ] **`/dashboard` placeholder still returns `null`** — post-login redirect lands on an empty page. Stage 6 dashboard owns the real implementation.
+- [ ] **Email verification UX** — `email_verified` column is wired but always `false` at registration. Stage 7 owns the verify-email flow.
+- [ ] **Auth-route rate limiting** — Stage 7 (Redis layer wraps everything).
+- [ ] **Conversation / message logging** — Stage 4 schema, Stage 6 UI.
+- [ ] **CORS** for the embeddable widget — Stage 5.
+- [ ] **Per-bot rate-limit overrides** via `bots.rate_limit_per_minute` / `rate_limit_per_day` columns — Stage 7.
+- [ ] **Settings page** for editing `bots.loading_messages`, theme color, custom instructions, OAuth — Stage 7.
+- [ ] **Real Google + DeepSeek adapters** — out of Stage 1 scope; registered stubs throw on call.
+- [ ] **Streaming** `complete()` — out of scope; vai.md is non-streaming.
 - [ ] **Run the migration:** `drizzle/0000_new_misty_knight.sql` is generated and committed but not applied. Run `npm run db:migrate` against a real Postgres (Supabase/Neon free tier or local Docker) before Task 1.4's UI flows can hit a live backend.
 - [ ] **Email verification UX:** the `email_verified` column is wired but always `false` at registration. Stage 7 owns the actual verify-email flow; until then login is intentionally not gated on this flag.
 - [ ] **Rate limiting on auth routes:** none in Stage 1 (Stage 7's Redis layer wraps everything). Credential stuffing is undefended in the meantime.
@@ -530,5 +549,58 @@ _Architectural and product decisions, in chronological order. Each entry: date, 
 - **Settings page** (Stage 7) — the editor for `bots.loading_messages`, theme color, custom instructions, and OAuth providers.
 - **Visual regression / Playwright for chat surface** — not in scope this turn; pair with Task 1.8 when there's a real backend to drive.
 - **`/dashboard` placeholder still returns null** — the post-login redirect still lands on an empty page. Cosmetic. Stage 6 dashboard owns the real implementation.
+
+---
+
+### 2026-06-04 15:40 — Stage 1 Task 1.8: Chat API + sanitizers + rate limit (Stage 1 close-out)
+
+**What was asked to do:** Build the chat API route at `POST /api/chat/[botId]` — the final piece of Stage 1. The route reads the BYO `x-llm-api-key` header (Task 1.5), resolves botId → bot+owner via Drizzle, runs the user's message through input sanitization + system-prompt construction + provider dispatch + output sanitization, and returns `{ reply }` or a structured error. Includes a per-bot two-tier in-memory rate limiter (Stage 7 swaps to Redis). Locked Q1=a (per-bot rate limit, not per-IP), Q2=a (no route-level auth — page-level gate is enough for Stage 1, route ready for Stage 4), Q3=a (400 + structured `{ error }` for missing/bad BYO key, not 401), Q4=a (hardcoded prose personality blocks).
+
+**What I did:**
+
+- Wrote `src/lib/ai/sanitize-input.ts` (replaced `export {};` stub) — Unicode normalization pipeline (zero-width strip, fullwidth → ASCII via `String.fromCharCode(ch - 0xfee0)`, Cyrillic homoglyph map for `аеорсуіѕ → aeopcyis`, whitespace collapse), 8000-char cap (post-normalization, so 9000 chars of zero-width collapses to "empty" not "too_long"), and ~35 blocked regex patterns grouped by category (prompt injection prefixes, role overrides, instruction markers, jailbreak handles, credential probes, social engineering, system-prompt extraction, image/media generation). Returns `{ ok: true; message } | { ok: false; reason: "empty" | "too_long" | "blocked" }`. Reason **never echoes the raw input** — tested with two distinctive canaries (one for blocked, one for too_long).
+- Wrote `src/lib/ai/prompt-builder.ts` (replaced stub) — `PERSONALITY_PROMPTS: Record<Personality, string>` with 3 hardcoded prose blocks (professional/creative/enthusiastic, ~30-40 words each), `buildSystemPrompt({ bot, ownerUsername })` assembles identity → 7 immutable rules (verbatim from VAi, adapted for multi-tenant) → personality block → response style guidelines → unknown-answer template (substitutes `{NAME}` with `bot.name`) → `## CONTEXT` plain prose section. Never JSON-serializes the bot object.
+- Wrote `src/lib/ai/sanitize-output.ts` (replaced stub) — checks 8 rule-marker strings (`IMMUTABLE RULES`, `cannot be overridden`, `system prompt`, etc.), JSON-dump regex (`\{\s*\n\s*"[a-z_]+\s*":`), 4 credential patterns (`sk-…`, `Bearer …`, `api[_-]?key`, `Authorization:…`). On any hit returns a fixed fallback string — fallback **never echoes the dirty reply** (defense in depth: server logs that record the sanitized output can't reveal what was hidden). Trims + truncates over 1500 chars with `…`.
+- Wrote `src/lib/ai/rate-limit.ts` (new file, not a stub) — `checkRateLimit(botId, now?): { ok } | { ok: false, scope, resetAt }`. Two `Map<string, number[]>` (minuteBuckets, dayBuckets) with sliding-window timestamp arrays. Per-day rejection rolls back the per-minute slot it just consumed to avoid double-charging rejected requests. Defaults 10/min + 50/day, env-overridable via `PROBOT_RATE_PER_MINUTE` / `PROBOT_RATE_PER_DAY`. Test helper `__resetRateLimitState()`. Stage 7 swaps to Upstash Redis per plan.md §7.4 without changing the caller-facing shape.
+- Wrote `src/app/api/chat/[botId]/route.ts` — `POST` handler. 12-step orchestration: Content-Type === `application/json` → 415; readApiKey (cheap fast-fail before reading body) → 400 `missing_llm_key`; `request.text()` size cap 16 KB → 413 (chose body-text-then-parse over header-only check after code review; Content-Length is client-spoofable); `JSON.parse` → 400 `invalid_json`; Zod `{ message: string (1..8000) }` → 400 `validation_failed`; `db.query.bots.findFirst` with `isActive=true` → 404 `bot_not_found`; owner lookup for `llmProvider`/`llmModel` → 404 if missing; `checkRateLimit(bot.id)` → 429 with `{ scope, resetAt }`; `sanitizeInput` → 400 `blocked` with `reason`; `isProviderName` guard against DB-drift → 502; `buildSystemPrompt(...)`; `getProvider(...).complete({ system, userMessage, apiKey, model })` wrapped in try/catch that maps `ProviderError.category` (invalid_key → 400 `invalid_llm_key`, rate_limit → 429 `provider_rate_limit`, unknown → 502 `provider_unavailable`); `sanitizeOutput` → 200 `{ reply }`. The route is intentionally **not auth-gated** (page-level gate is enough for Stage 1; Stage 4 will remove the page gate with zero route changes).
+- Wrote 65 specs across 5 test files: `sanitize-input.test.ts` (29), `prompt-builder.test.ts` (7), `sanitize-output.test.ts` (10), `rate-limit.test.ts` (6), `chat/[botId]/route.test.ts` (13). Total project tests: **226 / 226** across 24 files (was 161 after Task 1.7; +65 new).
+- Applied 2 HIGH + 2 MEDIUM findings from code review: (1) replaced `.push()` + `.pop()` mutations in `rate-limit.ts` with `slice()` + spread (CLAUDE.md §2 immutability + concurrent-millisecond rollback hazard); (2) dropped the dead `_bot` second parameter from `sanitizeOutput` — was misleading API; (3) replaced spoofable `Content-Length` header check with `request.text()` then length-check then `JSON.parse` (same I/O cost, actually enforced); (4) changed `<= cutoff` to `< cutoff` in `pruneAndCheck` so boundary timestamps stay live (matches docstring). Pushed back on 2 MEDIUM: `\p{Cf}` over-strips legitimate format characters, and `isPersonality` reads `PERSONALITY_PRESETS` directly (no duplication; the fallback exists as DB-drift defense).
+- Verified: `npm run typecheck` clean. `npm test` → **226 / 226** across 24 files. `npm run build` green — `/api/chat/[botId]` shows up as ƒ dynamic in the route table; full route table unchanged otherwise. Zero `console.*` in any new file.
+
+**Files changed:**
+
+- `src/lib/ai/sanitize-input.ts` — update — replaced `export {};` stub with normalization + 35 blocked patterns (~140 lines).
+- `src/lib/ai/sanitize-input.test.ts` — create — 29 specs.
+- `src/lib/ai/prompt-builder.ts` — update — replaced `export {};` stub with `buildSystemPrompt` + `PERSONALITY_PROMPTS` (~80 lines).
+- `src/lib/ai/prompt-builder.test.ts` — create — 7 specs.
+- `src/lib/ai/sanitize-output.ts` — update — replaced `export {};` stub with 4 leakage checks + truncate (~50 lines).
+- `src/lib/ai/sanitize-output.test.ts` — create — 10 specs.
+- `src/lib/ai/rate-limit.ts` — create — sliding-window two-tier in-memory limiter (~85 lines).
+- `src/lib/ai/rate-limit.test.ts` — create — 6 specs.
+- `src/app/api/chat/[botId]/route.ts` — create — POST handler (~160 lines).
+- `src/app/api/chat/[botId]/route.test.ts` — create — 13 specs incl. BYO-key canary scan.
+- `claude/context.md` — update — Status (Stage 1 complete), Architecture (sanitization / prompt-builder / rate-limit / chat route blocks), Repository Layout, Open Questions (Stage 1 fully closed; carried items grouped by stage), this Session History entry.
+
+**Decisions made:**
+
+- **Body-text-then-parse over header check (MEDIUM 1 fix):** the Content-Length HTTP header is a client hint and can be spoofed/omitted. Reading via `await request.text()` and measuring the actual byte count enforces the 16 KB cap reliably. Same I/O cost as `request.json()` (both read the entire body); the `.length` check is O(1).
+- **`readApiKey` fast-fails BEFORE body read:** the cheapest, most-likely-to-trip guard runs first. A request missing the key wastes zero I/O.
+- **Per-bot rate limit (Q1=a, not per-IP):** ProBot is BYO-key — the limit exists to protect the bot owner's LLM credits, not ProBot infrastructure. The bot owner's `botId` is the natural scope. Aligns with plan.md §7.4 which puts per-bot overrides on the bots table.
+- **Per-day rollback of the per-minute slot:** if the per-day window blocks, we pop the per-minute timestamp we just appended. Otherwise a single bot's first request of the day at exactly 11:59:59 PM would consume two slots — one per-minute (legitimately) and one per-day (rejected). Tests cover the isolation and the boundary; the pop is immutable (`slice(0, -1)`) per code review HIGH 1.
+- **`sanitizeOutput` takes only `raw`, no bot context (HIGH 2 fix):** original blueprint accepted a `bot` param for future per-bot context-leakage detection (e.g., bot.name + "system prompt" co-occurrence). Implementation never used it. Removed to match KISS — Stage 7 hardening can add it back with a real consumer.
+- **`<` not `<=` for window cutoff (MEDIUM 2 fix):** the docstring says "entries within the last `windowMs`", which means strictly newer than `now - windowMs`. Boundary entries stay live. Sub-millisecond correctness alignment with the doc.
+- **In-memory rate limit, no cleanup timer:** Vercel cold-starts naturally bound memory; self-hosted long-lived processes accumulate one array per bot ever seen (10-50 timestamps each). Stage 7's Redis swap supersedes. Per CLAUDE.md §2 — don't engineer a cleanup pass for a code path that will be replaced.
+- **7 immutable rules verbatim from VAi, no personality preset in VAi → 3 added for ProBot:** the rules are battle-tested prompt-injection defenses; ported as-is. The personality preset slot is ProBot-specific (VAi was single-tenant Vishal). Hardcoded prose blocks rather than single-line guidance (Q4=a) so the model has enough surface to actually distinguish tones.
+- **All `ProviderError.message` strings are dropped in favor of fixed status-code responses:** the route never echoes a provider's error message into its own response body. Defense in depth on top of Task 1.5's `ProviderError.toJSON()` bound — even if a future caller serialized the error, the bound is still there.
+- **No auth check on the route (Q2=a):** the chat *page* in Stage 1 is auth-gated (`/u/[username]/chat/page.tsx` redirects to `/login`). When Stage 4 makes the page public, the route doesn't change. Defensive route-level auth would have created churn in Stage 4.
+- **No conversation/message logging (deferred to Stage 4/6):** plan.md §4.5 introduces the `conversations` + `messages` tables in Stage 4; Stage 6's dashboard owns the analytics surface. Adding either now is YAGNI.
+
+**Open questions / follow-ups:**
+
+- Real Google + DeepSeek adapters — when those providers' first paying customer/test user appears.
+- Streaming `complete()` — Stage 5/6 if widget needs token-by-token rendering.
+- Redis-backed rate limiter — Stage 7 hardening.
+- Conversation logging — Stage 4 schema, Stage 6 UI.
+- The Stage 1 loop is complete; next step is Stage 2 (PDF + URL ingestion per plan.md).
 
 ---
