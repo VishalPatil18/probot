@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  index,
   jsonb,
   pgTable,
   text,
@@ -13,6 +14,9 @@ import {
 // The LLM API key is intentionally NOT stored here - it lives only in the
 // user's browser (localStorage `probot.llm.key.v1`) and rides the
 // `x-llm-api-key` header per chat request. See claude/plan.md §1.5.
+// RLS is enabled with no policies so Supabase PostgREST anon/authenticated
+// roles are denied by default; the app's pg.Pool (table-owner) connection
+// is unaffected because we do NOT use FORCE ROW LEVEL SECURITY.
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   username: varchar("username", { length: 30 }).notNull().unique(),
@@ -30,36 +34,42 @@ export const users = pgTable("users", {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}).enableRLS();
 
 // bots
-export const bots = pgTable("bots", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  name: varchar("name", { length: 100 }).notNull(),
-  headline: varchar("headline", { length: 120 }),
-  personality: varchar("personality", { length: 20 })
-    .notNull()
-    .default("professional"),
-  contextText: text("context_text").notNull(),
-  suggestedQuestions: jsonb("suggested_questions").$type<string[]>(),
-  loadingMessages: jsonb("loading_messages")
-    .$type<string[]>()
-    .notNull()
-    .default(
-      sql`'["Thinking…","Searching memory…","Drafting a response…","Almost ready…"]'::jsonb`,
-    ),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: false })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+export const bots = pgTable(
+  "bots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    headline: varchar("headline", { length: 120 }),
+    personality: varchar("personality", { length: 20 })
+      .notNull()
+      .default("professional"),
+    contextText: text("context_text").notNull(),
+    suggestedQuestions: jsonb("suggested_questions").$type<string[]>(),
+    loadingMessages: jsonb("loading_messages")
+      .$type<string[]>()
+      .notNull()
+      .default(
+        sql`'["Thinking…","Searching memory…","Drafting a response…","Almost ready…"]'::jsonb`,
+      ),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    userIdIdx: index("bots_user_id_idx").on(table.userId),
+  }),
+).enableRLS();
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
