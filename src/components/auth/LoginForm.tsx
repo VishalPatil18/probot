@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
-import { OAuthDisabledRow } from "./OAuthDisabledRow";
+import { OAuthRow } from "./OAuthRow";
 
 export function LoginForm() {
   const router = useRouter();
@@ -41,7 +41,7 @@ export function LoginForm() {
         Log in to manage your bot and leads.
       </p>
 
-      <OAuthDisabledRow />
+      <OAuthRow email={email} />
 
       <div className="flex items-center gap-3 mb-6">
         <div className="flex-1 h-px bg-border-base" />

@@ -11,6 +11,15 @@ vi.mock("@/lib/db", () => ({
     },
   },
   users: {} as Record<string, unknown>,
+  accounts: {} as Record<string, unknown>,
+  verificationTokens: {} as Record<string, unknown>,
+}));
+
+// DrizzleAdapter runs dialect detection on the real `db` at module-load. Our
+// mock db is a plain object - bypass with a no-op adapter so this unit test
+// stays focused on CredentialsProvider.authorize().
+vi.mock("@auth/drizzle-adapter", () => ({
+  DrizzleAdapter: () => ({}),
 }));
 
 import { authOptions } from "./auth";

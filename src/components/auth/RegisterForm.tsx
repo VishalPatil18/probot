@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
-import { OAuthDisabledRow } from "./OAuthDisabledRow";
+import { OAuthRow } from "./OAuthRow";
 
 type RegisterErrorPayload = {
   error?: string;
@@ -93,7 +93,7 @@ export function RegisterForm() {
         Build your AI recruiter in 2 minutes.
       </p>
 
-      <OAuthDisabledRow />
+      <OAuthRow email={email} />
 
       <div className="flex items-center gap-3 mb-6">
         <div className="flex-1 h-px bg-border-base" />
