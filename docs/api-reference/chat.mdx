@@ -1,0 +1,187 @@
+---
+title: POST /api/chat/[botId]
+description: "Send a message to a bot. The user's LLM API key rides the x-llm-api-key header."
+---
+
+The chat endpoint. Takes a user message, runs it through input sanitization, dispatches to the bot owner's configured provider with the **caller's** BYO key, sanitizes the reply, and returns it.
+
+## Request
+
+```http
+POST /api/chat/00000000-0000-0000-0000-000000000000
+Content-Type: application/json
+x-llm-api-key: sk-…
+```
+
+### Path params
+
+| Name    | Type | Source    |
+| ------- | ---- | --------- |
+| `botId` | UUID | `bots.id` |
+
+### Headers
+
+| Header                    | Required        | Meaning                                          |
+| ------------------------- | --------------- | ------------------------------------------------ |
+| `Content-Type`            | yes             | Must include `application/json`                  |
+| `x-llm-api-key`           | yes             | The user's BYO LLM API key                       |
+| `x-llm-azure-endpoint`    | yes if Azure    | Azure OpenAI endpoint URL                        |
+| `x-llm-azure-api-version` | optional, Azure | Azure API version (defaults to provider default) |
+
+The key is **never** placed in the JSON body. See [BYO-key flow](/concepts/byo-key).
+
+### Body
+
+```json
+{ "message": "What kind of role are you looking for?" }
+```
+
+| Field     | Type   | Constraint    |
+| --------- | ------ | ------------- |
+| `message` | string | 1–8,000 chars |
+
+### Total body size cap
+
+The route measures the raw byte length and rejects payloads over **16,384 bytes** with `413 request_too_large`, regardless of `Content-Length`.
+
+## Lifecycle
+
+1. **Content-Type check** - non-JSON → `415 unsupported_media_type`
+2. **Key read** - missing `x-llm-api-key` → `400 missing_llm_key`
+3. **Body size cap** - > 16,384 bytes → `413 request_too_large`
+4. **JSON parse** - malformed → `400 invalid_json`
+5. **Zod validate** - `message` out of bounds → `400 validation_failed`
+6. **Bot lookup** - `bots.id` + `is_active = true`; miss → `404 bot_not_found`
+7. **Owner lookup** - owner row missing → `404 bot_not_found`
+8. **Rate limit** - 2-tier per-bot → `429 rate_limit`
+9. **Input sanitize** - match → `400 blocked`
+10. **Provider dispatch** - Azure requires `x-llm-azure-endpoint`; missing → `400 missing_llm_key`
+11. **Provider call** → on error, map `ProviderError.category` to `invalid_llm_key` / `provider_rate_limit` / `provider_unavailable`
+12. **Output sanitize** - strip key shapes, system-prompt echo, PII, internal errors
+13. **Return** `{ reply }`
+
+## Responses
+
+### 200 OK
+
+```json
+{
+  "reply": "I'm looking for senior platform-engineering roles..."
+}
+```
+
+### 400 Bad Request - missing key
+
+```json
+{ "error": "missing_llm_key" }
+```
+
+### 400 Bad Request - invalid JSON
+
+```json
+{ "error": "invalid_json" }
+```
+
+### 400 Bad Request - validation failure
+
+```json
+{
+  "error": "validation_failed",
+  "details": {
+    "fieldErrors": {
+      "message": ["String must contain at least 1 character(s)"]
+    },
+    "formErrors": []
+  }
+}
+```
+
+### 400 Bad Request - blocked by sanitizer
+
+```json
+{ "error": "blocked", "reason": "prompt_injection" }
+```
+
+`reason` is a coarse category string (`prompt_injection`, `role_override`, `credential_probe`, `system_prompt_extraction`, `jailbreak`). The matched substring is **not** returned.
+
+### 400 Bad Request - invalid LLM key
+
+```json
+{ "error": "invalid_llm_key" }
+```
+
+The provider rejected the key. The key value itself is **never** echoed.
+
+### 404 Not Found
+
+```json
+{ "error": "bot_not_found" }
+```
+
+Returned both when the bot id doesn't exist and when its owner record is missing - the two cases are deliberately indistinguishable to the caller.
+
+### 413 Payload Too Large
+
+```json
+{ "error": "request_too_large" }
+```
+
+### 415 Unsupported Media Type
+
+```json
+{ "error": "unsupported_media_type" }
+```
+
+### 429 Too Many Requests - local rate limit
+
+```json
+{
+  "error": "rate_limit",
+  "scope": "short",
+  "resetAt": 1718713200000
+}
+```
+
+### 429 Too Many Requests - provider rate limit
+
+```json
+{ "error": "provider_rate_limit" }
+```
+
+The bot owner's LLM provider rate-limited the underlying call.
+
+### 502 Bad Gateway
+
+```json
+{ "error": "provider_unavailable" }
+```
+
+Provider was down, timed out, or returned an unknown error.
+
+## cURL
+
+### Anthropic / OpenAI / Google
+
+```bash
+curl -X POST https://probot.vercel.app/api/chat/00000000-0000-0000-0000-000000000000 \
+  -H 'Content-Type: application/json' \
+  -H 'x-llm-api-key: sk-...' \
+  -d '{"message": "What kind of role are you looking for?"}'
+```
+
+### Azure OpenAI
+
+```bash
+curl -X POST https://probot.vercel.app/api/chat/00000000-0000-0000-0000-000000000000 \
+  -H 'Content-Type: application/json' \
+  -H 'x-llm-api-key: <azure-key>' \
+  -H 'x-llm-azure-endpoint: https://my-resource.openai.azure.com' \
+  -H 'x-llm-azure-api-version: 2024-02-15-preview' \
+  -d '{"message": "What kind of role are you looking for?"}'
+```
+
+## Notes
+
+- The route owner determines provider + model (`users.llm_provider`, `users.llm_model`). Callers cannot override them.
+- The system prompt is rebuilt per-request from the freshly-fetched bot row; there is no cache to invalidate.
+- The output sanitizer never returns an empty string - if the entire reply got stripped, the route returns a polite fallback string, **not** a 500.

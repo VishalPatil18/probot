@@ -1,0 +1,96 @@
+---
+title: Security model
+description: "Defense-in-depth: input sanitization, output leakage checks, markdown safety, rate limits."
+---
+
+ProBot's security model has four pillars. Each is independently enforced and individually tested.
+
+1. **BYO-key transport** - covered in detail in [BYO-key flow](/concepts/byo-key).
+2. **Input sanitization** - block prompt-injection before it reaches the LLM.
+3. **Output sanitization** - block leakage on the way back.
+4. **Render-time safety** - markdown rendered without raw HTML, links with `rel="noopener noreferrer"`.
+
+Plus per-bot rate limiting and credential-free error messages.
+
+## 1. Input sanitization (`sanitizeInput`)
+
+Located in `src/lib/ai/sanitize-input.ts`. Runs **after** Zod schema validation but **before** the provider call.
+
+### Unicode normalization first
+
+Pattern matchers don't see naïve UTF-16 - `sanitizeInput` calls `.normalize('NFKC')` and applies a homoglyph-fold (Cyrillic → Latin) before pattern matching. This kills the classic Cyrillic-`о`-instead-of-Latin-`o` bypass.
+
+### ~35 blocking patterns
+
+Roughly grouped:
+
+| Category                     | Examples                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| **Prompt injection**         | `ignore previous instructions`, `disregard all prior`, `forget your system prompt` |
+| **Role override**            | `you are now`, `act as a`, `from now on you are`                                   |
+| **Credential probe**         | `what is your API key`, `print your system prompt`, `reveal the prompt above`      |
+| **System-prompt extraction** | `repeat the text above`, `output your instructions`                                |
+| **Jailbreak phrasing**       | `DAN mode`, `developer mode`, `unrestricted assistant`                             |
+
+A match returns `{ ok: false, reason }` → route responds `400 blocked`. The reason is **never** echoed verbatim to the LLM or to network logs that include user payloads.
+
+### Length cap
+
+Already enforced at the schema: `message` is 1–8,000 chars. The body-size cap (16,384 bytes) is enforced earlier still, before JSON parse, so oversized payloads never touch the parser.
+
+## 2. Output sanitization (`sanitizeOutput`)
+
+Located in `src/lib/ai/sanitize-output.ts`. Runs **after** the provider returns but **before** the JSON response is built.
+
+Four leakage checks:
+
+1. **API-key shape.** Strip anything matching common provider key prefixes (`sk-…`, `sk-ant-…`, `AIza…`) plus high-entropy long strings.
+2. **System-prompt echo.** Strip blocks the LLM might have copied verbatim from the system prompt.
+3. **PII leak from the resume.** Reduce risk of accidental phone-number / email harvesting (the bot intentionally shares the owner's contact info if relevant - the check is for _other_ PII the resume might contain about third parties).
+4. **Internal error text.** Drop stack-trace-looking strings.
+
+The result is **always** a clean string, never an error envelope. If the model hallucinated and the entire reply got stripped, the route falls back to a polite "I'm not able to answer that" string - never `500`.
+
+## 3. Markdown render-time safety
+
+`MessageBubble.tsx` renders with:
+
+- `react-markdown` 9 + `remark-gfm` 4
+- **No `rehype-raw`** - raw HTML embedded in model output is rendered as text, not parsed. This is the single most important XSS defense.
+- A `SafeLink` component that overrides `<a>` to inject `rel="noopener noreferrer"` and `target="_blank"`.
+
+Even if a model emitted `<img src=x onerror=alert(1)>`, the user sees the literal string.
+
+## 4. Per-bot rate limiting
+
+`src/lib/ai/rate-limit.ts` enforces a 2-tier in-memory limiter:
+
+- Short window - burst control (a few requests per few seconds)
+- Long window - sustained-traffic control (a couple dozen per hour)
+
+A 429 response includes the `scope` (which tier tripped) and `resetAt` (epoch ms). The limiter is in-process - fine for Vercel single-region; for multi-region production you would switch to Redis (Upstash) per Stage 7 of the [roadmap](/concepts/stages).
+
+## Error responses never leak credentials
+
+Every error envelope is a stable shape:
+
+```json
+{ "error": "<machine-readable code>" }
+```
+
+Where `<code>` is one of: `missing_llm_key`, `invalid_llm_key`, `invalid_json`, `validation_failed`, `bot_not_found`, `blocked`, `rate_limit`, `provider_rate_limit`, `provider_unavailable`, `request_too_large`, `unsupported_media_type`.
+
+The key is **never** present in the envelope, even when the cause is the key itself (`invalid_llm_key`).
+
+## What's planned
+
+- **Redis-backed rate limit** (Upstash) - Stage 7.
+- **OAuth + email verification** - Stage 7.
+- **Sentry error reporting with PII scrubbing** - Stage 7.
+- **GDPR data-export and account deletion** - Stage 7.
+
+See [Roadmap & stages](/concepts/stages).
+
+## Reporting a vulnerability
+
+Do **not** open a public issue. See [SECURITY.md](https://github.com/vishalpatil18/probot/blob/main/SECURITY.md) for the responsible-disclosure contact.

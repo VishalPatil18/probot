@@ -1,0 +1,104 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "ProBot",
+  "description": "Build an AI bot from your resume, share a public URL or embeddable widget. BYO key chatbot platform for job seekers.",
+  "colors": {
+    "primary": "#2563eb",
+    "light": "#60a5fa",
+    "dark": "#1d4ed8"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/byo-key",
+              "concepts/security",
+              "concepts/stages"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/build-your-bot",
+              "guides/self-host",
+              "guides/embed-widget"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api-reference/auth-register",
+              "api-reference/bots-upsert",
+              "api-reference/chat"
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/vishalpatil18/probot",
+          "icon": "github"
+        },
+        {
+          "anchor": "Live app",
+          "href": "https://probot.vercel.app",
+          "icon": "rocket"
+        }
+      ]
+    }
+  },
+  "logo": {
+    "light": "/logo/icon.svg",
+    "dark": "/logo/icon.svg",
+    "href": "https://docs.probot.dev"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Live app",
+        "href": "https://probot.vercel.app"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get started",
+      "href": "https://probot.vercel.app/register"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/vishalpatil18/probot"
+    }
+  },
+  "seo": {
+    "indexing": "all"
+  }
+}

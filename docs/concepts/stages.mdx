@@ -1,0 +1,91 @@
+---
+title: Roadmap & stages
+description: "What's shipped, what's planned, and where to find the detailed plan."
+---
+
+ProBot is built in 7 incremental stages. Stage 1 is shipped; Stages 2–7 are planned. The detailed per-stage breakdown lives in [`claude/plan.md`](https://github.com/vishalpatil18/probot/blob/main/claude/plan.md) in the repo.
+
+## Stage 1 - shipped ✅
+
+The current public surface.
+
+- Scaffolding: Next.js 14 App Router + TypeScript strict
+- Drizzle schema + migrations (`users`, `bots`)
+- NextAuth email/password (Credentials provider, JWT)
+- Login + register UI
+- Multi-provider LLM clients: Anthropic + OpenAI + Azure (Google stub)
+- `ProviderError` taxonomy (`invalid_key` / `rate_limit` / `provider_unavailable` / `timeout`)
+- BYO-key transport (`x-llm-api-key` header)
+- Browser key store (`localStorage`)
+- 5-step bot factory
+- `POST /api/bots` upsert
+- Chat UI with safe markdown
+- `POST /api/chat/[botId]` with full request lifecycle, input + output sanitization, 2-tier rate limit
+- 260 tests across 24 files
+
+## Stage 2 - planned
+
+**Knowledge ingestion.** PDF and URL imports.
+
+- AWS S3 (Always Free tier) for upload storage via presigned URLs
+- `pdf-parse` for text extraction
+- `cheerio` for URL → HTML → text
+- `tiktoken` for chunking by token budget
+- Persisted as additional bot-context segments
+
+## Stage 3 - planned
+
+**RAG / vector search.**
+
+- Pinecone OR `pgvector` (decision pending - `pgvector` likely for free-tier alignment)
+- Embedding step at ingest time
+- Vector retrieval at chat time, top-k injected into system prompt
+- Falls back to full-context mode when vector store unavailable
+
+## Stage 4 - planned
+
+**Public chat without auth.**
+
+- `/u/[username]/chat` route (already scaffolded as placeholder)
+- Conversation logging (anonymized, owner-readable in dashboard)
+- Per-IP rate limit on top of per-bot
+
+## Stage 5 - planned
+
+**Embeddable `<script>` widget.**
+
+- Built as a standalone bundle, served via AWS CloudFront (Always Free tier)
+- One-line embed: `<script src="https://d…cloudfront.net/widget.js" data-bot="…"></script>`
+- iframe-isolated chat UI; bot owner's BYO key not exposed to the embedding site (visitor uses owner's hosted chat endpoint instead)
+
+## Stage 6 - planned
+
+**Dashboard, analytics, lead capture.**
+
+- Bot owner dashboard with conversation history, message counts, top questions
+- In-app notifications with unread badge when a recruiter leaves an email mid-chat
+- Bot toggle (`is_active`)
+- Multi-bot support (planned but not in Stage 1)
+
+## Stage 7 - planned
+
+**Production hardening.**
+
+- OAuth providers: Google, GitHub, LinkedIn
+- Email verification + password reset
+- Landing page polish
+- Redis-backed rate limiting (Upstash)
+- GDPR data-export + account deletion
+- One-command Docker self-host
+- Sentry error reporting with PII scrubbing
+
+## Where to read more
+
+- [`claude/plan.md`](https://github.com/vishalpatil18/probot/blob/main/claude/plan.md) - full per-stage plan with file-by-file tasks
+- [`claude/srs.md`](https://github.com/vishalpatil18/probot/blob/main/claude/srs.md) - Software Requirements Specification
+- [`claude/context.md`](https://github.com/vishalpatil18/probot/blob/main/claude/context.md) - append-only session history of what's been built and why
+- [`claude/learnings.md`](https://github.com/vishalpatil18/probot/blob/main/claude/learnings.md) - topic-keyed concept journal
+
+## How to help
+
+PRs for any planned stage are welcome. Start with [CONTRIBUTING.md](https://github.com/vishalpatil18/probot/blob/main/CONTRIBUTING.md) and look for [`good first issue`](https://github.com/vishalpatil18/probot/labels/good%20first%20issue).

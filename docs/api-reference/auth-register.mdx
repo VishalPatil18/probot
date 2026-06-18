@@ -1,0 +1,99 @@
+---
+title: POST /api/auth/register
+description: "Create a new user account with username, email, and password."
+---
+
+Creates a user row. The password is hashed with `bcryptjs` (cost 10) before insertion.
+
+## Request
+
+```http
+POST /api/auth/register
+Content-Type: application/json
+```
+
+### Body
+
+```json
+{
+  "username": "example_user",
+  "email": "user@example.com",
+  "password": "a-strong-password"
+}
+```
+
+| Field      | Type   | Constraint                                                   |
+| ---------- | ------ | ------------------------------------------------------------ |
+| `username` | string | Validated by `registerInput` (see `src/lib/auth/schemas.ts`) |
+| `email`    | string | Valid email                                                  |
+| `password` | string | Minimum length enforced by schema                            |
+
+## Responses
+
+### 201 Created
+
+```json
+{
+  "user": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "username": "example_user",
+    "email": "user@example.com"
+  }
+}
+```
+
+The `hashed_password` column is **never** returned.
+
+### 400 Bad Request - invalid JSON
+
+```json
+{ "error": "Invalid JSON body" }
+```
+
+### 400 Bad Request - validation failure
+
+```json
+{
+  "error": "Validation failed",
+  "details": {
+    "fieldErrors": {
+      "email": ["Invalid email"]
+    },
+    "formErrors": []
+  }
+}
+```
+
+### 409 Conflict - duplicate
+
+When the email or username already exists. Two possible bodies depending on which check tripped:
+
+```json
+{ "error": "A user with this email already exists" }
+```
+
+```json
+{ "error": "A user with this username already exists" }
+```
+
+```json
+{ "error": "Email or username already exists" }
+```
+
+The third is the fallback for a race between the pre-check and the `INSERT` - the route translates Postgres `unique_violation` (`23505`) to `409` rather than leaking `500`.
+
+## cURL
+
+```bash
+curl -X POST https://probot.vercel.app/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "username": "example_user",
+    "email": "user@example.com",
+    "password": "a-strong-password"
+  }'
+```
+
+## After registering
+
+You're not logged in yet. Use the NextAuth credentials sign-in flow (the `/login` page in the app), or `POST /api/auth/callback/credentials` directly. See <https://next-auth.js.org/getting-started/rest-api>.
