@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/vishalpatil18/probot/discussions
+    about: Ask a question, share an idea, or chat with maintainers. Start here if you're not sure it's a bug.
+  - name: Security report
+    url: https://github.com/vishalpatil18/probot/security/advisories/new
+    about: Report a security vulnerability privately via GitHub Security Advisories. Do NOT open a public issue.

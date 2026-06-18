@@ -14,7 +14,7 @@ Before implementing:
 
 - State your assumptions explicitly. If uncertain, ask.
 - Do not introduce any assumptions that cannot realistically be implemented. Keep all plans and technical choices strictly realistic.
-- If multiple interpretations exist, present them — don't pick silently.
+- If multiple interpretations exist, present them - don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
 
@@ -43,7 +43,7 @@ When editing existing code:
 - Don't "improve" adjacent code, comments, or formatting.
 - Don't refactor things that aren't broken.
 - Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it — don't delete it.
+- If you notice unrelated dead code, mention it - don't delete it.
 
 When your changes create orphans:
 
@@ -78,7 +78,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 > Act as an interactive mentor. Explain the mechanics.
 
-For every prompt and task, don't just output code — help the user understand the codebase and architectural changes in detail.
+For every prompt and task, don't just output code - help the user understand the codebase and architectural changes in detail.
 
 - Break down and teach what the implementation is doing under the hood, with specific emphasis on anything related to Retrieval-Augmented Generation (RAG) or Generative AI (GenAI).
 - Provide concrete, detailed examples to illustrate complex concepts like vector embeddings, semantic search, prompt engineering, or LLM integrations.
@@ -116,23 +116,40 @@ This includes avoiding paid APIs, paid database tiers, premium cloud storage, or
 
 ---
 
-## 9. Prompt History Logging
+## 9. Project Knowledge Base (`context.md`)
 
-> Every user prompt must be recorded — no exceptions.
+> [`./claude/context.md`](./claude/context.md) is the project's persistent knowledge base - the record of what has been built so far, how it is implemented, and which decisions shaped it. Treat it as required reading and as the destination for every meaningful change.
 
-Starting from Stage 1 of the main task execution, before doing any other work in response to a user message:
+**Before coding** in response to any prompt:
 
-- **Append** the user's verbatim prompt to [`./claude/prompts.md`](./claude/prompts.md).
-- Use the format defined at the top of that file:
-  ```
-  ## [YYYY-MM-DD HH:MM] — Stage <N>: <short label>
-  <verbatim user prompt>
-  ```
-- Do **not** paraphrase, summarize, or redact the prompt. Copy it exactly.
-- Do **not** skip logging for "small" or "trivial" prompts. Every prompt is logged.
-- If the stage number is ambiguous, infer it from `./claude/plan.md` or ask.
+- Read [`./claude/context.md`](./claude/context.md).
+- At minimum, read the **Current State** section (tech stack, architecture, repo layout, build/run/test commands) and the **most recent 2–3 entries in Session History**.
+- Use this as the source of truth for what already exists, how it works, and which decisions are locked in. Do not duplicate or contradict prior work without explicit reason.
 
-This log is the canonical record of the build conversation and must stay complete and in order.
+**After making code, design, or architecture changes** in response to a prompt:
+
+- Append a new entry to **Session History** using the template defined at the top of `context.md`. Record: what was done, files touched (path + create/update/delete + why), decisions made and their rationale, and any open questions or follow-ups.
+- Update **Current State** when the stack, architecture, repo layout, or build/run/test commands materially change.
+- Update **Key Decisions** when a non-trivial architectural or product decision is made.
+- Update **Open Questions / TODOs** as items are added or resolved.
+- **Never edit past Session History entries** - the log is append-only. If a prior entry turns out to be wrong, correct it in the new entry rather than rewriting history.
+
+Skip the append only when no code, design, or architecture changed (e.g. a pure clarifying-question turn). When in doubt, append.
+
+---
+
+## 10. Learnings Log (`learnings.md`)
+
+> [`./claude/learnings.md`](./claude/learnings.md) is the user's personal learning journal - the distilled "what / why / how it works under the hood" record of every concept taught while building this project. It pairs with §5 (Teach & Explain): every teaching moment becomes an entry here.
+
+**After every teaching moment** in a response (per §5 - whenever you explain how something works under the hood, the rationale for a technical choice, a non-obvious framework behavior, a RAG/GenAI concept, or a tradeoff):
+
+- Append a new entry to [`./claude/learnings.md`](./claude/learnings.md) capturing the same explanation in durable form.
+- Match the existing structure: a `###` heading for the topic (or extend an existing topic's section when the new teaching is a natural continuation), one or more `> Question framing?` lines, followed by prose that explains the mechanics, the _why_, the tradeoffs, and a concrete example where it clarifies.
+- Keep it self-contained - a future reader (the user, six months later) should be able to understand the concept without re-reading the surrounding conversation. Avoid references like "as we discussed above" or "in Task 1.4".
+- **Never edit past entries** - the log is append-only, same rule as `context.md` Session History. If a prior explanation turns out wrong or incomplete, correct it in a new entry.
+
+Skip the append only when the response contains no real teaching (e.g. a pure code edit with no explanation, or a clarifying question). When in doubt, append.
 
 ---
 

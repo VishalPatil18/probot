@@ -150,10 +150,10 @@ tailwind.config = { theme: { extend: {
       <section class="panel hidden" data-p="4">
         <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2">Step 4 of 5</p>
         <h1 class="font-display text-3xl font-extrabold tracking-tight mb-2">Choose your AI model.</h1>
-        <p class="text-muted text-sm mb-6">ProBot is open source and runs on <strong class="text-ink">your own LLM key</strong>. Pick a provider and paste your key — it's stored locally and never tracked by ProBot.</p>
+        <p class="text-muted text-sm mb-6">ProBot is open source and runs on <strong class="text-ink">your own LLM key</strong>. Pick a provider and paste your key - it's stored locally and never tracked by ProBot.</p>
         <div class="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 flex gap-2.5 mb-6">
           <span class="material-symbols-outlined text-brand !text-xl">lock</span>
-          <p class="text-[13px] text-ink leading-relaxed">Your key stays on this device. It's saved to local config and used only to call the model directly — <strong>never</strong> sent to or logged by ProBot.</p>
+          <p class="text-[13px] text-ink leading-relaxed">Your key stays on this device. It's saved to local config and used only to call the model directly - <strong>never</strong> sent to or logged by ProBot.</p>
         </div>
         <div class="space-y-5">
           <div>
@@ -168,9 +168,9 @@ tailwind.config = { theme: { extend: {
           <div>
             <label class="block text-xs font-semibold mb-1.5">Model</label>
             <select id="bf-model" class="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand bg-white">
-              <option>Claude Opus 4 — most capable</option>
-              <option>Claude Sonnet 4 — balanced</option>
-              <option>Claude Haiku 4 — fastest &amp; cheapest</option>
+              <option>Claude Opus 4 - most capable</option>
+              <option>Claude Sonnet 4 - balanced</option>
+              <option>Claude Haiku 4 - fastest &amp; cheapest</option>
             </select>
           </div>
           <div>
@@ -276,7 +276,7 @@ fname.addEventListener('input',()=>pname.textContent=fname.value||'Your name');
 fhead.addEventListener('input',()=>phead.textContent=fhead.value||'Your headline');
 // model provider selection (step 4)
 const BF_MODELS={
-  anthropic:['Claude Opus 4 — most capable','Claude Sonnet 4 — balanced','Claude Haiku 4 — fastest & cheapest'],
+  anthropic:['Claude Opus 4 - most capable','Claude Sonnet 4 - balanced','Claude Haiku 4 - fastest & cheapest'],
   google:['Gemini 2.5 Pro','Gemini 2.5 Flash','Gemini 2.0 Flash-Lite'],
   deepseek:['DeepSeek-V3','DeepSeek-R1 (reasoning)'],
   openai:['GPT-4o','GPT-4o mini','o3-mini']

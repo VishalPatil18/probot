@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Design system - ported from design/assets/probot.css.
+   Only the utilities Stage 1's auth UI needs land here; chat
+   bubbles and markdown styles arrive in Task 1.7.
+   ============================================================ */
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer components {
+  /* texture & surfaces */
+  .dot-pattern-light {
+    background-image: radial-gradient(
+      rgba(255, 255, 255, 0.1) 1px,
+      transparent 1.75px
+    );
+    background-size: 16px 16px;
+  }
+
+  /* brand fills */
+  .brand-deep-gradient {
+    background: linear-gradient(
+      160deg,
+      oklch(0.28 0.06 262) 0%,
+      oklch(0.17 0.025 262) 100%
+    );
+  }
+  .brand-blue-gradient {
+    background: linear-gradient(
+      oklch(0.6 0.1737 245.16) 0%,
+      oklch(0.55 0.193 251.78) 100%
+    );
+  }
+
+  /* shadows */
+  .shadow-floating {
+    box-shadow:
+      rgba(0, 0, 0, 0.06) 0 0 0 1px,
+      rgba(0, 0, 0, 0.05) 0 1px 1px -0.5px,
+      rgba(0, 0, 0, 0.05) 0 3px 3px -1.5px,
+      rgba(0, 0, 0, 0.04) 0 6px 6px -3px,
+      rgba(0, 0, 0, 0.04) 0 12px 12px -6px,
+      rgba(0, 0, 0, 0.04) 0 24px 24px -12px;
+  }
+  .shadow-soft {
+    box-shadow:
+      rgba(0, 0, 0, 0.04) 0 1px 2px,
+      rgba(0, 0, 0, 0.04) 0 4px 12px -4px;
+  }
+
+  /* buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-semibold text-sm rounded-xl px-5 py-2.5 transition-all cursor-pointer whitespace-nowrap;
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn-primary {
+    background: linear-gradient(
+      oklch(0.6 0.1737 245.16) 0%,
+      oklch(0.55 0.193 251.78) 100%
+    );
+    color: #fff;
+    border: 1px solid oklch(0.48 0.16 253);
+    box-shadow: rgba(255, 255, 255, 0.24) 0 1.5px 0 0 inset;
+  }
+  .btn-primary:hover {
+    opacity: 0.92;
+  }
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-white border border-border-base text-ink;
+  }
+  .btn-secondary:hover {
+    background: oklch(0.97 0.004 264);
+  }
+}

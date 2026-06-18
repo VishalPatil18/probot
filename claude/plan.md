@@ -1,6 +1,6 @@
-# ProBot - 7-Stage Build Plan
+# ProBot - v1.0 7-Stage Build Plan
 
-> **Aligned with SRS v1.1.** ProBot is free, open-source software (MIT). There is no Stripe integration, no Free/Pro tiers, and no paid features. Users bring their own LLM API key (Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT, etc.); the key is stored locally (browser local storage or self-host config) and is **never** transmitted to or persisted on ProBot servers. Rate limits remain, but exist only to protect the user's own LLM credits and are configurable when self-hosting.
+> ProBot is free, open-source software (MIT). There is no Stripe integration, no Free/Pro tiers, and no paid features. Users bring their own LLM API key (Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT, etc.); the key is stored locally (browser local storage or self-host config) and is **never** transmitted to or persisted on ProBot servers. Rate limits remain, but exist only to protect the user's own LLM credits and are configurable when self-hosting.
 
 ## Overview
 
@@ -11,7 +11,7 @@ This document outlines a **7-stage incremental development plan** for pro-bot, d
 ### v1.1 Changes Reflected in This Plan
 
 - **Open-source, no billing**: Stage 7 no longer adds Stripe, tier enforcement, or "Upgrade to Pro" prompts. It focuses on OAuth, compliance (GDPR / ToS / Privacy), landing page, security hardening, monitoring, and self-host packaging.
-- **BYO-key LLM from Stage 1**: The Bot Factory now includes an "AI Model" step (FR-002.11, FR-002.12). The chat API resolves the user's selected provider/model and uses the locally stored key passed in per request (`x-llm-api-key` header) — never persisted server-side.
+- **BYO-key LLM from Stage 1**: The Bot Factory now includes an "AI Model" step (FR-002.11, FR-002.12). The chat API resolves the user's selected provider/model and uses the locally stored key passed in per request (`x-llm-api-key` header) - never persisted server-side.
 - **Multi-provider abstraction**: From Stage 1, the AI client is provider-agnostic (Anthropic / Google / DeepSeek / OpenAI). Stage 3 extends this to embeddings.
 - **Schema deltas**: `users` table gains `llm_provider` / `llm_model` (non-sensitive preferences only). Columns `tier`, `stripe_customer_id`, `stripe_subscription_id` from the v1.0 plan are removed.
 - **Rate limits as cost protection**: Limits are uniform (no Free vs Pro split), configurable via env / self-host config, and exist only to protect the user's own LLM credits.
@@ -53,7 +53,7 @@ A user can sign up, create a chatbot by pasting their career info as text, and i
 ### What the User Sees
 
 1. Sign up / login page
-2. A "Bot Factory" form: enter name, headline, paste bio/resume text, **pick an LLM provider + model, paste their own API key** (UI prominently states "stored locally in your browser — ProBot servers never see this key")
+2. A "Bot Factory" form: enter name, headline, paste bio/resume text, **pick an LLM provider + model, paste their own API key** (UI prominently states "stored locally in your browser - ProBot servers never see this key")
 3. A private chat page where they can test their bot
 4. The bot answers questions based on their pasted text, using the user's chosen LLM provider
 
@@ -242,7 +242,7 @@ NEXTAUTH_URL=http://localhost:3000
 - [x] Chat UI ported from VAi's `VAi.tsx` (markdown, loading, suggestions)
 - [x] Input sanitization (40+ patterns from VAi)
 - [x] Output sanitization (leakage detection from VAi)
-- [x] Basic in-memory rate limiting (ported from VAi, replaced in Stage 7) — uniform default, no tier split
+- [x] Basic in-memory rate limiting (ported from VAi, replaced in Stage 7) - uniform default, no tier split
 
 ### What Works After Stage 1
 
@@ -255,7 +255,7 @@ A job seeker can register, paste their resume/bio text, choose an LLM provider/m
 - Chat page requires login to access (Stage 4 makes it public)
 - No embeddable widget (Stage 5)
 - No analytics or lead capture (Stage 6)
-- No OAuth, no email verification / password reset, no landing page, no GDPR flows (Stage 7) — v1.1 has no payment tiers in any stage
+- No OAuth, no email verification / password reset, no landing page, no GDPR flows (Stage 7) - v1.1 has no payment tiers in any stage
 
 ---
 
@@ -345,8 +345,11 @@ Update bots.context_text with assembled full text
 
 #### 2.4 File Storage
 
-- Profile photos: Cloudflare R2 or S3 via presigned URLs
-- PDFs: Temporarily stored for processing, then deleted (only extracted text is kept)
+- **AWS S3** (Always Free tier: 5 GB storage + 20K GET + 2K PUT per month) via presigned URLs.
+- Profile photos: uploaded direct-to-S3 via short-lived presigned PUT URLs minted server-side.
+- PDFs: uploaded to a temporary S3 prefix for processing, then deleted (only extracted text is kept in Postgres).
+- AWS region pinned in env (`AWS_REGION`); IAM user scoped to one bucket with `PutObject`/`GetObject`/`DeleteObject` only.
+- No direct public reads - PDFs/photos are fetched server-side only, so we never burn the 100 GB/mo egress allowance. Profile-photo URLs in chat UIs come from short-lived signed GET URLs.
 
 #### 2.5 New API Endpoints
 
@@ -775,8 +778,10 @@ Users get a `<script>` tag they can paste into their portfolio site. The script 
 
 The widget is a **single JavaScript file** that creates an isolated chat interface inside a Shadow DOM on the host page. This prevents CSS conflicts.
 
+**Hosting:** the widget.js bundle is uploaded to AWS S3 (same bucket family as Stage 2) and served via **AWS CloudFront** (Always Free tier: 1 TB egress + 10M requests/month). CloudFront-to-S3 data transfer is waived. Distribution URL like `d111111abcdef8.cloudfront.net/widget.js` or behind a custom domain.
+
 ```
-probot.com/widget.js (served from CDN/Edge)
+probot.com/widget.js (served from CloudFront → S3 origin)
     |
     v
 Reads data-bot-id from its own <script> tag
@@ -851,15 +856,18 @@ src/widget/
 Output: public/widget.js (single file, < 50KB gzipped)
 ```
 
-Build with esbuild for fast single-file bundling:
+Build with esbuild for fast single-file bundling, then deploy to S3 (CloudFront-fronted):
 
 ```json
 {
   "scripts": {
-    "build:widget": "esbuild src/widget/widget.ts --bundle --minify --outfile=public/widget.js"
+    "build:widget": "esbuild src/widget/widget.ts --bundle --minify --outfile=dist/widget.js",
+    "deploy:widget": "aws s3 cp dist/widget.js s3://$PROBOT_WIDGET_BUCKET/widget.js --cache-control 'public,max-age=300' && aws cloudfront create-invalidation --distribution-id $PROBOT_CF_DISTRIBUTION --paths '/widget.js'"
   }
 }
 ```
+
+CloudFront cache: 5-minute TTL so widget code updates propagate fast; invalidation on every deploy. `widget.js` cost projection: 50 KB × 10M req/mo = 500 GB egress → well within the 1 TB Always Free allowance.
 
 #### 5.5 Dashboard Embed Section
 
@@ -925,7 +933,7 @@ Everything from Stages 1-4, plus: users can embed their bot on any website. A jo
 
 ### Goal
 
-Give bot owners visibility into how their bot is being used. Show conversation logs, capture recruiter emails as leads, send notifications, and provide actionable analytics.
+Give bot owners visibility into how their bot is being used. Show conversation logs, capture recruiter emails as leads, surface **in-app notifications** in the dashboard when new leads arrive (no transactional email in this stage), and provide actionable analytics.
 
 ### What the User Sees
 
@@ -934,7 +942,7 @@ Give bot owners visibility into how their bot is being used. Show conversation l
 3. **Lead list**: Captured recruiter emails with conversation context
 4. **Lead export**: Download leads as CSV
 5. **In-chat lead capture**: After 3-4 messages, the bot asks for the recruiter's email
-6. **Email notification**: Bot owner gets an email when a new lead is captured
+6. **In-app notification**: Bot owner sees a bell badge in the dashboard with an unread counter; clicking opens the new-leads list. (Email notifications deferred - re-evaluated post-Stage 7.)
 
 ### SRS Requirements Covered
 
@@ -1035,24 +1043,45 @@ LEFT JOIN leads l ON l.bot_id = b.id
 WHERE b.id = :botId AND b.user_id = :userId;
 ```
 
-#### 6.6 Email Notifications
+#### 6.6 In-App Notifications
 
-Using Resend (or SendGrid):
+No transactional email in Stage 6 - notifications surface in the dashboard.
 
-```typescript
-// When a lead is captured
-await resend.emails.send({
-  from: "ProBot <notifications@probot.com>",
-  to: botOwner.email,
-  subject: `New lead captured by your bot!`,
-  html: `
-    <p>A recruiter left their email while chatting with your bot:</p>
-    <p><strong>Email:</strong> ${lead.email}</p>
-    <p><strong>Context:</strong> ${lead.contextSummary}</p>
-    <p><a href="https://probot.com/dashboard/bots/${botId}/leads">View in Dashboard</a></p>
-  `,
-});
+**Schema addition:**
+
+```sql
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  bot_id UUID REFERENCES bots(id) ON DELETE CASCADE,
+  kind VARCHAR(40) NOT NULL,  -- 'lead_captured' for Stage 6; extensible
+  payload JSONB NOT NULL,      -- e.g. { leadId, email, contextSummary }
+  read_at TIMESTAMP,           -- NULL = unread
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_notifications_user_unread
+  ON notifications(user_id, created_at DESC)
+  WHERE read_at IS NULL;
 ```
+
+**On lead capture:** `INSERT INTO notifications (...) VALUES (...)` in the same transaction as the lead row, so the badge increments atomically.
+
+**Dashboard UX:**
+
+- Bell icon in the dashboard header with a small red dot + unread count
+- `GET /api/notifications?unread=true` returns the list (paginated)
+- `POST /api/notifications/:id/read` marks a single notification read
+- `POST /api/notifications/read-all` clears the badge
+- Client polls `GET /api/notifications/unread-count` every 30s while the dashboard is open (lightweight `{ count }` response). Stage 7 can swap to Server-Sent Events or WebSockets if real-time matters.
+
+**Why no email here:**
+
+- Avoids a SendGrid/Resend/SES dependency at this stage
+- Side-steps email-deliverability complexity (sender reputation, DKIM, bounce handling) until Stage 7
+- Bot owners visit the dashboard regularly enough that in-app surfacing is sufficient for the lead-followup loop in Stage 6
+
+Email notifications can be re-introduced post-Stage 7 as an opt-in setting once the auth-email plumbing (Resend) is already wired for password reset and email verification.
 
 #### 6.7 Knowledge Base Management in Dashboard
 
@@ -1073,17 +1102,17 @@ The dashboard bot settings page now includes:
 - [x] Full conversation transcript viewer
 - [x] Lead list with pagination
 - [x] CSV lead export
-- [x] Email notifications on new lead capture (Resend integration)
+- [x] In-app notifications on new lead capture (dashboard bell + unread badge + `notifications` table)
 - [x] Knowledge base management UI in bot settings
 - [x] Bot settings page (edit name, headline, personality, suggested questions)
 
 ### What Works After Stage 6
 
-Everything from Stages 1-5, plus: bot owners have full visibility into their bot's usage. They can see who's chatting, what questions are being asked, and capture recruiter emails as leads. They get email notifications for new leads. This is a **complete product** suitable for early adopters and beta testing.
+Everything from Stages 1-5, plus: bot owners have full visibility into their bot's usage. They can see who's chatting, what questions are being asked, and capture recruiter emails as leads. They see in-app notifications in the dashboard the moment a new lead arrives (with an unread-badge counter on the bell icon). This is a **complete product** suitable for early adopters and beta testing.
 
 ### Limitations (Resolved in Stage 7)
 
-- No persistent rate limits (in-memory only — risk of credit drain on user's LLM key) -> Stage 7
+- No persistent rate limits (in-memory only - risk of credit drain on user's LLM key) -> Stage 7
 - No OAuth, no email verification / password reset -> Stage 7
 - In-memory rate limiting (not persistent across deploys) -> Stage 7
 - No landing page, no GDPR flows, no self-host packaging -> Stage 7
@@ -1096,12 +1125,12 @@ Everything from Stages 1-5, plus: bot owners have full visibility into their bot
 
 ### Goal
 
-Harden security to production grade, add Redis-backed rate limiting (as cost-protection for users' BYO LLM credits — uniform, no tier split), ship OAuth + email verification + password reset, build a high-converting open-source landing page, complete GDPR compliance, package the project for self-hosting (Docker / one-click deploy), and add monitoring.
+Harden security to production grade, add Redis-backed rate limiting (as cost-protection for users' BYO LLM credits - uniform, no tier split), ship OAuth + email verification + password reset, build a high-converting open-source landing page, complete GDPR compliance, package the project for self-hosting (Docker / one-click deploy), and add monitoring.
 
 ### What the User Sees
 
 1. **Landing page**: Hero section, live demo, "Free & Open Source · Bring Your Own Key" messaging, self-host CTA, GitHub link, social proof
-2. **All features available to all users** — no paywalls, no upgrade prompts, no billing UI
+2. **All features available to all users** - no paywalls, no upgrade prompts, no billing UI
 3. **OAuth sign-in**: Google, GitHub, LinkedIn (in addition to email/password)
 4. **Email verification & password reset**: standard flows
 5. **AI Model settings**: full provider/model picker, BYO-key management, "key active · stored locally" status
@@ -1110,9 +1139,9 @@ Harden security to production grade, add Redis-backed rate limiting (as cost-pro
 
 ### SRS Requirements Covered
 
-- **FR-001.2**: OAuth login (Google, GitHub, LinkedIn) — deferred from Stage 1
+- **FR-001.2**: OAuth login (Google, GitHub, LinkedIn) - deferred from Stage 1
 - **FR-001.5-1.6**: Email verification, password reset
-- **FR-002.7-2.8**: Custom instructions, theme color (available to **all** users in v1.1 — no longer Pro-gated)
+- **FR-002.7-2.8**: Custom instructions, theme color (available to **all** users in v1.1 - no longer Pro-gated)
 - **FR-002.10**: Bot preview before publishing
 - **FR-007.10**: Dashboard surfaces active LLM provider/model + key status ("active · stored locally")
 - **FR-010.1-10.9**: Open-source distribution, multi-provider BYO-key, local-only key storage, no telemetry by default, configurable rate limits
@@ -1140,7 +1169,7 @@ ALTER TABLE bots ADD COLUMN rate_limit_per_minute INTEGER;   -- NULL = use platf
 ALTER TABLE bots ADD COLUMN rate_limit_per_day INTEGER;      -- NULL = use platform default
 ```
 
-**Backward Compatibility**: All new columns are nullable or have defaults. Existing users and bots continue to work without migration. No `tier`, `stripe_customer_id`, `stripe_subscription_id`, or `usage_logs` table — these are removed from the v1.1 plan.
+**Backward Compatibility**: All new columns are nullable or have defaults. Existing users and bots continue to work without migration. No `tier`, `stripe_customer_id`, `stripe_subscription_id`, or `usage_logs` table - these are removed from the v1.1 plan.
 
 #### 7.2 (Removed) Stripe Integration
 
@@ -1178,7 +1207,7 @@ const dailyLimit = new Ratelimit({
 });
 ```
 
-Per-bot overrides (when set) take precedence over the platform defaults — empowering self-hosters and individual bot owners to tune for their own LLM budget.
+Per-bot overrides (when set) take precedence over the platform defaults - empowering self-hosters and individual bot owners to tune for their own LLM budget.
 
 #### 7.5 OAuth Authentication
 
@@ -1201,7 +1230,7 @@ POST /api/auth/forgot-password  # Send reset email
 POST /api/auth/reset-password   # Reset with token
 ```
 
-Using Resend for transactional emails (same provider as Stage 6 lead notifications).
+Using **Resend** for transactional auth emails only (verification + password reset). Stage 6 explicitly does **not** use email for lead notifications - those are in-app. **AWS SES is not used** (sandbox-mode friction + production-access ticket friction make it a poor fit for the open-source self-host story; Resend is the easier path for both us and self-hosters).
 
 #### 7.7 Landing Page
 
@@ -1209,7 +1238,7 @@ Using Resend for transactional emails (same provider as Stage 6 lead notificatio
 src/app/
   page.tsx          # Landing page (replaces simple redirect)
     ├── Hero section: "Don't just send a resume; send a representative"
-    │     Subtitle: "Free, open source, and BYO-key — your API key never leaves your browser."
+    │     Subtitle: "Free, open source, and BYO-key - your API key never leaves your browser."
     ├── How It Works: 3-step visual (Upload → Pick Provider + Paste Key → Share)
     ├── Live Demo: Interactive widget showing a sample bot
     ├── Features grid: 6 key features with icons
@@ -1271,7 +1300,7 @@ All items from SRS Section 9, verified and production-ready:
 - [x] Per-IP per-bot window rate limit (default 10/min, env-configurable, per-bot override)
 - [x] Per-bot daily rate limit (default 200/day, env-configurable, per-bot override)
 - [x] Max message length (default 8,000 chars, env-configurable)
-- [x] No tier-based splits — uniform defaults for all users
+- [x] No tier-based splits - uniform defaults for all users
 
 **BYO-Key Security (v1.1):**
 
@@ -1304,7 +1333,7 @@ All items from SRS Section 9, verified and production-ready:
 
 ### Deliverables
 
-- [x] Redis-backed rate limiting (Upstash) — uniform defaults, env-configurable, per-bot overrides
+- [x] Redis-backed rate limiting (Upstash) - uniform defaults, env-configurable, per-bot overrides
 - [x] OAuth login (Google, GitHub, LinkedIn)
 - [x] Email verification and password reset flows
 - [x] Landing page with hero, demo, open-source / BYO-key messaging, GitHub link, social proof
@@ -1314,9 +1343,9 @@ All items from SRS Section 9, verified and production-ready:
 - [x] Account deletion and data export endpoints (GDPR)
 - [x] Sentry error tracking with BYO-key header scrubbing
 - [x] Bot preview before publishing
-- [x] Custom branding (theme color, custom instructions) — available to all users
+- [x] Custom branding (theme color, custom instructions) - available to all users
 - [x] AI model & API-key management UI (provider/model selector, "key active · stored locally" status, switch/remove key)
-- [x] Self-host packaging: `Dockerfile`, `docker-compose.yml`, sample `.env`, one-command quickstart, self-host docs
+- [x] Self-host packaging: `Dockerfile`, `docker-compose.yml`, sample `.env`, one-command quickstart, self-host docs. Recommended deploy targets: **Vercel** (preferred - same as the hosted deployment), **Render** / **Fly.io** / **Railway** / **AWS Lightsail** (flat-rate, predictable). **AWS EC2 is intentionally NOT a recommended target** - its post-July-2025 credit model is complex for new users and bills unpredictably after credits expire. AWS S3 + CloudFront (used in Stages 2 + 5) remain the only AWS services in the stack.
 - [x] Public GitHub repository (MIT license, CONTRIBUTING, README, security policy)
 
 ### What Works After Stage 7
@@ -1355,7 +1384,8 @@ All items from SRS Section 9, verified and production-ready:
 | Conversation logging                 |     |     |     | x   | x   | x   | x   |
 | Dashboard analytics                  |     |     |     |     |     | x   | x   |
 | Lead capture                         |     |     |     |     |     | x   | x   |
-| Email notifications                  |     |     |     |     |     | x   | x   |
+| In-app notifications (lead capture)  |     |     |     |     |     | x   | x   |
+| Transactional auth email (Resend)    |     |     |     |     |     |     | x   |
 | Redis rate limiting (uniform)        |     |     |     |     |     |     | x   |
 | Landing page (open-source / BYO-key) |     |     |     |     |     |     | x   |
 | GDPR compliance                      |     |     |     |     |     |     | x   |
@@ -1366,44 +1396,48 @@ All items from SRS Section 9, verified and production-ready:
 
 `*` = Full-context is kept as fallback for legacy bots; new bots use RAG from Stage 3 onward.
 
-> **Removed in v1.1:** "Stripe billing (Free/Pro)" row — no payments in any stage.
+> **Removed in v1.1:** "Stripe billing (Free/Pro)" row - no payments in any stage.
 
 ---
 
 ## Estimated Effort per Stage
 
-| Stage | Description                                      | Complexity  | New Infra                                                                          |
-| ----- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------------------- |
-| **1** | Foundation + Auth + BYO-key Text Chat            | Medium      | PostgreSQL, NextAuth, multi-provider LLM client (Anthropic / OpenAI min.)          |
-| **2** | PDF/URL Ingestion                                | Medium      | S3/R2 (file storage)                                                               |
-| **3** | RAG + Vector Search (provider-aware embeddings)  | High        | Pinecone or pgvector                                                               |
-| **4** | Public URLs + Multi-Tenant                       | Medium      | None (routing only)                                                                |
-| **5** | Embeddable Widget                                | Medium      | CDN (widget.js)                                                                    |
-| **6** | Dashboard + Analytics + Leads                    | Medium-High | Resend (email)                                                                     |
-| **7** | OAuth + Compliance + Self-host + Launch          | High        | Redis (Upstash), OAuth providers, Docker packaging (NO Stripe in v1.1)             |
+| Stage | Description                                     | Complexity  | New Infra                                                                 |
+| ----- | ----------------------------------------------- | ----------- | ------------------------------------------------------------------------- |
+| **1** | Foundation + Auth + BYO-key Text Chat           | Medium      | PostgreSQL, NextAuth, multi-provider LLM client (Anthropic / OpenAI min.) |
+| **2** | PDF/URL Ingestion                               | Medium      | AWS S3 (5 GB Always Free)                                                 |
+| **3** | RAG + Vector Search (provider-aware embeddings) | High        | Pinecone or pgvector                                                      |
+| **4** | Public URLs + Multi-Tenant                      | Medium      | None (routing only)                                                       |
+| **5** | Embeddable Widget                               | Medium      | AWS S3 + CloudFront (1 TB Always Free)                                    |
+| **6** | Dashboard + Analytics + Leads (in-app notif)    | Medium-High | None new (extends existing Postgres with `notifications` table)           |
+| **7** | OAuth + Compliance + Self-host + Launch         | High        | Redis (Upstash), OAuth providers, Docker packaging (NO Stripe in v1.1)    |
 
 ---
 
 ## Tech Stack (Final)
 
-| Layer                | Technology                                                                                                                | Introduced In |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| **Framework**        | Next.js 14+ (App Router)                                                                                                  | Stage 1       |
-| **Language**         | TypeScript                                                                                                                | Stage 1       |
-| **Styling**          | Tailwind CSS                                                                                                              | Stage 1       |
-| **ORM**              | Drizzle ORM                                                                                                               | Stage 1       |
-| **Database**         | PostgreSQL (Supabase/Neon)                                                                                                | Stage 1       |
-| **Auth**             | NextAuth.js (email/password in Stage 1; OAuth in Stage 7)                                                                 | Stage 1       |
-| **AI (Chat)**        | Multi-provider BYO-key client: Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT (key stored locally, never tracked)  | Stage 1       |
-| **AI (Embeddings)**  | Provider-matched embeddings (OpenAI `text-embedding-3-small`, Google `text-embedding-004`, Anthropic Voyage, DeepSeek)    | Stage 3       |
-| **Vector DB**        | Pinecone or Supabase pgvector                                                                                             | Stage 3       |
-| **File Storage**     | Cloudflare R2 / AWS S3                                                                                                    | Stage 2       |
-| **Widget Build**     | esbuild                                                                                                                   | Stage 5       |
-| **Email**            | Resend                                                                                                                    | Stage 6       |
-| **License**          | MIT (open source, no payments)                                                                                            | Stage 7       |
-| **Cache/Rate Limit** | Upstash Redis (uniform, configurable, BYO-credit protection)                                                              | Stage 7       |
-| **Self-Host**        | Docker + docker-compose                                                                                                   | Stage 7       |
-| **Monitoring**       | Sentry + Vercel Analytics (with `x-llm-api-key` header scrubbing)                                                         | Stage 7       |
-| **Hosting**          | Vercel (also self-hostable on any Node 20+ host)                                                                          | Stage 1       |
+| Layer                    | Technology                                                                                                               | Introduced In |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| **Framework**            | Next.js 14+ (App Router)                                                                                                 | Stage 1       |
+| **Language**             | TypeScript                                                                                                               | Stage 1       |
+| **Styling**              | Tailwind CSS                                                                                                             | Stage 1       |
+| **ORM**                  | Drizzle ORM                                                                                                              | Stage 1       |
+| **Database**             | PostgreSQL (Supabase/Neon)                                                                                               | Stage 1       |
+| **Auth**                 | NextAuth.js (email/password in Stage 1; OAuth in Stage 7)                                                                | Stage 1       |
+| **AI (Chat)**            | Multi-provider BYO-key client: Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT (key stored locally, never tracked) | Stage 1       |
+| **AI (Embeddings)**      | Provider-matched embeddings (OpenAI `text-embedding-3-small`, Google `text-embedding-004`, Anthropic Voyage, DeepSeek)   | Stage 3       |
+| **Vector DB**            | Pinecone or Supabase pgvector                                                                                            | Stage 3       |
+| **File Storage**         | AWS S3 (Always Free: 5 GB + 20K GET + 2K PUT)                                                                            | Stage 2       |
+| **CDN**                  | AWS CloudFront (Always Free: 1 TB + 10M req) - fronts S3 for `widget.js`                                                 | Stage 5       |
+| **Widget Build**         | esbuild                                                                                                                  | Stage 5       |
+| **In-app notifications** | Postgres `notifications` table + dashboard bell badge (no email)                                                         | Stage 6       |
+| **Transactional email**  | **Resend** (auth flows only: verify email + password reset). AWS SES intentionally not used.                             | Stage 7       |
+| **License**              | MIT (open source, no payments)                                                                                           | Stage 7       |
+| **Cache/Rate Limit**     | Upstash Redis (uniform, configurable, BYO-credit protection)                                                             | Stage 7       |
+| **Self-Host**            | Docker + docker-compose                                                                                                  | Stage 7       |
+| **Monitoring**           | Sentry + Vercel Analytics (with `x-llm-api-key` header scrubbing)                                                        | Stage 7       |
+| **Hosting**              | Vercel (also self-hostable on any Node 20+ host)                                                                         | Stage 1       |
 
 > **Removed in v1.1:** Stripe is not part of the stack.
+>
+> **Removed in this revision (post Stage 1 close-out):** AWS SES (replaced by Resend for auth-only emails; Stage 6 lead notifications are now in-app). AWS EC2 (not a recommended deploy target - Vercel primary; Render / Fly.io / Railway / Lightsail for self-hosters). The AWS surface is now strictly **S3 (Stage 2) + CloudFront (Stage 5)** for clean Always Free tier coverage.

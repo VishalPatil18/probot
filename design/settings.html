@@ -193,7 +193,7 @@ tailwind.config = { theme: { extend: {
 
         <div class="bg-white rounded-2xl border border-border-base p-6 shadow-soft">
           <h3 class="font-bold mb-1">Provider &amp; model</h3>
-          <p class="text-xs text-muted mb-5">Choose any supported LLM. Switch any time — answers are always grounded in your knowledge base via RAG.</p>
+          <p class="text-xs text-muted mb-5">Choose any supported LLM. Switch any time - answers are always grounded in your knowledge base via RAG.</p>
           <label class="block text-xs font-semibold mb-2">Provider</label>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5" id="providers">
             <button class="prov p-3 rounded-xl border-2 border-brand bg-blue-50/50 text-center" data-p="anthropic"><p class="text-sm font-bold">Anthropic</p><p class="text-[11px] text-muted">Claude</p></button>
@@ -203,9 +203,9 @@ tailwind.config = { theme: { extend: {
           </div>
           <label class="block text-xs font-semibold mb-1.5">Model</label>
           <select id="model-select" class="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand bg-white">
-            <option>Claude Opus 4 — most capable</option>
-            <option>Claude Sonnet 4 — balanced</option>
-            <option>Claude Haiku 4 — fastest &amp; cheapest</option>
+            <option>Claude Opus 4 - most capable</option>
+            <option>Claude Sonnet 4 - balanced</option>
+            <option>Claude Haiku 4 - fastest &amp; cheapest</option>
           </select>
         </div>
 
@@ -231,7 +231,7 @@ tailwind.config = { theme: { extend: {
           <h3 class="font-bold mb-1">Privacy &amp; telemetry</h3>
           <p class="text-xs text-muted mb-4">ProBot is built to stay out of your data path.</p>
           <div class="divide-y divide-border-base">
-            <div class="flex items-center justify-between py-3"><div><p class="text-sm font-medium">Track / log my API key</p><p class="text-xs text-muted">Permanently disabled — keys are never sent to ProBot.</p></div><span class="text-xs font-bold text-success flex items-center gap-1"><span class="material-symbols-outlined !text-base">check_circle</span>Never</span></div>
+            <div class="flex items-center justify-between py-3"><div><p class="text-sm font-medium">Track / log my API key</p><p class="text-xs text-muted">Permanently disabled - keys are never sent to ProBot.</p></div><span class="text-xs font-bold text-success flex items-center gap-1"><span class="material-symbols-outlined !text-base">check_circle</span>Never</span></div>
             <div class="flex items-center justify-between py-3"><div><p class="text-sm font-medium">Anonymous usage telemetry</p><p class="text-xs text-muted">Optional, off by default.</p></div><span class="relative inline-block w-10 h-6"><input type="checkbox" class="peer sr-only"><span class="absolute inset-0 rounded-full bg-neutral-200 peer-checked:bg-success transition-colors"></span><span class="absolute left-0.5 top-0.5 size-5 rounded-full bg-white transition-transform peer-checked:translate-x-4"></span></span></div>
           </div>
         </div>
@@ -253,7 +253,7 @@ if(location.hash==='#model') activate('model');
 
 // provider → model list + key label
 const MODELS={
-  anthropic:['Claude Opus 4 — most capable','Claude Sonnet 4 — balanced','Claude Haiku 4 — fastest & cheapest'],
+  anthropic:['Claude Opus 4 - most capable','Claude Sonnet 4 - balanced','Claude Haiku 4 - fastest & cheapest'],
   google:['Gemini 2.5 Pro','Gemini 2.5 Flash','Gemini 2.0 Flash-Lite'],
   deepseek:['DeepSeek-V3','DeepSeek-R1 (reasoning)'],
   openai:['GPT-4o','GPT-4o mini','o3-mini']
