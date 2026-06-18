@@ -1,0 +1,142 @@
+---
+title: POST /api/bots
+description: "Upsert the authenticated user's bot. Requires a session cookie."
+---
+
+Creates or updates the current user's bot. Stage 1 supports **one bot per user** - the route is an upsert keyed on the session's `userId`.
+
+## Request
+
+```http
+POST /api/bots
+Content-Type: application/json
+Cookie: next-auth.session-token=<jwt>
+```
+
+### Body
+
+```json
+{
+  "name": "Career Bot",
+  "headline": "Senior platform engineer · open to staff roles",
+  "personality": "professional",
+  "contextText": "I am a software engineer based in...",
+  "suggestedQuestions": [
+    "What stack do you work in?",
+    "Are you open to remote?"
+  ],
+  "llmProvider": "anthropic",
+  "llmModel": "claude-sonnet-4-5"
+}
+```
+
+| Field                | Type                                                   | Constraint                                                 |
+| -------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| `name`               | string                                                 | 1–100 chars, trimmed                                       |
+| `headline`           | string (optional)                                      | ≤ 120 chars                                                |
+| `personality`        | `"professional"` \| `"creative"` \| `"enthusiastic"`   |                                                            |
+| `contextText`        | string                                                 | 1–50,000 chars, trimmed                                    |
+| `suggestedQuestions` | string[]                                               | ≤ 6 entries, each ≤ 200 chars                              |
+| `llmProvider`        | `"anthropic"` \| `"openai"` \| `"google"` \| `"azure"` |                                                            |
+| `llmModel`           | string (optional)                                      | ≤ 60 chars; provider-specific model id or Azure deployment |
+
+<Note>
+  The LLM API key is **not** part of this body and **must not** be sent here. It
+  lives in the browser's `localStorage` and rides the `x-llm-api-key` header on
+  `/api/chat/[botId]` requests. See [BYO-key flow](/concepts/byo-key).
+</Note>
+
+## Behaviour
+
+The route runs in a single Drizzle transaction:
+
+1. Update the user's `llm_provider` and `llm_model` columns.
+2. Look up an existing bot for the user.
+3. If present, `UPDATE` it; return `200 OK`.
+4. Otherwise `INSERT`; return `201 Created`.
+
+## Responses
+
+### 201 Created (first save)
+
+```json
+{
+  "bot": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "userId": "11111111-1111-1111-1111-111111111111",
+    "name": "Career Bot",
+    "headline": "Senior platform engineer · open to staff roles",
+    "personality": "professional",
+    "contextText": "I am a software engineer based in...",
+    "suggestedQuestions": [
+      "What stack do you work in?",
+      "Are you open to remote?"
+    ],
+    "loadingMessages": [
+      "Thinking…",
+      "Searching memory…",
+      "Drafting a response…",
+      "Almost ready…"
+    ],
+    "isActive": true,
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+}
+```
+
+Dates serialize as ISO-8601 `YYYY-MM-DDThh:mm:ss.sssZ`.
+
+### 200 OK (subsequent saves)
+
+Same shape, `updatedAt` advances.
+
+### 400 Bad Request - invalid JSON
+
+```json
+{ "error": "Invalid JSON body" }
+```
+
+### 400 Bad Request - validation failure
+
+```json
+{
+  "error": "Validation failed",
+  "details": {
+    "fieldErrors": {
+      "personality": ["Invalid enum value..."]
+    },
+    "formErrors": []
+  }
+}
+```
+
+### 401 Unauthorized
+
+```json
+{ "error": "Unauthorized" }
+```
+
+When no session cookie is attached or the session is invalid.
+
+## cURL
+
+```bash
+curl -X POST https://probot.vercel.app/api/bots \
+  -H 'Content-Type: application/json' \
+  -b 'next-auth.session-token=<JWT>' \
+  -d '{
+    "name": "Career Bot",
+    "personality": "professional",
+    "contextText": "I am a software engineer based in...",
+    "suggestedQuestions": ["What stack do you work in?"],
+    "llmProvider": "anthropic",
+    "llmModel": "claude-sonnet-4-5"
+  }'
+```
+
+## Notes
+
+- `loadingMessages` is set server-side at `INSERT` time from a default JSON literal. It is **not** part of the request body in Stage 1.
+- `isActive` defaults to `true` and is not exposed for client updates yet - bot disable/enable is part of Stage 6.
+- Multi-bot support is planned (Stage 6+).

@@ -1,0 +1,129 @@
+---
+title: Quickstart
+description: "Clone, install, migrate the database, and run ProBot locally in under 5 minutes."
+---
+
+This page gets ProBot running on your laptop. For production self-hosting, see [Self-host](/guides/self-host).
+
+## Prerequisites
+
+<AccordionGroup>
+  <Accordion title="Node.js 20 or later" icon="node-js">
+    `node --version` should print `v20.x` or higher. Older versions miss APIs Next.js 14 relies on.
+  </Accordion>
+  <Accordion title="Postgres with `gen_random_uuid()`" icon="database">
+    Any of the following works:
+    - **Supabase** free tier (recommended for production)
+    - **Neon** free tier
+    - **Local Docker:** `docker run -p 5432:5432 -e POSTGRES_PASSWORD=probot postgres:16`
+
+    Postgres 13+ ships `gen_random_uuid()` in the `pgcrypto` extension. Drizzle migrations enable it automatically.
+
+  </Accordion>
+  <Accordion title="An LLM API key" icon="key">
+    From at least one supported provider:
+    - [Anthropic](https://console.anthropic.com/) - `sk-ant-…`
+    - [OpenAI](https://platform.openai.com/api-keys) - `sk-…`
+    - [Azure OpenAI](https://portal.azure.com/) - requires endpoint + deployment + key
+    - Google AI Studio (Gemini) - provider currently registered as a stub
+
+    The key is **never** stored in `.env`; you paste it into the bot factory at runtime.
+
+  </Accordion>
+</AccordionGroup>
+
+## 1. Clone and install
+
+```bash
+git clone https://github.com/vishalpatil18/probot.git
+cd probot
+npm install
+```
+
+## 2. Configure environment
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in:
+
+```bash .env.local
+DATABASE_URL="postgresql://user:pass@host:5432/probot"
+NEXTAUTH_SECRET="<output of: openssl rand -base64 32>"
+NEXTAUTH_URL="http://localhost:3000"
+```
+
+<Warning>
+  Do **not** put any LLM API keys in `.env.local`. Keys are entered in the bot
+  factory UI and stored only in your browser's `localStorage`. Putting them in
+  env vars is the wrong shape - they would be available server-side, which is
+  exactly what BYO-key prevents.
+</Warning>
+
+## 3. Run database migrations
+
+```bash
+npm run db:migrate
+```
+
+This applies both Drizzle migrations:
+
+- `0000_*.sql` - `users` and `bots` tables
+- `0001_*.sql` - `users.llm_provider` and `users.llm_model` columns
+
+## 4. Start the dev server
+
+```bash
+npm run dev
+```
+
+Open <http://localhost:3000>.
+
+## 5. Create your first bot
+
+<Steps>
+  <Step title="Register an account">
+    Go to `/register`, pick a username, email, and password (≥ 8 chars).
+  </Step>
+  <Step title="Open the bot factory">Navigate to `/dashboard/bots/new`.</Step>
+  <Step title="Walk the 5 steps">
+    1. **Identity** - bot name and optional headline. 2. **Knowledge** - paste
+    your resume text (≤ 50,000 chars). 3. **Personality** - `professional`,
+    `creative`, or `enthusiastic`. 4. **AI model + key** - pick a provider,
+    paste your API key. The key is saved to `localStorage` only. 5. **Suggested
+    questions** - up to 6 prompts recruiters see.
+  </Step>
+  <Step title="Preview the bot">
+    Click **Preview bot** to chat with your bot using your own key.
+  </Step>
+</Steps>
+
+## Verify
+
+```bash
+npm run test
+```
+
+You should see **260 tests passing** across 24 files. If anything fails, see [Self-host → Troubleshooting](/guides/self-host#troubleshooting).
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="BYO-key flow" icon="key" href="/concepts/byo-key">
+    Trace exactly where your API key goes (and doesn't).
+  </Card>
+  <Card
+    title="Build your bot"
+    icon="wand-magic-sparkles"
+    href="/guides/build-your-bot"
+  >
+    Detailed walkthrough of each factory step.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/introduction">
+    Endpoint shapes, status codes, error envelopes.
+  </Card>
+  <Card title="Self-host" icon="server" href="/guides/self-host">
+    Vercel, Docker, Fly.io, Render, Railway, AWS Lightsail.
+  </Card>
+</CardGroup>

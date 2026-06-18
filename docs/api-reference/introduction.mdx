@@ -1,0 +1,129 @@
+---
+title: API reference
+description: "All ProBot HTTP endpoints, request shapes, response envelopes, and status codes."
+---
+
+ProBot exposes three first-party HTTP endpoints under `/api/*`, plus the NextAuth handler. All are co-located in the Next.js app and deploy as serverless functions on Vercel.
+
+## Base URL
+
+- **Hosted:** `https://probot.vercel.app`
+- **Self-hosted:** wherever you deployed (see [Self-host](/guides/self-host))
+
+All requests below are relative to that base.
+
+## Endpoints at a glance
+
+| Method   | Path                      | Auth            | Purpose                                            |
+| -------- | ------------------------- | --------------- | -------------------------------------------------- |
+| POST     | `/api/auth/register`      | none            | Create a new user account                          |
+| GET/POST | `/api/auth/[...nextauth]` | session-managed | NextAuth handlers (login, logout, session)         |
+| POST     | `/api/bots`               | session         | Upsert the current user's bot                      |
+| POST     | `/api/chat/[botId]`       | BYO key         | Send a message to a bot; receive a sanitized reply |
+
+## Authentication models
+
+ProBot has two distinct auth surfaces:
+
+### 1. Session auth (cookie-based)
+
+For dashboard operations (`/api/bots`). Issued by NextAuth's Credentials provider, JWT strategy. Cookies are `httpOnly`, `secure` in production.
+
+A missing or invalid session returns:
+
+```json
+{ "error": "Unauthorized" }
+```
+
+with HTTP `401`.
+
+### 2. BYO LLM key (header-based)
+
+For chat (`/api/chat/[botId]`). The user's LLM provider key rides in the `x-llm-api-key` header. Azure additionally requires `x-llm-azure-endpoint` and accepts optional `x-llm-azure-api-version`.
+
+The key is **never** in the JSON body, **never** persisted server-side, **never** echoed in error responses. See [BYO-key flow](/concepts/byo-key).
+
+## Response envelopes
+
+### Success
+
+Success responses are either:
+
+```json
+{
+  "bot": {
+    /* row */
+  }
+}
+```
+
+…for resource endpoints, or:
+
+```json
+{ "reply": "..." }
+```
+
+…for chat.
+
+### Error
+
+Errors always use one of two shapes:
+
+**Single error code (used by chat + NextAuth):**
+
+```json
+{ "error": "<machine_readable_code>" }
+```
+
+**Validation error (used by register + bots):**
+
+```json
+{
+  "error": "Validation failed",
+  "details": {
+    "fieldErrors": { "<field>": ["<message>"] },
+    "formErrors": []
+  }
+}
+```
+
+The `details` shape comes from Zod's `.flatten()`.
+
+## Status code reference
+
+| Code | When                                                                                                                |
+| ---- | ------------------------------------------------------------------------------------------------------------------- |
+| 200  | Successful read, or successful upsert that updated an existing row                                                  |
+| 201  | Successful create                                                                                                   |
+| 400  | Bad request - invalid JSON, validation failure, missing key header, blocked-by-sanitizer                            |
+| 401  | Missing or invalid session (cookie endpoints)                                                                       |
+| 404  | Resource not found (e.g. unknown `botId` or inactive bot)                                                           |
+| 409  | Conflict - register endpoint when email or username already exists                                                  |
+| 413  | Request body exceeds the chat endpoint's 16,384-byte cap                                                            |
+| 415  | Unsupported content type - chat endpoint requires `application/json`                                                |
+| 429  | Rate limited - either the in-process 2-tier limiter (`rate_limit`) or the upstream provider (`provider_rate_limit`) |
+| 502  | Provider unavailable - upstream LLM returned `provider_unavailable` or `timeout`                                    |
+
+## Rate limit response
+
+When the per-bot limiter trips:
+
+```json
+{
+  "error": "rate_limit",
+  "scope": "short",
+  "resetAt": 1718713200000
+}
+```
+
+`resetAt` is epoch ms. `scope` is `"short"` or `"long"`.
+
+## What's documented vs. not
+
+The pages under **Endpoints** document the **public, currently-shipped** routes only:
+
+- [`POST /api/auth/register`](/api-reference/auth-register)
+- [`POST /api/bots`](/api-reference/bots-upsert)
+- [`POST /api/chat/[botId]`](/api-reference/chat)
+
+NextAuth's `/api/auth/[...nextauth]` is **not** documented here - its surface is owned by NextAuth and changes per their docs. See <https://next-auth.js.org/getting-started/rest-api>.
