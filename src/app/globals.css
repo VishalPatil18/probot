@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ============================================================
-   Design system — ported from design/assets/probot.css.
+   Design system - ported from design/assets/probot.css.
    Only the utilities Stage 1's auth UI needs land here; chat
    bubbles and markdown styles arrive in Task 1.7.
    ============================================================ */

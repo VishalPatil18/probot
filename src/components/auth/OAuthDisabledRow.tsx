@@ -1,4 +1,4 @@
-// OAuth buttons — rendered disabled with a "SOON" badge per Q1=b.
+// OAuth buttons - rendered disabled with a "SOON" badge per Q1=b.
 // Real wiring lands in Stage 7 (per claude/plan.md §7.5).
 export function OAuthDisabledRow() {
   const baseClass =
@@ -7,7 +7,7 @@ export function OAuthDisabledRow() {
   return (
     <div
       className="space-y-2.5 mb-6"
-      aria-label="OAuth providers — coming in Stage 7"
+      aria-label="OAuth providers - coming in Stage 7"
     >
       <button
         type="button"

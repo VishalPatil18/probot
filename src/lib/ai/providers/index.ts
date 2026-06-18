@@ -1,5 +1,5 @@
 import { anthropicProvider } from "./anthropic";
-import { deepseekProvider } from "./deepseek";
+import { azureProvider } from "./azure";
 import { googleProvider } from "./google";
 import { openaiProvider } from "./openai";
 import type { LLMProvider, ProviderName } from "./types";
@@ -8,14 +8,14 @@ const PROVIDERS: Record<ProviderName, LLMProvider> = {
   anthropic: anthropicProvider,
   openai: openaiProvider,
   google: googleProvider,
-  deepseek: deepseekProvider,
+  azure: azureProvider,
 };
 
 export const PROVIDER_NAMES: readonly ProviderName[] = [
   "anthropic",
   "openai",
   "google",
-  "deepseek",
+  "azure",
 ];
 
 export function getProvider(name: ProviderName): LLMProvider {

@@ -35,7 +35,7 @@ function pruneAndCheck(
   const stamps = bucket.get(key) ?? [];
   const cutoff = now - windowMs;
   let firstIn = 0;
-  // Strictly older than the window — boundary entries are still live.
+  // Strictly older than the window - boundary entries are still live.
   while (firstIn < stamps.length && stamps[firstIn]! < cutoff) firstIn++;
   const live = firstIn === 0 ? stamps : stamps.slice(firstIn);
 
@@ -45,7 +45,7 @@ function pruneAndCheck(
     return { allowed: false, resetAt: oldest + windowMs };
   }
 
-  // Immutable append — avoids both the in-place mutation and the
+  // Immutable append - avoids both the in-place mutation and the
   // concurrent-millisecond rollback hazard.
   bucket.set(key, [...live, now]);
   return { allowed: true, resetAt: 0 };

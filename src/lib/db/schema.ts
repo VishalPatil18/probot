@@ -10,7 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 // users
-// The LLM API key is intentionally NOT stored here — it lives only in the
+// The LLM API key is intentionally NOT stored here - it lives only in the
 // user's browser (localStorage `probot.llm.key.v1`) and rides the
 // `x-llm-api-key` header per chat request. See claude/plan.md §1.5.
 export const users = pgTable("users", {

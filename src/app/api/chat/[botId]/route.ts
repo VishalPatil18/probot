@@ -2,7 +2,11 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { KeyTransportError, readApiKey } from "@/lib/ai/key-transport";
+import {
+  KeyTransportError,
+  readApiKey,
+  readAzureCreds,
+} from "@/lib/ai/key-transport";
 import { buildSystemPrompt } from "@/lib/ai/prompt-builder";
 import { ProviderError, getProvider, isProviderName } from "@/lib/ai/providers";
 import { checkRateLimit } from "@/lib/ai/rate-limit";
@@ -127,6 +131,31 @@ export async function POST(
     ownerUsername: ownerRow.username,
   });
 
+  // Azure needs three extra runtime values (endpoint, apiVersion, deployment).
+  // Endpoint + apiVersion ride in custom headers (read here); deployment is
+  // persisted in `users.llmModel`. Missing endpoint when provider is azure is
+  // the same UX class as a missing api key - both mean "your provider
+  // settings are incomplete."
+  let extras: Record<string, string> | undefined;
+  if (ownerRow.llmProvider === "azure") {
+    let azureCreds: ReturnType<typeof readAzureCreds>;
+    try {
+      azureCreds = readAzureCreds(request.headers);
+    } catch (err) {
+      if (err instanceof KeyTransportError) {
+        return NextResponse.json({ error: "missing_llm_key" }, { status: 400 });
+      }
+      throw err;
+    }
+    if (!azureCreds) {
+      return NextResponse.json({ error: "missing_llm_key" }, { status: 400 });
+    }
+    extras = { endpoint: azureCreds.endpoint };
+    if (azureCreds.apiVersion !== null) {
+      extras.apiVersion = azureCreds.apiVersion;
+    }
+  }
+
   let providerReply: string;
   try {
     const result = await provider.complete({
@@ -134,15 +163,13 @@ export async function POST(
       userMessage: sanitized.message,
       apiKey,
       model: ownerRow.llmModel ?? undefined,
+      extras,
     });
     providerReply = result.reply;
   } catch (err) {
     if (err instanceof ProviderError) {
       if (err.category === "invalid_key") {
-        return NextResponse.json(
-          { error: "invalid_llm_key" },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: "invalid_llm_key" }, { status: 400 });
       }
       if (err.category === "rate_limit") {
         return NextResponse.json(

@@ -5,27 +5,35 @@ import { useMemo, useState } from "react";
 
 import { PROVIDER_NAMES, type ProviderName } from "@/lib/ai/providers";
 import { PERSONALITY_PRESETS, type Personality } from "@/lib/bots/schemas";
-import { setApiKey } from "@/lib/client/llm-key-store";
+import { setApiKey, setAzureCreds } from "@/lib/client/llm-key-store";
 
 const TOTAL_STEPS = 5;
+const DEFAULT_AZURE_API_VERSION = "2025-01-01-preview";
 
-const PROVIDER_LABELS: Record<ProviderName, { name: string; family: string }> = {
-  anthropic: { name: "Anthropic", family: "Claude" },
-  google: { name: "Google", family: "Gemini" },
-  deepseek: { name: "DeepSeek", family: "V3 / R1" },
-  openai: { name: "OpenAI", family: "GPT" },
-};
+const PROVIDER_LABELS: Record<ProviderName, { name: string; family: string }> =
+  {
+    anthropic: { name: "Anthropic", family: "Claude" },
+    google: { name: "Google", family: "Gemini" },
+    azure: { name: "Azure", family: "OpenAI" },
+    openai: { name: "OpenAI", family: "GPT" },
+  };
 
+// For Azure the user supplies their deployment name as free text (it IS the
+// model), so the dropdown is empty/hidden on that branch.
 const MODEL_OPTIONS: Record<ProviderName, string[]> = {
   anthropic: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"],
   openai: ["gpt-4o-mini", "gpt-4o", "o3-mini"],
   google: ["gemini-2.5-flash", "gemini-2.5-pro"],
-  deepseek: ["deepseek-chat", "deepseek-reasoner"],
+  azure: [],
 };
 
-// Stage 1: only anthropic + openai have real adapters (Task 1.5).
-// google + deepseek render disabled with a "SOON" badge.
-const STAGE1_ENABLED: ReadonlySet<ProviderName> = new Set(["anthropic", "openai"]);
+// Stage 1: anthropic, openai, and azure ship real adapters.
+// google renders disabled with a "SOON" badge.
+const STAGE1_ENABLED: ReadonlySet<ProviderName> = new Set([
+  "anthropic",
+  "openai",
+  "azure",
+]);
 
 const PERSONALITY_LABELS: Record<
   Personality,
@@ -61,6 +69,9 @@ type FormState = {
   llmProvider: ProviderName;
   llmModel: string;
   apiKey: string;
+  // Azure-only extras (ignored when llmProvider !== "azure").
+  azureEndpoint: string;
+  azureApiVersion: string;
 };
 
 export function BotFactoryForm({
@@ -75,11 +86,15 @@ export function BotFactoryForm({
   // If the DB has a model that isn't in our current MODEL_OPTIONS (e.g. a
   // deprecated id, or one chosen via a future custom field), fall back to the
   // first option so the <select> can't render in a desynced state.
+  // Azure has an empty MODEL_OPTIONS list - the user supplies deployment name
+  // as free text, so we pass through whatever the DB has (or empty).
   const providerModels = MODEL_OPTIONS[initialProvider];
   const initialModel =
-    initialLlmModel && providerModels.includes(initialLlmModel)
-      ? initialLlmModel
-      : providerModels[0]!;
+    initialProvider === "azure"
+      ? (initialLlmModel ?? "")
+      : initialLlmModel && providerModels.includes(initialLlmModel)
+        ? initialLlmModel
+        : (providerModels[0] ?? "");
   const [form, setForm] = useState<FormState>({
     name: initialBot?.name ?? "",
     headline: initialBot?.headline ?? "",
@@ -89,6 +104,8 @@ export function BotFactoryForm({
     llmProvider: initialProvider,
     llmModel: initialModel,
     apiKey: "",
+    azureEndpoint: "",
+    azureApiVersion: DEFAULT_AZURE_API_VERSION,
   });
   const [newQuestion, setNewQuestion] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -104,7 +121,8 @@ export function BotFactoryForm({
     setForm((prev) => ({
       ...prev,
       llmProvider: provider,
-      llmModel: MODEL_OPTIONS[provider][0]!,
+      // Azure deployment names are free-text; everyone else picks from a list.
+      llmModel: provider === "azure" ? "" : (MODEL_OPTIONS[provider][0] ?? ""),
     }));
   }
 
@@ -126,7 +144,15 @@ export function BotFactoryForm({
     if (n === 1) return form.name.trim().length > 0;
     if (n === 2) return form.contextText.trim().length > 0;
     if (n === 3) return true;
-    if (n === 4) return form.apiKey.trim().length >= 8;
+    if (n === 4) {
+      if (form.apiKey.trim().length < 8) return false;
+      if (form.llmProvider === "azure") {
+        const endpoint = form.azureEndpoint.trim();
+        const deployment = form.llmModel.trim();
+        return endpoint.startsWith("https://") && deployment.length > 0;
+      }
+      return true;
+    }
     return true;
   }
 
@@ -134,9 +160,17 @@ export function BotFactoryForm({
     setSubmitting(true);
     setError(null);
     try {
-      // Stash the BYO key in localStorage BEFORE the network call — so even if
+      // Stash the BYO key in localStorage BEFORE the network call - so even if
       // the server request hangs, the key is captured locally for the chat UI.
       setApiKey(form.apiKey);
+      // Azure needs endpoint + apiVersion alongside the key. Store separately
+      // so switching providers doesn't wipe the other provider's key.
+      if (form.llmProvider === "azure") {
+        setAzureCreds({
+          endpoint: form.azureEndpoint,
+          apiVersion: form.azureApiVersion || DEFAULT_AZURE_API_VERSION,
+        });
+      }
 
       const res = await fetch("/api/bots", {
         method: "POST",
@@ -192,11 +226,7 @@ export function BotFactoryForm({
         <div className="px-6 lg:px-12 py-10 overflow-y-auto">
           <div className="max-w-lg">
             {step === 1 && (
-              <StepIdentity
-                form={form}
-                patch={patch}
-                username={username}
-              />
+              <StepIdentity form={form} patch={patch} username={username} />
             )}
             {step === 2 && <StepKnowledge form={form} patch={patch} />}
             {step === 3 && (
@@ -217,10 +247,7 @@ export function BotFactoryForm({
               />
             )}
             {step === 5 && (
-              <StepDeploy
-                username={username}
-                createdBotId={createdBotId}
-              />
+              <StepDeploy username={username} createdBotId={createdBotId} />
             )}
 
             {error && (
@@ -346,7 +373,10 @@ function StepIdentity({
       />
       <div className="space-y-5">
         <div>
-          <label htmlFor="bf-name" className="block text-xs font-semibold mb-1.5">
+          <label
+            htmlFor="bf-name"
+            className="block text-xs font-semibold mb-1.5"
+          >
             Display name
           </label>
           <input
@@ -408,11 +438,16 @@ function StepKnowledge({
       />
       <div className="space-y-5">
         <div className="rounded-2xl p-6 text-center border-2 border-dashed border-border-base bg-neutral-50 opacity-60">
-          <p className="text-sm font-semibold">PDF upload — Stage 2</p>
-          <p className="text-xs text-muted mt-1">Coming with the ingestion pipeline.</p>
+          <p className="text-sm font-semibold">PDF upload - Stage 2</p>
+          <p className="text-xs text-muted mt-1">
+            Coming with the ingestion pipeline.
+          </p>
         </div>
         <div>
-          <label htmlFor="bf-ctx" className="block text-xs font-semibold mb-1.5">
+          <label
+            htmlFor="bf-ctx"
+            className="block text-xs font-semibold mb-1.5"
+          >
             Bio / resume text{" "}
             <span className="text-muted font-normal">· max 50,000 chars</span>
           </label>
@@ -458,8 +493,14 @@ function StepPersonality({
       />
       <div className="space-y-6">
         <div>
-          <label className="block text-xs font-semibold mb-2">Tone preset</label>
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tone preset">
+          <label className="block text-xs font-semibold mb-2">
+            Tone preset
+          </label>
+          <div
+            className="grid grid-cols-3 gap-2"
+            role="radiogroup"
+            aria-label="Tone preset"
+          >
             {PERSONALITY_PRESETS.map((p) => {
               const meta = PERSONALITY_LABELS[p];
               const active = form.personality === p;
@@ -485,7 +526,9 @@ function StepPersonality({
         </div>
 
         <div className="rounded-xl p-4 border border-border-base bg-neutral-50 opacity-60">
-          <p className="text-sm font-semibold">Theme color & custom instructions — Stage 7</p>
+          <p className="text-sm font-semibold">
+            Theme color & custom instructions - Stage 7
+          </p>
           <p className="text-xs text-muted mt-1">
             Lands with the settings page.
           </p>
@@ -563,11 +606,11 @@ function StepAIModel({
       <StepHeading
         step={4}
         title="Choose your AI model."
-        subtitle="ProBot runs on your own LLM key. Pick a provider and paste your key — it's stored locally and never tracked by ProBot."
+        subtitle="ProBot runs on your own LLM key. Pick a provider and paste your key - it's stored locally and never tracked by ProBot."
       />
       <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 mb-6 text-[13px] leading-relaxed">
         Your key stays on this device. It's saved to local storage and used only
-        to call the model directly — <strong>never</strong> sent to or logged by
+        to call the model directly - <strong>never</strong> sent to or logged by
         ProBot.
       </div>
 
@@ -606,26 +649,96 @@ function StepAIModel({
           </div>
         </div>
 
-        <div>
-          <label htmlFor="bf-model" className="block text-xs font-semibold mb-1.5">
-            Model
-          </label>
-          <select
-            id="bf-model"
-            value={form.llmModel}
-            onChange={(e) => patch("llmModel", e.target.value)}
-            className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand bg-white"
-          >
-            {models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
+        {form.llmProvider === "azure" ? (
+          <>
+            <div>
+              <label
+                htmlFor="bf-az-endpoint"
+                className="block text-xs font-semibold mb-1.5"
+              >
+                Azure endpoint
+              </label>
+              <input
+                id="bf-az-endpoint"
+                type="url"
+                value={form.azureEndpoint}
+                onChange={(e) => patch("azureEndpoint", e.target.value)}
+                maxLength={512}
+                placeholder="https://your-resource.cognitiveservices.azure.com"
+                className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-muted mt-1.5">Must use https://</p>
+            </div>
+            <div>
+              <label
+                htmlFor="bf-az-deployment"
+                className="block text-xs font-semibold mb-1.5"
+              >
+                Deployment name
+              </label>
+              <input
+                id="bf-az-deployment"
+                type="text"
+                value={form.llmModel}
+                onChange={(e) => patch("llmModel", e.target.value)}
+                maxLength={60}
+                placeholder="gpt-4o-mini"
+                className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-muted mt-1.5">
+                The name you gave the deployment in Azure (it is also the model
+                id sent in requests).
+              </p>
+            </div>
+            <div>
+              <label
+                htmlFor="bf-az-version"
+                className="block text-xs font-semibold mb-1.5"
+              >
+                API version
+              </label>
+              <input
+                id="bf-az-version"
+                type="text"
+                value={form.azureApiVersion}
+                onChange={(e) => patch("azureApiVersion", e.target.value)}
+                maxLength={64}
+                placeholder={DEFAULT_AZURE_API_VERSION}
+                className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
+                autoComplete="off"
+              />
+            </div>
+          </>
+        ) : (
+          <div>
+            <label
+              htmlFor="bf-model"
+              className="block text-xs font-semibold mb-1.5"
+            >
+              Model
+            </label>
+            <select
+              id="bf-model"
+              value={form.llmModel}
+              onChange={(e) => patch("llmModel", e.target.value)}
+              className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand bg-white"
+            >
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
-          <label htmlFor="bf-key" className="block text-xs font-semibold mb-1.5">
+          <label
+            htmlFor="bf-key"
+            className="block text-xs font-semibold mb-1.5"
+          >
             {providerLabel} API key
           </label>
           <input
@@ -634,7 +747,9 @@ function StepAIModel({
             value={form.apiKey}
             onChange={(e) => patch("apiKey", e.target.value)}
             maxLength={256}
-            placeholder="sk-…"
+            placeholder={
+              form.llmProvider === "azure" ? "your azure key" : "sk-…"
+            }
             className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
             autoComplete="off"
           />
@@ -681,7 +796,7 @@ function StepDeploy({
           </div>
         </div>
         <div className="rounded-xl p-4 border border-border-base bg-neutral-50 opacity-60">
-          <p className="text-sm font-semibold">Embed code — Stage 5</p>
+          <p className="text-sm font-semibold">Embed code - Stage 5</p>
           <p className="text-xs text-muted mt-1">Lands with the widget.</p>
         </div>
       </div>

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { getApiKey } from "@/lib/client/llm-key-store";
+import type { ProviderName } from "@/lib/ai/providers";
+import { getApiKey, getAzureCreds } from "@/lib/client/llm-key-store";
 
 import { LoadingAnimation } from "./LoadingAnimation";
 import { MessageBubble } from "./MessageBubble";
@@ -24,6 +25,7 @@ type Props = {
   botHeadline: string | null;
   suggestedQuestions: string[];
   loadingMessages: string[];
+  llmProvider: ProviderName;
 };
 
 export function ChatWindow({
@@ -32,6 +34,7 @@ export function ChatWindow({
   botHeadline,
   suggestedQuestions,
   loadingMessages,
+  llmProvider,
 }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -54,6 +57,16 @@ export function ChatWindow({
       setMissingKey(true);
       return;
     }
+
+    // Azure also needs endpoint + apiVersion alongside the key.
+    let azureCreds: ReturnType<typeof getAzureCreds> = null;
+    if (llmProvider === "azure") {
+      azureCreds = getAzureCreds();
+      if (!azureCreds) {
+        setMissingKey(true);
+        return;
+      }
+    }
     setMissingKey(false);
 
     setMessages((prev) => [
@@ -63,14 +76,20 @@ export function ChatWindow({
     setInput("");
     setLoading(true);
 
+    // BYO credentials ride ONLY in headers - never in the JSON body.
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "x-llm-api-key": apiKey,
+    };
+    if (azureCreds) {
+      headers["x-llm-azure-endpoint"] = azureCreds.endpoint;
+      headers["x-llm-azure-api-version"] = azureCreds.apiVersion;
+    }
+
     try {
       const res = await fetch(`/api/chat/${botId}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // BYO key rides ONLY in the header — never in the JSON body.
-          "x-llm-api-key": apiKey,
-        },
+        headers,
         body: JSON.stringify({ message: trimmed }),
       });
 
@@ -88,7 +107,7 @@ export function ChatWindow({
           {
             id: newId(),
             role: "assistant",
-            text: "Sorry — something went wrong on my end. Please try again.",
+            text: "Sorry - something went wrong on my end. Please try again.",
           },
         ]);
         return;
@@ -125,7 +144,8 @@ export function ChatWindow({
     }
   }
 
-  const showSuggestions = messages.length === 0 && suggestedQuestions.length > 0;
+  const showSuggestions =
+    messages.length === 0 && suggestedQuestions.length > 0;
 
   return (
     <div className="h-screen flex flex-col bg-bg-app">
@@ -166,7 +186,10 @@ export function ChatWindow({
               className="mb-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2"
             >
               No API key found.{" "}
-              <Link href="/dashboard/bots/new" className="underline font-semibold">
+              <Link
+                href="/dashboard/bots/new"
+                className="underline font-semibold"
+              >
                 Add your API key in bot settings
               </Link>{" "}
               to start chatting.

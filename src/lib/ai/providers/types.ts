@@ -1,4 +1,4 @@
-export type ProviderName = "anthropic" | "openai" | "google" | "deepseek";
+export type ProviderName = "anthropic" | "openai" | "google" | "azure";
 
 export type CompleteParams = {
   system: string;
@@ -7,6 +7,10 @@ export type CompleteParams = {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  // Per-provider auxiliary fields. Azure uses `endpoint` and `apiVersion`;
+  // other providers ignore. Kept as a generic Record so a new provider with
+  // extra config (e.g. base URL, region) doesn't require widening the type.
+  extras?: Record<string, string>;
 };
 
 export type CompleteResult = {

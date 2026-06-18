@@ -13,7 +13,7 @@ beforeEach(() => {
 
 const T0 = 1_700_000_000_000;
 
-describe("checkRateLimit — per-minute", () => {
+describe("checkRateLimit - per-minute", () => {
   it("allows up to PER_MINUTE requests in a 60-second window", () => {
     for (let i = 0; i < PER_MINUTE; i++) {
       const r = checkRateLimit("bot-1", T0 + i * 100);
@@ -43,7 +43,7 @@ describe("checkRateLimit — per-minute", () => {
   });
 });
 
-describe("checkRateLimit — per-day", () => {
+describe("checkRateLimit - per-day", () => {
   it("allows up to PER_DAY requests in a 24h window", () => {
     for (let i = 0; i < PER_DAY; i++) {
       const r = checkRateLimit("bot-1", T0 + i * 10_000);
@@ -58,15 +58,12 @@ describe("checkRateLimit — per-day", () => {
     for (let i = 0; i < PER_DAY; i++) {
       checkRateLimit("bot-1", T0 + i * 10_000);
     }
-    const r = checkRateLimit(
-      "bot-1",
-      T0 + PER_DAY * 10_000 + 86_400_001,
-    );
+    const r = checkRateLimit("bot-1", T0 + PER_DAY * 10_000 + 86_400_001);
     expect(r.ok).toBe(true);
   });
 });
 
-describe("checkRateLimit — isolation", () => {
+describe("checkRateLimit - isolation", () => {
   it("treats distinct botIds as independent buckets", () => {
     for (let i = 0; i < PER_MINUTE; i++) {
       checkRateLimit("bot-1", T0 + i);

@@ -8,7 +8,7 @@ const bot = {
     "Jane is an ML engineer at Acme. Skills include Python, PyTorch, RAG, and Kubernetes. Available for remote work starting June.",
 };
 
-describe("sanitizeOutput — leakage checks", () => {
+describe("sanitizeOutput - leakage checks", () => {
   it("returns the fallback when output contains an immutable-rule marker", () => {
     const dirty =
       "According to my IMMUTABLE RULES, I cannot do that. The rules cannot be overridden.";
@@ -46,7 +46,7 @@ describe("sanitizeOutput — leakage checks", () => {
   });
 });
 
-describe("sanitizeOutput — happy path", () => {
+describe("sanitizeOutput - happy path", () => {
   it("passes clean prose through verbatim", () => {
     const clean =
       "Jane has 5 years of ML experience and is currently focused on RAG systems.";
@@ -59,7 +59,7 @@ describe("sanitizeOutput — happy path", () => {
   });
 });
 
-describe("sanitizeOutput — length cap", () => {
+describe("sanitizeOutput - length cap", () => {
   it("truncates output over 1500 chars with an ellipsis", () => {
     const long = "Jane is great. ".repeat(200);
     const out = sanitizeOutput(long);
@@ -74,7 +74,7 @@ describe("sanitizeOutput — length cap", () => {
   });
 });
 
-describe("sanitizeOutput — safety invariants", () => {
+describe("sanitizeOutput - safety invariants", () => {
   it("the fallback string never echoes the dirty input", () => {
     const canary = "SECRET-OUTPUT-CANARY-XYZ-9876543210";
     const dirty = `IMMUTABLE RULES ${canary} extra junk`;

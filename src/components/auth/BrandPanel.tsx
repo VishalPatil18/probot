@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-// Shared left-side chrome for /login + /register. Server component — no client
+// Shared left-side chrome for /login + /register. Server component - no client
 // state. Ported from design/login.html lines 23–48. Inline SVGs per CLAUDE.md
 // §2 (no icon-library dep for 4 icons).
 export function BrandPanel() {
@@ -41,7 +41,7 @@ export function BrandPanel() {
               Does she know Kubernetes?
             </div>
             <div className="bg-white rounded-xl rounded-br-sm px-3 py-2 text-xs w-fit max-w-[85%] ml-auto text-ink">
-              Yes — she ran production K8s clusters at her last role for 2
+              Yes - she ran production K8s clusters at her last role for 2
               years.
             </div>
           </div>

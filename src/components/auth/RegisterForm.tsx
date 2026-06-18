@@ -76,7 +76,7 @@ export function RegisterForm() {
     });
     setLoading(false);
     if (!signInResult || signInResult.error) {
-      setError("Account created — please log in.");
+      setError("Account created - please log in.");
       router.push("/login");
       return;
     }

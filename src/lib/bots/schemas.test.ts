@@ -12,7 +12,7 @@ const validInput = {
   llmModel: "claude-haiku-4-5",
 };
 
-describe("botInput — happy path", () => {
+describe("botInput - happy path", () => {
   it("accepts a fully-formed valid payload", () => {
     expect(botInput.safeParse(validInput).success).toBe(true);
   });
@@ -39,7 +39,7 @@ describe("botInput — happy path", () => {
   });
 });
 
-describe("botInput — name validation", () => {
+describe("botInput - name validation", () => {
   it.each([
     ["empty name", ""],
     ["whitespace-only name", "   "],
@@ -49,7 +49,7 @@ describe("botInput — name validation", () => {
   });
 });
 
-describe("botInput — headline validation", () => {
+describe("botInput - headline validation", () => {
   it("rejects an overlong headline (121 chars)", () => {
     expect(
       botInput.safeParse({ ...validInput, headline: "a".repeat(121) }).success,
@@ -57,11 +57,11 @@ describe("botInput — headline validation", () => {
   });
 });
 
-describe("botInput — contextText validation", () => {
+describe("botInput - contextText validation", () => {
   it("rejects empty contextText", () => {
-    expect(
-      botInput.safeParse({ ...validInput, contextText: "" }).success,
-    ).toBe(false);
+    expect(botInput.safeParse({ ...validInput, contextText: "" }).success).toBe(
+      false,
+    );
   });
 
   it("rejects whitespace-only contextText", () => {
@@ -78,13 +78,13 @@ describe("botInput — contextText validation", () => {
   });
 });
 
-describe("botInput — personality enum", () => {
+describe("botInput - personality enum", () => {
   it.each([["professional"], ["creative"], ["enthusiastic"]])(
     "accepts personality=%s",
     (personality) => {
-      expect(
-        botInput.safeParse({ ...validInput, personality }).success,
-      ).toBe(true);
+      expect(botInput.safeParse({ ...validInput, personality }).success).toBe(
+        true,
+      );
     },
   );
 
@@ -95,13 +95,13 @@ describe("botInput — personality enum", () => {
   });
 });
 
-describe("botInput — llmProvider enum", () => {
-  it.each([["anthropic"], ["openai"], ["google"], ["deepseek"]])(
+describe("botInput - llmProvider enum", () => {
+  it.each([["anthropic"], ["openai"], ["google"], ["azure"]])(
     "accepts llmProvider=%s",
     (llmProvider) => {
-      expect(
-        botInput.safeParse({ ...validInput, llmProvider }).success,
-      ).toBe(true);
+      expect(botInput.safeParse({ ...validInput, llmProvider }).success).toBe(
+        true,
+      );
     },
   );
 
@@ -112,7 +112,7 @@ describe("botInput — llmProvider enum", () => {
   });
 });
 
-describe("botInput — suggestedQuestions", () => {
+describe("botInput - suggestedQuestions", () => {
   it("rejects more than 6 suggested questions", () => {
     const seven = Array.from({ length: 7 }, (_, i) => `Q${i}`);
     expect(

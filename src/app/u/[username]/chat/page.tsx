@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 
 import { ChatWindow } from "@/components/chat/ChatWindow";
+import { isProviderName, type ProviderName } from "@/lib/ai/providers";
 import { authOptions } from "@/lib/auth/auth";
 import { bots, db, users } from "@/lib/db";
 
@@ -26,7 +27,7 @@ export default async function PublicChatPage({ params }: PageProps) {
 
   const owner = await db.query.users.findFirst({
     where: eq(users.username, params.username),
-    columns: { id: true, username: true },
+    columns: { id: true, username: true, llmProvider: true },
   });
   if (!owner) notFound();
 
@@ -35,6 +36,10 @@ export default async function PublicChatPage({ params }: PageProps) {
   });
   if (!bot) notFound();
 
+  const llmProvider: ProviderName = isProviderName(owner.llmProvider)
+    ? owner.llmProvider
+    : "anthropic";
+
   return (
     <ChatWindow
       botId={bot.id}
@@ -42,6 +47,7 @@ export default async function PublicChatPage({ params }: PageProps) {
       botHeadline={bot.headline}
       suggestedQuestions={bot.suggestedQuestions ?? []}
       loadingMessages={bot.loadingMessages}
+      llmProvider={llmProvider}
     />
   );
 }

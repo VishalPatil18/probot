@@ -83,11 +83,11 @@ tailwind.config = { theme: { extend: {
   <main class="doc-content px-6 lg:px-12 py-10 max-w-3xl min-w-0">
     <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2">Getting started</p>
     <h1 class="font-display text-4xl font-extrabold tracking-tight mb-3">Documentation</h1>
-    <p class="!text-base">Everything you need to build, deploy, and embed your ProBot — your personal AI digital recruiter.</p>
+    <p class="!text-base">Everything you need to build, deploy, and embed your ProBot - your personal AI digital recruiter.</p>
 
     <section class="mt-12">
       <h2 id="intro" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Introduction</h2>
-      <p>ProBot turns your résumé, LinkedIn, and portfolio into a personal AI chatbot that answers recruiter questions 24/7. It's <strong class="text-ink">fully open source</strong> and runs on <strong class="text-ink">your own LLM API key</strong> — use the hosted version or self-host. Under the hood it uses a <strong class="text-ink">Retrieval-Augmented Generation (RAG)</strong> pipeline: your data is chunked, embedded, and stored in a private vector namespace, then the most relevant chunks are retrieved to ground every answer.</p>
+      <p>ProBot turns your résumé, LinkedIn, and portfolio into a personal AI chatbot that answers recruiter questions 24/7. It's <strong class="text-ink">fully open source</strong> and runs on <strong class="text-ink">your own LLM API key</strong> - use the hosted version or self-host. Under the hood it uses a <strong class="text-ink">Retrieval-Augmented Generation (RAG)</strong> pipeline: your data is chunked, embedded, and stored in a private vector namespace, then the most relevant chunks are retrieved to ground every answer.</p>
       <div class="my-5 p-4 rounded-xl bg-blue-50/50 border border-blue-100 flex gap-3">
         <span class="material-symbols-outlined text-brand">lightbulb</span>
         <p class="!my-0 !text-sm">New here? Jump to the <a href="#quickstart" class="text-brand font-semibold">Quick start</a> to get a live bot in two minutes.</p>
@@ -98,10 +98,10 @@ tailwind.config = { theme: { extend: {
       <h2 id="quickstart" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Quick start</h2>
       <p>Three steps from sign-up to a shareable bot:</p>
       <ul>
-        <li><strong class="text-ink">Sign up</strong> with email or OAuth (Google, GitHub, LinkedIn) and claim your username — it becomes your bot URL.</li>
-        <li><strong class="text-ink">Add your model key</strong> — Claude, Gemini, DeepSeek, or GPT. Stored locally, never tracked.</li>
+        <li><strong class="text-ink">Sign up</strong> with email or OAuth (Google, GitHub, LinkedIn) and claim your username - it becomes your bot URL.</li>
+        <li><strong class="text-ink">Add your model key</strong> - Claude, Gemini, DeepSeek, or GPT. Stored locally, never tracked.</li>
         <li><strong class="text-ink">Upload</strong> your résumé PDF, paste a LinkedIn/portfolio URL, or type a bio in the Bot Factory.</li>
-        <li><strong class="text-ink">Deploy</strong> — share <code>probot.com/u/your-name</code> or drop the embed snippet on your site.</li>
+        <li><strong class="text-ink">Deploy</strong> - share <code>probot.com/u/your-name</code> or drop the embed snippet on your site.</li>
       </ul>
       <pre><span class="c"># Your bot is live at:</span>
 https://probot.com/u/<span class="b">vishal</span></pre>
@@ -111,27 +111,27 @@ https://probot.com/u/<span class="b">vishal</span></pre>
       <h2 id="bot-factory" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Creating a bot</h2>
       <p>The <a href="bot-factory.html" class="text-brand font-semibold">Bot Factory</a> is a 4-step wizard: <strong class="text-ink">Identity</strong> (name, headline, photo), <strong class="text-ink">Knowledge base</strong> (PDF / URL / text), <strong class="text-ink">Personality</strong> (tone preset, theme color, custom instructions), and <strong class="text-ink">Deploy</strong>. Supported knowledge sources:</p>
       <ul>
-        <li>PDF — up to 5 files, max 10MB each</li>
-        <li>URL — LinkedIn profile or portfolio site</li>
-        <li>Free text — up to 50,000 characters</li>
+        <li>PDF - up to 5 files, max 10MB each</li>
+        <li>URL - LinkedIn profile or portfolio site</li>
+        <li>Free text - up to 50,000 characters</li>
       </ul>
     </section>
 
     <section class="mt-12">
       <h2 id="config" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Models &amp; API keys</h2>
-      <p>ProBot doesn't ship its own LLM — you <strong class="text-ink">bring your own API key</strong> and choose the model that fits your budget and quality needs. Supported providers:</p>
+      <p>ProBot doesn't ship its own LLM - you <strong class="text-ink">bring your own API key</strong> and choose the model that fits your budget and quality needs. Supported providers:</p>
       <ul>
-        <li><strong class="text-ink">Anthropic</strong> — Claude Opus 4, Sonnet 4, Haiku 4</li>
-        <li><strong class="text-ink">Google</strong> — Gemini 2.5 Pro, Flash, Flash-Lite</li>
-        <li><strong class="text-ink">DeepSeek</strong> — DeepSeek-V3, DeepSeek-R1</li>
-        <li><strong class="text-ink">OpenAI</strong> — GPT-4o, GPT-4o mini, o3-mini</li>
+        <li><strong class="text-ink">Anthropic</strong> - Claude Opus 4, Sonnet 4, Haiku 4</li>
+        <li><strong class="text-ink">Google</strong> - Gemini 2.5 Pro, Flash, Flash-Lite</li>
+        <li><strong class="text-ink">DeepSeek</strong> - DeepSeek-V3, DeepSeek-R1</li>
+        <li><strong class="text-ink">OpenAI</strong> - GPT-4o, GPT-4o mini, o3-mini</li>
       </ul>
       <div class="my-5 p-4 rounded-xl bg-blue-50/50 border border-blue-100 flex gap-3">
         <span class="material-symbols-outlined text-brand">lock</span>
-        <p class="!my-0 !text-sm"><strong class="text-ink">Your key is stored locally and never tracked by ProBot.</strong> It's saved to your browser/self-hosted config and used only to call the provider directly — it never passes through or is logged by ProBot's servers.</p>
+        <p class="!my-0 !text-sm"><strong class="text-ink">Your key is stored locally and never tracked by ProBot.</strong> It's saved to your browser/self-hosted config and used only to call the provider directly - it never passes through or is logged by ProBot's servers.</p>
       </div>
       <p>Set it in <a href="settings.html#model" class="text-brand font-semibold">Settings → AI model &amp; key</a>, the Bot Factory wizard, or via config when self-hosting:</p>
-<pre><span class="c">// probot.config.json — never committed, never sent</span>
+<pre><span class="c">// probot.config.json - never committed, never sent</span>
 {
   <span class="b">"provider"</span>: <span class="s">"anthropic"</span>,      <span class="c">// anthropic | google | deepseek | openai</span>
   <span class="b">"model"</span>: <span class="s">"claude-opus-4"</span>,
@@ -156,7 +156,7 @@ https://probot.com/u/<span class="b">vishal</span></pre>
         <table class="w-full text-sm">
           <thead><tr class="bg-neutral-50 text-left text-[11px] uppercase tracking-wider text-muted"><th class="px-4 py-2.5 font-bold">Attribute</th><th class="px-4 py-2.5 font-bold">Default</th><th class="px-4 py-2.5 font-bold">Description</th></tr></thead>
           <tbody class="divide-y divide-border-base">
-            <tr><td class="px-4 py-2.5 font-mono text-brand-deep text-xs">data-bot-id</td><td class="px-4 py-2.5 text-muted">—</td><td class="px-4 py-2.5 text-muted">Required. Your bot's ID/username.</td></tr>
+            <tr><td class="px-4 py-2.5 font-mono text-brand-deep text-xs">data-bot-id</td><td class="px-4 py-2.5 text-muted">-</td><td class="px-4 py-2.5 text-muted">Required. Your bot's ID/username.</td></tr>
             <tr><td class="px-4 py-2.5 font-mono text-brand-deep text-xs">data-position</td><td class="px-4 py-2.5 text-muted">bottom-right</td><td class="px-4 py-2.5 text-muted">Bubble placement.</td></tr>
             <tr><td class="px-4 py-2.5 font-mono text-brand-deep text-xs">data-color</td><td class="px-4 py-2.5 text-muted">#3461d6</td><td class="px-4 py-2.5 text-muted">Theme color (hex).</td></tr>
           </tbody>
@@ -185,20 +185,20 @@ https://probot.com/u/<span class="b">vishal</span></pre>
 
 <span class="c">// 200 OK</span>
 {
-  <span class="b">"reply"</span>: <span class="s">"Yes — he built a production RAG chatbot..."</span>,
+  <span class="b">"reply"</span>: <span class="s">"Yes - he built a production RAG chatbot..."</span>,
   <span class="b">"conversation_id"</span>: <span class="s">"uuid"</span>
 }</pre>
       <p>Other endpoints (session required):</p>
       <ul>
-        <li><code>GET /api/bots/:botId/analytics</code> — engagement summary</li>
-        <li><code>GET /api/bots/:botId/leads</code> — captured leads</li>
-        <li><code>POST /api/bots/:botId/knowledge</code> — ingest new data</li>
+        <li><code>GET /api/bots/:botId/analytics</code> - engagement summary</li>
+        <li><code>GET /api/bots/:botId/leads</code> - captured leads</li>
+        <li><code>POST /api/bots/:botId/knowledge</code> - ingest new data</li>
       </ul>
     </section>
 
     <section class="mt-12">
       <h2 id="ratelimits" class="font-display text-2xl font-bold tracking-tight border-b border-border-base pb-2 mb-2">Rate limits</h2>
-      <p>Sensible defaults protect your bot — and your own LLM credits — from abuse. When self-hosting, every value is configurable in <code>probot.config.json</code>.</p>
+      <p>Sensible defaults protect your bot - and your own LLM credits - from abuse. When self-hosting, every value is configurable in <code>probot.config.json</code>.</p>
       <div class="overflow-x-auto my-4 rounded-xl border border-border-base">
         <table class="w-full text-sm">
           <thead><tr class="bg-neutral-50 text-left text-[11px] uppercase tracking-wider text-muted"><th class="px-4 py-2.5 font-bold">Limit</th><th class="px-4 py-2.5 font-bold">Default</th><th class="px-4 py-2.5 font-bold">Config key</th></tr></thead>
@@ -224,7 +224,7 @@ https://probot.com/u/<span class="b">vishal</span></pre>
       </ul>
       <div class="my-5 p-4 rounded-xl bg-blue-50/50 border border-blue-100 flex gap-3">
         <span class="material-symbols-outlined text-brand">shield</span>
-        <p class="!my-0 !text-sm">Your bot will <strong class="text-ink">never</strong> reveal its system prompt or invent facts not in your data — it points recruiters to you instead.</p>
+        <p class="!my-0 !text-sm">Your bot will <strong class="text-ink">never</strong> reveal its system prompt or invent facts not in your data - it points recruiters to you instead.</p>
       </div>
     </section>
 

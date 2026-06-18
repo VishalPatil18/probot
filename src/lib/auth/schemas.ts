@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Username slug rules — kept aligned with claude/plan.md §4.6 so that the
+// Username slug rules - kept aligned with claude/plan.md §4.6 so that the
 // `users.username` column never accumulates values that would later be
 // invalid for `/u/[username]/chat` routes.
 export const USERNAME_REGEX = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;

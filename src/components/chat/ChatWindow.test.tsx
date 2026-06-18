@@ -3,10 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getApiKeyMock = vi.fn();
+const getAzureCredsMock = vi.fn();
 const fetchMock = vi.fn();
 
 vi.mock("@/lib/client/llm-key-store", () => ({
   getApiKey: () => getApiKeyMock(),
+  getAzureCreds: () => getAzureCredsMock(),
 }));
 
 import { ChatWindow } from "./ChatWindow";
@@ -24,11 +26,13 @@ const defaultProps = {
   botHeadline: "ML Engineer",
   suggestedQuestions: ["What are her top skills?", "Is she remote-friendly?"],
   loadingMessages: ["Thinking…"],
+  llmProvider: "anthropic" as const,
 };
 
 describe("ChatWindow", () => {
   beforeEach(() => {
     getApiKeyMock.mockReset();
+    getAzureCredsMock.mockReset();
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -136,5 +140,44 @@ describe("ChatWindow", () => {
     await user.click(screen.getByRole("button", { name: /send message/i }));
 
     expect(await screen.findByText(/network error/i)).toBeInTheDocument();
+  });
+
+  it("Azure: sends x-llm-api-key + x-llm-azure-endpoint + x-llm-azure-api-version headers and no creds in body", async () => {
+    getApiKeyMock.mockReturnValue("azure-leak-canary-9876543210");
+    getAzureCredsMock.mockReturnValue({
+      endpoint: "https://example.cognitiveservices.azure.com",
+      apiVersion: "2025-01-01-preview",
+    });
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { reply: "Hi!" }));
+    const user = userEvent.setup();
+    render(<ChatWindow {...defaultProps} llmProvider="azure" />);
+
+    await user.type(screen.getByRole("textbox"), "hi");
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["x-llm-api-key"]).toBe("azure-leak-canary-9876543210");
+    expect(headers["x-llm-azure-endpoint"]).toBe(
+      "https://example.cognitiveservices.azure.com",
+    );
+    expect(headers["x-llm-azure-api-version"]).toBe("2025-01-01-preview");
+    // Neither the key nor the endpoint should appear in the JSON body.
+    expect(init.body).not.toContain("azure-leak-canary");
+    expect(init.body).not.toContain("cognitiveservices.azure.com");
+  });
+
+  it("Azure: shows missing-key alert and does NOT fetch when Azure creds are absent", async () => {
+    getApiKeyMock.mockReturnValue("sk-some-key-1234567890");
+    getAzureCredsMock.mockReturnValue(null);
+    const user = userEvent.setup();
+    render(<ChatWindow {...defaultProps} llmProvider="azure" />);
+
+    await user.type(screen.getByRole("textbox"), "hi");
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/no api key/i);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

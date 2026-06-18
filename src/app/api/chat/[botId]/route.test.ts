@@ -17,9 +17,10 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/ai/providers", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/ai/providers")>(
-    "@/lib/ai/providers",
-  );
+  const actual =
+    await vi.importActual<typeof import("@/lib/ai/providers")>(
+      "@/lib/ai/providers",
+    );
   return {
     ...actual,
     getProvider: () => ({
@@ -88,7 +89,7 @@ describe("POST /api/chat/[botId]", () => {
     findUserMock.mockReset().mockResolvedValue(owner);
     completeMock
       .mockReset()
-      .mockResolvedValue({ reply: "Sure — Jane is great." });
+      .mockResolvedValue({ reply: "Sure - Jane is great." });
     checkRateLimitMock.mockReset().mockReturnValue({ ok: true });
   });
 
@@ -99,7 +100,7 @@ describe("POST /api/chat/[botId]", () => {
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { reply: string };
-    expect(body.reply).toBe("Sure — Jane is great.");
+    expect(body.reply).toBe("Sure - Jane is great.");
   });
 
   it("returns 415 on wrong content-type", async () => {
@@ -231,5 +232,83 @@ describe("POST /api/chat/[botId]", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { reply: string };
     expect(body.reply).not.toContain("IMMUTABLE RULES");
+  });
+
+  describe("Azure provider", () => {
+    const azureOwner = {
+      id: "user-1",
+      username: "jane",
+      llmProvider: "azure",
+      llmModel: "gpt-4o-mini",
+    };
+
+    function makeAzureRequest(
+      body: unknown,
+      headers: Record<string, string> = {},
+    ): Request {
+      return new Request(`http://localhost/api/chat/${BOT_ID}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-llm-api-key": VALID_KEY,
+          "x-llm-azure-endpoint": "https://example.cognitiveservices.azure.com",
+          "x-llm-azure-api-version": "2025-01-01-preview",
+          ...headers,
+        },
+        body: JSON.stringify(body),
+      });
+    }
+
+    it("forwards endpoint + apiVersion to provider.complete via extras", async () => {
+      findUserMock.mockResolvedValueOnce(azureOwner);
+      const res = await POST(makeAzureRequest({ message: "hi" }), PARAMS);
+      expect(res.status).toBe(200);
+      expect(completeMock).toHaveBeenCalledTimes(1);
+      const [args] = completeMock.mock.calls[0] as [Record<string, unknown>];
+      expect(args.model).toBe("gpt-4o-mini");
+      expect(args.extras).toEqual({
+        endpoint: "https://example.cognitiveservices.azure.com",
+        apiVersion: "2025-01-01-preview",
+      });
+    });
+
+    it("returns 400 missing_llm_key when the Azure endpoint header is absent", async () => {
+      findUserMock.mockResolvedValueOnce(azureOwner);
+      const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-llm-api-key": VALID_KEY,
+        },
+        body: JSON.stringify({ message: "hi" }),
+      });
+      const res = await POST(req, PARAMS);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("missing_llm_key");
+      expect(completeMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 missing_llm_key when the Azure endpoint header is malformed", async () => {
+      findUserMock.mockResolvedValueOnce(azureOwner);
+      const res = await POST(
+        makeAzureRequest(
+          { message: "hi" },
+          { "x-llm-azure-endpoint": "http://insecure.example.com" },
+        ),
+        PARAMS,
+      );
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("missing_llm_key");
+      expect(completeMock).not.toHaveBeenCalled();
+    });
+
+    it("omits extras when provider is not Azure", async () => {
+      const res = await POST(makeRequest({ message: "hi" }), PARAMS);
+      expect(res.status).toBe(200);
+      const [args] = completeMock.mock.calls[0] as [Record<string, unknown>];
+      expect(args.extras).toBeUndefined();
+    });
   });
 });

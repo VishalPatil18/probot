@@ -5,7 +5,7 @@ import { hashPassword } from "@/lib/auth/passwords";
 import { registerInput } from "@/lib/auth/schemas";
 import { db, users } from "@/lib/db";
 
-// Postgres unique_violation code — emitted by the UNIQUE constraints on
+// Postgres unique_violation code - emitted by the UNIQUE constraints on
 // users.username / users.email if a row sneaks in between the pre-check and
 // the INSERT. We translate it back to a 409 rather than leaking a 500.
 function isUniqueViolation(err: unknown): boolean {

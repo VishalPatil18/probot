@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pushMock = vi.fn();
 const setApiKeyMock = vi.fn();
+const setAzureCredsMock = vi.fn();
 const fetchMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
@@ -12,6 +13,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/client/llm-key-store", () => ({
   setApiKey: (...args: unknown[]) => setApiKeyMock(...args),
+  setAzureCreds: (...args: unknown[]) => setAzureCredsMock(...args),
 }));
 
 import { BotFactoryForm } from "./BotFactoryForm";
@@ -52,6 +54,7 @@ describe("BotFactoryForm", () => {
   beforeEach(() => {
     pushMock.mockReset();
     setApiKeyMock.mockReset();
+    setAzureCredsMock.mockReset();
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -95,7 +98,7 @@ describe("BotFactoryForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders Google + DeepSeek provider buttons as disabled with SOON badge", async () => {
+  it("renders Google as the only disabled provider with SOON badge (anthropic/openai/azure enabled)", async () => {
     const user = userEvent.setup();
     render(<BotFactoryForm username="jane" />);
     await fillStep1(user);
@@ -103,11 +106,52 @@ describe("BotFactoryForm", () => {
     await passStep3(user);
 
     const google = screen.getByRole("button", { name: /Google/i });
-    const deepseek = screen.getByRole("button", { name: /DeepSeek/i });
+    const azure = screen.getByRole("button", { name: /Azure/i });
     expect(google).toBeDisabled();
-    expect(deepseek).toBeDisabled();
+    expect(azure).toBeEnabled();
     expect(within(google).getByText("SOON")).toBeInTheDocument();
-    expect(within(deepseek).getByText("SOON")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /DeepSeek/i })).toBeNull();
+  });
+
+  it("Azure flow: shows endpoint + deployment + apiVersion fields, saves Azure creds, submits with deployment as llmModel", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(201, { bot: { id: "bot-1", name: "Jane Doe" } }),
+    );
+    const user = userEvent.setup();
+    render(<BotFactoryForm username="jane" />);
+    await fillStep1(user);
+    await fillStep2(user);
+    await passStep3(user);
+
+    await user.click(screen.getByRole("button", { name: /Azure/i }));
+
+    await user.type(
+      screen.getByLabelText(/azure endpoint/i),
+      "https://example.cognitiveservices.azure.com",
+    );
+    await user.type(
+      screen.getByLabelText(/deployment name/i),
+      "gpt-4o-mini",
+    );
+    await user.type(
+      screen.getByLabelText(/azure api key/i),
+      "azure-test-key-1234567890",
+    );
+    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
+
+    expect(setApiKeyMock).toHaveBeenCalledWith("azure-test-key-1234567890");
+    expect(setAzureCredsMock).toHaveBeenCalledWith({
+      endpoint: "https://example.cognitiveservices.azure.com",
+      apiVersion: "2025-01-01-preview",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.llmProvider).toBe("azure");
+    expect(body.llmModel).toBe("gpt-4o-mini");
+    // Defense-in-depth: neither the key nor the endpoint leak into the JSON body.
+    expect(init.body).not.toContain("azure-test-key-1234567890");
+    expect(init.body).not.toContain("cognitiveservices.azure.com");
   });
 
   it("submits to /api/bots with form payload, stashes apiKey locally, advances to Step 5", async () => {
