@@ -272,9 +272,7 @@ export default function HomePage() {
             </div>
             <div className="px-4 text-center">
               <p className="font-display text-3xl font-extrabold">Any LLM</p>
-              <p className="text-xs text-muted mt-1">
-                Claude, Gemini, DeepSeek…
-              </p>
+              <p className="text-xs text-muted mt-1">Claude, Gemini, OpenAI…</p>
             </div>
             <div className="px-4 text-center">
               <p className="font-display text-3xl font-extrabold">$0</p>
