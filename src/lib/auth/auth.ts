@@ -9,6 +9,7 @@ import EmailProvider from "next-auth/providers/email";
 import GitHubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 
+import { pickDefaultAvatar } from "@/lib/avatars";
 import { accounts, db, users, verificationTokens } from "@/lib/db";
 
 import { sendMagicLinkEmail } from "./email";
@@ -43,6 +44,10 @@ const adapter: Adapter = {
   ...baseAdapter,
   async createUser(data: AdapterUser) {
     const username = await generateUniqueUsername();
+    // Stage 4: OAuth/magic-link users without a provider-supplied image get
+    // a deterministic animal icon. Seeded by the new username so the same
+    // account always gets the same default if the field is ever cleared.
+    const image = data.image ?? pickDefaultAvatar(username);
     const [created] = await db
       .insert(users)
       .values({
@@ -50,7 +55,7 @@ const adapter: Adapter = {
         email: data.email,
         emailVerified: data.emailVerified,
         name: data.name ?? null,
-        image: data.image ?? null,
+        image,
       })
       .returning();
     if (!created) {
@@ -125,10 +130,17 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        // Credentials authorize() returns username inline; OAuth/magic-link
-        // flows don't. Source of truth is the DB row.
+      }
+      // Re-read username from the DB on every JWT mint so the
+      // /onboarding PATCH (which updates users.username) is reflected on the
+      // very next request without forcing a sign-out / sign-in cycle. Without
+      // this, OAuth/magic-link users land in a redirect loop: dashboard
+      // layout sees the stale "user-<8hex>" placeholder and bounces them
+      // back to /onboarding. The cost is one DB query per authenticated
+      // request — acceptable here and easy to cache later.
+      if (token.id) {
         const row = await db.query.users.findFirst({
-          where: eq(users.id, user.id),
+          where: eq(users.id, token.id),
           columns: { username: true },
         });
         token.username = row?.username ?? "user";

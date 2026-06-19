@@ -11,6 +11,7 @@ import {
   PERSONALITY_PRESETS,
   type Personality,
 } from "@/lib/bots/schemas";
+import { CopyUrlButton } from "@/components/dashboard/CopyUrlButton";
 import { setEmbeddingApiKey } from "@/lib/client/embedding-key-store";
 import { setApiKey, setAzureCreds } from "@/lib/client/llm-key-store";
 import {
@@ -1012,7 +1013,13 @@ function StepDeploy({
   username: string;
   createdBotId: string | null;
 }) {
-  const url = `probot.com/u/${username}`;
+  // Stage 4: build the real public URL from the current origin so localhost
+  // dev, preview deploys, and prod all show the right share link.
+  const origin =
+    typeof window !== "undefined" && window.location.origin
+      ? window.location.origin
+      : "https://probot.dev";
+  const url = `${origin}/u/${username}/chat`;
   return (
     <section>
       <StepHeading
@@ -1036,6 +1043,7 @@ function StepDeploy({
           </label>
           <div className="flex items-center gap-2 mt-1.5 border border-border-base rounded-xl px-3 py-2.5 bg-white">
             <span className="text-sm font-mono flex-1 truncate">{url}</span>
+            <CopyUrlButton url={url} />
           </div>
         </div>
         <div className="rounded-xl p-4 border border-border-base bg-neutral-50 opacity-60">

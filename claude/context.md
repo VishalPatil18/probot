@@ -836,3 +836,123 @@ _Pre-existing test fix:_
 - No prompt-injection test for the RAG path. Stage 3 inherits the Stage 1 input sanitizer (runs BEFORE retrieval), so retrieved chunks are sourced from the bot owner's verified content (not user input) — but a future audit should confirm no untrusted text reaches the embedding API as the query.
 
 ---
+
+### 2026-06-19 07:45 - Stage 4: Public multi-tenant chat + onboarding + avatars + dashboard
+
+**What was asked to do:** Ship Stage 4 from `plan.md` — every bot gets a public URL (`/u/[username]/chat`) anyone can visit without logging in. Includes: removing the auth gate on the public chat route, adding owner branding (name + headline + avatar) on the chat page, enriching SEO/OG metadata, creating `conversations` + `messages` tables for Stage 6 analytics, a username onboarding flow that forces OAuth/magic-link users to replace their `user-<8hex>` placeholder slug, a per-user animal-icon avatar system (13 Cloudinary URLs), a public bot config API for the Stage 5 widget, a dashboard home with a per-bot Copy URL button, and `/u/[username]` → `/u/[username]/chat` redirect.
+
+**Locked decisions before any code (Q1-Q6):** Q1 = OAuth `users.image` when present + auto-assigned animal-icon avatar (13 Cloudinary URLs from the user's own Cloudinary account, zero cost) otherwise; user can re-pick during onboarding. Q2 = create `conversations` + `messages` tables in migration only; chat-route logging wiring deferred to Stage 6 (no point shipping write code without an analytics reader). Q3 = skip `recruiter_ip` entirely — raw IPs are PII and Stage 7 handles GDPR / consent. Q4 = ship `GET /api/bots/[botId]/config` now (Stage 5 widget will consume it; small surface). Q5 = dashboard layout server-component redirect to `/onboarding` when `username` matches `^user-[0-9a-f]{8}$`; middleware would be overkill. Q6 = Copy URL surfaces both in Bot Factory Step 5 (post-creation) and Dashboard home (return visits).
+
+**What I did:**
+
+_Slice 4.1 — public chat surface:_
+
+- `src/app/u/[username]/chat/page.tsx` — removed the `getServerSession` gate that redirected to `/login?next=…`. Replaced the inline drizzle queries with a `resolve(username)` helper, wrapped in React `cache()` so `generateMetadata` and `PublicChatPage` share the same DB lookups in a single render pass (4 queries → 2). Enriched `generateMetadata` with description, OpenGraph (image from `users.image`), Twitter card (`summary_large_image` when owner has a photo, else `summary`), and `robots: { index: true, follow: true }`. Wraps `<OwnerCard>` + `<ChatWindow>` in a centered `max-w-3xl` container so the chat page now has a real hero, not just a chat window floating in `<body>`.
+- `src/app/u/[username]/page.tsx` — new file; one-liner `redirect(\`/u/\${params.username}/chat\`)`. Bare-username URLs are friendlier share targets.
+- `src/components/u/OwnerCard.tsx` — new server component. Renders avatar (plain `<img>` to a 64×64 circle, with `bg-neutral-100` background as graceful fallback if Cloudinary is unreachable) + name + headline as a rounded card. Initials avatar (`brand/10` background) used when `users.image` is null. Justified eslint-disable for `<img>` over `next/image`: a degraded CDN should fall back gracefully via `alt` + bg color, not block the page render.
+- `src/app/api/bots/[botId]/config/route.ts` — new public GET endpoint (no auth). Returns `{ bot: { id, name, headline, suggestedQuestions, loadingMessages }, owner: { username, name, image } }`. Two `findFirst`s (bot, then owner). Cache-Control `public, s-maxage=60, stale-while-revalidate=300` so a CDN absorbs enumeration attempts before per-IP rate limiting lands in Stage 7. Explicitly NOT returned: `bot.contextText` (the assembled knowledge), `owner.email`, `owner.llmProvider`, `users.hashedPassword`. The route test asserts a `LEAK_CANARY` value never appears in the response.
+- `src/app/api/bots/[botId]/config/route.test.ts` — 5 specs covering happy path, 404 on missing bot, 404 on orphan (owner not found), explicit no-leak assertion against sensitive fields, normalization of null suggestedQuestions to `[]`.
+
+_Slice 4.2 — schema migration (no wiring):_
+
+- `src/lib/db/schema.ts` — added `conversations` (id, botId FK CASCADE, sessionId varchar(255), messageCount int default 0, startedAt, lastMessageAt) and `messages` (id, conversationId FK CASCADE, role varchar(10), content text, tokensUsed nullable int, createdAt) tables. Added `Conversation` / `NewConversation` / `Message` / `NewMessage` type exports. Both tables `.enableRLS()` to match existing pattern. After code review: added a `messages_role_check` CHECK constraint (Postgres-level, so a future writer typo `'assitant'` cannot silently corrupt analytics) and a composite UNIQUE INDEX on `(bot_id, session_id)` so concurrent tabs on the same recruiter session cannot double-insert. Imported `check` and `uniqueIndex` from `drizzle-orm/pg-core`.
+- `drizzle/0006_cheerful_lila_cheney.sql` — generated migration. Creates both tables, enables RLS, adds FK cascades, indexes, CHECK constraint, and the composite unique index. **NOT YET APPLIED to Supabase.** User needs to run `psql "$DATABASE_URL" -f drizzle/0006_cheerful_lila_cheney.sql` before Stage 6 (which is when the tables actually get used).
+
+_Slice 4.3 — avatars + onboarding flow:_
+
+- `src/lib/avatars.ts` — `ANIMAL_AVATARS` array of 13 Cloudinary URLs (from the user's own portfolio bucket, zero operator cost). `pickDefaultAvatar(seed)` does a deterministic 31-multiplier polynomial hash → modulo → URL; same seed always returns the same URL. `isAllowedAvatar(url)` is a Set membership check used by the onboarding PATCH allowlist. Includes a `FALLBACK_AVATAR: string` constant pulled out so the function signature is `: string` (not `string | undefined`) under `noUncheckedIndexedAccess` without a non-null assertion (codebase doesn't use `!`).
+- `src/lib/users/placeholder.ts` — `isPlaceholderUsername(name): boolean` with regex `^user-[0-9a-f]{8}$`. Single source of truth used by the dashboard layout, the `/onboarding` page, and (transitively, via session check) the onboarding PATCH route.
+- `src/lib/auth/auth.ts` — in the custom `createUser` adapter override, assigns `image = data.image ?? pickDefaultAvatar(username)`. OAuth providers with real avatars (Google, GitHub) get to keep them; magic-link users and OAuth providers that didn't return an image get a deterministic animal icon. Imported `pickDefaultAvatar` from `@/lib/avatars`.
+- `src/app/api/auth/register/route.ts` — credentials register also assigns `image: pickDefaultAvatar(username)` at INSERT. Every new account now has a non-null `image` from the start, so the public chat page never has to handle a totally faceless owner.
+- `src/lib/auth/schemas.ts` — exported the existing `usernameSchema` (it was previously module-local) so the onboarding PATCH can reuse the regex + reserved-slug rules without duplicating them.
+- `src/app/api/onboarding/profile/route.ts` — new PATCH endpoint. Requires session (401 if missing). Zod-validates `{ username: usernameSchema, image: url<=2000 }`. Reads the user's current `users.image` from the DB. Image allowlist: must be in `ANIMAL_AVATARS` OR equal the user's current image (the OR clause preserves OAuth-provided photos without opening arbitrary URL injection — `existing.image` is read using the session's userId so it cannot be spoofed). UPDATE wrapped in try/catch with pg `23505` translated to 409 (username taken). Returns `{ user: { id, username, image } }`. 10 specs covering: 401, invalid JSON, validation failure (regex + reserved), allowlist enforcement, current-image passthrough, happy path, 409 collision, 404 missing user, 2000-char URL cap.
+- `src/app/onboarding/page.tsx` — new server component. Auth-gated; redirects to `/dashboard` immediately if the session username is NOT a placeholder. Reads `users.image` for the form's "current image" prop. Renders an explanatory header + `<OnboardingForm>`.
+- `src/components/onboarding/OnboardingForm.tsx` — new client component. Dual-field form: username text input (with same regex constraints as register; auto-lowercase + space→hyphen on keystroke) + avatar grid (4 cols mobile, 7 cols sm+). When user has an external (non-animal) `currentImage`, that image is rendered as a first "Keep current" card; selecting it preserves the OAuth photo. Otherwise the grid is just the 13 animals with `ANIMAL_AVATARS[0]` pre-selected. Submit POSTs to `/api/onboarding/profile`. On success, hard navigates via `window.location.href = "/dashboard"` so the JWT re-mints (see code-review fix #1 below).
+- `src/app/(dashboard)/layout.tsx` — added `getServerSession` check up front (redirects unauthenticated to `/login?next=/dashboard`), then `isPlaceholderUsername` check (redirects to `/onboarding`). All dashboard sub-routes inherit this guard via the route group's shared layout.
+- `next.config.js` — added `images.remotePatterns` allowlist for `res.cloudinary.com/dbjdu0hvl/**` so `next/image` can optimize the avatar URLs if any future component uses it. The current `<img>` usage doesn't need this, but it's a small allowlist that future-proofs without opening arbitrary remote URL proxying.
+- Tests: 9 specs for `avatars.ts` (curated count, uniqueness, deterministic per-seed, distribution, empty-string handling, allowlist accept/reject), 6 specs for `placeholder.ts` (true/false matrix including uppercase hex rejection and whitespace), 10 specs for the onboarding PATCH route (auth, validation, allowlist, OAuth passthrough, happy path, collision, missing user, URL cap).
+
+_Slice 4.4 — dashboard home + Copy URL:_
+
+- `src/components/dashboard/CopyUrlButton.tsx` — new client component. Wraps `navigator.clipboard.writeText` with three states: idle (label), copied (`"Copied!"` for 1.5s), and error (`"Copy failed"` when clipboard API unavailable or rejects). `aria-label` is dynamic, including both the visible text and the URL, so screen readers + tests can rely on `getByRole({ name: /Copied!/ })` matching the current state.
+- `src/components/dashboard/CopyUrlButton.test.tsx` — 5 specs. Tricky one: `navigator.clipboard` doesn't exist in jsdom AND userEvent v14's `setup()` installs its own clipboard simulator that intercepts `writeText`. Resolution: `fireEvent.click` + `await act(...)` instead of `userEvent.click`, plus `Object.defineProperty(globalThis.navigator, "clipboard", { value, configurable: true })` so the patch can be reset per test. The `vi.stubGlobal` + `vi.unstubAllGlobals` approach hit the same userEvent interception, so we bypassed userEvent entirely for clipboard-interactive tests while keeping it for non-clipboard interactions in other suites.
+- `src/components/bot-factory/BotFactoryForm.tsx` — one-line update to `StepDeploy`: replaced the static `probot.com/u/${username}` placeholder URL with `${origin}/u/${username}/chat` (where origin = `window.location.origin` with `https://probot.dev` fallback for SSR) and added `<CopyUrlButton url={url} />` next to the URL display. Imported `CopyUrlButton`.
+- `src/app/(dashboard)/dashboard/page.tsx` — replaced `return null` with a real server-rendered bot list. Fetches all of the session user's bots ordered by `updatedAt DESC`. Empty state: "No bots yet" + a CTA to `/dashboard/bots/new`. Non-empty: a card per bot with name, headline, public URL (mono font), `<CopyUrlButton>`, and an "Open ↗" external link. The origin is constructed from the request's Host header via Next.js `headers()`. After code review: `x-forwarded-proto` is allowlisted to `"http" | "https"` only — an attacker-supplied `x-forwarded-proto: javascript` would have caused the rendered URL to read `javascript://host/u/...` in the clipboard (low exploitability but bad hygiene).
+
+_Code-review pass (HIGH-severity findings fixed):_
+
+- **HIGH #1: JWT staleness redirect loop.** OAuth/magic-link users would land in a tight loop: dashboard layout reads stale JWT (`token.username` still `user-abc12345`), redirects to `/onboarding`, onboarding page reads same stale JWT, re-renders the form. The PATCH would succeed but the next page load would still see the placeholder. Fixed in `src/lib/auth/auth.ts` jwt callback: previously the DB lookup for `username` only fired when `user` arg was present (first sign-in); now it ALSO fires on every subsequent JWT mint when `token.id` exists, so the post-onboarding hard refresh re-reads `users.username` from the DB and the placeholder check returns false. One extra DB query per authenticated server request — acceptable for this app's traffic shape and a `React.cache()` wrap can mitigate later.
+- **HIGH #2: Public config API has no rate limit; could be enumerated to harvest names.** Added `Cache-Control: public, s-maxage=60, stale-while-revalidate=300` so CDN absorbs repeated fetches. Proper per-IP rate limiting lands with the Redis work in Stage 7.
+
+_Code-review MEDIUM fixes:_
+
+- **MEDIUM: dashboard page trusts `x-forwarded-proto` verbatim.** Allowlisted to `"http" | "https"` with sane fallback.
+- **MEDIUM: chat page double-fetches via `generateMetadata` + page component.** Wrapped `resolve()` with React `cache()` — dedupes the 2 DB queries from 4 to 2 per page load. Standard Next.js pattern.
+- **LOW: messages.role no CHECK constraint.** Added DB-level `CHECK (role IN ('user', 'assistant', 'system', 'tool'))` so future analytics writers can't silently corrupt the table.
+- **LOW: conversations.session_id not unique per bot.** Added composite `uniqueIndex("conversations_bot_session_unique").on(botId, sessionId)` so concurrent tabs for the same recruiter session can't double-insert.
+
+**Files changed:**
+
+_Slice 4.1:_
+
+- `src/app/u/[username]/chat/page.tsx` — update — removed auth gate, added `resolve()` (cached), `OwnerCard` integration, enriched generateMetadata with OG/Twitter/robots.
+- `src/app/u/[username]/page.tsx` — create — bare-username redirect.
+- `src/components/u/OwnerCard.tsx` — create — owner avatar/name/headline hero.
+- `src/app/api/bots/[botId]/config/route.ts` — create — public bot config GET, Cache-Control header.
+- `src/app/api/bots/[botId]/config/route.test.ts` — create — 5 specs.
+
+_Slice 4.2:_
+
+- `src/lib/db/schema.ts` — update — added `conversations` + `messages` tables with FKs, indexes, CHECK constraint on `role`, composite unique index on `(bot_id, session_id)`. Imported `check` and `uniqueIndex`. Type exports for both tables.
+- `drizzle/0006_cheerful_lila_cheney.sql` — create — CREATE TABLE x2 + RLS enable + FK cascades + indexes + CHECK constraint + unique index.
+- `drizzle/meta/_journal.json` — update — replaced the abandoned first-pass `0006_small_war_machine` entry with the regenerated `0006_cheerful_lila_cheney`.
+
+_Slice 4.3:_
+
+- `src/lib/avatars.ts` — create — `ANIMAL_AVATARS`, `pickDefaultAvatar`, `isAllowedAvatar`.
+- `src/lib/avatars.test.ts` — create — 9 specs.
+- `src/lib/users/placeholder.ts` — create — `isPlaceholderUsername`.
+- `src/lib/users/placeholder.test.ts` — create — 6 specs.
+- `src/lib/auth/auth.ts` — update — default-assign animal avatar in `createUser` adapter override; jwt callback re-reads username on every mint (HIGH fix).
+- `src/app/api/auth/register/route.ts` — update — default-assign animal avatar at INSERT.
+- `src/lib/auth/schemas.ts` — update — exported `usernameSchema`.
+- `src/app/api/onboarding/profile/route.ts` — create — PATCH endpoint with auth + Zod + allowlist + collision handling.
+- `src/app/api/onboarding/profile/route.test.ts` — create — 10 specs.
+- `src/app/onboarding/page.tsx` — create — server component, redirects if username not placeholder.
+- `src/components/onboarding/OnboardingForm.tsx` — create — client form with username + avatar grid.
+- `src/app/(dashboard)/layout.tsx` — update — auth check + placeholder username redirect to `/onboarding`.
+- `next.config.js` — update — Cloudinary remotePatterns allowlist.
+
+_Slice 4.4:_
+
+- `src/components/dashboard/CopyUrlButton.tsx` — create — clipboard button with idle/copied/error states.
+- `src/components/dashboard/CopyUrlButton.test.tsx` — create — 5 specs (used `fireEvent` + `act` to dodge userEvent's clipboard simulator).
+- `src/app/(dashboard)/dashboard/page.tsx` — update — replaced `return null` with bot list + Copy URL; allowlisted `x-forwarded-proto` (MEDIUM fix).
+- `src/components/bot-factory/BotFactoryForm.tsx` — update — Step 5 success block now uses real `${origin}/u/${username}/chat` URL with `<CopyUrlButton>` integrated.
+
+**Decisions made:**
+
+- **OAuth photo + animal icon hybrid (Q1):** OAuth providers that return a photo (Google, GitHub) keep using it via `users.image` at signup; everyone else gets an auto-assigned animal from a 13-icon Cloudinary set. Deterministic from the username seed so the same user always gets the same default, even if the field is later cleared. Onboarding flow shows a "Keep current" card when the user has an OAuth photo so they're not forced off of it. The animal icons are hosted on the user's own Cloudinary bucket — operator cost is zero, no S3, no proxying.
+- **Conversations/messages tables ship now, wiring deferred (Q2):** Building the schema in Stage 4 makes the Stage 6 analytics work a pure UI/wiring story instead of also a migration story. CLAUDE.md §3 (surgical changes) is satisfied because the new tables are completely unreferenced by any code — they're a future commitment, not a present interaction surface. The composite unique index + CHECK constraint were added during code-review to make sure those future writes can't be sloppy.
+- **No `recruiter_ip` (Q3):** GDPR / consent lives in Stage 7. Adding a PII column now and reasoning about how to scrub it later is the wrong order. The hashed-IP alternative was rejected because the Stage 6 analytics surface doesn't need per-recruiter de-dupe — `session_id` from the client cookie does the job for unique-session counting.
+- **Public config API ships now (Q4=b):** It's a small endpoint with a tight surface, the Stage 5 widget will need it, and shipping it lets us settle the response shape + Cache-Control story in one place. Tests assert no sensitive fields ever leak even if a future writer adds a private column to the bot select.
+- **Onboarding redirect lives in dashboard layout, not middleware (Q5):** Middleware-based redirects can't run async DB queries before responding (well, they can, but at the cost of edge runtime constraints and complicated tracing). The layout server-component approach is one DB read piggybacking on the session decode that was happening anyway, and it covers all `/dashboard/*` paths via the shared route group layout. Trade-off: every dashboard navigation hits this check. Cost is one stale-JWT-decode + one regex; the placeholder check itself doesn't touch the DB.
+- **Username + avatar bundled in a single onboarding form (Q6 extension):** Two-step flow (pick name → pick avatar) felt long for first-time users. Single screen with both controls + a clear "Continue" button is faster and matches the "one decision per step" pattern of the Bot Factory.
+- **Copy URL surfaces in BOTH Step 5 AND dashboard home (Q6):** Step 5 catches the first-share moment when the user is in flow; dashboard home catches every return visit. The component is shared (`CopyUrlButton`) so the UX is identical in both places.
+- **JWT re-reads username on every mint:** The HIGH-severity fix changes the jwt callback from "only re-read username on first sign-in" to "re-read on every JWT mint when token.id exists." This costs one query per authenticated server request but eliminates the entire class of "JWT carries stale identity" bugs (onboarding being the immediate trigger; future Stage 7 settings will benefit too). Premature optimization to cache this would have hidden the stale-state class behind a TTL — better to take the small constant cost.
+- **React `cache()` for the chat page resolve:** Standard pattern for `generateMetadata` + page component sharing data. Halves DB queries per page load. Zero behavior change. Documented inline.
+- **`<img>` over `next/image` for OwnerCard avatar:** `next/image` will throw at build/runtime if the CDN host isn't in `remotePatterns` AND fails closed if the upstream image returns a non-200. For a public chat page, we want graceful degradation (bg color + alt text) over hard failure. The eslint-disable is justified with an inline comment.
+- **`x-forwarded-proto` allowlist:** Defense-in-depth. The current dashboard render never passes the proto through to an `href`, but if a future surface does, the allowlist removes the entire vector. Two-line change.
+- **CHECK constraint + composite unique on the new tables:** Empty tables are the cheapest time to add constraints. Adding them during Stage 6's analytics work would require a `NOT VALID` migration on a populated table. Now is free.
+- **`fireEvent` + `act` instead of `userEvent.click` for clipboard tests:** userEvent v14's `setup()` installs a simulated clipboard that intercepts `navigator.clipboard.writeText` calls before our mock can see them. Even `vi.stubGlobal("navigator", { ...globalThis.navigator, clipboard: ... })` didn't penetrate the interception. The fix is to use `fireEvent.click` (which doesn't engage userEvent's instrumentation) and `await act(...)` to flush the async state updates. The non-clipboard tests in other files continue to use `userEvent.setup()` as normal.
+
+**Open questions / follow-ups:**
+
+- Tracking-pixel risk on `OwnerCard.tsx` avatar URL (review MEDIUM): when Stage 6 / Stage 7 adds a profile editor that lets users change `users.image` to arbitrary URLs, the public chat page becomes a tracking surface for anyone visiting it. Mitigation: proxy avatars through `/api/avatar?url=…` with strict allowlist, OR keep the allowlist enforced in any future profile editor (the onboarding PATCH already does this).
+- Per-IP rate limit on `/api/bots/[botId]/config` (review HIGH, partially mitigated): Cache-Control absorbs scraping but a focused enumeration could still walk through cache. Proper rate limiting lands with the Redis migration in Stage 7.
+- 0006 migration is generated but NOT yet applied to Supabase. User needs to run `psql "$DATABASE_URL" -f drizzle/0006_cheerful_lila_cheney.sql` before Stage 6 starts using the new tables.
+- Pre-existing credentials users who registered before Stage 4 don't have an animal icon (their `users.image` is NULL). They'll see the initials-style fallback in OwnerCard. A small backfill SQL could fix this but is not in Stage 4 scope: `UPDATE users SET image = … WHERE image IS NULL;` (would need to compute `pickDefaultAvatar(username)` per row via a small migration script).
+- Server-component tests pattern is still empty — the dashboard home, onboarding page, and public chat page have no direct component tests. Tested transitively via route handlers + manual QA. Stage 7 may add a real server-component test harness.
+- `OwnerCard.tsx`, `BotListItem.tsx` (folded into dashboard/page.tsx), and the dashboard home itself have no co-located tests because they're server components — a server-rendering test harness would be premature in scope for Stage 4.
+
+---

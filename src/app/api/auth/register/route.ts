@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { hashPassword } from "@/lib/auth/passwords";
 import { registerInput } from "@/lib/auth/schemas";
+import { pickDefaultAvatar } from "@/lib/avatars";
 import { db, users } from "@/lib/db";
 
 // Postgres unique_violation code - emitted by the UNIQUE constraints on
@@ -50,9 +51,14 @@ export async function POST(request: Request) {
   const hashedPassword = await hashPassword(password);
 
   try {
+    // Stage 4: every new account gets a deterministic animal-icon avatar so
+    // the public chat page (and dashboard hero) always render a face. The
+    // user can change it in the onboarding flow (Stage 4) or in Stage 7
+    // settings.
+    const image = pickDefaultAvatar(username);
     const [created] = await db
       .insert(users)
-      .values({ username, email, hashedPassword })
+      .values({ username, email, hashedPassword, image })
       .returning({
         id: users.id,
         username: users.username,
