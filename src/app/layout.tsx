@@ -20,8 +20,8 @@ const sans = Inter_Tight({
 });
 
 export const metadata: Metadata = {
-  title: "ProBot",
-  description: "Open-source, BYO-key AI bots for job seekers.",
+  title: "ProBot - Your AI Digital Recruiter",
+  description: "Free-to-use, BYO-key AI bots for job seekers.",
 };
 
 export default function RootLayout({
@@ -31,6 +31,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${display.variable} ${sans.variable}`}>
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+        />
+      </head>
       <body className="font-sans bg-bg-app text-ink min-h-screen">
         <SessionProvider>{children}</SessionProvider>
       </body>
