@@ -107,10 +107,14 @@ describe("BotFactoryForm", () => {
 
     const google = screen.getByRole("button", { name: /Google/i });
     const azure = screen.getByRole("button", { name: /Azure/i });
+    // `/^OpenAI/i` anchors to the start of the accessible name so it matches
+    // only the OpenAI provider button — not Azure, whose family label also
+    // contains "OpenAI" ("Azure / OpenAI").
+    const openai = screen.getByRole("button", { name: /^OpenAI/i });
     expect(google).toBeDisabled();
     expect(azure).toBeEnabled();
+    expect(openai).toBeEnabled();
     expect(within(google).getByText("SOON")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /OpenAI/i })).toBeNull();
   });
 
   it("Azure flow: shows endpoint + deployment + apiVersion fields, saves Azure creds, submits with deployment as llmModel", async () => {

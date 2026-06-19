@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import type { ProviderName } from "@/lib/ai/providers";
+import { getEmbeddingApiKey } from "@/lib/client/embedding-key-store";
 import { getApiKey, getAzureCreds } from "@/lib/client/llm-key-store";
 
 import { LoadingAnimation } from "./LoadingAnimation";
@@ -84,6 +85,13 @@ export function ChatWindow({
     if (azureCreds) {
       headers["x-llm-azure-endpoint"] = azureCreds.endpoint;
       headers["x-llm-azure-api-version"] = azureCreds.apiVersion;
+    }
+    // Stage 3 RAG: include the optional OpenAI embedding key. Absent →
+    // server skips retrieval and falls back to full-context. Same security
+    // model as the chat key (localStorage only, never persisted server-side).
+    const embeddingKey = getEmbeddingApiKey();
+    if (embeddingKey) {
+      headers["x-embedding-api-key"] = embeddingKey;
     }
 
     try {

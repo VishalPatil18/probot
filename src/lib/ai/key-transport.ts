@@ -1,4 +1,5 @@
 const HEADER_NAME = "x-llm-api-key";
+const EMBEDDING_HEADER_NAME = "x-embedding-api-key";
 const AZURE_ENDPOINT_HEADER = "x-llm-azure-endpoint";
 const AZURE_API_VERSION_HEADER = "x-llm-azure-api-version";
 const MIN_LEN = 8;
@@ -42,6 +43,31 @@ export function readApiKey(headers: Headers): string {
     throw new KeyTransportError(
       "too_long",
       `${HEADER_NAME} header exceeds ${MAX_LEN} characters`,
+    );
+  }
+  return trimmed;
+}
+
+// Stage 3 RAG: the OpenAI key used for embedding generation and chat-time
+// query embedding. Independent of `x-llm-api-key` because the user's chat
+// provider may not be OpenAI. Returns null when the header is absent — the
+// caller treats this as "skip embeddings, fall back to full-context". Only
+// throws when the header is present but malformed (length out of range).
+export function readEmbeddingApiKey(headers: Headers): string | null {
+  const raw = headers.get(EMBEDDING_HEADER_NAME);
+  if (raw === null) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.length < MIN_LEN) {
+    throw new KeyTransportError(
+      "too_short",
+      `${EMBEDDING_HEADER_NAME} header is shorter than ${MIN_LEN} characters`,
+    );
+  }
+  if (trimmed.length > MAX_LEN) {
+    throw new KeyTransportError(
+      "too_long",
+      `${EMBEDDING_HEADER_NAME} header exceeds ${MAX_LEN} characters`,
     );
   }
   return trimmed;

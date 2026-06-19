@@ -41,12 +41,20 @@ type Bot = {
 export function buildSystemPrompt(args: {
   bot: Bot;
   ownerUsername: string;
+  // Stage 3 RAG: when present + non-empty, replaces `bot.contextText` as the
+  // ## CONTEXT body. Chunks are joined with a `---` separator so the LLM
+  // sees clear boundaries between independently retrieved passages.
+  relevantChunks?: string[];
 }): string {
-  const { bot } = args;
+  const { bot, relevantChunks } = args;
   const identity = `You are the AI assistant for ${bot.name}. You answer questions about ${bot.name}'s career on their behalf.`;
   const personality = `## TONE\n${PERSONALITY_PROMPTS[bot.personality]}`;
   const unknown = UNKNOWN_TEMPLATE.replace(/\{NAME\}/g, bot.name);
-  const context = `## CONTEXT\n${bot.contextText}`;
+  const contextBody =
+    relevantChunks && relevantChunks.length > 0
+      ? relevantChunks.join("\n\n---\n\n")
+      : bot.contextText;
+  const context = `## CONTEXT\n${contextBody}`;
 
   return [
     identity,

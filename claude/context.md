@@ -740,3 +740,99 @@ _Refactor-clean:_
 - Stage 1 OAuth + magic-link work that happened outside this session's scope (visible in BotFactoryForm tests and the Architecture entries) isn't tracked in detail here - it landed in the four sessions between 2026-06-04 (Stage 1 close-out) and 2026-06-18 (this Stage 2 work). See git log for those commits.
 
 ---
+
+### 2026-06-19 01:55 - Stage 3: RAG pipeline with pgvector + OpenAI embeddings
+
+**What was asked to do:** Ship Stage 3 from `plan.md` - the RAG pipeline replacing Stage 2's full-context injection with vector embeddings + top-k semantic search. Constrained to zero-cost infra per CLAUDE.md §7 (no Pinecone, no paid vector DBs).
+
+**Locked decisions before any code (Q1-Q5):** Q1 = pgvector on the existing Supabase Postgres (only viable zero-cost option). Q2 = OpenAI-only embeddings using `text-embedding-3-large` truncated to 1536 dims via the API's `dimensions` parameter (Matryoshka representation) - scores ~63.3 MTEB vs `text-embedding-3-small`'s 62.3 at the same dimension count and half the storage of `large` at 3072d. Q3 = silent fallback to Stage 2 full-context when no OpenAI key is supplied; embeddings are an opt-in upgrade. Q4 = no backfill endpoint for Stage 1/2 bots (they're test-only artifacts; production users land at Stage 7). Q5 = top-5 retrieval with cosine similarity floor of 0.5; HNSW index (m=16, ef_construction=64 defaults).
+
+**What I did:**
+
+_Slice 3.1 - schema + embedding interface + retrieval util:_
+
+- `src/lib/db/schema.ts` - added `embedding vector(1536)` + `embedding_model varchar(60)` columns to `knowledge_base` (both nullable). Imported `vector` from `drizzle-orm/pg-core` (0.36 ships this column type natively).
+- `drizzle/0005_dizzy_tomas.sql` - generated then hand-edited to prepend `CREATE EXTENSION IF NOT EXISTS vector` and append the HNSW cosine index. Drizzle's `index()` builder doesn't yet emit pgvector index syntax, so the DDL is raw SQL.
+- `src/lib/ai/embeddings/types.ts` - new `EmbeddingProvider` interface kept INTENTIONALLY separate from `LLMProvider` because embedding and completion are independent capabilities (Anthropic has no native embeddings endpoint, Google's text-embedding-004 is 768d). Includes `EmbeddingError` class with a bounded `toJSON()` mirroring `ProviderError`.
+- `src/lib/ai/embeddings/openai.ts` - `openaiEmbedder` impl, batched at 96 inputs per API call. Uses `client.embeddings.create({ model, dimensions: 1536, input: batch })`. Maps 401/429/dim-mismatch/empty-input to typed `EmbeddingError` categories.
+- `src/lib/ai/embeddings/index.ts` - `getEmbedder(name)` registry + re-exports.
+- `src/lib/rag/retrieve.ts` - `retrieveRelevant({ botId, query, apiKey, options })`. Embeds the (trimmed) query, runs a raw-SQL pgvector query (`embedding <=> $1::vector` distance), filters by similarity floor in app code (not WHERE) so the HNSW plan stays clean. Helper `toVectorLiteral(values)` formats JS `number[]` as `'[0.1,0.2,...]'` for the cast. Exports `DEFAULT_TOP_K = 5`, `DEFAULT_SIMILARITY_FLOOR = 0.5`.
+- Tests: openaiEmbedder (11 specs - mocks the SDK, covers batching, dim mismatch, 401/429 mapping, no-key-leak in errors), retrieve.ts (8 specs - mocks `@/lib/db.execute`, covers floor filtering, empty result, string→number similarity coercion, topK/floor overrides). All green via `vi.hoisted` for the DB mock (avoids hoisting `ReferenceError`).
+
+_Slice 3.2 - ingestion-time embedding + chat-time retrieval + Bot Factory UI:_
+
+- `src/lib/ai/key-transport.ts` - added `readEmbeddingApiKey(headers): string | null`. Reads `x-embedding-api-key`. Returns null when absent (not an error - absence means "skip embeddings"). Only throws `KeyTransportError` when present but malformed (length out of `[8, 256]`).
+- `src/lib/client/embedding-key-store.ts` - mirrors `llm-key-store.ts` but under a separate localStorage slot (`probot.embedding.key.v1`). Independent of the chat key so users can use Anthropic for chat + OpenAI for embeddings.
+- `src/lib/ingestion/embed-chunks.ts` - `embedChunks({ botId, sourceName, apiKey, embedder? })`. SELECTs rows where `embedding IS NULL`, embeds each `contentText`, UPDATEs in place with vector + model. Idempotent - re-running on a fully embedded source skips everything. Returns `{ embedded, skipped: 0 }`. Tests (4 specs): no-op when empty, embedding alignment, wrong vector count guard, error propagation. Uses `vi.hoisted` for the chained mock builder.
+- `src/lib/ai/prompt-builder.ts` - added optional `relevantChunks?: string[]` param. When present + non-empty, joins chunks with `\n\n---\n\n` and replaces `bot.contextText` as the `## CONTEXT` body. Empty array still falls back to full context. Two new prompt-builder tests cover the RAG branch and empty-array fallback.
+- `src/app/api/bots/[botId]/knowledge/route.ts` - reads `x-embedding-api-key` early (after content-type validation). Tracks processed source names in an array; after `persistChunks` for each source, embeds with `embedChunks` per source. Embedding failures are caught and surfaced in the response as `embeddingError: <category>` (NOT raw message - see "Decisions made" below). `assembleAndSaveBotContext` ALWAYS runs so the legacy full-context path stays intact regardless of embedding success. 4 new route tests cover: no-key-skip-embed, per-source embed call shape, error swallow with bounded category, malformed key 400.
+- `src/app/api/chat/[botId]/route.ts` - inserted step 9b (RAG retrieval) between input sanitize and provider dispatch. Reads `x-embedding-api-key`; malformed treated as missing (no 400 - chat must keep working). If key present: calls `retrieveRelevant`. On non-empty result, passes chunks to `buildSystemPrompt`. On empty result OR throw, falls back to bot.contextText. Throws are caught with a bounded `console.warn` signal (EmbeddingError.toJSON() or generic category) so a broken HNSW index doesn't silently degrade every user. 6 new chat-route tests cover all branches.
+- `src/components/bot-factory/BotFactoryForm.tsx` - added `embeddingApiKey: string` to FormState. New `<input type="password">` inside Step 2's Advanced disclosure with copy "OpenAI key for semantic search (optional)". On submit: stores via `setEmbeddingApiKey()` BEFORE the network call (same pattern as the chat key), and attaches `x-embedding-api-key` header on the `/knowledge` POST when the key is ≥ 8 chars.
+- `src/components/chat/ChatWindow.tsx` - reads `getEmbeddingApiKey()` and attaches `x-embedding-api-key` header on each chat request when present.
+
+_Code-review pass (HIGH-severity findings fixed):_
+
+- **HIGH #1: key leak via `err.message` in embeddingError response field.** The knowledge route was assigning `err instanceof Error ? err.message : "embedding generation failed"` to the response body. If an SDK-level network error ever printed the request headers (which carry the BYO key), that key reached the client. Fixed by narrowing to `EmbeddingError.category` (a string union: `invalid_key | rate_limit | dimension_mismatch | empty_input | unknown`) or falling through to a generic `"embedding_failed"` string. Two new tests verify the response body NEVER contains a key fragment.
+- **HIGH #2: silent retrieval failure in chat route had no observable signal.** A broken HNSW index or stored-vector dimension mismatch would silently fall back to context_text with no log. Added `console.warn("[rag] retrieval failed, falling back to context_text", signal)` where `signal` is either `EmbeddingError.toJSON()` (bounded, no key) or a generic `{ category: "retrieval_failed" }`. ESLint disabled inline with a justification comment because this is the intended ops signal until a real logger lands (Stage 7).
+
+_Pre-existing test fix (in scope because it was blocking the full suite):_
+
+- `src/components/bot-factory/BotFactoryForm.test.tsx:113` had `screen.queryByRole("button", { name: /OpenAI/i }).toBeNull()` but the test's own name says "anthropic/openai/azure enabled" - clearly a copy-paste regression from the recent "Deepseek removed from UI" commit. The `/OpenAI/i` regex matched two buttons (the OpenAI provider button AND the Azure button whose family label is "OpenAI"). Fixed: anchored to `/^OpenAI/i` and flipped the assertion to `toBeEnabled()`.
+
+**Files changed:**
+
+_Slice 3.1:_
+
+- `src/lib/db/schema.ts` - update - added `embedding` + `embeddingModel` columns to `knowledgeBase`, imported `vector` from `drizzle-orm/pg-core`.
+- `drizzle/0005_dizzy_tomas.sql` - create then hand-edit - CREATE EXTENSION vector, ADD COLUMN x2, CREATE INDEX hnsw vector_cosine_ops. User applied to Supabase before Slice 3.2.
+- `src/lib/ai/embeddings/types.ts` - create - `EmbeddingProvider`, `EmbedParams`, `EmbeddingError`.
+- `src/lib/ai/embeddings/openai.ts` - create - `openaiEmbedder`, `DEFAULT_EMBEDDING_MODEL`, `DEFAULT_EMBEDDING_DIMENSIONS`. Batched at 96.
+- `src/lib/ai/embeddings/openai.test.ts` - create - 11 specs.
+- `src/lib/ai/embeddings/index.ts` - create - registry + re-exports.
+- `src/lib/rag/retrieve.ts` - create - `retrieveRelevant`, `DEFAULT_TOP_K`, `DEFAULT_SIMILARITY_FLOOR`.
+- `src/lib/rag/retrieve.test.ts` - create - 8 specs.
+
+_Slice 3.2:_
+
+- `src/lib/ai/key-transport.ts` - update - added `readEmbeddingApiKey` (returns null on absence).
+- `src/lib/client/embedding-key-store.ts` - create - localStorage shim keyed `probot.embedding.key.v1`.
+- `src/lib/ingestion/embed-chunks.ts` - create - `embedChunks` (idempotent embed-and-update).
+- `src/lib/ingestion/embed-chunks.test.ts` - create - 4 specs.
+- `src/lib/ai/prompt-builder.ts` - update - optional `relevantChunks?: string[]` arg.
+- `src/lib/ai/prompt-builder.test.ts` - update - 2 new specs (RAG branch + empty-array fallback).
+- `src/app/api/bots/[botId]/knowledge/route.ts` - update - read embedding key header, embed per source after persist, surface bounded category in response.
+- `src/app/api/bots/[botId]/knowledge/route.test.ts` - update - 5 new specs (no-key-skip, per-source call shape, error swallow, malformed 400, EmbeddingError leak guard).
+- `src/app/api/chat/[botId]/route.ts` - update - insert RAG retrieval step 9b, bounded `console.warn` on retrieval throw.
+- `src/app/api/chat/[botId]/route.test.ts` - update - 6 new specs (no-key path, retrieval shape, RAG-success-uses-chunks, empty-fallback, throw-fallback, malformed-key-no-400).
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - `embeddingApiKey` field, Advanced input, submit wiring.
+- `src/components/chat/ChatWindow.tsx` - update - attach `x-embedding-api-key` header when stored.
+
+_Pre-existing test fix:_
+
+- `src/components/bot-factory/BotFactoryForm.test.tsx` - update - `/^OpenAI/i` regex + `toBeEnabled()` assertion (was a stale copy-paste regression unrelated to Stage 3).
+
+**Decisions made:**
+
+- **pgvector NOT Pinecone (Q1):** CLAUDE.md §7 forbids paid services. Pinecone's free tier has caps and deprecation risk; Supabase ships pgvector on all plans (free included). The HNSW index serves all bots from one global index - the `WHERE bot_id = $1` constraint is a post-filter, fine for typical bot sizes (<10K chunks). Migration path to Pinecone later is straightforward if scale demands it: replace `retrieveRelevant`'s SQL with the Pinecone SDK and keep the embedding column as the source of truth.
+- **OpenAI `text-embedding-3-large` @ 1536d via Matryoshka (Q2):** Per OpenAI's published MTEB benchmark: `large` @ 3072d scores ~64.6, `large` @ 1536d scores ~63.3, `small` @ 1536d scores ~62.3. The Matryoshka representation lets us pick a stronger model while keeping the pgvector column compact (half the storage of 3072d, smaller HNSW index, same retrieval latency profile). User explicitly asked for the most accurate model, and Matryoshka is the practical accuracy/cost balance.
+- **Embedding provider is INTENTIONALLY separate from LLMProvider:** Anthropic redirects embeddings to Voyage AI (paid, separate API), and Google's text-embedding-004 is 768d (incompatible with a single 1536d pgvector column). Forcing embeddings into the same interface would either narrow to OpenAI/Azure (defeats the abstraction) or fan out into multiple columns / per-bot embedding choices. Stage 3 ships OpenAI-only with a `getEmbedder("openai")` registry; adding Google later is one new file + one column addition.
+- **Embeddings are silently optional (Q3=b):** No key → no embeddings → Stage 2 full-context path runs. The bot still works. Users discover RAG via the Bot Factory Advanced disclosure; no key entry is gated, no flow is blocked. This is the right UX for a BYO-key product where the user's chat provider may not be OpenAI.
+- **No backfill for Stage 1/2 bots (Q4=c):** Per the user, Stage 1/2 bots are test-only artifacts; production users land at Stage 7. Skipping the backfill endpoint saves a feature surface that would never see real use. Side benefit: the route handler stays focused on the ingestion path; reprocess endpoint already exists for re-assembly without re-extraction.
+- **Top-5 + cosine ≥ 0.5 floor + HNSW (Q5):** Top-5 is the industry default for resume Q&A. The 0.5 floor is conservative - cosine similarity on normalized OpenAI embeddings sits in `[-1, 1]` and 0.5 is well above noise. HNSW beats IVFFlat on recall at our scale (sub-10K rows per bot) at the cost of slower index build, which is irrelevant for our once-per-upload cadence.
+- **Vector literal as parameterized string, not pgvector node lib:** The pgvector node package is convenient but adds another dependency. Building `'[0.1,0.2,...]'::vector` as a parameter-bound string achieves the same thing with zero new deps. The cast is server-side; node-postgres binds the string safely.
+- **Filter similarity in app code, not SQL WHERE:** `WHERE embedding <=> q < threshold ORDER BY embedding <=> q LIMIT k` can confuse the HNSW query plan because the index returns approximate neighbors and the threshold filter changes the result set non-monotonically. Cleanest pattern: ORDER BY + LIMIT to use the index, then filter the small result set in JavaScript.
+- **`assembleAndSaveBotContext` ALWAYS runs in the knowledge route:** Even when embedding succeeds. This keeps `bots.context_text` fresh as a fallback when the chat-time embedding key is absent OR retrieval fails. Two writes per upload (chunks + assembled context) is acceptable; the alternative (skipping assembly for RAG-enabled bots) introduces a coupling: if the user removes their embedding key from localStorage later, their bot would have a stale or empty context_text.
+- **Embedding errors are bounded categories, NOT raw messages (HIGH fix):** The knowledge route originally returned `err.message` in the `embeddingError` response field. SDK errors can carry headers (which carry the BYO key) in their `.message`. Fixed by narrowing to `EmbeddingError.category` (a small string union) or collapsing to a generic `"embedding_failed"` for non-typed errors. Same defense-in-depth pattern as `ProviderError.toJSON()`.
+- **Chat-route retrieval failures are logged at warn level with bounded shape (HIGH fix):** Originally a bare `catch {}` block. A broken HNSW index, stored-vector dimension mismatch, or rate-limited OpenAI account would all degrade users silently with no log signal. Added `console.warn` with `EmbeddingError.toJSON()` or a generic `{ category }` shape. ESLint disabled inline because a proper logger isn't shipped yet (Stage 7); the call site is one line and the shape is bounded.
+- **`vi.hoisted` for DB mocks in new tests:** The hoist-before-init `ReferenceError` (vitest's "make sure there are no top-level variables inside vi.mock factory") was hit twice during Slice 3.1. The fix is `const { x } = vi.hoisted(() => ({ x: vi.fn() }))` which moves the mock declaration into the hoisted block. Applied in `retrieve.test.ts` and `embed-chunks.test.ts`.
+- **BotFactoryForm regex fix (out-of-scope but blocking):** The pre-existing failure at `BotFactoryForm.test.tsx:113` was a stale copy-paste from the recent Deepseek removal. The test's own name said "anthropic/openai/azure enabled" while the assertion checked OpenAI was NOT a button. The `/OpenAI/i` regex matched both the OpenAI button and the Azure button (family label "OpenAI"). Fixed: `/^OpenAI/i` anchors to the start of the accessible name, and the assertion flipped to `toBeEnabled()`. Could have been deferred to a separate PR but a red test in main blocks future work; surgical change is the right call.
+
+**Open questions / follow-ups:**
+
+- `toVectorLiteral` is duplicated in `src/lib/rag/retrieve.ts` and `src/lib/ingestion/embed-chunks.ts` with an explanatory comment. Reviewer flagged as MEDIUM (real DRY violation that could silently diverge). Extract to `src/lib/pgvector/format.ts` in a future cleanup pass. Deferred per CLAUDE.md §3 (surgical changes) because the comment already documents the duplication and both call sites are tested.
+- Partially-embedded bot state (source A embedded, source B failed) isn't represented in the response shape - the `embedded: boolean` field is binary. Reviewer flagged as MEDIUM. Future improvement: per-source embedding status in the `sources` array (`{ name, sourceType, chunkCount, tokenCount, embedded: boolean }`). Requires a UI change too.
+- Proper logger (pino/winston) for the chat-route warn signal. Currently uses `console.warn` with an ESLint disable comment. Stage 7 surface.
+- Backfill endpoint deferred per Q4=c. If real users ever do come from a Stage 1/2 bot, they'll need a `POST /api/bots/[botId]/knowledge/embed` endpoint to populate embeddings without re-uploading.
+- No prompt-injection test for the RAG path. Stage 3 inherits the Stage 1 input sanitizer (runs BEFORE retrieval), so retrieved chunks are sourced from the bot owner's verified content (not user input) — but a future audit should confirm no untrusted text reaches the embedding API as the query.
+
+---

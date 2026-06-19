@@ -10,6 +10,7 @@ import {
   timestamp,
   uuid,
   varchar,
+  vector,
 } from "drizzle-orm/pg-core";
 
 // users
@@ -147,6 +148,13 @@ export const knowledgeBase = pgTable(
     contentText: text("content_text").notNull(),
     chunkIndex: integer("chunk_index").notNull(),
     tokenCount: integer("token_count").notNull(),
+    // Stage 3 RAG: OpenAI text-embedding-3-large truncated to 1536 dims via
+    // the API's `dimensions` parameter (Matryoshka representation). Nullable
+    // because (a) Stage 1/2 bots have no embeddings, and (b) ingestion-time
+    // embedding may be skipped when the user does not supply an OpenAI key.
+    // Bots without embeddings fall back to the assembled `bots.context_text`.
+    embedding: vector("embedding", { dimensions: 1536 }),
+    embeddingModel: varchar("embedding_model", { length: 60 }),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
       .notNull()
       .defaultNow(),

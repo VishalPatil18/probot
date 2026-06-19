@@ -1,6 +1,11 @@
 import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+import { EmbeddingError } from "@/lib/ai/embeddings";
+import {
+  KeyTransportError,
+  readEmbeddingApiKey,
+} from "@/lib/ai/key-transport";
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { db, knowledgeBase } from "@/lib/db";
 import {
@@ -8,6 +13,7 @@ import {
   deleteSource,
 } from "@/lib/ingestion/assemble";
 import { chunkText } from "@/lib/ingestion/chunk";
+import { embedChunks } from "@/lib/ingestion/embed-chunks";
 import { IngestionError } from "@/lib/ingestion/errors";
 import {
   MAX_PDF_BYTES,
@@ -64,6 +70,22 @@ export async function POST(
     );
   }
 
+  // Stage 3 RAG: optional OpenAI key for embedding generation. Absent header
+  // means "skip embeddings" — the bot falls back to full-context at chat
+  // time. Malformed header (wrong length) is rejected early.
+  let embeddingApiKey: string | null;
+  try {
+    embeddingApiKey = readEmbeddingApiKey(request.headers);
+  } catch (err) {
+    if (err instanceof KeyTransportError) {
+      return NextResponse.json(
+        { error: "invalid_embedding_key" },
+        { status: 400 },
+      );
+    }
+    throw err;
+  }
+
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -111,6 +133,10 @@ export async function POST(
     );
   }
 
+  // Track sources we touched in this request so we only re-embed those (not
+  // the whole bot every upload).
+  const processedSources: string[] = [];
+
   try {
     // Process PDFs first so per-source replace by filename is deterministic.
     for (const file of fileEntries) {
@@ -136,11 +162,13 @@ export async function POST(
       const text = await extractPdfText(buffer);
       await deleteSource(bot.id, file.name);
       await persistChunks(bot.id, file.name, "pdf", text);
+      processedSources.push(file.name);
     }
 
     if (manualText.length > 0) {
       await deleteSource(bot.id, MANUAL_TEXT_SOURCE);
       await persistChunks(bot.id, MANUAL_TEXT_SOURCE, "text", manualText);
+      processedSources.push(MANUAL_TEXT_SOURCE);
     }
   } catch (e: unknown) {
     if (e instanceof IngestionError) {
@@ -152,6 +180,30 @@ export async function POST(
     throw e;
   }
 
+  // Stage 3 RAG: embed each newly persisted source. Embedding failures are
+  // logged but do NOT fail the request — the chunks remain queryable via the
+  // legacy full-context path (assembled below). The user gets a degraded but
+  // working bot rather than a 5xx on an OpenAI hiccup.
+  let embeddingError: string | null = null;
+  if (embeddingApiKey && processedSources.length > 0) {
+    try {
+      for (const sourceName of processedSources) {
+        await embedChunks({
+          botId: bot.id,
+          sourceName,
+          apiKey: embeddingApiKey,
+        });
+      }
+    } catch (err) {
+      // Bound the error surface to a category — never serialize raw `err.message`
+      // because a network-layer error could carry the BYO key in headers or
+      // URL parts. `EmbeddingError.category` is a small string union; all
+      // other errors collapse to a generic label.
+      embeddingError =
+        err instanceof EmbeddingError ? err.category : "embedding_failed";
+    }
+  }
+
   const result = await assembleAndSaveBotContext(bot.id);
   const sources = await summarizeSources(bot.id);
 
@@ -159,6 +211,8 @@ export async function POST(
     sources,
     totalTokens: result.totalTokens,
     truncated: result.truncated,
+    embedded: embeddingApiKey !== null && embeddingError === null,
+    ...(embeddingError ? { embeddingError } : {}),
   });
 }
 
