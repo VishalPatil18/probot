@@ -135,6 +135,58 @@ In-memory state lives in a single process. On Vercel serverless, each function i
 
 ---
 
+### Token-Based Chunking with Overlapping Windows
+
+> Why does `chunkText` walk the token array with a stride of `target - overlap` instead of just splitting on sentence boundaries?
+
+Sentence-boundary splitting (split on `. ` or `\n\n`) feels intuitive but breaks the moment your input doesn't have those signals: a resume with bullet points, a PDF whose extractor concatenated lines without punctuation, a foreign-language transcript with different sentence terminators. Token-based chunking with a fixed budget side-steps all of that: the encoder gives you a sequence of integers, you take windows of `targetTokens` length, you decode each window back to text. The overlap exists because semantic information lives across boundaries - if the sentence "Jane led the migration to Kubernetes" gets cut between chunks at the word "Kubernetes," chunk N has "Jane led the migration to" and chunk N+1 has "Kubernetes," and an embedding (Stage 3) of either alone misses the connection. Overlapping by 100 tokens means both chunks contain the full phrase. Concretely: `targetTokens=750`, `overlapTokens=100`, `stride=650`. Chunk 0 covers tokens [0, 750), chunk 1 covers [650, 1400), chunk 2 covers [1300, 2050), and so on. Each consecutive pair shares 100 tokens of content. The stride is what governs how many chunks you produce: a 5,000-token document yields `ceil((5000 - 750) / 650) + 1 ≈ 8 chunks`. The overlap is what governs how robust your downstream embedding/retrieval will be. In Stage 2 we pay the redundancy cost (~13% extra text in `context_text` after assembly) and the cap absorbs it; in Stage 3 the overlap becomes the whole point - each chunk's vector embedding captures both its center _and_ the contextual neighbors, which is what lets cosine-similarity search find "the paragraph about K8s" even when the user's query embeds nearer the word "containers" than to "Kubernetes."
+
+> Why `cl100k_base` instead of a model-specific encoder?
+
+`cl100k_base` is OpenAI's BPE encoder used by `gpt-4` / `gpt-4o` / `gpt-3.5-turbo`. Token counts are exact for those models. For Anthropic, Gemini, and DeepSeek the count is approximate (within ~10-15% in practice, more for non-English text). We accept that error because the per-bot `contextTokenCap` is itself a heuristic ceiling we picked, not a hard limit the provider enforces: when a user sets 12,000 tokens, the chat route still leaves room for their question + the system prompt + the response, so a ~10% miscounting cushion is already baked in. The alternative ("each provider has its own tokenizer, use the right one per user") would cost a per-provider import, a runtime branch on `bot.llmProvider`, and a much larger WASM footprint - all for a difference that gets absorbed by the conservative cap defaults. Stage 3's vector embedding pipeline will use a provider-matched embedder for similarity quality, but the chunking step itself can stay encoder-agnostic.
+
+---
+
+### When PDF Library Workarounds Become a Class of Problem
+
+> Why is `pdf-parse` imported as `import("pdf-parse/lib/pdf-parse.js")` instead of `import pdfParse from "pdf-parse"`?
+
+`pdf-parse@1.1.1` has a long-known bug where the package root entrypoint (the file `package.json`'s `"main"` points to) runs **demo code at module-load time**. It reads a bundled test PDF (`./test/data/05-versions-space.pdf`) and prints its text - originally meant as a "this is how you use the library" smoke test. Two problems with this: (1) under Next.js bundling, the demo code runs at build time, looking for a file that doesn't exist in the build's working directory, and crashes the build. (2) Even at runtime, you're paying for a PDF parse you never asked for just by importing the lib. The widely-documented workaround is to bypass the package root and import the actual implementation file: `pdf-parse/lib/pdf-parse.js`. Combined with a dynamic `import()` inside the function (instead of a top-level static import), you also delay loading until the first PDF arrives - cold-start cost is paid by the first uploading user, not by every cold container that boots. This is a pattern worth recognizing: many Node libs that predate the ESM era have side effects at import time, and Next.js's Webpack-based bundling is uniquely intolerant of them. When you see `Module not found: Can't resolve 'fs'` or `ENOENT: ./test/data/something.pdf` in a Next.js build log and the lib in question is a Node-classic CommonJS package, look for a `/lib/` subpath that contains just the implementation.
+
+> Why did `BotFactoryForm` importing `MAX_PDF_BYTES` from `extract-pdf.ts` break the production build?
+
+`BotFactoryForm.tsx` starts with `"use client"`. Anything it imports becomes part of the client bundle that the browser downloads and runs. `extract-pdf.ts` lives on the server, but it has `import("pdf-parse/lib/pdf-parse.js")` inside one of its functions. Webpack's static analysis - even though that import is dynamic and gated behind a conditional - treats the entire dependency graph reachable from the file as potentially needed in the bundle the importing module ships. So when the client file imports any export from `extract-pdf.ts`, Webpack pulls `pdf-parse` into the client graph, which depends on `fs` (a Node-only module that doesn't exist in the browser), and the build fails with `Module not found: Can't resolve 'fs'`. The fix is structural, not a config flag: split the file so that the client-safe surface (constants) lives in a module that imports nothing from Node-only deps, and the server-only surface (the actual extractor that uses `pdf-parse`) lives in a separate file that re-imports those constants. This is why `src/lib/ingestion/constants.ts` exists. **The general rule for a Next.js codebase: any module reachable from a `"use client"` file must have a zero-Node-deps closure**. When you find yourself wanting to share a single constant or type between server and client, ask: is the file that owns it currently importing anything server-only? If yes, move just the shared thing into a dependency-free module first.
+
+---
+
+### Discriminated Unions for "Maybe Did the Auth Check Fail" Returns
+
+> Why does `requireBotOwner` return `{ ok: true, bot, userId } | { ok: false, response }` instead of throwing on auth failure?
+
+Three patterns are common for "this function might fail an auth check":
+
+1. Throw a typed error and let the caller try/catch (`requireBotOwner(botId)` → throws `UnauthorizedError | ForbiddenError | NotFoundError`).
+2. Return `null` on failure and let the caller fabricate the response (`requireBotOwner(botId): Bot | null`).
+3. Return a discriminated union with the prebuilt response on failure (the pattern shipped here).
+
+Pattern (1) forces every route to wrap calls in try/catch and re-author the response, and gives the type system zero help making sure they did. Pattern (2) is concise at the call site but loses information: was it 401 (no session) or 403 (wrong owner) or 404 (no such bot)? The caller has to re-check to pick a status code, which means re-running the same checks. Pattern (3) hands back a fully-formed `NextResponse` for the failure cases, so each route's auth handling collapses to one line: `if (!owner.ok) return owner.response;`. The discriminator (`ok`) is a value the compiler narrows on - inside `if (owner.ok) { ... }`, TypeScript knows `bot` and `userId` are defined; in the `else`, it knows `response` is defined. There's no place to forget the auth check because there's no place to access `bot` without first proving `ok` is true. The pattern scales: if Stage 3 needs a `requireBotOwnerWithKnowledge` (verify owner AND at least one chunk exists), it returns the same discriminator shape with extra fields on the success arm, and every route that uses it gets compile-time enforcement that they handle both arms. **The point of discriminated unions in domain code isn't elegance, it's making the type system enforce control flow that comments can only ask for.**
+
+---
+
+### Per-Source Replace Semantics for Idempotent Re-Uploads
+
+> Why does the POST `/knowledge` route do `deleteSource(botId, sourceName)` _before_ inserting new chunks, instead of upserting or appending?
+
+When a user re-uploads `resume.pdf` after editing it, they expect the new version to **replace** the old one - not to coexist with stale chunks from the previous upload. The semantic they want is "this source name is the latest version of itself." Three implementations:
+
+1. **Append-only:** Insert new chunks alongside the old. Now you have ghost chunks from the old version polluting the context. The user has to remember to manually DELETE the old source first. Awful UX.
+2. **Upsert by `(bot_id, source_name, chunk_index)`:** Overwrite chunks at the same index. Breaks the moment the new version chunks to a different count - chunks 0-4 get overwritten but chunks 5-9 from the old version remain orphaned.
+3. **Per-source replace:** Delete every row matching `(bot_id, source_name)`, then insert the new chunks. Atomic at the source level, no orphans, no ghost content. The implementation: `deleteSource(botId, "resume.pdf")` → bulk insert N new chunks.
+
+The cost is that the operation isn't strictly idempotent at the chunk level - chunk row IDs change on every re-upload - but it _is_ idempotent at the user-facing semantic level: uploading the same PDF twice produces the same final state. This is also why the DELETE endpoint operates on a source name, not a chunk ID: the unit of "knowledge" the user manages is the source (a PDF, the manual text block), not the individual chunk inside it. The chunk is an implementation detail of how we feed the LLM. The same principle - **align the API's primitive with the user's mental model, not with the storage layout** - is why the per-bot token cap lives on `bots` not on a separate settings table: users think "my bot's max context," not "my user account's preference for bot max contexts."
+
+---
+
 ### Never Echo What You Reject
 
 > Why do `sanitizeInput`, `sanitizeOutput`, and `KeyTransportError` all return error/fallback strings that don't include the original input?

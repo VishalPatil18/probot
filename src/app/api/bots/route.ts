@@ -51,6 +51,9 @@ export async function POST(request: Request): Promise<Response> {
           personality: input.personality,
           contextText: input.contextText,
           suggestedQuestions: input.suggestedQuestions,
+          ...(input.contextTokenCap !== undefined
+            ? { contextTokenCap: input.contextTokenCap }
+            : {}),
         })
         .where(eq(bots.id, existing.id))
         .returning();
@@ -66,6 +69,9 @@ export async function POST(request: Request): Promise<Response> {
         personality: input.personality,
         contextText: input.contextText,
         suggestedQuestions: input.suggestedQuestions,
+        ...(input.contextTokenCap !== undefined
+          ? { contextTokenCap: input.contextTokenCap }
+          : {}),
       })
       .returning();
     return { bot: created, created: true };

@@ -1,16 +1,78 @@
+import { randomBytes } from "crypto";
+
+import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { eq } from "drizzle-orm";
 import type { NextAuthOptions } from "next-auth";
+import type { Adapter, AdapterUser } from "next-auth/adapters";
 import CredentialsProvider from "next-auth/providers/credentials";
+import EmailProvider from "next-auth/providers/email";
+import GitHubProvider from "next-auth/providers/github";
+import GoogleProvider from "next-auth/providers/google";
 
-import { db, users } from "@/lib/db";
+import { accounts, db, users, verificationTokens } from "@/lib/db";
 
+import { sendMagicLinkEmail } from "./email";
 import { verifyPassword } from "./passwords";
 import { loginInput } from "./schemas";
 
+// Cast tables because our `.enableRLS()` chain on the Drizzle schema strips
+// the `enableRLS` method that the adapter's generic still expects. Runtime
+// behaviour is unaffected - the adapter just does plain INSERTs/SELECTs.
+const baseAdapter = DrizzleAdapter(db, {
+  usersTable: users as never,
+  accountsTable: accounts as never,
+  verificationTokensTable: verificationTokens as never,
+});
+
+// OAuth + magic-link flows don't supply a username. Generate one inline so the
+// users table's NOT NULL UNIQUE constraint on `username` is satisfied. A future
+// onboarding step can let the user pick a real one.
+async function generateUniqueUsername(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = `user-${randomBytes(4).toString("hex")}`;
+    const existing = await db.query.users.findFirst({
+      where: eq(users.username, candidate),
+      columns: { id: true },
+    });
+    if (!existing) return candidate;
+  }
+  throw new Error("Failed to generate unique username after 5 attempts");
+}
+
+const adapter: Adapter = {
+  ...baseAdapter,
+  async createUser(data: AdapterUser) {
+    const username = await generateUniqueUsername();
+    const [created] = await db
+      .insert(users)
+      .values({
+        username,
+        email: data.email,
+        emailVerified: data.emailVerified,
+        name: data.name ?? null,
+        image: data.image ?? null,
+      })
+      .returning();
+    if (!created) {
+      throw new Error("Failed to create user row");
+    }
+    return {
+      id: created.id,
+      name: created.name,
+      email: created.email,
+      image: created.image,
+      emailVerified: created.emailVerified,
+    } as AdapterUser;
+  },
+};
+
 export const authOptions: NextAuthOptions = {
+  adapter,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
+    verifyRequest: "/auth/verify-request",
+    error: "/auth/error",
   },
   providers: [
     CredentialsProvider({
@@ -28,7 +90,9 @@ export const authOptions: NextAuthOptions = {
         const user = await db.query.users.findFirst({
           where: eq(users.email, email),
         });
-        if (!user) return null;
+        // user.hashedPassword can be null for OAuth/magic-link-only accounts.
+        // In that case, credentials sign-in is not a valid path.
+        if (!user || !user.hashedPassword) return null;
 
         const ok = await verifyPassword(password, user.hashedPassword);
         if (!ok) return null;
@@ -40,12 +104,34 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    EmailProvider({
+      from: process.env.EMAIL_FROM ?? "onboarding@resend.dev",
+      sendVerificationRequest: async ({ identifier, url }) => {
+        await sendMagicLinkEmail({ to: identifier, url });
+      },
+    }),
+    GitHubProvider({
+      clientId: process.env.GITHUB_CLIENT_ID ?? "",
+      clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
+      allowDangerousEmailAccountLinking: true,
+    }),
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+      allowDangerousEmailAccountLinking: true,
+    }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.username = user.username;
+        // Credentials authorize() returns username inline; OAuth/magic-link
+        // flows don't. Source of truth is the DB row.
+        const row = await db.query.users.findFirst({
+          where: eq(users.id, user.id),
+          columns: { username: true },
+        });
+        token.username = row?.username ?? "user";
       }
       return token;
     },

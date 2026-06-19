@@ -22,7 +22,7 @@ export function BrandPanel() {
           Your career, answering questions while you sleep.
         </h2>
         <p className="text-white/50 text-sm leading-relaxed mb-6 -mt-3">
-          Open source · bring your own LLM key · stored locally, never tracked.
+          Free to use · bring your own LLM key · stored locally, never tracked.
         </p>
         <div className="bg-white/5 backdrop-blur rounded-2xl border border-white/10 p-5">
           <div className="flex items-center gap-3 pb-3 border-b border-white/10 mb-3">
@@ -50,7 +50,7 @@ export function BrandPanel() {
 
       <div className="relative z-10 flex items-center gap-6 text-sm text-white/50">
         <span className="flex items-center gap-1.5">
-          <CodeIcon /> Open source
+          <CodeIcon /> Free to use
         </span>
         <span className="flex items-center gap-1.5">
           <KeyIcon /> Your own LLM key

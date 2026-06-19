@@ -737,6 +737,7 @@ export async function generateMetadata({ params }): Promise<Metadata> {
 - [x] Public bot config API endpoint
 - [x] Conversation and message logging tables
 - [x] Username validation with reserved slug protection
+- [x] **Username onboarding step for OAuth / magic-link users** - Stage 1.5 auto-generates `user-<8hex>` placeholder usernames so the `users.username NOT NULL UNIQUE` constraint is satisfied for accounts created via Google / GitHub / Email magic link. Before public chat goes live in Stage 4, prompt the user (first visit to `/dashboard` after an OAuth/magic-link sign-in where `username` still matches `^user-[0-9a-f]{8}$`) to pick a real slug. Same Zod constraints as the existing register-flow username (3-30 chars, alphanumeric + dash + underscore, reserved-slug list). Without this, public URLs would read `/u/user-abc12345/chat` and look broken.
 - [x] SEO/Open Graph meta tags for public pages
 - [x] "Copy URL" button in dashboard
 - [x] Redirect `/u/[username]` -> `/u/[username]/chat`
@@ -1336,6 +1337,7 @@ All items from SRS Section 9, verified and production-ready:
 - [x] Redis-backed rate limiting (Upstash) - uniform defaults, env-configurable, per-bot overrides
 - [x] OAuth login (Google, GitHub, LinkedIn)
 - [x] Email verification and password reset flows
+- [x] **"Resend magic link" action on the verify-request page** - `/auth/verify-request` (built in Stage 1.5) currently tells the user to "check your email" with no way to request a fresh link if delivery failed (Resend issue, typo'd address, spam-filtered). Add a small form on that page: pre-filled email input + "Send a new link" button that calls `signIn("email", { email, callbackUrl: "/dashboard" })`. Rate-limit at the page level (e.g., one resend per 30 s, three per hour per email) to prevent abuse of the Resend free-tier quota.
 - [x] Landing page with hero, demo, open-source / BYO-key messaging, GitHub link, social proof
 - [x] Security hardening (CSRF, CSP, HSTS, key-header scrubbing)
 - [x] Terms of Service and Privacy Policy pages (explicitly cover the BYO-key model)

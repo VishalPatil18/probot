@@ -68,13 +68,35 @@ describe("LoginForm", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it("renders OAuth buttons as disabled with a SOON badge", () => {
+  it("renders working Google + GitHub + Magic Link buttons (no LinkedIn)", () => {
     render(<LoginForm />);
-    const googleBtn = screen.getByRole("button", {
-      name: /continue with google/i,
+    expect(
+      screen.getByRole("button", { name: /continue with google/i }),
+    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: /github/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /magic link/i })).toBeEnabled();
+    expect(screen.queryByText(/linkedin/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/soon/i)).not.toBeInTheDocument();
+  });
+
+  it("Magic Link button shows hint when email field is empty", async () => {
+    const user = userEvent.setup();
+    render(<LoginForm />);
+    await user.click(screen.getByRole("button", { name: /magic link/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /enter your email/i,
+    );
+    expect(signInMock).not.toHaveBeenCalled();
+  });
+
+  it("Magic Link button calls signIn('email', ...) when email is valid", async () => {
+    const user = userEvent.setup();
+    render(<LoginForm />);
+    await user.type(screen.getByLabelText(/email/i), "jane@example.com");
+    await user.click(screen.getByRole("button", { name: /magic link/i }));
+    expect(signInMock).toHaveBeenCalledWith("email", {
+      email: "jane@example.com",
+      callbackUrl: "/dashboard",
     });
-    expect(googleBtn).toBeDisabled();
-    const soonBadges = screen.getAllByText(/soon/i);
-    expect(soonBadges.length).toBeGreaterThanOrEqual(3); // Google + GitHub + LinkedIn
   });
 });
