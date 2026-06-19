@@ -85,7 +85,7 @@ export default function HomePage() {
             </Link>
           </nav>
           <div className="hidden md:flex items-center gap-2 ml-auto">
-            <Link href="/login" className="btn btn-ghost">
+            <Link href="/login" className="btn btn-secondary">
               Log in
             </Link>
             <Link href="/dashboard/bots/new" className="btn btn-primary">
