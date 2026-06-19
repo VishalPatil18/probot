@@ -1,11 +1,11 @@
 import { desc, eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import Link from "next/link";
-import { headers } from "next/headers";
 
 import { CopyUrlButton } from "@/components/dashboard/CopyUrlButton";
 import { authOptions } from "@/lib/auth/auth";
 import { bots, db } from "@/lib/db";
+import { getOrigin } from "@/lib/server/origin";
 
 // Stage 4 plan.md §4: dashboard home is the user's return-visit surface.
 // Lists their bots with the shareable URL + copy button + "Edit" link.
@@ -35,23 +35,7 @@ export default async function DashboardPage() {
     .where(eq(bots.userId, session.user.id))
     .orderBy(desc(bots.updatedAt));
 
-  // Construct the share URL from the request's Host header so the value
-  // matches the deploy environment (localhost / preview / prod) without
-  // requiring a build-time env var. Falls back to "https://probot.dev" if
-  // headers are missing for any reason.
-  const headersList = headers();
-  const host = headersList.get("host") ?? "probot.dev";
-  // Allowlist the proto value — `x-forwarded-proto` comes from upstream
-  // proxies and shouldn't be embedded into URL strings without validation.
-  // Defaults to https (production); localhost falls back to http for dev.
-  const rawProto = headersList.get("x-forwarded-proto");
-  const proto =
-    rawProto === "https" || rawProto === "http"
-      ? rawProto
-      : host.includes("localhost")
-        ? "http"
-        : "https";
-  const origin = `${proto}://${host}`;
+  const origin = getOrigin();
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
@@ -108,6 +92,12 @@ export default async function DashboardPage() {
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-2">
                     <CopyUrlButton url={url} />
+                    <Link
+                      href={`/dashboard/bots/${bot.id}`}
+                      className="rounded-xl border border-border-base bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50"
+                    >
+                      Manage
+                    </Link>
                     <Link
                       href={url}
                       target="_blank"
