@@ -154,9 +154,8 @@ export default function HomePage() {
               <p className="text-muted text-lg leading-relaxed max-w-md">
                 ProBot turns your resume, LinkedIn, and portfolio into a
                 personal AI chatbot that answers recruiters&apos; questions -
-                powered by{" "}
-                <strong className="text-ink">your own LLM</strong> (Claude,
-                Gemini, DeepSeek &amp; more), with keys stored locally.
+                powered by <strong className="text-ink">your own LLM</strong>{" "}
+                (Claude, Gemini, OpenAI &amp; more), with keys stored locally.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
@@ -246,7 +245,10 @@ export default function HomePage() {
                       type="button"
                       className="size-7 grid place-items-center rounded-lg brand-blue-gradient text-white"
                     >
-                      <MaterialIcon name="arrow_upward" className="!text-base" />
+                      <MaterialIcon
+                        name="arrow_upward"
+                        className="!text-base"
+                      />
                     </button>
                   </div>
                   <p className="text-[10px] text-muted text-center mt-2">
@@ -276,7 +278,9 @@ export default function HomePage() {
             </div>
             <div className="px-4 text-center">
               <p className="font-display text-3xl font-extrabold">$0</p>
-              <p className="text-xs text-muted mt-1">Free &amp; self-hostable</p>
+              <p className="text-xs text-muted mt-1">
+                Free &amp; self-hostable
+              </p>
             </div>
             <div className="px-4 text-center">
               <p className="font-display text-3xl font-extrabold">100%</p>
@@ -315,12 +319,7 @@ export default function HomePage() {
                     <stop offset="0" stopColor="oklch(0.60 0.1737 245.16)" />
                     <stop offset="1" stopColor="oklch(0.55 0.193 251.78)" />
                   </linearGradient>
-                  <radialGradient
-                    id="il-orbglow"
-                    cx="0.5"
-                    cy="0.5"
-                    r="0.5"
-                  >
+                  <radialGradient id="il-orbglow" cx="0.5" cy="0.5" r="0.5">
                     <stop
                       offset="0"
                       stopColor="oklch(0.62 0.17 248)"
@@ -332,31 +331,14 @@ export default function HomePage() {
                       stopOpacity="0"
                     />
                   </radialGradient>
-                  <radialGradient
-                    id="il-orbsheen"
-                    cx="0.35"
-                    cy="0.3"
-                    r="0.8"
-                  >
+                  <radialGradient id="il-orbsheen" cx="0.35" cy="0.3" r="0.8">
                     <stop offset="0" stopColor="#fff" stopOpacity="0.4" />
                     <stop offset="1" stopColor="#fff" stopOpacity="0" />
                   </radialGradient>
-                  <path
-                    id="il-pA"
-                    d="M242,110 C 360,110 432,206 546,222"
-                  />
-                  <path
-                    id="il-pB"
-                    d="M242,230 C 384,230 440,230 544,230"
-                  />
-                  <path
-                    id="il-pC"
-                    d="M242,350 C 360,350 432,254 546,238"
-                  />
-                  <path
-                    id="il-pD"
-                    d="M656,230 C 706,230 724,210 760,210"
-                  />
+                  <path id="il-pA" d="M242,110 C 360,110 432,206 546,222" />
+                  <path id="il-pB" d="M242,230 C 384,230 440,230 544,230" />
+                  <path id="il-pC" d="M242,350 C 360,350 432,254 546,238" />
+                  <path id="il-pD" d="M656,230 C 706,230 724,210 760,210" />
                 </defs>
 
                 <use href="#il-pA" className="il-wire" />
@@ -597,21 +579,10 @@ export default function HomePage() {
                   fill="url(#il-blue)"
                   stroke="oklch(0.48 0.16 253)"
                 />
-                <circle
-                  cx="600"
-                  cy="230"
-                  r="58"
-                  fill="url(#il-orbsheen)"
-                />
+                <circle cx="600" cy="230" r="58" fill="url(#il-orbsheen)" />
                 <g className="il-eyes">
                   <circle cx="585" cy="230" r="10" fill="#fff" />
-                  <circle
-                    cx="615"
-                    cy="230"
-                    r="10"
-                    fill="#fff"
-                    opacity="0.65"
-                  />
+                  <circle cx="615" cy="230" r="10" fill="#fff" opacity="0.65" />
                 </g>
                 <text
                   x="600"
@@ -646,13 +617,7 @@ export default function HomePage() {
                 />
                 <circle cx="800" cy="104" r="20" fill="url(#il-blue)" />
                 <circle cx="794" cy="104" r="4.5" fill="#fff" />
-                <circle
-                  cx="807"
-                  cy="104"
-                  r="4.5"
-                  fill="#fff"
-                  opacity="0.65"
-                />
+                <circle cx="807" cy="104" r="4.5" fill="#fff" opacity="0.65" />
                 <text
                   x="832"
                   y="100"
@@ -663,12 +628,7 @@ export default function HomePage() {
                 >
                   AI Recruiter
                 </text>
-                <circle
-                  cx="836"
-                  cy="118"
-                  r="3.5"
-                  fill="oklch(0.62 0.16 150)"
-                />
+                <circle cx="836" cy="118" r="3.5" fill="oklch(0.62 0.16 150)" />
                 <text
                   x="846"
                   y="122"
@@ -754,13 +714,7 @@ export default function HomePage() {
                   <text x="832" y="300" fontSize="13" fill="#fff">
                     mentoring 30+ student developers. 🎯
                   </text>
-                  <text
-                    x="832"
-                    y="330"
-                    fontSize="11"
-                    fill="#fff"
-                    opacity="0.7"
-                  >
+                  <text x="832" y="330" fontSize="11" fill="#fff" opacity="0.7">
                     Source: positions_of_responsibility · 0.91
                   </text>
                 </g>
@@ -792,7 +746,7 @@ export default function HomePage() {
                   num: "02",
                   icon: "network_intelligence",
                   title: "Plug in your own LLM",
-                  body: "Add your API key for Claude, Gemini, DeepSeek, or any supported model. ProBot indexes your data into a private vector store - your key stays on your machine.",
+                  body: "Add your API key for Claude, Gemini, OpenAI, or any supported model. ProBot indexes your data into a private vector store - your key stays on your machine.",
                 },
                 {
                   num: "03",
@@ -848,8 +802,8 @@ export default function HomePage() {
                     RAG-powered, never made-up
                   </h3>
                   <p className="text-sm text-muted leading-relaxed max-w-md">
-                    Each question is embedded and matched against the top-3
-                    most relevant chunks of your data. If it&apos;s not in your
+                    Each question is embedded and matched against the top-3 most
+                    relevant chunks of your data. If it&apos;s not in your
                     history, the bot says so and points to you directly.
                   </p>
                 </div>
@@ -864,9 +818,7 @@ export default function HomePage() {
                     matched: positions_of_responsibility (0.91)
                   </p>
                   <p className="text-success">
-                    {
-                      '"Yes - GDSC Lead & Community of Coders core team…"'
-                    }
+                    {'"Yes - GDSC Lead & Community of Coders core team…"'}
                   </p>
                 </div>
               </div>
@@ -880,9 +832,9 @@ export default function HomePage() {
                 </h3>
                 <p className="text-sm text-white/60 leading-relaxed mb-6">
                   Inherits a battle-tested defense stack: 40+ prompt-injection
-                  patterns, unicode homoglyph normalization, output sanitization,
-                  and per-bot rate limiting. Your LLM key never leaves your
-                  machine.
+                  patterns, unicode homoglyph normalization, output
+                  sanitization, and per-bot rate limiting. Your LLM key never
+                  leaves your machine.
                 </p>
                 <div className="mt-auto grid grid-cols-2 gap-2 text-[11px]">
                   {[
@@ -938,12 +890,12 @@ export default function HomePage() {
                   Bring your own model
                 </h3>
                 <p className="text-sm text-muted leading-relaxed mb-4">
-                  Pick Claude Opus, Haiku, Gemini, DeepSeek, GPT - whatever you
-                  prefer. Your API key is stored locally and{" "}
+                  Pick Claude Opus, Haiku, Gemini, OpenAI - whatever you prefer.
+                  Your API key is stored locally and{" "}
                   <strong className="text-ink">never tracked by ProBot</strong>.
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {["Claude", "Gemini", "DeepSeek", "GPT"].map((m) => (
+                  {["Claude", "Gemini", "OpenAI"].map((m) => (
                     <span
                       key={m}
                       className="px-2 py-1 rounded-md bg-neutral-100 text-[11px] font-semibold"
@@ -984,8 +936,8 @@ export default function HomePage() {
                       <strong className="text-ink">
                         Bring your own API key.
                       </strong>{" "}
-                      Claude, Gemini, DeepSeek, GPT &amp; more - swap any time
-                      from config.
+                      Claude, Gemini, OpenAI &amp; more - swap any time from
+                      config.
                     </span>
                   </li>
                   <li className="flex gap-3 text-sm">
@@ -1114,12 +1066,7 @@ export default function HomePage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
             <div className="col-span-2 md:col-span-1">
               <Link href="/" className="flex items-center gap-2.5 mb-3">
-                <svg
-                  width="26"
-                  height="26"
-                  viewBox="0 0 40 40"
-                  fill="none"
-                >
+                <svg width="26" height="26" viewBox="0 0 40 40" fill="none">
                   <circle
                     cx="20"
                     cy="20"
@@ -1127,13 +1074,7 @@ export default function HomePage() {
                     fill="oklch(0.55 0.193 251.78)"
                   />
                   <circle cx="14" cy="20" r="3.4" fill="#fff" />
-                  <circle
-                    cx="26"
-                    cy="20"
-                    r="3.4"
-                    fill="#fff"
-                    opacity="0.65"
-                  />
+                  <circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65" />
                 </svg>
                 <span className="font-display text-lg font-extrabold tracking-tight">
                   ProBot
@@ -1162,10 +1103,7 @@ export default function HomePage() {
                   </Link>
                 </li>
                 <li>
-                  <Link
-                    href="/dashboard/bots/new"
-                    className="hover:text-ink"
-                  >
+                  <Link href="/dashboard/bots/new" className="hover:text-ink">
                     Create a bot
                   </Link>
                 </li>

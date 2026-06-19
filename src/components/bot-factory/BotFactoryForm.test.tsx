@@ -110,7 +110,7 @@ describe("BotFactoryForm", () => {
     expect(google).toBeDisabled();
     expect(azure).toBeEnabled();
     expect(within(google).getByText("SOON")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /DeepSeek/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /OpenAI/i })).toBeNull();
   });
 
   it("Azure flow: shows endpoint + deployment + apiVersion fields, saves Azure creds, submits with deployment as llmModel", async () => {
@@ -129,10 +129,7 @@ describe("BotFactoryForm", () => {
       screen.getByLabelText(/azure endpoint/i),
       "https://example.cognitiveservices.azure.com",
     );
-    await user.type(
-      screen.getByLabelText(/deployment name/i),
-      "gpt-4o-mini",
-    );
+    await user.type(screen.getByLabelText(/deployment name/i), "gpt-4o-mini");
     await user.type(
       screen.getByLabelText(/azure api key/i),
       "azure-test-key-1234567890",
@@ -210,7 +207,9 @@ describe("BotFactoryForm", () => {
     await fillStep4(user, "sk-ant-test-1234567890");
     await user.click(screen.getByRole("button", { name: /save & deploy/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/network error/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /network error/i,
+    );
   });
 
   it("Step 2 advances on PDF-only (no pasted text) and the file appears in the list", async () => {
