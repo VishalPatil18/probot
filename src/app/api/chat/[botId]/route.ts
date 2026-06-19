@@ -9,6 +9,15 @@ import {
   readAzureCreds,
   readEmbeddingApiKey,
 } from "@/lib/ai/key-transport";
+import { corsPreflight } from "@/lib/bots/cors-headers";
+
+// Stage 5: CORS preflight for the embeddable widget. The widget POSTs from
+// arbitrary origins (janedoe.com, etc.) so the browser fires OPTIONS first.
+// next.config.js sets CORS headers on the POST response; this handler
+// answers the preflight before the POST fires.
+export function OPTIONS(): Response {
+  return corsPreflight();
+}
 import { buildSystemPrompt } from "@/lib/ai/prompt-builder";
 import { ProviderError, getProvider, isProviderName } from "@/lib/ai/providers";
 import { checkRateLimit } from "@/lib/ai/rate-limit";

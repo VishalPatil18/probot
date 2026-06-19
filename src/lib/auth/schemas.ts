@@ -16,7 +16,7 @@ export const RESERVED_SLUGS = new Set<string>([
   "settings",
 ]);
 
-const usernameSchema = z
+export const usernameSchema = z
   .string()
   .min(3, "Username must be at least 3 characters")
   .max(30, "Username must be at most 30 characters")

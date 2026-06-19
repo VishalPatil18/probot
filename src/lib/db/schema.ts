@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -8,6 +9,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
   vector,
@@ -73,6 +75,10 @@ export const bots = pgTable(
       .default(
         sql`'["Thinking…","Searching memory…","Drafting a response…","Almost ready…"]'::jsonb`,
       ),
+    // Stage 5: per-bot theme color (hex #RRGGBB) used by the embeddable
+    // widget and signature badge. Default matches the brand purple so bots
+    // created before Stage 5 render coherently when the column backfills.
+    themeColor: varchar("theme_color", { length: 7 }).notNull().default("#7c5cff"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
       .notNull()
@@ -168,6 +174,74 @@ export const knowledgeBase = pgTable(
   }),
 ).enableRLS();
 
+// conversations
+// One row per recruiter session on a bot. Created in Stage 4 (plan.md §4.5)
+// for the chat-logging story that lands in Stage 6 — no code writes to this
+// table yet. `session_id` is a client-supplied opaque ID (UUID generated in
+// the chat UI per visit). `recruiter_ip` is INTENTIONALLY omitted; raw IPs
+// are PII and the GDPR / consent surface lives in Stage 7.
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    sessionId: varchar("session_id", { length: 255 }).notNull(),
+    messageCount: integer("message_count").notNull().default(0),
+    startedAt: timestamp("started_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+    lastMessageAt: timestamp("last_message_at", {
+      mode: "date",
+      withTimezone: false,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    botIdIdx: index("conversations_bot_id_idx").on(table.botId),
+    // Unique on (bot_id, session_id) so concurrent tabs on the same bot for
+    // the same recruiter cannot double-insert and skew the Stage 6 metrics.
+    botSessionUnique: uniqueIndex("conversations_bot_session_unique").on(
+      table.botId,
+      table.sessionId,
+    ),
+  }),
+).enableRLS();
+
+// messages
+// One row per chat turn (user + assistant), child of conversations. Created
+// in Stage 4 for the Stage 6 analytics surface — no code writes yet.
+// `tokens_used` is nullable because the provider response may not include a
+// usage breakdown for every model.
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 10 }).notNull(),
+    content: text("content").notNull(),
+    tokensUsed: integer("tokens_used"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    conversationIdIdx: index("messages_conversation_id_idx").on(
+      table.conversationId,
+    ),
+    // Lock the role to the allowed values at the DB level so a typo
+    // ('assitant') in some future writer can't silently corrupt analytics.
+    roleCheck: check(
+      "messages_role_check",
+      sql`${table.role} IN ('user', 'assistant', 'system', 'tool')`,
+    ),
+  }),
+).enableRLS();
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Bot = typeof bots.$inferSelect;
@@ -178,3 +252,7 @@ export type VerificationToken = typeof verificationTokens.$inferSelect;
 export type NewVerificationToken = typeof verificationTokens.$inferInsert;
 export type KnowledgeChunk = typeof knowledgeBase.$inferSelect;
 export type NewKnowledgeChunk = typeof knowledgeBase.$inferInsert;
+export type Conversation = typeof conversations.$inferSelect;
+export type NewConversation = typeof conversations.$inferInsert;
+export type Message = typeof messages.$inferSelect;
+export type NewMessage = typeof messages.$inferInsert;

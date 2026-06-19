@@ -1,0 +1,1 @@
+ALTER TABLE "bots" ADD COLUMN "theme_color" varchar(7) DEFAULT '#7c5cff' NOT NULL;
