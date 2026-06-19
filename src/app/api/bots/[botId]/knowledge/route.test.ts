@@ -5,6 +5,7 @@ const extractPdfTextMock = vi.fn();
 const chunkTextMock = vi.fn();
 const assembleAndSaveBotContextMock = vi.fn();
 const deleteSourceMock = vi.fn();
+const embedChunksMock = vi.fn();
 const dbCountMock = vi.fn();
 const dbInsertMock = vi.fn();
 const dbInsertValuesMock = vi.fn();
@@ -43,6 +44,10 @@ vi.mock("@/lib/ingestion/assemble", () => ({
   deleteSource: (...args: unknown[]) => deleteSourceMock(...args),
 }));
 
+vi.mock("@/lib/ingestion/embed-chunks", () => ({
+  embedChunks: (...args: unknown[]) => embedChunksMock(...args),
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     $count: (...args: unknown[]) => dbCountMock(...args),
@@ -65,15 +70,24 @@ const OWNER_BOT = {
   contextTokenCap: 12_000,
 };
 
-function multipart(parts: { text?: string; files?: File[] }): Request {
+function multipart(parts: {
+  text?: string;
+  files?: File[];
+  embeddingKey?: string;
+}): Request {
   const form = new FormData();
   if (parts.text !== undefined) form.set("text", parts.text);
   if (parts.files) {
     for (const f of parts.files) form.append("files", f, f.name);
   }
+  const headers: Record<string, string> = {};
+  if (parts.embeddingKey !== undefined) {
+    headers["x-embedding-api-key"] = parts.embeddingKey;
+  }
   return new Request(`http://localhost/api/bots/${BOT_ID}/knowledge`, {
     method: "POST",
     body: form,
+    headers,
   });
 }
 
@@ -96,6 +110,7 @@ describe("POST /api/bots/[botId]/knowledge", () => {
       .mockReset()
       .mockResolvedValue({ text: "ok", totalTokens: 10, truncated: false });
     deleteSourceMock.mockReset().mockResolvedValue(0);
+    embedChunksMock.mockReset().mockResolvedValue({ embedded: 1, skipped: 0 });
     dbCountMock.mockReset().mockResolvedValue(0);
     dbInsertMock.mockClear();
     dbInsertValuesMock.mockReset().mockResolvedValue(undefined);
@@ -239,5 +254,95 @@ describe("POST /api/bots/[botId]/knowledge", () => {
     const txtFile = new File(["hi"], "notes.txt", { type: "text/plain" });
     const res = await POST(multipart({ files: [txtFile] }), PARAMS);
     expect(res.status).toBe(415);
+  });
+
+  describe("Stage 3 RAG (embedding key)", () => {
+    const EMBEDDING_KEY = "sk-openai-emb-XYZ-1234567890";
+
+    it("skips embedChunks entirely when no x-embedding-api-key header is sent", async () => {
+      const res = await POST(multipart({ text: "my bio" }), PARAMS);
+      expect(res.status).toBe(200);
+      expect(embedChunksMock).not.toHaveBeenCalled();
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.embedded).toBe(false);
+    });
+
+    it("calls embedChunks per processed source when key is provided", async () => {
+      extractPdfTextMock.mockResolvedValueOnce("pdf content");
+      const res = await POST(
+        multipart({
+          text: "manual bio",
+          files: [pdfFile("resume.pdf")],
+          embeddingKey: EMBEDDING_KEY,
+        }),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      expect(embedChunksMock).toHaveBeenCalledTimes(2);
+      expect(embedChunksMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          botId: BOT_ID,
+          sourceName: "resume.pdf",
+          apiKey: EMBEDDING_KEY,
+        }),
+      );
+      expect(embedChunksMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          botId: BOT_ID,
+          sourceName: "manual_text",
+          apiKey: EMBEDDING_KEY,
+        }),
+      );
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.embedded).toBe(true);
+    });
+
+    it("does NOT fail the request when embedChunks throws — returns 200 with bounded embeddingError category", async () => {
+      // Use a plain Error to test the worst-case fallback path. The route
+      // must NOT echo raw error messages (which could carry the BYO key).
+      embedChunksMock.mockRejectedValueOnce(
+        new Error("OpenAI rejected key sk-openai-leak-canary-9999"),
+      );
+      const res = await POST(
+        multipart({ text: "my bio", embeddingKey: EMBEDDING_KEY }),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.embedded).toBe(false);
+      // Generic bounded label — no raw error message
+      expect(body.embeddingError).toBe("embedding_failed");
+      // Body must NEVER contain the key fragment
+      const raw = JSON.stringify(body);
+      expect(raw).not.toContain("sk-openai-leak-canary");
+      // legacy assemble still ran — bot falls back to full-context
+      expect(assembleAndSaveBotContextMock).toHaveBeenCalledWith(BOT_ID);
+    });
+
+    it("maps EmbeddingError categories into embeddingError without leaking message", async () => {
+      const { EmbeddingError } = await import("@/lib/ai/embeddings");
+      embedChunksMock.mockRejectedValueOnce(
+        new EmbeddingError("openai", "invalid_key", "key sk-openai-leak-XXX bad"),
+      );
+      const res = await POST(
+        multipart({ text: "my bio", embeddingKey: EMBEDDING_KEY }),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.embeddingError).toBe("invalid_key");
+      const raw = JSON.stringify(body);
+      expect(raw).not.toContain("sk-openai-leak");
+    });
+
+    it("rejects a malformed (too-short) embedding key with 400", async () => {
+      const res = await POST(
+        multipart({ text: "my bio", embeddingKey: "abc" }),
+        PARAMS,
+      );
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.error).toBe("invalid_embedding_key");
+    });
   });
 });

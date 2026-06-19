@@ -11,6 +11,7 @@ import {
   PERSONALITY_PRESETS,
   type Personality,
 } from "@/lib/bots/schemas";
+import { setEmbeddingApiKey } from "@/lib/client/embedding-key-store";
 import { setApiKey, setAzureCreds } from "@/lib/client/llm-key-store";
 import {
   MAX_PDF_BYTES,
@@ -88,6 +89,10 @@ type FormState = {
   // Azure-only extras (ignored when llmProvider !== "azure").
   azureEndpoint: string;
   azureApiVersion: string;
+  // Stage 3 RAG: optional OpenAI key for embedding generation. When present,
+  // the bot uses semantic search over its knowledge at chat time; when empty,
+  // it falls back to the full assembled context (legacy path).
+  embeddingApiKey: string;
 };
 
 export function BotFactoryForm({
@@ -124,6 +129,7 @@ export function BotFactoryForm({
     apiKey: "",
     azureEndpoint: "",
     azureApiVersion: DEFAULT_AZURE_API_VERSION,
+    embeddingApiKey: "",
   });
   const [newQuestion, setNewQuestion] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -192,6 +198,10 @@ export function BotFactoryForm({
           apiVersion: form.azureApiVersion || DEFAULT_AZURE_API_VERSION,
         });
       }
+      // Stage 3 RAG: persist the OpenAI embedding key (when supplied) so the
+      // chat UI can attach it as `x-embedding-api-key` on every chat request.
+      // Empty value clears any previously stored key.
+      setEmbeddingApiKey(form.embeddingApiKey);
 
       const res = await fetch("/api/bots", {
         method: "POST",
@@ -227,8 +237,14 @@ export function BotFactoryForm({
         for (const file of form.pdfFiles) {
           fd.append("files", file, file.name);
         }
+        const embeddingKey = form.embeddingApiKey.trim();
+        const knowledgeHeaders: Record<string, string> = {};
+        if (embeddingKey.length >= 8) {
+          knowledgeHeaders["x-embedding-api-key"] = embeddingKey;
+        }
         const kRes = await fetch(`/api/bots/${body.bot.id}/knowledge`, {
           method: "POST",
+          headers: knowledgeHeaders,
           body: fd,
         });
         if (!kRes.ok) {
@@ -665,6 +681,28 @@ function StepKnowledge({
                 risk exceeding your LLM's context window - smaller models
                 (Haiku, gpt-4o-mini) may refuse responses above ~12K. Default{" "}
                 {CONTEXT_TOKEN_CAP_DEFAULT.toLocaleString()}.
+              </p>
+
+              <label
+                htmlFor="bf-embedding-key"
+                className="block text-xs font-semibold pt-3"
+              >
+                OpenAI key for semantic search (optional)
+              </label>
+              <input
+                id="bf-embedding-key"
+                type="password"
+                autoComplete="off"
+                placeholder="sk-..."
+                value={form.embeddingApiKey}
+                onChange={(e) => patch("embeddingApiKey", e.target.value)}
+                className="w-full py-2 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand"
+              />
+              <p className="text-[11px] text-muted">
+                When provided, your knowledge is embedded with OpenAI and the
+                bot uses semantic search at chat time for more accurate
+                answers. Stored in your browser only, never on our servers.
+                Leave blank to use full-context (default).
               </p>
             </div>
           )}

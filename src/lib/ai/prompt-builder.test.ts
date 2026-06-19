@@ -49,6 +49,32 @@ describe("buildSystemPrompt", () => {
     expect(prompt).not.toMatch(/^\s*\{\s*"/m);
   });
 
+  it("uses relevantChunks under ## CONTEXT when provided, dropping bot.contextText", () => {
+    const prompt = buildSystemPrompt({
+      bot: baseBot,
+      ownerUsername: "jane",
+      relevantChunks: [
+        "Jane led the team that shipped Acme's RAG search.",
+        "She mentored 4 junior engineers in 2025.",
+      ],
+    });
+    expect(prompt).toContain("## CONTEXT");
+    expect(prompt).toContain("Jane led the team that shipped Acme's RAG search.");
+    expect(prompt).toContain("She mentored 4 junior engineers in 2025.");
+    expect(prompt).toContain("\n\n---\n\n");
+    // Fallback contextText must NOT appear when chunks are used
+    expect(prompt).not.toContain(baseBot.contextText);
+  });
+
+  it("falls back to bot.contextText when relevantChunks is empty array", () => {
+    const prompt = buildSystemPrompt({
+      bot: baseBot,
+      ownerUsername: "jane",
+      relevantChunks: [],
+    });
+    expect(prompt).toContain(baseBot.contextText);
+  });
+
   it("puts identity → rules → personality → context in that order", () => {
     const prompt = buildSystemPrompt({ bot: baseBot, ownerUsername: "jane" });
     const identityIdx = prompt.indexOf("Jane Doe");

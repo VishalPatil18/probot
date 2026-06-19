@@ -40,6 +40,11 @@ vi.mock("@/lib/ai/rate-limit", async () => {
   };
 });
 
+const retrieveRelevantMock = vi.fn();
+vi.mock("@/lib/rag/retrieve", () => ({
+  retrieveRelevant: (...args: unknown[]) => retrieveRelevantMock(...args),
+}));
+
 import { ProviderError } from "@/lib/ai/providers";
 
 import { POST } from "./route";
@@ -91,6 +96,7 @@ describe("POST /api/chat/[botId]", () => {
       .mockReset()
       .mockResolvedValue({ reply: "Sure - Jane is great." });
     checkRateLimitMock.mockReset().mockReturnValue({ ok: true });
+    retrieveRelevantMock.mockReset().mockResolvedValue([]);
   });
 
   it("returns 200 with { reply } on the happy path", async () => {
@@ -309,6 +315,96 @@ describe("POST /api/chat/[botId]", () => {
       expect(res.status).toBe(200);
       const [args] = completeMock.mock.calls[0] as [Record<string, unknown>];
       expect(args.extras).toBeUndefined();
+    });
+  });
+
+  describe("Stage 3 RAG", () => {
+    const EMBEDDING_KEY = "sk-openai-emb-XYZ-1234567890";
+
+    it("skips retrieval entirely when no x-embedding-api-key header is present", async () => {
+      const res = await POST(makeRequest({ message: "tell me about ML" }), PARAMS);
+      expect(res.status).toBe(200);
+      expect(retrieveRelevantMock).not.toHaveBeenCalled();
+      const [args] = completeMock.mock.calls[0] as [{ system: string }];
+      // Falls back to bot.contextText
+      expect(args.system).toContain(bot.contextText);
+    });
+
+    it("calls retrieveRelevant with the sanitized message + bot id when key is present", async () => {
+      retrieveRelevantMock.mockResolvedValueOnce([
+        { contentText: "Jane led Acme's RAG search", similarity: 0.91, sourceName: "resume.pdf", chunkIndex: 0 },
+      ]);
+      const res = await POST(
+        makeRequest(
+          { message: "what RAG work has she done?" },
+          { "x-embedding-api-key": EMBEDDING_KEY },
+        ),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      expect(retrieveRelevantMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          botId: BOT_ID,
+          query: "what RAG work has she done?",
+          apiKey: EMBEDDING_KEY,
+        }),
+      );
+    });
+
+    it("uses retrieved chunks in the system prompt when retrieval succeeds", async () => {
+      retrieveRelevantMock.mockResolvedValueOnce([
+        { contentText: "CHUNK_ONE_TEXT", similarity: 0.91, sourceName: "resume.pdf", chunkIndex: 0 },
+        { contentText: "CHUNK_TWO_TEXT", similarity: 0.72, sourceName: "resume.pdf", chunkIndex: 3 },
+      ]);
+      const res = await POST(
+        makeRequest(
+          { message: "hi" },
+          { "x-embedding-api-key": EMBEDDING_KEY },
+        ),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      const [args] = completeMock.mock.calls[0] as [{ system: string }];
+      expect(args.system).toContain("CHUNK_ONE_TEXT");
+      expect(args.system).toContain("CHUNK_TWO_TEXT");
+      expect(args.system).not.toContain(bot.contextText);
+    });
+
+    it("falls back to bot.contextText when retrieveRelevant returns empty (below floor)", async () => {
+      retrieveRelevantMock.mockResolvedValueOnce([]);
+      const res = await POST(
+        makeRequest(
+          { message: "hi" },
+          { "x-embedding-api-key": EMBEDDING_KEY },
+        ),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      const [args] = completeMock.mock.calls[0] as [{ system: string }];
+      expect(args.system).toContain(bot.contextText);
+    });
+
+    it("falls back to bot.contextText when retrieveRelevant throws (e.g. bad embedding key)", async () => {
+      retrieveRelevantMock.mockRejectedValueOnce(new Error("OpenAI rejected the API key"));
+      const res = await POST(
+        makeRequest(
+          { message: "hi" },
+          { "x-embedding-api-key": EMBEDDING_KEY },
+        ),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      const [args] = completeMock.mock.calls[0] as [{ system: string }];
+      expect(args.system).toContain(bot.contextText);
+    });
+
+    it("treats a malformed (too-short) x-embedding-api-key header as missing — no retrieval, no 4xx", async () => {
+      const res = await POST(
+        makeRequest({ message: "hi" }, { "x-embedding-api-key": "abc" }),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      expect(retrieveRelevantMock).not.toHaveBeenCalled();
     });
   });
 });

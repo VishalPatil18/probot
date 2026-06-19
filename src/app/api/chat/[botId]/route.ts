@@ -2,10 +2,12 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { EmbeddingError } from "@/lib/ai/embeddings";
 import {
   KeyTransportError,
   readApiKey,
   readAzureCreds,
+  readEmbeddingApiKey,
 } from "@/lib/ai/key-transport";
 import { buildSystemPrompt } from "@/lib/ai/prompt-builder";
 import { ProviderError, getProvider, isProviderName } from "@/lib/ai/providers";
@@ -15,6 +17,7 @@ import { sanitizeOutput } from "@/lib/ai/sanitize-output";
 import type { Personality } from "@/lib/bots/schemas";
 import { PERSONALITY_PRESETS } from "@/lib/bots/schemas";
 import { bots, db, users } from "@/lib/db";
+import { retrieveRelevant } from "@/lib/rag/retrieve";
 
 const MAX_BODY_BYTES = 16_384;
 
@@ -111,6 +114,47 @@ export async function POST(
     );
   }
 
+  // 9b. Stage 3 RAG retrieval. Embedding key is optional — when absent OR
+  // when no chunks pass the similarity floor, we fall through to the legacy
+  // full-context path. Retrieval failures (bad key, OpenAI down, etc.) also
+  // fall back silently rather than 5xx the chat request.
+  let relevantChunks: string[] | undefined;
+  let embeddingApiKey: string | null = null;
+  try {
+    embeddingApiKey = readEmbeddingApiKey(request.headers);
+  } catch (err) {
+    if (!(err instanceof KeyTransportError)) throw err;
+    // Malformed embedding header: treat as missing, do not fail chat.
+    embeddingApiKey = null;
+  }
+  if (embeddingApiKey) {
+    try {
+      const retrieved = await retrieveRelevant({
+        botId: botRow.id,
+        query: sanitized.message,
+        apiKey: embeddingApiKey,
+      });
+      if (retrieved.length > 0) {
+        relevantChunks = retrieved.map((r) => r.contentText);
+      }
+    } catch (err: unknown) {
+      // Retrieval failure → fall back to full-context. Chat must keep
+      // working even if pgvector or the embedding API is unavailable.
+      // We DO want an observable signal so a broken HNSW index or stored
+      // dimension mismatch doesn't silently degrade every user.
+      // `EmbeddingError.toJSON()` is bounded (no raw message, no key); plain
+      // errors collapse to a generic category so we never echo SDK-layer
+      // strings that may carry the BYO key.
+      const signal =
+        err instanceof EmbeddingError
+          ? err.toJSON()
+          : { category: "retrieval_failed" };
+      // eslint-disable-next-line no-console -- intentional ops signal; safe shape, no raw error
+      console.warn("[rag] retrieval failed, falling back to context_text", signal);
+      relevantChunks = undefined;
+    }
+  }
+
   // 10. Provider dispatch
   if (!isProviderName(ownerRow.llmProvider)) {
     return NextResponse.json(
@@ -129,6 +173,7 @@ export async function POST(
       contextText: botRow.contextText,
     },
     ownerUsername: ownerRow.username,
+    ...(relevantChunks ? { relevantChunks } : {}),
   });
 
   // Azure needs three extra runtime values (endpoint, apiVersion, deployment).
