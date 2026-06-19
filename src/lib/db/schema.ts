@@ -60,6 +60,11 @@ export const bots = pgTable(
       .notNull()
       .default("professional"),
     contextText: text("context_text").notNull(),
+    // Per-bot cap (in tokens) on the assembled `context_text` reassembled from
+    // knowledge_base chunks. Default 12_000 ≈ 50K chars - safe for Haiku/gpt-4o-mini
+    // with room for chat history. Surfaced as an Advanced setting in the Bot
+    // Factory; raising it risks model context-window overflow.
+    contextTokenCap: integer("context_token_cap").notNull().default(12000),
     suggestedQuestions: jsonb("suggested_questions").$type<string[]>(),
     loadingMessages: jsonb("loading_messages")
       .$type<string[]>()
@@ -125,6 +130,36 @@ export const verificationTokens = pgTable(
   }),
 ).enableRLS();
 
+// knowledge_base
+// One row per chunk. A bot's `context_text` is reassembled by concatenating
+// all chunks for the bot ordered by (source_name, chunk_index) and truncated
+// to `bots.context_token_cap`. `source_type` is 'pdf' or 'text'; per-source
+// replace on re-ingestion (delete WHERE bot_id=? AND source_name=?).
+export const knowledgeBase = pgTable(
+  "knowledge_base",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    sourceType: varchar("source_type", { length: 10 }).notNull(),
+    sourceName: varchar("source_name", { length: 255 }).notNull(),
+    contentText: text("content_text").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    tokenCount: integer("token_count").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    botIdIdx: index("knowledge_base_bot_id_idx").on(table.botId),
+    botSourceIdx: index("knowledge_base_bot_source_idx").on(
+      table.botId,
+      table.sourceName,
+    ),
+  }),
+).enableRLS();
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Bot = typeof bots.$inferSelect;
@@ -133,3 +168,5 @@ export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 export type VerificationToken = typeof verificationTokens.$inferSelect;
 export type NewVerificationToken = typeof verificationTokens.$inferInsert;
+export type KnowledgeChunk = typeof knowledgeBase.$inferSelect;
+export type NewKnowledgeChunk = typeof knowledgeBase.$inferInsert;

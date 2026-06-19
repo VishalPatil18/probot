@@ -58,16 +58,21 @@ describe("botInput - headline validation", () => {
 });
 
 describe("botInput - contextText validation", () => {
-  it("rejects empty contextText", () => {
+  // Stage 2: contextText may be empty because knowledge can come entirely
+  // from PDF uploads via /api/bots/[botId]/knowledge.
+  it("accepts empty contextText (Stage 2 - PDF-only flows)", () => {
     expect(botInput.safeParse({ ...validInput, contextText: "" }).success).toBe(
-      false,
+      true,
     );
   });
 
-  it("rejects whitespace-only contextText", () => {
-    expect(
-      botInput.safeParse({ ...validInput, contextText: "   " }).success,
-    ).toBe(false);
+  it("trims whitespace and accepts the result", () => {
+    const parsed = botInput.safeParse({
+      ...validInput,
+      contextText: "   hello   ",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.contextText).toBe("hello");
   });
 
   it("rejects contextText over 50,000 chars", () => {

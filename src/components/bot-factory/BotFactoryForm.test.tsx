@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -211,6 +211,95 @@ describe("BotFactoryForm", () => {
     await user.click(screen.getByRole("button", { name: /save & deploy/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/network error/i);
+  });
+
+  it("Step 2 advances on PDF-only (no pasted text) and the file appears in the list", async () => {
+    const user = userEvent.setup();
+    render(<BotFactoryForm username="jane" />);
+    await fillStep1(user);
+
+    const cont = screen.getByRole("button", { name: /continue/i });
+    expect(cont).toBeDisabled();
+
+    // Use the hidden file input directly; jsdom can't dispatch real drops.
+    const fileInput = document.getElementById(
+      "bf-pdf-input",
+    ) as HTMLInputElement;
+    const pdf = new File(["%PDF-1.4 demo"], "resume.pdf", {
+      type: "application/pdf",
+    });
+    await user.upload(fileInput, pdf);
+
+    expect(screen.getByText("resume.pdf")).toBeInTheDocument();
+    expect(cont).toBeEnabled();
+  });
+
+  it("Advanced disclosure exposes context_token_cap, default 12000, sent in /api/bots body", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(201, { bot: { id: "bot-1", name: "Jane Doe" } }),
+    );
+    const user = userEvent.setup();
+    render(<BotFactoryForm username="jane" />);
+    await fillStep1(user);
+
+    await user.click(screen.getByRole("button", { name: /advanced/i }));
+    const capInput = screen.getByLabelText(
+      /context token cap/i,
+    ) as HTMLInputElement;
+    expect(capInput.value).toBe("12000");
+    // Direct change event - bypasses user.type's per-keystroke clamping that
+    // intermediate values would trigger for a controlled number input.
+    fireEvent.change(capInput, { target: { value: "20000" } });
+
+    await fillStep2(user);
+    await passStep3(user);
+    await fillStep4(user, "sk-ant-test-1234567890");
+    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
+
+    expect(fetchMock).toHaveBeenCalled();
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.contextTokenCap).toBe(20000);
+  });
+
+  it("posts queued PDFs to /api/bots/:id/knowledge after /api/bots succeeds", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(201, { bot: { id: "bot-42", name: "Jane Doe" } }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { sources: [] }));
+    const user = userEvent.setup();
+    render(<BotFactoryForm username="jane" />);
+    await fillStep1(user);
+
+    const fileInput = document.getElementById(
+      "bf-pdf-input",
+    ) as HTMLInputElement;
+    const pdf = new File(["%PDF-1.4 cv"], "cv.pdf", {
+      type: "application/pdf",
+    });
+    await user.upload(fileInput, pdf);
+    // Also paste manual text to verify it's included in the multipart `text` field.
+    await user.type(
+      screen.getByLabelText(/bio \/ resume text/i),
+      "manual bio text",
+    );
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await passStep3(user);
+    await fillStep4(user, "sk-ant-test-1234567890");
+    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const secondCall = fetchMock.mock.calls[1] as [string, RequestInit];
+    const [url, secondInit] = secondCall;
+    expect(url).toBe("/api/bots/bot-42/knowledge");
+    expect(secondInit.method).toBe("POST");
+    expect(secondInit.body).toBeInstanceOf(FormData);
+    const fd = secondInit.body as FormData;
+    expect(fd.get("text")).toBe("manual bio text");
+    const files = fd.getAll("files");
+    expect(files).toHaveLength(1);
+    expect((files[0] as File).name).toBe("cv.pdf");
   });
 
   it("navigates to /u/{username}/chat when Preview is clicked on Step 5", async () => {

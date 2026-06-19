@@ -52,6 +52,7 @@ export default async function NewBotPage() {
                 ? existing.personality
                 : "professional",
               contextText: existing.contextText,
+              contextTokenCap: existing.contextTokenCap,
               suggestedQuestions: existing.suggestedQuestions ?? [],
             }
           : undefined
