@@ -47,7 +47,7 @@ vi.mock("@/lib/rag/retrieve", () => ({
 
 import { ProviderError } from "@/lib/ai/providers";
 
-import { POST } from "./route";
+import { OPTIONS, POST } from "./route";
 
 const VALID_KEY = "sk-ant-test-XYZ-1234567890";
 const BOT_ID = "11111111-1111-1111-1111-111111111111";
@@ -406,5 +406,21 @@ describe("POST /api/chat/[botId]", () => {
       expect(res.status).toBe(200);
       expect(retrieveRelevantMock).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("OPTIONS /api/chat/[botId] (CORS preflight)", () => {
+  it("returns 204 No Content with the CORS allowlist headers", () => {
+    const res = OPTIONS();
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(res.headers.get("Access-Control-Allow-Methods")).toContain("POST");
+    // Widget passes the BYO key headers — must be on the allowlist
+    expect(res.headers.get("Access-Control-Allow-Headers")).toContain(
+      "x-llm-api-key",
+    );
+    expect(res.headers.get("Access-Control-Allow-Headers")).toContain(
+      "x-embedding-api-key",
+    );
   });
 });

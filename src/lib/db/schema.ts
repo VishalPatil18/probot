@@ -75,6 +75,10 @@ export const bots = pgTable(
       .default(
         sql`'["Thinking…","Searching memory…","Drafting a response…","Almost ready…"]'::jsonb`,
       ),
+    // Stage 5: per-bot theme color (hex #RRGGBB) used by the embeddable
+    // widget and signature badge. Default matches the brand purple so bots
+    // created before Stage 5 render coherently when the column backfills.
+    themeColor: varchar("theme_color", { length: 7 }).notNull().default("#7c5cff"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
       .notNull()

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { PROVIDER_NAMES } from "@/lib/ai/providers";
+import { themeColorSchema } from "./theme-color";
 
 export const PERSONALITY_PRESETS = [
   "professional",
@@ -44,6 +45,24 @@ export const botInput = z.object({
     .string()
     .max(60, "Model identifier must be ≤ 60 chars")
     .optional(),
+  // Stage 5: per-bot widget/badge color. Optional on create so existing
+  // forms don't break; the DB default '#7c5cff' takes over when absent.
+  themeColor: themeColorSchema.optional(),
 });
 
 export type BotInput = z.infer<typeof botInput>;
+
+// Stage 5: partial-update schema for the PATCH endpoint behind the bot
+// detail page. Limited to fields the detail page actually edits so we
+// don't accidentally widen the surface (and let an attacker mass-assign
+// e.g. `userId` or `isActive`).
+export const botPatchInput = z
+  .object({
+    themeColor: themeColorSchema.optional(),
+  })
+  .refine(
+    (value) => Object.values(value).some((v) => v !== undefined),
+    "PATCH body must include at least one field",
+  );
+
+export type BotPatchInput = z.infer<typeof botPatchInput>;

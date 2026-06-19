@@ -14,7 +14,7 @@ vi.mock("@/lib/db", () => ({
   users: { id: "id-col" } as Record<string, unknown>,
 }));
 
-import { GET } from "./route";
+import { GET, OPTIONS } from "./route";
 
 const BOT_ID = "11111111-1111-1111-1111-111111111111";
 const PARAMS = { params: { botId: BOT_ID } };
@@ -24,6 +24,7 @@ const bot = {
   userId: "user-1",
   name: "Jane Doe",
   headline: "Senior ML Engineer",
+  themeColor: "#7c5cff",
   suggestedQuestions: ["What does she do?", "Tell me about her ML work."],
   loadingMessages: ["Thinking…"],
 };
@@ -55,6 +56,7 @@ describe("GET /api/bots/[botId]/config", () => {
         id: BOT_ID,
         name: "Jane Doe",
         headline: "Senior ML Engineer",
+        themeColor: "#7c5cff",
         suggestedQuestions: [
           "What does she do?",
           "Tell me about her ML work.",
@@ -108,5 +110,26 @@ describe("GET /api/bots/[botId]/config", () => {
     const res = await GET(makeRequest(), PARAMS);
     const body = (await res.json()) as { bot: { suggestedQuestions: string[] } };
     expect(body.bot.suggestedQuestions).toEqual([]);
+  });
+
+  it("sets CORS headers on the GET response so the widget can read it cross-origin", async () => {
+    const res = await GET(makeRequest(), PARAMS);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(res.headers.get("Access-Control-Allow-Methods")).toContain("GET");
+    // Cache-Control is preserved alongside CORS
+    expect(res.headers.get("Cache-Control")).toContain("s-maxage=60");
+  });
+});
+
+describe("OPTIONS /api/bots/[botId]/config (CORS preflight)", () => {
+  it("returns 204 No Content with the CORS allowlist headers", () => {
+    const res = OPTIONS();
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(res.headers.get("Access-Control-Allow-Methods")).toContain("GET");
+    expect(res.headers.get("Access-Control-Allow-Headers")).toContain(
+      "Content-Type",
+    );
+    expect(res.headers.get("Access-Control-Max-Age")).toBe("86400");
   });
 });

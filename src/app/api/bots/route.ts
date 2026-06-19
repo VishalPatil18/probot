@@ -54,6 +54,9 @@ export async function POST(request: Request): Promise<Response> {
           ...(input.contextTokenCap !== undefined
             ? { contextTokenCap: input.contextTokenCap }
             : {}),
+          ...(input.themeColor !== undefined
+            ? { themeColor: input.themeColor }
+            : {}),
         })
         .where(eq(bots.id, existing.id))
         .returning();
@@ -71,6 +74,9 @@ export async function POST(request: Request): Promise<Response> {
         suggestedQuestions: input.suggestedQuestions,
         ...(input.contextTokenCap !== undefined
           ? { contextTokenCap: input.contextTokenCap }
+          : {}),
+        ...(input.themeColor !== undefined
+          ? { themeColor: input.themeColor }
           : {}),
       })
       .returning();
