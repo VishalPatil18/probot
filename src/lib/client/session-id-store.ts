@@ -17,16 +17,29 @@ function isBrowser(): boolean {
 }
 
 function newUuid(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+  // Bind the global `crypto` to a local so TypeScript's narrowing on the
+  // randomUUID early-return doesn't collapse the remaining branch to
+  // `never` (the global Crypto type's flow analysis interacts poorly with
+  // the `in` operator narrowing).
+  const c: Crypto | undefined =
+    typeof crypto !== "undefined" ? crypto : undefined;
+  if (c && typeof c.randomUUID === "function") {
+    return c.randomUUID();
+  }
+  if (!c || typeof c.getRandomValues !== "function") {
+    // No crypto namespace at all — extreme legacy runtime. Bubble a
+    // recognizable invalid UUID so the server's Zod check rejects with
+    // a clean 400 instead of corrupting analytics with a deterministic
+    // string that every such client would share.
+    throw new Error("no crypto namespace available");
   }
   // Fallback for runtimes without crypto.randomUUID (very old WebView).
-  // We use crypto.getRandomValues — universally available wherever any
-  // crypto namespace exists — rather than Math.random, so the sessionId
-  // is not guessable. A guessable sessionId would let an adversary forge
-  // another recruiter's conversation key and pollute metrics.
+  // crypto.getRandomValues is universally available wherever any crypto
+  // namespace exists — and crucially cryptographically random, so the
+  // sessionId is not guessable. A guessable sessionId would let an
+  // adversary forge another recruiter's conversation key.
   const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
+  c.getRandomValues(bytes);
   // Set version (4) and variant (10xx) bits per RFC 4122.
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;

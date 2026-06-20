@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **Stage 6 Slice 6.1 complete** — Stages 1–5 shipped end-to-end (BYO-key chat, PDF ingestion, RAG, multi-tenant public chat, embeddable widget). Slice 6.1 lays the Stage 6 foundation: `leads` + `notifications` tables, `recruiter_email` on `conversations`, dashboard-friendly composite indexes, and the previously-dormant `conversations` / `messages` tables now actually receive writes from the chat orchestrator (UPSERT + transactional 2-row insert per turn, keyed by a per-tab `sessionStorage` UUID generated client-side in `ChatWindow`). Persistence failures are warn-logged but never block the user-facing reply. 450/450 tests, build green. **Earlier status note (kept for context):** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **Stage 6 Slice 6.2 complete** — Stages 1–5 shipped end-to-end (BYO-key chat, PDF ingestion, RAG, multi-tenant public chat, embeddable widget). Slice 6.1 laid the Stage 6 schema + chat persistence; slice 6.2 (current) wires the ten API endpoints the dashboard will consume — analytics overview, conversation list (with `?q` search) + detail, lead list + CSV export (with RFC 5987 `filename*` + U+2028/U+2029 quoting), the anonymous CORS-public lead-capture POST (idempotent on convId+email, atomic 3-row transaction), and the four session-scoped notification endpoints (list, unread-count poll target, single-mark-read, bulk read-all). 521/521 tests, build green. Slices 6.3–6.5 (dashboard UI, in-chat lead card + bell + polling, settings page) still to ship. **Earlier status note (kept for context):** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -1148,3 +1148,101 @@ Total: 450/450 tests pass, build green.
 - No integration test that exercises the migration against a real Postgres. Drizzle's generator is deterministic but a `db:push` against a Supabase-style instance is a reasonable manual QA gate before merging.
 - The schema-wide deprecation hints on `pgTable(name, columns, extraConfig)` apply to every table in the file (pre-existing). Migration to the new `pgTable(name, columns, (table) => [...])` signature is a clean refactor opportunity but explicitly out of scope for this surgical slice.
 - Slice 6.2 (next) wires the `/analytics`, `/conversations`, `/leads`, `/notifications` API endpoints on top of this foundation.
+
+---
+
+### 2026-06-19 22:00 - Stage 6 Slice 6.2: dashboard + lead-capture + notification API endpoints
+
+**What was asked to do:** Build the ten Stage 6 read/write endpoints on top of the slice-6.1 schema. Three groups: (1) owner-gated bot endpoints powering the dashboard overview cards, conversation list/detail, and lead list/CSV-export; (2) one anonymous CORS-public endpoint for chat-UI lead capture; (3) four session-scoped notification endpoints behind the dashboard bell badge + 30s polling target. No UI in this slice (lands in 6.3 and 6.4).
+
+**Locked decisions before any code (Q1-Q9):** Q1 pagination shape is `{ items, total, page, limit }` everywhere (page-based, friendly for "page X of Y" UI, matches plan §6.4 query params). Q2 no rate limit on POST `/leads` — explicit deferral to Stage 7's Redis layer; the chat route's upstream per-bot limit is the natural gate and the lead-capture endpoint itself has a 4 KB body cap + idempotent dedupe + 24h email-only fallback window to bound noise. Q3 POST `/leads` is idempotent on `(botId, conversationId, lowercased-email)` — second submit returns `{ deduped: true }` with the existing row instead of polluting the notification feed. Q4 CSV: UTF-8 BOM, RFC 4180 quoting (`,`, `"`, `\r`, `\n`, U+2028, U+2029 → quote), CRLF line endings, ISO-8601 timestamps. Q5 conversation list supports `?q=<text>` ILIKE search on both `recruiter_email` and the first-user-message preview, in addition to pagination. Q6 leads POST is CORS-public. Q7 notification `payload` for `lead_captured` pre-denormalizes `botName` so the bell-list dropdown doesn't need a join per row. Q8 notification ownership on POST `/[id]/read` is checked in the WHERE clause (`AND user_id = session.userId`) — single statement, 0-row update → 404, never a separate SELECT. Q9 single-pass slice (not split 6.2a/b).
+
+**What I did:**
+
+_Helpers (4 new):_
+
+- `src/lib/auth/require-session.ts` — discriminated-union session check parallel to `requireBotOwner`. Returns `{ ok: true, userId, username }` or `{ ok: false, response }` so notification routes can `return result.response` on failure without exception detour.
+- `src/lib/pagination.ts` — `parsePagination(searchParams, opts?)` → `{ page, limit, offset }` or 400 response. `DEFAULT_PAGE=1`, `DEFAULT_LIMIT=20`, `MAX_LIMIT=100`. `Number.isInteger` guards prevent silent NaN propagation from `?page=1.5` or `?page=abc`.
+- `src/lib/csv.ts` — RFC 4180 escaper. `CSV_NEEDS_QUOTE` regex covers `,`, `"`, `\r`, `\n`, U+2028, U+2029 (built via `new RegExp(string)` because U+2028/U+2029 are JS source-level line terminators and would close a regex literal mid-pattern). UTF-8 BOM prefix for Excel mojibake protection, CRLF line endings, generic `toCsv<T>(rows, columns)` with per-column `cell` extractors.
+- `src/lib/leads/schemas.ts` — Zod `leadCaptureInput`: `email` is `.trim().toLowerCase()` for idempotent dedupe + `.email().max(255)`; `conversationId` optional UUID; `contextSummary` optional, capped at 1024 chars to bound row size + prevent abuse.
+
+_Owner-gated bot endpoints (5 new):_
+
+- `GET /api/bots/[botId]/analytics` — Three parallel COUNT queries (conversations totals + this-month, messages-via-join total, leads totals + this-month) instead of the plan's 4-way LEFT JOIN. The JOIN multiplies rows (one bot × many convos × many messages × many leads → cartesian explosion before SUMs); three small COUNTs hit the slice-6.1 indexes and each return one row. Returns the five integers `{ totalConversations, totalMessages, totalLeads, conversationsThisMonth, leadsThisMonth }`. "This month" is rolling 30-day window (not calendar month) per plan §6.5.
+- `GET /api/bots/[botId]/conversations?page&limit&q` — Paginated list. Each row carries `firstUserMessage` as a 200-char LEFT() of the first user-role message via a LATERAL subquery — no N+1 round-trips. `?q=<text>` does case-insensitive `ILIKE %q%` on both `recruiter_email` and the first-message preview. Both columns are scoped to `bot_id` so the filter scans a small per-bot subset covered by the slice-6.1 `conversations_bot_started_idx`.
+- `GET /api/bots/[botId]/conversations/[convId]` — Transcript viewer. `findFirst` with `AND(eq(conversations.id, convId), eq(conversations.botId, bot.id))` so a forged convId targeting another owner's conversation returns 404, not a leak. Messages embedded in chronological order (covered by slice-6.1 `messages_conv_created_idx`).
+- `GET /api/bots/[botId]/leads?page&limit` — Paginated lead list, ordered by `captured_at DESC` (covered by slice-6.1 `leads_bot_captured_idx`).
+- `GET /api/bots/[botId]/leads/export` — CSV download. 50K row hard cap (DoS protection). Columns: `captured_at, email, bot_name, context_summary, conversation_id` (per slice-6.2 Q4 lock). Filename = `leads-<sanitized-bot-name>-<YYYY-MM-DD>.csv` with both ASCII `filename="…"` and RFC 5987 `filename*=UTF-8''…` parameters so non-ASCII bot names render correctly on every browser. `Content-Disposition: attachment; Cache-Control: no-store`.
+
+_Public CORS endpoint (1 new):_
+
+- `POST /api/bots/[botId]/leads` — Anonymous + cross-origin. 12-step flow: content-type → 4 KB body cap (measured from `request.text()`, not the spoofable Content-Length) → JSON parse → Zod validate (lowercases email) → resolve bot with `isActive=true` filter → idempotent dedupe (existing row on `(botId, conversationId, email)` → return `{ deduped: true }`, or the 24h `(botId, email)` fallback when no convId) → `db.transaction` writing three rows atomically: insert lead, update `conversations.recruiter_email` if convId, insert `notifications` row with `kind='lead_captured'` and pre-denormalized `botName` in the payload. CORS handled in-handler via `jsonWithCors()` helper on every response path (no `next.config.js` change needed — the leads route is self-contained, unlike chat which relies on `next.config.js`). `OPTIONS` handler uses the shared `corsPreflight()` from slice 5. On transaction throw: `console.warn` (matches the `[chat]` / `[rag]` warn pattern) + 500 `{ error: "capture_failed" }`. Same `try/catch` rule as slice 6.1: failure logs but doesn't break the chat UI's optimistic-success animation.
+
+_Session-scoped notification endpoints (4 new):_
+
+- `GET /api/notifications?unread&page&limit` — Paginated feed. Returns `{ items, total, page, limit, unreadCount }` so the dropdown can render the badge in sync without a follow-up `/unread-count` round-trip. Optional `?unread=true` narrows to unread rows, hitting the slice-6.1 partial index `notifications_user_unread_idx`.
+- `GET /api/notifications/unread-count` — Returns `{ count }`. Hits the same partial index. Cheap polling target (dashboard bell will hit this every 30s in slice 6.4).
+- `POST /api/notifications/[id]/read` — UUID-shape check first (early 400). UPDATE with `WHERE id = ? AND user_id = session.userId` — single statement, no SELECT. 0 rows affected → 404 (handles both "doesn't exist" and "belongs to another user"; never leaks existence cross-tenant). Returns `{ id, readAt }` where `readAt` is captured once and used for both the persisted column and the response body (post-review fix — two `new Date()` calls produced microsecond skew).
+- `POST /api/notifications/read-all` — Bulk UPDATE on `user_id = session.userId AND read_at IS NULL`. Returns `{ markedRead: <row count> }` so the dashboard can pre-flip its local unread state.
+
+_Code-review pass (1 HIGH + 2 MEDIUM fixes applied):_
+
+- **HIGH: `readAt` clock skew on POST `/notifications/[id]/read`.** Original code did `new Date()` twice — once in the SET payload, once in the response JSON. The two timestamps differed by microseconds (harmless but semantically wrong: the response promised a timestamp that was never persisted). Fixed by capturing `const now = new Date()` once and using it in both places.
+- **MEDIUM: RFC 5987 `filename*` parameter on CSV export.** ASCII-only `safeFilenameSegment` correctly strips unsafe chars, but for non-ASCII bot names ("Jané Doe 日本") the resulting filename degenerated to dashes. Added the parallel `filename*=UTF-8''<percent-encoded>` parameter so every modern browser renders the original name; ASCII `filename="..."` stays as the legacy-client fallback. Test asserts both parameters are present and the percent-encoded UTF-8 (e.g. `Jan%C3%A9`) appears.
+- **MEDIUM: U+2028/U+2029 in CSV cells.** Regex extended from `[",\r\n]` to `[",\r\n  ]` because Google Sheets and older Excel parse those as row terminators in unquoted cells, which would silently split a `context_summary` across CSV rows. The regex is built via `new RegExp(string-literal)` because those code points are JS source-level line terminators that would close a `/.../` regex literal mid-pattern. Test asserts both code points trigger wrapping.
+- **HIGH not applied: rate limit on POST `/leads`.** Reviewer flagged the missing rate limit; this was the user-confirmed Q2 deferral to Stage 7 Redis. Added a doc comment to the route explaining the layered defenses that bound noise in the meantime (4 KB body cap + Zod + idempotent dedupe + 24h fallback window) and that the deferral is explicit.
+- **LOW not applied: `console.warn`.** Reviewer flagged it per a strict reading of CLAUDE.md no-`console.log`, but the project's accepted pattern (post slice-6.1 review) is exactly this — `console.warn("[<surface>] <event>", err)` for warn-and-continue paths, replaced wholesale in Stage 7 by a structured logger. Same pattern in `[chat]` and `[rag]` channels.
+- **LOW not applied: `Access-Control-Expose-Headers`.** Reviewer noted "no fix needed at this stage" — flagged only as a heads-up for future slices that might add a custom response header the widget needs to read.
+
+**Files changed:**
+
+_Helpers:_
+
+- `src/lib/auth/require-session.ts` — create — session check with discriminated union.
+- `src/lib/pagination.ts` — create — `parsePagination` + constants.
+- `src/lib/pagination.test.ts` — create — 8 specs.
+- `src/lib/csv.ts` — create — RFC 4180 escaper + `toCsv<T>`.
+- `src/lib/csv.test.ts` — create — 10 specs (incl. U+2028/U+2029 quoting + null cells).
+- `src/lib/leads/schemas.ts` — create — Zod for lead-capture POST body.
+- `src/lib/leads/schemas.test.ts` — create — 7 specs.
+
+_Endpoints:_
+
+- `src/app/api/bots/[botId]/analytics/route.ts` — create — five-metric overview.
+- `src/app/api/bots/[botId]/analytics/route.test.ts` — create — 3 specs.
+- `src/app/api/bots/[botId]/conversations/route.ts` — create — list + `?q` search.
+- `src/app/api/bots/[botId]/conversations/route.test.ts` — create — 5 specs.
+- `src/app/api/bots/[botId]/conversations/[convId]/route.ts` — create — transcript.
+- `src/app/api/bots/[botId]/conversations/[convId]/route.test.ts` — create — 4 specs.
+- `src/app/api/bots/[botId]/leads/route.ts` — create — GET (owner) + POST (CORS) + OPTIONS.
+- `src/app/api/bots/[botId]/leads/route.test.ts` — create — 14 specs.
+- `src/app/api/bots/[botId]/leads/export/route.ts` — create — CSV export with RFC 5987 filename.
+- `src/app/api/bots/[botId]/leads/export/route.test.ts` — create — 4 specs.
+- `src/app/api/notifications/route.ts` — create — list + unread filter + unread count co-rendered.
+- `src/app/api/notifications/route.test.ts` — create — 4 specs.
+- `src/app/api/notifications/unread-count/route.ts` — create — `{ count }`.
+- `src/app/api/notifications/unread-count/route.test.ts` — create — 3 specs.
+- `src/app/api/notifications/[id]/read/route.ts` — create — single-row UPDATE with ownership.
+- `src/app/api/notifications/[id]/read/route.test.ts` — create — 4 specs.
+- `src/app/api/notifications/read-all/route.ts` — create — bulk UPDATE.
+- `src/app/api/notifications/read-all/route.test.ts` — create — 3 specs.
+
+Total: 13 new source files + 11 new test files. 521/521 tests pass (450 → 521, net +71), build green.
+
+**Decisions made:**
+
+- **Three small COUNTs over one 4-way LEFT JOIN in analytics.** The plan's SQL `SELECT COUNT(DISTINCT c.id), SUM(c.message_count), COUNT(DISTINCT l.id), ... FROM bots b LEFT JOIN conversations c LEFT JOIN messages m LEFT JOIN leads l WHERE b.id = :botId` is correct but explodes cartesian rows before the SUMs/DISTINCTs aggregate them. Three separate `COUNT(*)::int` queries scoped by `bot_id` each scan a small per-bot index slice and return one row. Postgres planner has no surprises here — equivalent to writing the queries yourself in `psql`.
+- **`FIRST_USER_MESSAGE_SQL` as a shared `sql<>` constant.** Drizzle's `sql` template is a descriptor object, so spreading the same reference into both the SELECT projection (to display) and the WHERE clause (for `ILIKE %q%` filtering) is structurally fine — the ORM re-renders it per query. Tradeoff: the count query also runs the subquery, paying the cost even when the preview text is irrelevant. Acceptable at slice-6.2 scale; tech debt logged for if any single bot ever has 10K+ conversations.
+- **Idempotent dedupe over server-side rate limiting.** `(botId, conversationId, lowercased email)` is the natural dedupe key for the chat-driven path. The 24h email-only fallback bounds noise when no convId is supplied (lead capture from a misbehaving widget without sessionId). Both layers together absorb double-submits + drag-out spam without inventing a token bucket; the real rate limit lands with Stage 7's Redis layer.
+- **`bots.findFirst(isActive=true)` on lead capture.** An owner who flips a bot inactive should not still be receiving leads on it (potential GDPR / off-boarding concern). The Stage 1 chat route already has the same gate; leads inherits.
+- **CSV `new RegExp(string)` over regex literal.** U+2028 and U+2029 cannot appear in a regex literal (they close it as line terminators), but can be written via the ` ` / ` ` escape syntax inside a backtick-or-double-quoted string. Building the regex from a string sidesteps the source-level termination problem.
+- **RFC 5987 `filename*` over silent ASCII-only.** A bot named "Jané Doe" exporting leads previously got `leads-Jan-Doe-2026-06-19.csv` with the accent silently dropped. The dual-parameter form (`filename="ascii"; filename*=UTF-8''percent-encoded`) is the WHATWG-recommended shape — browsers prefer `filename*` when present, fall back to `filename` when not.
+- **Capture `readAt` once in notification-read.** The reviewer-flagged HIGH was small in absolute impact (microsecond skew) but worth fixing for semantic correctness — the API contract says "we set readAt to X and returned X"; two `new Date()` calls produce two different X's.
+- **No `next.config.js` CORS change for leads POST.** Unlike the chat route which keeps `POST` body bare and lets `next.config.js` inject CORS headers, the leads route returns through a `jsonWithCors` helper that attaches the headers on every code path. Two CORS strategies coexist in the codebase; this one is self-contained at the route file, which is preferable for endpoints that mix public + owner-gated handlers under the same path.
+
+**Open questions / follow-ups:**
+
+- The `FIRST_USER_MESSAGE_SQL` LATERAL subquery runs in both the rows query AND the count query for conversations list. The count query doesn't need the preview text. Splitting that off into two separate `sql` descriptors (one with preview for the rows query, one without for the count) would let the count avoid the join entirely. Acceptable now; revisit when any bot reaches 10K+ conversations and the dashboard list page starts feeling slow.
+- The 4 KB body cap on POST `/leads` is conservative — the largest legitimate payload is `email` (255) + `conversationId` (36) + `contextSummary` (1024) plus JSON overhead, well under 2 KB. Raise the cap if Stage 6.4 ever needs to send a richer payload.
+- Notification `payload` is `jsonb` with a permissive `Record<string, unknown>` TS type. A future slice could narrow this with a discriminated union keyed on `kind` for stronger type guarantees on the dashboard side. Not blocking; today there's only one `kind`.
+- Slice 6.3 (next) wires the dashboard UI pages on top of these endpoints: overview cards, conversation list/detail, lead list, CSV download. Slice 6.4 adds the in-chat lead-capture card + the bell + 30s polling. Slice 6.5 adds the settings page (editable name/headline/personality/suggested questions + knowledge management UI).
