@@ -1,8 +1,11 @@
 import { eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+import { sendEmailVerificationEmail } from "@/lib/auth/email";
+import { createVerificationToken } from "@/lib/auth/email-verification";
 import { hashPassword } from "@/lib/auth/passwords";
 import { registerInput } from "@/lib/auth/schemas";
+import { buildTokenUrl } from "@/lib/auth/tokens";
 import { pickDefaultAvatar } from "@/lib/avatars";
 import { db, users } from "@/lib/db";
 
@@ -50,11 +53,8 @@ export async function POST(request: Request) {
 
   const hashedPassword = await hashPassword(password);
 
+  let createdUserId: string;
   try {
-    // Stage 4: every new account gets a deterministic animal-icon avatar so
-    // the public chat page (and dashboard hero) always render a face. The
-    // user can change it in the onboarding flow (Stage 4) or in Stage 7
-    // settings.
     const image = pickDefaultAvatar(username);
     const [created] = await db
       .insert(users)
@@ -64,8 +64,10 @@ export async function POST(request: Request) {
         username: users.username,
         email: users.email,
       });
-
-    return NextResponse.json({ user: created }, { status: 201 });
+    if (!created) {
+      throw new Error("Insert returned no row");
+    }
+    createdUserId = created.id;
   } catch (err) {
     if (isUniqueViolation(err)) {
       return NextResponse.json(
@@ -75,4 +77,30 @@ export async function POST(request: Request) {
     }
     throw err;
   }
+
+  // Stage 7 §FR-001.5: send the verification email immediately. The user
+  // cannot log in via credentials until they click the link (gated in
+  // auth.ts authorize()). We don't roll back the user row if Resend fails -
+  // the user can resend from the verify-request page.
+  const { rawToken } = await createVerificationToken(createdUserId);
+  const url = buildTokenUrl({ path: "/auth/verify-email", token: rawToken });
+  try {
+    await sendEmailVerificationEmail({ to: email, url });
+  } catch {
+    return NextResponse.json(
+      {
+        user: { id: createdUserId, username, email },
+        verificationEmailSent: false,
+      },
+      { status: 201 },
+    );
+  }
+
+  return NextResponse.json(
+    {
+      user: { id: createdUserId, username, email },
+      verificationEmailSent: true,
+    },
+    { status: 201 },
+  );
 }

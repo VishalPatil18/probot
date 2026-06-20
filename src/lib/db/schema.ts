@@ -139,6 +139,65 @@ export const verificationTokens = pgTable(
   }),
 ).enableRLS();
 
+// password_reset_tokens (Stage 7 §FR-001.6)
+// One row per outstanding reset request. `token_hash` stores SHA-256 of the
+// raw token we email; the raw token never touches the DB so a leaked dump
+// cannot be used to take over accounts. TTL = 1 hour. `used_at` makes tokens
+// strictly single-use - a second POST with the same token is rejected.
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      mode: "date",
+      withTimezone: false,
+    }).notNull(),
+    usedAt: timestamp("used_at", { mode: "date", withTimezone: false }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    tokenHashUnique: uniqueIndex("password_reset_tokens_token_hash_unique").on(
+      table.tokenHash,
+    ),
+    userIdIdx: index("password_reset_tokens_user_id_idx").on(table.userId),
+  }),
+).enableRLS();
+
+// email_verification_tokens (Stage 7 §FR-001.5)
+// Sent to credentials-registered users at signup time. Magic-link signups
+// don't use this table - NextAuth's `verification_tokens` covers them and
+// sets `email_verified` on click. TTL = 24 hours. Verifying the email
+// deletes the row (no `used_at` column needed - presence implies pending).
+export const emailVerificationTokens = pgTable(
+  "email_verification_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      mode: "date",
+      withTimezone: false,
+    }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    tokenHashUnique: uniqueIndex(
+      "email_verification_tokens_token_hash_unique",
+    ).on(table.tokenHash),
+    userIdIdx: index("email_verification_tokens_user_id_idx").on(table.userId),
+  }),
+).enableRLS();
+
 // knowledge_base
 // One row per chunk. A bot's `context_text` is reassembled by concatenating
 // all chunks for the bot ordered by (source_name, chunk_index) and truncated
@@ -336,6 +395,12 @@ export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 export type VerificationToken = typeof verificationTokens.$inferSelect;
 export type NewVerificationToken = typeof verificationTokens.$inferInsert;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+export type EmailVerificationToken =
+  typeof emailVerificationTokens.$inferSelect;
+export type NewEmailVerificationToken =
+  typeof emailVerificationTokens.$inferInsert;
 export type KnowledgeChunk = typeof knowledgeBase.$inferSelect;
 export type NewKnowledgeChunk = typeof knowledgeBase.$inferInsert;
 export type Conversation = typeof conversations.$inferSelect;

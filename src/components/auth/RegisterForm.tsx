@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { useState } from "react";
 
 import { OAuthRow } from "./OAuthRow";
@@ -13,6 +11,11 @@ type RegisterErrorPayload = {
     fieldErrors?: Record<string, string[] | undefined>;
     formErrors?: string[];
   };
+};
+
+type RegisterSuccessPayload = {
+  user: { id: string; username: string; email: string };
+  verificationEmailSent: boolean;
 };
 
 function firstError(payload: RegisterErrorPayload): string {
@@ -33,12 +36,14 @@ function firstError(payload: RegisterErrorPayload): string {
 }
 
 export function RegisterForm() {
-  const router = useRouter();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState<RegisterSuccessPayload | null>(
+    null,
+  );
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,21 +72,20 @@ export function RegisterForm() {
       return;
     }
 
-    // Auto sign-in with the same credentials so the user lands in /dashboard
-    // without typing their password twice.
-    const signInResult = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    const payload = (await response
+      .json()
+      .catch(() => null)) as RegisterSuccessPayload | null;
     setLoading(false);
-    if (!signInResult || signInResult.error) {
-      setError("Account created - please log in.");
-      router.push("/login");
-      return;
-    }
-    router.push("/dashboard");
-    router.refresh();
+    setSubmitted(
+      payload ?? {
+        user: { id: "", username, email },
+        verificationEmailSent: true,
+      },
+    );
+  }
+
+  if (submitted) {
+    return <VerificationPendingPanel email={submitted.user.email} />;
   }
 
   return (
@@ -187,6 +191,50 @@ export function RegisterForm() {
         </Link>
       </p>
     </>
+  );
+}
+
+function VerificationPendingPanel({ email }: { email: string }) {
+  return (
+    <div className="text-center">
+      <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-brand/10">
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-brand"
+          aria-hidden="true"
+        >
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <polyline points="3 7 12 13 21 7" />
+        </svg>
+      </div>
+      <h1 className="font-display text-2xl font-extrabold tracking-tight mb-2">
+        Check your email
+      </h1>
+      <p className="text-muted text-sm mb-2 max-w-sm mx-auto">
+        We sent a verification link to{" "}
+        <span className="font-semibold text-base">{email}</span>.
+      </p>
+      <p className="text-muted text-sm mb-8 max-w-sm mx-auto">
+        Click the link to verify your account, then sign in.
+      </p>
+      <Link
+        href="/login"
+        className="btn btn-primary !py-3 inline-flex items-center gap-2"
+      >
+        Back to sign in
+      </Link>
+      <p className="text-xs text-muted mt-6 max-w-sm mx-auto">
+        Didn&apos;t get the email? Check your spam folder. The link expires in
+        24 hours.
+      </p>
+    </div>
   );
 }
 

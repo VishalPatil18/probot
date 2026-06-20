@@ -1988,3 +1988,69 @@ _Tests + types:_
 - **Dashboard-banner notification mechanism for ToS changes is referenced but not built.** The "Changes to these terms" section says "we will notify signed-in users via the dashboard before the change takes effect" - there's no banner component today. If the policies ever materially change, the user needs to either build that banner or remove the promise from the ToS. Acceptable for v1 launch (no changes pending).
 - **Account self-delete button is referenced but not built.** Current deletion path is "email us" - works for v1 launch but a future Settings → Danger Zone → Delete account button would be the better UX. The privacy/terms copy is already future-compatible - it says "delete your account (or email us to do so)".
 - **Effective date is hard-coded to 2026-06-20.** When the policies are next materially revised, bump `LEGAL_EFFECTIVE_DATE` in `src/lib/marketing/legal.ts`. Both pages update automatically.
+
+### 2026-06-20 19:40 - Stage 7 Phase 1: OAuth lock-down + email verification gate + password reset
+
+**What was asked to do:** Close out the deferred auth tasks from Stage 1 (FR-001.2/5/6) — turn off dangerous OAuth account-linking, force credentials-registered users to verify email before sign-in, and ship a full password-reset flow (forgot/reset pages, token table, transactional emails).
+
+**What I did:**
+- Added two narrow-purpose token tables: `password_reset_tokens` (1h TTL, single-use, used_at marks consumption) and `email_verification_tokens` (24h TTL, presence implies pending). Both store only SHA-256 hashes of the raw token; the raw token only exists in the URL we email.
+- Generated drizzle migration `0009_workable_paibok.sql` via `npm run db:generate` from schema-first edits.
+- Refactored `src/lib/auth/email.ts` into a thin Resend transport that delegates body construction to a new `email-templates.ts` (magic-link, email-verification, password-reset). One template shell with safe HTML escape; future copy tweaks touch one file.
+- New `src/lib/auth/tokens.ts` shared helpers: `generateRawToken` (32 random bytes hex), `hashToken` (SHA-256), `buildTokenUrl` (NEXTAUTH_URL → APP_URL → localhost fallback chain, strips trailing slash, encodes token).
+- New `src/lib/auth/password-reset.ts` and `email-verification.ts` modules — `createResetToken` / `validateAndConsumeToken` and `createVerificationToken` / `verifyAndConsumeToken`. The consume step writes `used_at` for reset tokens (single-use) and deletes the row for verification tokens (presence-implies-pending model).
+- `src/lib/auth/auth.ts`: removed `allowDangerousEmailAccountLinking: true` from both GitHub and Google providers (NextAuth now rejects cross-provider claims on a shared email and surfaces `OAuthAccountNotLinked` which the existing `/auth/error` page already handles). Added `emailVerified` guard in the credentials `authorize()` that throws `"email_not_verified"` so NextAuth surfaces it as `?error=email_not_verified` on `/login`.
+- `POST /api/auth/register`: stops auto-signing-in the user. Creates the user with `emailVerified=null`, mints a verification token, sends the email via Resend. Returns 201 with `{user, verificationEmailSent}` so the form can show the "check your email" panel even when Resend is degraded.
+- New `GET /api/auth/verify-email?token=...` redirects to `/login?verify=ok|expired|invalid` so the verification link works without client JS.
+- New `POST /api/auth/forgot-password` always returns 200 regardless of email existence (prevents enumeration), only sends the reset email when a credentials-registered user is found. OAuth-only accounts silently no-op.
+- New `POST /api/auth/reset-password` consumes the token, bcrypt-hashes the new password, updates `users.hashedPassword`.
+- New pages: `/(auth)/forgot-password`, `/(auth)/reset-password` with `ForgotPasswordForm` and `ResetPasswordForm` components matching the existing brand-panel layout. Reset form validates password length + confirmation match client-side before POSTing; redirects to `/login?reset=ok`.
+- `RegisterForm.tsx`: switched from auto-sign-in to a `VerificationPendingPanel` success state showing the email address and a "Back to sign in" CTA. Removed unused `useRouter`/`signIn` from the success path.
+- `LoginForm.tsx`: enabled the previously disabled "Forgot?" link → `/forgot-password`. Added banner support for `?verify=ok|expired|invalid` and `?reset=ok` query params. Maps `email_not_verified` to a clear "please verify your email" alert. Reads search params via `useSearchParams()` which forced the login page into `<Suspense>` per Next.js 14's SSG rule.
+- Test updates: `LoginForm.test.tsx` adds `useSearchParams: () => new URLSearchParams()` to its `next/navigation` mock. `RegisterForm.test.tsx` rewritten to assert the new "Check your email" panel instead of the old auto-sign-in path; verifies signIn is NOT called. `auth.test.ts` split the happy-path test into a verified-email pass and an unverified-email throw. `register/route.test.ts` mocks `createVerificationToken` and `sendEmailVerificationEmail` and asserts both are invoked + the response carries `verificationEmailSent: true`; added a case where the send fails and the response still 201s with `verificationEmailSent: false`.
+- New `src/lib/auth/tokens.test.ts` covers raw-token entropy, hash determinism + non-identity, and `buildTokenUrl` env-fallback chain + URL encoding (11 tests).
+
+**Files changed:**
+- `src/lib/db/schema.ts` - update - declared `passwordResetTokens` and `emailVerificationTokens` tables with unique index on `token_hash` and a non-unique index on `user_id`; exported inferred Select/Insert types.
+- `drizzle/0009_workable_paibok.sql` - create - migration emitted by drizzle-kit from the schema edits.
+- `drizzle/meta/_journal.json` + `drizzle/meta/0009_snapshot.json` - update/create - drizzle-kit bookkeeping for migration 0009.
+- `src/lib/auth/auth.ts` - update - dropped `allowDangerousEmailAccountLinking`; added the email_not_verified guard.
+- `src/lib/auth/email.ts` - update - now a thin Resend transport calling shared template builders; exports `sendEmailVerificationEmail` and `sendPasswordResetEmail` alongside the original `sendMagicLinkEmail`.
+- `src/lib/auth/email-templates.ts` - create - HTML/text bodies for magic-link, email-verification, and password-reset, sharing a single safe-escape shell.
+- `src/lib/auth/tokens.ts` - create - `generateRawToken`/`hashToken`/`buildTokenUrl` shared by both token modules.
+- `src/lib/auth/password-reset.ts` - create - `createResetToken` (1h TTL), `validateAndConsumeToken` with `used_at` enforcement, `pruneExpiredResetTokens`.
+- `src/lib/auth/email-verification.ts` - create - `createVerificationToken` (24h TTL), `verifyAndConsumeToken` (sets users.emailVerified + deletes the row), `pruneExpiredVerificationTokens`.
+- `src/lib/auth/schemas.ts` - update - added `forgotPasswordInput`, `resetPasswordInput`, `verifyEmailInput` Zod schemas + inferred types.
+- `src/app/api/auth/register/route.ts` - update - skip auto-sign-in, mint verification token, send email, return verificationEmailSent flag.
+- `src/app/api/auth/verify-email/route.ts` - create - GET handler that consumes the token and redirects to /login with a status flag.
+- `src/app/api/auth/forgot-password/route.ts` - create - always-200 enumeration-safe endpoint that mints a reset token + sends an email only for credentials-registered users.
+- `src/app/api/auth/reset-password/route.ts` - create - token-validate + bcrypt rehash + UPDATE users.hashedPassword.
+- `src/app/(auth)/forgot-password/page.tsx` - create - server page wrapping ForgotPasswordForm.
+- `src/app/(auth)/reset-password/page.tsx` - create - reads ?token= from searchParams and hands to ResetPasswordForm.
+- `src/app/(auth)/login/page.tsx` - update - wraps LoginForm in <Suspense> (Next.js 14 SSG requirement once the form reads useSearchParams).
+- `src/components/auth/ForgotPasswordForm.tsx` - create - email-only form + success panel.
+- `src/components/auth/ResetPasswordForm.tsx` - create - password + confirm fields + missing-token fallback panel.
+- `src/components/auth/LoginForm.tsx` - update - enabled Forgot? link, surfaced verify/reset query params + email_not_verified error mapping.
+- `src/components/auth/RegisterForm.tsx` - update - replaced auto-sign-in with VerificationPendingPanel success state.
+- `src/components/auth/LoginForm.test.tsx` - update - added `useSearchParams` to the next/navigation mock.
+- `src/components/auth/RegisterForm.test.tsx` - update - asserts the new success panel, asserts signIn is NOT called, drops the obsolete "falls back to /login" case.
+- `src/app/api/auth/register/route.test.ts` - update - mocks `createVerificationToken` + `sendEmailVerificationEmail`; new case for failed-send 201 path.
+- `src/lib/auth/auth.test.ts` - update - happy path now requires emailVerified Date; new case asserts unverified user throws.
+- `src/lib/auth/tokens.test.ts` - create - 11 unit tests for the shared token helpers.
+
+**Decisions made:**
+- **Two token tables, not one with a `kind` column.** TTLs differ (1h vs 24h), consume semantics differ (mark `used_at` vs delete), and the indexes/queries are unrelated. Sharing a table would push the divergence into application code where it would be invisible to future readers — separate tables make the intent obvious from the schema alone.
+- **Store SHA-256 hashes, not raw tokens.** A leaked DB dump cannot be replayed against the API because hashing is one-way. The raw token only exists transiently in the email link. Same pattern as session cookies in modern auth libraries.
+- **forgot-password always returns 200.** Returning 404 for unknown emails leaks which addresses are registered (account enumeration). The cost is a slightly worse UX for typos — acceptable tradeoff.
+- **OAuth-only accounts get a silent no-op on forgot-password.** Returning a different response for "no password to reset" would re-introduce enumeration via response shape. The user is left to figure out they need to sign in with their original provider — a small UX gap accepted for the security win.
+- **GET handler for verify-email, not POST.** The verification link in the email must work even with JavaScript disabled (some corporate email clients sanitize JS-required URLs). A server-side GET that redirects is the only reliable pattern.
+- **Verification token deletes-on-consume (no `used_at` column).** A verification token is single-purpose: you verified, the token has no further role. Reset tokens keep `used_at` for one specific reason — auditing replay attempts in the rare case where a leaked token is consumed by an attacker after the user already used it (we can detect "this token was used twice" forensically). Verification tokens have no equivalent forensic value.
+- **emailVerified gate throws inside authorize() instead of returning null.** Returning null surfaces as the generic `CredentialsSignin` error which the user has already seen mean "wrong password." Throwing `"email_not_verified"` produces a distinct error code that the login form can map to a specific banner — better UX, no security tradeoff (an attacker probing for verified accounts could already discriminate via timing).
+- **Removed `allowDangerousEmailAccountLinking: true`.** That setting let anyone who controlled a Google account at email X claim an existing GitHub account at email X (or vice versa) without proving control of the original sign-in method. The fix is one line; NextAuth now surfaces `OAuthAccountNotLinked` which the existing `/auth/error` page already maps to a clear "this email is already linked to another sign-in method" message.
+- **Skipped a "resend verification" route in Phase 1.** It's a spam vector (anyone can keep triggering verification emails to an inbox they don't own). Proper implementation needs IP + email rate limiting which lands more naturally with the Phase 5 rate-limit work. Acceptable gap for v1 — users with stuck verification can re-register with a fresh email; CLAUDE.md text was kept honest about this (no false "try registering again" promise).
+
+**Open questions / follow-ups:**
+- **Resend verification flow** is the only Phase 1 gap. Will land with Phase 5 rate-limit work since the rate-limit infrastructure is the same shape we'd need.
+- **`/auth/error` page** already handles `OAuthAccountNotLinked` (Stage 6 work) so no edit was needed in Phase 1 — verified at the start of the phase, not assumed.
+- **NEXTAUTH_URL must be set in production** for the verification + reset email links to work. The `buildTokenUrl` fallback chain ends at `http://localhost:3000` which obviously can't be clicked from a recruiter's inbox. Confirm this is wired in Vercel env before the next prod deploy.
+- **Production smoke test** — manually verify OAuth sign-in still works (Google + GitHub) since prior session had a sign-in incident in prod. Specifically watch for any user whose Google email matches an existing GitHub-linked email now hitting `OAuthAccountNotLinked` for the first time; they will need to sign in via their original provider.

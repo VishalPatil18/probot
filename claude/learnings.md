@@ -1143,3 +1143,96 @@ The alternative - repeating `<SiteHeader />` and `<SiteFooter />` in every page 
 The landing page (`src/app/page.tsx`) is intentionally OUTSIDE the (marketing) group because its layout was already inlined and rewriting it to use the group's layout would mean either (a) moving page.tsx into the group (and breaking the `/` URL - would resolve to `/(marketing)` which Next does collapse to `/`, but only one route can own `/`) or (b) accepting a small diff and just importing the shared components directly. Option (b) was the surgical choice here.
 
 ---
+
+### Hashing One-Shot Auth Tokens Even Though They're Already Random (Stage 7 Phase 1)
+
+> Why store SHA-256 of a password-reset token in the database instead of the raw token? The token is already 32 random bytes — what attack does hashing prevent?
+
+The token is high-entropy, yes, but the threat model isn't "guess the token." The threat is **database leak / SQL injection / backup theft**. If you store raw tokens and an attacker reads the `password_reset_tokens` table, they can immediately replay every unexpired token against your API — effectively a password-reset bypass for every active reset request. Storing only `sha256(token)` makes the dump useless: the API computes `sha256(suppliedToken)` and looks it up; an attacker with hashes alone has no way to invert the hash back to a token the API will accept.
+
+The same logic applies to email-verification tokens, magic-link tokens, session cookies, API keys, OAuth refresh tokens — basically any "bearer" credential. The pattern is: **the system that issues the credential keeps the secret in memory just long enough to hand it to the user; the system that validates the credential stores only the hash.** Concretely:
+
+- `createResetToken()`: `raw = randomBytes(32).toString("hex")` → `tokenHash = sha256(raw)` → INSERT `{ tokenHash }` → return `raw` to the caller. The caller embeds `raw` in the email link.
+- `validateAndConsumeToken(raw)`: SELECT WHERE `tokenHash = sha256(raw)` → check expiry + `usedAt` → UPDATE `usedAt = now`.
+
+The raw token only exists in memory and in the email body. The DB only ever sees the hash.
+
+Why specifically SHA-256 and not bcrypt? Bcrypt's slow-by-design is what you want for passwords because attackers brute-force them. Random 32-byte tokens are infeasible to brute-force in the first place (2^256 keyspace), so the slowdown buys nothing. SHA-256 is fast enough to validate on every request without budget impact, while still being one-way. Use bcrypt for passwords (cracking matters), SHA-256 for random tokens (replay matters).
+
+The cost of this pattern is tiny — one extra `crypto.createHash("sha256")` per token operation, well under 1ms. The benefit is that a stolen DB dump is operationally useless against the auth flow, which is a load-bearing security guarantee.
+
+### `used_at` vs Delete-On-Consume: When To Audit-Trail A Consumed Token (Stage 7 Phase 1)
+
+> The verification-token table doesn't have a `used_at` column — it just deletes the row on consume. The reset-token table sets `used_at` instead. Why the inconsistency?
+
+It's not inconsistency, it's intent. Both designs make the token single-use; they differ in what they preserve for after-the-fact analysis.
+
+- **Verification tokens**: a successful verify means "yes, you control this inbox." The token has no further role. Keeping a `used_at` row buys nothing — you already know the user is verified because `users.email_verified` is now set. The clean delete keeps the table small and the indexes lean.
+- **Reset tokens**: keeping the row with `used_at` set lets you forensically detect "this token was consumed twice" if a leaked token is ever attempted by an attacker after the user already used it. The first consume sets `used_at`; the second consume queries the same row, sees `used_at IS NOT NULL`, returns "already used." You can then audit those "already used" failures in the logs to detect attempted replay attacks. The signal is small but real.
+
+The general principle: **a consumed credential should be deleted unless its post-consume state has forensic value.** Auth tokens that are part of a single user-state transition (verification, signup confirmation) lose their value the moment they're consumed. Auth tokens that protect a more-sensitive action (password reset, key rotation, account deletion) deserve the audit trail.
+
+A related pattern: rate-limit tables typically retain consumed entries until expiry for exactly this reason — being able to see "this IP made 50 attempts in the last hour" is the entire point. Token tables where the act of consuming completes the transaction (verification) gain nothing from retention. Token tables where consuming might be the start of a sensitive transaction (reset) gain forensic insight from retention.
+
+### Enumeration-Safe Forgot-Password (Stage 7 Phase 1)
+
+> The forgot-password endpoint returns 200 even when the email doesn't exist. Why not return 404 for unknown emails — wouldn't that be more honest?
+
+It would be more honest in a vacuum, but it would also create an **account-enumeration oracle**. An attacker who wants to know "is this person registered on ProBot?" sends `POST /api/auth/forgot-password { email }` and reads the response code. A 404 means "no, this email isn't registered"; a 200 means "yes, it is." Now the attacker has a confirmed list of registered emails to target with phishing, credential-stuffing, or social engineering ("hey, since you have a ProBot account...").
+
+The mitigation is "always answer 200, regardless of state." The reset email only goes out if the email exists; the response is indistinguishable either way. The UX cost is small — a user who typos their email won't get a "this isn't registered" error, they'll just never receive the email. That's worth it for the security gain.
+
+A subtler version of the same trap: returning a different response for "no password to reset" (OAuth-only accounts) vs "no such email" leaks _which authentication method_ a given email uses. Same fix: silently no-op for OAuth-only accounts, return 200, send no email. The attacker can't distinguish the two cases from outside.
+
+A third version of this trap is timing-based. If the "send email" path takes 200ms and the "do nothing" path takes 2ms, the attacker can time the response to infer state. Mitigation depends on the threat model: for low-traffic apps, accept the timing leak; for high-stakes apps, add a `setTimeout` floor or run the work in a `setImmediate` so the response is detached from the work. ProBot is in the "low-traffic, accept the leak" tier — the timing difference is dominated by network jitter at our scale.
+
+The pattern generalizes: **anywhere your API's response shape differentiates between "this resource exists" and "this resource doesn't," you have an enumeration oracle.** Login forms have the same problem ("wrong password" vs "no such email" — both should map to one error). Password-reset is the highest-leverage place to apply this discipline because the cost of fixing it is one early-return rewrite and the cost of NOT fixing it is a confirmed-user-list that lives forever in attacker hands.
+
+### `useSearchParams` Forces `<Suspense>` In Next.js 14 (Stage 7 Phase 1)
+
+> The build broke with "useSearchParams() should be wrapped in a suspense boundary at page /login." The component compiled fine in dev mode but failed during static export. Why?
+
+Next.js 14 statically pre-renders pages at build time unless they explicitly opt into dynamic rendering. The pre-render happens without query parameters because, well, there are no query parameters at build time. If a client component calls `useSearchParams()` during the initial render, Next.js doesn't know whether to (a) pre-render assuming empty params, or (b) bail out of pre-rendering entirely.
+
+The contract Next.js settled on: **if you read `useSearchParams()`, you must wrap the component in `<Suspense>`.** The suspense boundary is the contract that says "I understand this subtree's render depends on client-side data; show the fallback during pre-render, hydrate the real content on the client." Without the boundary, Next assumes you wanted to pre-render and forces you to surface the dependency explicitly.
+
+The fix is mechanical:
+
+```tsx
+import { Suspense } from "react";
+import { LoginForm } from "@/components/auth/LoginForm";
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFormFallback />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+```
+
+The fallback should be a static, no-params version of the form's chrome — ideally rendering the same headings and skeleton so the visual layout doesn't shift on hydration. This is also a useful exercise in separating "the chrome that doesn't depend on URL state" from "the interactive form that does," which is good componentization regardless of Next's rules.
+
+The dev-mode-vs-build-mode discrepancy is the trap. In `next dev`, every render is server-rendered on demand, so the search-params read works fine. The error only surfaces during static generation, which doesn't happen until `next build`. Always run a real build before assuming a feature is shippable — `tsc --noEmit` and unit tests both pass for this kind of issue.
+
+The same pattern bites with `cookies()`, `headers()`, `useParams()` in certain configurations, and any other hook that reads request-time state. The fix is always the same: a `<Suspense>` boundary that establishes a contract about the dependency.
+
+### `allowDangerousEmailAccountLinking: true` Is A Cross-Provider Takeover Vector (Stage 7 Phase 1)
+
+> NextAuth's `allowDangerousEmailAccountLinking: true` flag has "dangerous" in the name but the docs make it sound like a quality-of-life feature. What's actually dangerous about it?
+
+NextAuth's default behavior is: if someone signs in with Google and the email matches an existing account that was created via GitHub, NextAuth **refuses to link them automatically** and surfaces an `OAuthAccountNotLinked` error. The reason is account-takeover prevention.
+
+Imagine I register on ProBot via GitHub with the email `jane@example.com`. Six months later, Jane (who controls the actual `jane@example.com` Google account) discovers the app, clicks "Sign in with Google," and Google sends a successful auth back to ProBot for `jane@example.com`. If `allowDangerousEmailAccountLinking: true`, NextAuth says "an account with this email already exists, let me link the Google account to it" — and Jane is now signed in as me. She has full access to my bots, my conversations, my leads. She didn't need my GitHub password, my session cookie, or anything else. She just needed to own the email.
+
+The default behavior (the safe one) prevents this: Jane gets the `OAuthAccountNotLinked` error and is told to sign in with the original method first. She can then add Google as a second auth method from her settings, having proven control of the original method first.
+
+The "dangerous" prefix is doing real work. The flag is sometimes useful for apps where:
+- All accounts trace back to a verified-email source (e.g., the only sign-up path is email-verification, so by definition only one person controls each email), AND
+- The convenience of "any provider with the matching email signs you in" outweighs the takeover risk.
+
+ProBot doesn't qualify on either count. The fix is one line: remove the flag. NextAuth's existing `/auth/error` page already handles the `OAuthAccountNotLinked` error code; the message reads "this email is already linked to another sign-in method, sign in with that method first." Clear, no UX gap, no security gap.
+
+The general lesson: **flags named "dangerous_X" or "force_X" or "unsafe_X" in mainstream auth libraries are not pejorative — they're warnings that the library author already considered and rejected the default they're letting you re-enable.** Read the linked docs before flipping any such flag; the docs usually describe the exact attack the default prevents.
+
+---

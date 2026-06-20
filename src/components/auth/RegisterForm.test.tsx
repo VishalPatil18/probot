@@ -60,7 +60,7 @@ describe("RegisterForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("POSTs to /api/auth/register and auto-signs-in on 201", async () => {
+  it("shows the check-your-email panel on 201 and does NOT auto-sign-in", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(201, {
         user: {
@@ -68,9 +68,9 @@ describe("RegisterForm", () => {
           username: "jane-doe",
           email: "jane@example.com",
         },
+        verificationEmailSent: true,
       }),
     );
-    signInMock.mockResolvedValueOnce({ ok: true, error: null });
 
     const user = userEvent.setup();
     render(<RegisterForm />);
@@ -93,12 +93,12 @@ describe("RegisterForm", () => {
         }),
       }),
     );
-    expect(signInMock).toHaveBeenCalledWith("credentials", {
-      email: "jane@example.com",
-      password: "hunter2hunter",
-      redirect: false,
-    });
-    expect(pushMock).toHaveBeenCalledWith("/dashboard");
+    expect(
+      await screen.findByRole("heading", { name: /check your email/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("jane@example.com")).toBeInTheDocument();
+    expect(signInMock).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
   it("shows the server message on 409 (duplicate)", async () => {
@@ -150,30 +150,6 @@ describe("RegisterForm", () => {
       /at least 8 characters/i,
     );
     expect(signInMock).not.toHaveBeenCalled();
-  });
-
-  it("falls back to /login if auto-signin fails after a successful registration", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(201, {
-        user: {
-          id: "new-id",
-          username: "jane-doe",
-          email: "jane@example.com",
-        },
-      }),
-    );
-    signInMock.mockResolvedValueOnce({ ok: false, error: "boom" });
-
-    const user = userEvent.setup();
-    render(<RegisterForm />);
-
-    await fillAndSubmit(user, {
-      username: "jane-doe",
-      email: "jane@example.com",
-      password: "hunter2hunter",
-    });
-
-    expect(pushMock).toHaveBeenCalledWith("/login");
   });
 
   it("shows a network-error message when fetch rejects", async () => {
