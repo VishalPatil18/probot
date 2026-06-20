@@ -1,9 +1,19 @@
+import { desc, eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { NotificationBell } from "@/components/dashboard/NotificationBell";
+import {
+  MobileSidebarPanel,
+  MobileSidebarProvider,
+} from "@/components/dashboard/MobileSidebar";
+import { Sidebar } from "@/components/dashboard/Sidebar";
+import { Topbar } from "@/components/dashboard/Topbar";
+import { getAnalyticsForUser } from "@/lib/analytics/queries";
 import { authOptions } from "@/lib/auth/auth";
+import { bots, db, users } from "@/lib/db";
+import { resolveSelectedBotId } from "@/lib/server/selected-bot";
+import { getOrigin } from "@/lib/server/origin";
 import { isPlaceholderUsername } from "@/lib/users/placeholder";
 
 interface DashboardLayoutProps {
@@ -16,9 +26,11 @@ interface DashboardLayoutProps {
 // dashboard page renders so public chat URLs (/u/<username>/chat) never
 // expose the throwaway slug.
 //
-// Auth check also lives here so individual dashboard pages don't have to
-// duplicate it. Unauthenticated users go to /login with a `next` param so
-// they return here after sign-in.
+// Slice A redesign: the layout now wraps every dashboard page in the
+// sidebar + topbar shell that mirrors design/dashboard.html. The
+// selected bot id rides a per-browser cookie so the URL pill, embed
+// snippet, and "View live bot" surfaces stay consistent as the user
+// navigates between pages.
 export default async function DashboardLayout({
   children,
 }: DashboardLayoutProps) {
@@ -30,23 +42,82 @@ export default async function DashboardLayout({
     redirect("/onboarding");
   }
 
+  const userId = session.user.id;
+  const username = session.user.username;
+
+  const [ownedBots, analytics, userRow] = await Promise.all([
+    db
+      .select({ id: bots.id, name: bots.name, updatedAt: bots.updatedAt })
+      .from(bots)
+      .where(eq(bots.userId, userId))
+      .orderBy(desc(bots.updatedAt)),
+    getAnalyticsForUser(userId),
+    db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { llmProvider: true, llmModel: true },
+    }),
+  ]);
+
+  const botList = ownedBots.map((b) => ({ id: b.id, name: b.name }));
+  const fallbackId = botList[0]?.id ?? null;
+  const selectedBotId = resolveSelectedBotId(
+    botList.map((b) => b.id),
+    fallbackId,
+  );
+  const selectedBot = botList.find((b) => b.id === selectedBotId) ?? null;
+  const selectedBotName = selectedBot?.name ?? username;
+
+  const origin = getOrigin();
+  const publicUrl = `${origin}/u/${username}/chat`;
+
+  const userName = session.user.name ?? username;
+  const userEmail = session.user.email ?? "";
+  const initials = computeInitials(userName);
+
+  const sidebarProps = {
+    bots: botList,
+    selectedBotId,
+    selectedBotName,
+    publicUrl,
+    counts: {
+      conversations: analytics.totalConversations,
+      leads: analytics.totalLeads,
+    },
+    user: { name: userName, email: userEmail, initials },
+    llmProvider: userRow?.llmProvider ?? null,
+    llmModel: userRow?.llmModel ?? null,
+  };
+
   return (
-    <div className="min-h-screen">
-      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-3">
-        <span className="text-sm font-semibold">ProBot</span>
-        <div className="flex items-center gap-2">
-          <NotificationBell />
-          <a
-            href="https://docs.probot.dev"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-blue-600 hover:underline"
-          >
-            Docs
-          </a>
+    <MobileSidebarProvider>
+      <div className="flex min-h-screen bg-bg-app text-ink">
+        <aside className="fixed hidden h-screen w-64 shrink-0 border-r border-border-base bg-white lg:flex lg:flex-col">
+          <Sidebar {...sidebarProps} />
+        </aside>
+
+        <div className="flex-1 lg:ml-64">
+          <Topbar
+            publicUrl={selectedBotId ? publicUrl : null}
+            liveBotUrl={selectedBotId ? publicUrl : null}
+          />
+          <main>{children}</main>
         </div>
-      </header>
-      <main>{children}</main>
-    </div>
+
+        <MobileSidebarPanel>
+          <Sidebar {...sidebarProps} />
+        </MobileSidebarPanel>
+      </div>
+    </MobileSidebarProvider>
+  );
+}
+
+function computeInitials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? "")
+      .join("") || "U"
   );
 }

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 
-import { conversations, db, messages } from "@/lib/db";
+import { bots, conversations, db, messages } from "@/lib/db";
 
 // Stage 6 shared conversation queries. Called by both the slice-6.2 API
 // routes and the slice-6.3 RSC dashboard pages.
@@ -144,4 +144,40 @@ export async function getConversationWithMessages(args: {
     lastMessageAt: convo.lastMessageAt,
     messages: rows,
   };
+}
+
+// Cross-bot conversation feed for the dashboard home (Slice A redesign).
+// Includes a first-user-message preview just like `listConversations`,
+// plus the bot id/name so the dashboard can label each row with which
+// bot the conversation belongs to.
+export type UserConversationRow = {
+  id: string;
+  recruiterEmail: string | null;
+  messageCount: number;
+  startedAt: Date;
+  firstUserMessage: string | null;
+  botId: string;
+  botName: string;
+};
+
+export async function listRecentConversationsForUser(args: {
+  userId: string;
+  limit: number;
+}): Promise<UserConversationRow[]> {
+  const { userId, limit } = args;
+  return db
+    .select({
+      id: conversations.id,
+      recruiterEmail: conversations.recruiterEmail,
+      messageCount: conversations.messageCount,
+      startedAt: conversations.startedAt,
+      firstUserMessage: FIRST_USER_MESSAGE_SQL,
+      botId: conversations.botId,
+      botName: bots.name,
+    })
+    .from(conversations)
+    .innerJoin(bots, eq(conversations.botId, bots.id))
+    .where(eq(bots.userId, userId))
+    .orderBy(desc(conversations.startedAt))
+    .limit(limit);
 }

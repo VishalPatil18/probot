@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **STAGE 6 COMPLETE** — Stages 1–6 shipped end-to-end. Slice 6.5 closes Stage 6 with the bot settings page (editable name/headline/personality/suggested questions via widened PATCH endpoint) + knowledge management UI (list sources, drag-drop PDF upload, per-source delete with a design-system ConfirmDialog modal, reprocess all). Full Stage 6 feature set: schema + chat persistence (6.1), ten API endpoints (6.2), dashboard UI with overview/conversations/leads/CSV (6.3), in-chat lead capture + notification bell with 30s polling (6.4), settings + knowledge management (6.5). 628/628 tests, build green. Next: Stage 7 (open-source hardening, OAuth + email verification + password reset, Redis-backed rate limiting, GDPR flows, landing page, self-host packaging, structured logging, monitoring). **Earlier status note (kept for context):** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **STAGE 6 COMPLETE + Dashboard Redesign Slice A** — Stages 1–6 shipped end-to-end. Slice A of the dashboard visual redesign (porting `design/dashboard.html`) is now live: new sidebar (logo + bot switcher + nav with count badges + model status card + user card) applied to every `(dashboard)` page, sticky topbar (hamburger + page title from `usePathname()` + URL pill + NotificationBell + View live bot CTA), dashboard home rewrite (welcome greeting + 4 metric tiles with faded growth/Coming Soon pills + 7-day SVG smooth Bézier line chart + Top topics placeholder + recent leads table with company-signal pill + recent conversations + share-your-bot reusing slice-5 EmbedSnippet). Mobile uses a slide-in panel with the same sidebar content. Selected bot persists in an httpOnly cookie (server-validated against owned bots on every render). 654/654 tests, build green. Slices B (settings 5-tab redesign) + C (sub-page re-theme + docs stub) still to ship. **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -1541,3 +1541,112 @@ Total: 10 new source files + 6 test files + 3 updates. 628/628 tests pass (588 �
 - The reprocess button's "X tokens" status is transient (stays until next action). A persistent "last reprocessed at" timestamp would be nice but isn't blocking.
 - `BotSettingsForm` doesn't expose `themeColor` (lives on the bot detail page via `<ThemeColorPicker>`). Could consolidate but the detail page already shows it in context with the embed snippet preview.
 - Next step is Stage 7. The build plan describes hardening, OAuth, landing page, GDPR, self-host packaging, monitoring, structured logger. That's a different beast — multiple parallel workstreams; will need a fresh planning pass.
+
+---
+
+### 2026-06-20 07:53 - Dashboard redesign Slice A: layout shell + dashboard home rebuild
+
+**What was asked to do:** Port `design/dashboard.html` (left sidebar + sticky topbar + 4 metric tiles + 7-day chart + top topics + recent leads table + recent conversations + share-your-bot card) into the existing React codebase. Apply the shell to all `(dashboard)` pages. Wire pieces that have data; mark unwired pieces with a faded "Coming soon" pill. The redesign was split into 3 slices; Slice A covers the shell + dashboard home.
+
+**Locked decisions before any code (Q1-Q10):** Q1 the new sidebar+topbar shell applies to all dashboard pages (sub-pages get re-themed in Slice C). Q2 selected bot persists in a per-browser cookie (read by `cookies()` in any RSC; no server-side storage / Redis needed for a single-value preference). Q3 docs links go to `https://docs.probot.dev/guides/embed-widget` (external — a stub page lands in Slice C). Q4 faded content + Coming Soon pill (not blank placeholder cards). Q5 curvy smooth line chart over the conversation counts (Catmull-Rom → cubic Bézier, SVG-native, no chart lib). Q6 multi-bot users: the user's first/most-recently-updated bot is the fallback; selection is per-browser via cookie + dropdown switcher above the workspace nav. Q7 mobile gets a hamburger button + slide-in panel with the full sidebar. Q8 NotificationBell migrates from the old single-row header into the new topbar. Q9 first-time users (no bots) see a focused empty-state CTA. Q10 single-pass slice (Slice A); Slices B (settings 5-tab redesign) and C (polish + sub-page re-theme) ship separately.
+
+**What I did:**
+
+_Server / data layer (4 new modules):_
+
+- `src/lib/server/selected-bot.ts` + test — cookie-backed bot selection. `resolveSelectedBotId(validIds, fallbackId)` reads the cookie and validates the value is in the user's owned bot set; stale or hostile cookie values fall through to the fallback. `writeSelectedBotCookie(botId)` is the writer (httpOnly per the review fix — XSS can't enumerate the user's bot IDs).
+- `src/lib/analytics/queries.ts` — added `getDailyConversationCounts({userId, days})` using Postgres `generate_series` to emit one row per day even on zero-count days. `days` is clamped `[1, 365]` defensively. SQL is Drizzle's parameterized `sql\`\`` template — no string interpolation.
+- `src/lib/conversations/queries.ts` — added `listRecentConversationsForUser({userId, limit})` joining `conversations` × `bots` so the dashboard can show cross-bot recent activity.
+- `src/lib/leads/queries.ts` — added `listRecentLeadsForUser({userId, limit})` joining `leads` × `bots` for the recent leads table.
+- `src/lib/ai/provider-labels.ts` — moved the inline PROVIDER_LABELS map from BotFactoryForm into a shared module; `describeProvider(provider, model)` is the consumer-facing helper.
+- `src/app/(dashboard)/actions.ts` — `selectBotAction(formData)` server action. Validates session + bot ownership in a single `findFirst({where: and(eq(bots.id), eq(bots.userId))})` before writing the cookie; a forged form payload pointing at another user's bot is silently rejected.
+
+_Shell components (under `src/components/dashboard/`):_
+
+- `ComingSoonPill.tsx` — gray "Coming soon" pill primitive, two sizes.
+- `ModelStatusCard.tsx` — bottom-of-sidebar widget showing `describeProvider(user.llmProvider, user.llmModel)` with a brand-deep gradient background. Active indicator + "Manage model & key" CTA.
+- `BotSwitcher.tsx` + test — dropdown above the workspace nav. Single-bot users see a static card (button disabled, no caret). Multi-bot users get a click-to-open menu; each item is a `<form action={selectBotAction}>` with hidden `botId` input. Outside-mousedown + ESC close the dropdown.
+- `Sidebar.tsx` — desktop sidebar shell (`hidden lg:flex` wrapper in the layout). Renders logo + BotSwitcher + nav sections (Workspace / Build / Account) + ModelStatusCard + user card with sign-out icon link. All SVG glyphs (no external icon-font dependency).
+- `SidebarNavLink.tsx` — client component. Active highlight computed via `usePathname()` so the server layout doesn't have to thread the current path. Exact-match for `/dashboard`, prefix-match for everything else. Supports external links (`target="_blank" rel="noopener noreferrer"`), inline count badges (muted gray for "Conversations", brand-color for "Leads" when > 0).
+- `MobileSidebar.tsx` — three exports: `MobileSidebarProvider` (context owning open/close state, mounted at the layout root, auto-closes on `usePathname()` change), `MobileSidebarToggle` (hamburger button, `lg:hidden`, lives inside the Topbar), `MobileSidebarPanel` (slide-in fixed panel with backdrop + body-scroll-lock + ESC close, mounted at the layout root and re-rendering the desktop Sidebar's content).
+- `Topbar.tsx` — client component (so it can read `usePathname()` for the page title). Renders hamburger + page title + URL pill with `<CopyUrlButton>` + `<NotificationBell>` + "View live bot" CTA. Title derived from a tiny path-to-title map; conversation transcript paths show "Conversation" (singular), list paths show "Conversations" (plural).
+
+_Dashboard sections:_
+
+- `MetricTile.tsx` + test — icon (forum / chat / contact_mail / bolt) + big number + label + optional faded growth pill ("+18%" at opacity-30) + optional Coming Soon pill (also fades the value to opacity-40).
+- `ConversationsLineChart.tsx` + test — SVG smooth Bézier curve. `toCoords` converts day counts to (x, y) pixels relative to a `viewBox`. `smoothPath` does Catmull-Rom → cubic Bézier conversion with neighbor-wrap-around at the edges. `fillPath` closes the curve along the baseline for a gradient fill. Falls back to a dashed baseline line on all-zero data so the panel doesn't visually collapse. "Today" label on the last point; weekday short name everywhere else.
+- `TopTopicsPlaceholder.tsx` — faded skeleton bars (5 fixed labels at fixed percentages) + Coming Soon pill in the header.
+- `RecentLeadsTable.tsx` + test — table with Email · Asked about · Company signal · When · View chat columns. `companyFromEmail` uses a registrable-domain heuristic (second-to-last segment for 3+ segment domains so `mail.stripe.com` → "Stripe" not "Mail"). Public providers (gmail, outlook, etc.) get no pill. "View all" link goes to the first lead's bot's leads page; row click opens the transcript.
+- `RecentConversationsList.tsx` — 3 rows with avatar + recruiter email (or "Anonymous visitor") + truncated first-user-message preview + relative-time badge. "View all N conversations" footer link.
+
+_Layout + page:_
+
+- `src/app/(dashboard)/layout.tsx` — full rewrite. Fetches `[ownedBots, analytics, userRow]` in parallel via Promise.all. Resolves the selected bot via cookie. Computes user initials, public URL. Renders `<MobileSidebarProvider>` wrapping: desktop sidebar `<aside className="fixed hidden h-screen w-64 ... lg:flex lg:flex-col">` containing `<Sidebar>`, a main column with `<Topbar>` + `{children}`, and `<MobileSidebarPanel>` mirroring the sidebar content at the layout root.
+- `src/app/(dashboard)/dashboard/page.tsx` — full rewrite. Empty state (no bots) renders a focused CTA; populated state renders Welcome greeting + 4 MetricTiles + ConversationsLineChart + TopTopicsPlaceholder + RecentLeadsTable + RecentConversationsList + Share-your-bot card (reuses slice-5 `<EmbedSnippet>` with the 3 cards: Public URL / Website embed / Email signature) + "Full embed guide →" link.
+
+_Code-review pass (0 CRITICAL/HIGH; 3 MEDIUM + 1 LOW applied):_
+
+- **MEDIUM applied: `httpOnly: true` on the bot selection cookie.** The value is bot ID (not a secret), but XSS can't enumerate the user's bot IDs from `document.cookie` with httpOnly. The cookie is only ever read server-side via `cookies()`; client JS has no need to see it.
+- **MEDIUM applied: `getDailyConversationCounts` clamps `days` to [1, 365].** Defensive cap so a future caller passing `days = 1_000_000` doesn't generate a million-row `generate_series` in Postgres.
+- **MEDIUM applied: `companyFromEmail` uses second-to-last domain segment for 3+ part domains.** `mail.stripe.com` → "Stripe" instead of "Mail". `.co.uk`-style public-suffix edge cases aren't handled (heuristic, not authoritative), but the decoration is correct for the common shapes. Added a regression test.
+- **LOW applied: dropped the redundant ownership re-query in the dashboard page.** `ownedBots` is already pre-filtered by `eq(bots.userId, userId)`, so `selectedBot = ownedBots.find(...)` is ownership-verified by construction — no need for an extra DB round-trip.
+
+**Files changed:**
+
+_Server / queries:_
+
+- `src/lib/server/selected-bot.ts` — create — cookie resolver + writer.
+- `src/lib/server/selected-bot.test.ts` — create — 6 specs (tenancy boundary).
+- `src/lib/analytics/queries.ts` — update — `getDailyConversationCounts` with clamped days.
+- `src/lib/conversations/queries.ts` — update — `listRecentConversationsForUser`.
+- `src/lib/leads/queries.ts` — update — `listRecentLeadsForUser`.
+- `src/lib/ai/provider-labels.ts` — create — shared provider labels.
+- `src/app/(dashboard)/actions.ts` — create — `selectBotAction` server action.
+
+_Components:_
+
+- `src/components/dashboard/ComingSoonPill.tsx` — create.
+- `src/components/dashboard/ModelStatusCard.tsx` — create.
+- `src/components/dashboard/BotSwitcher.tsx` — create.
+- `src/components/dashboard/BotSwitcher.test.tsx` — create — 5 specs.
+- `src/components/dashboard/Sidebar.tsx` — create.
+- `src/components/dashboard/SidebarNavLink.tsx` — create.
+- `src/components/dashboard/MobileSidebar.tsx` — create — Provider + Toggle + Panel.
+- `src/components/dashboard/Topbar.tsx` — create.
+- `src/components/dashboard/MetricTile.tsx` — create.
+- `src/components/dashboard/MetricTile.test.tsx` — create — 4 specs.
+- `src/components/dashboard/ConversationsLineChart.tsx` — create.
+- `src/components/dashboard/ConversationsLineChart.test.tsx` — create — 4 specs.
+- `src/components/dashboard/TopTopicsPlaceholder.tsx` — create.
+- `src/components/dashboard/RecentLeadsTable.tsx` — create.
+- `src/components/dashboard/RecentLeadsTable.test.tsx` — create — 7 specs.
+- `src/components/dashboard/RecentConversationsList.tsx` — create.
+
+_Layout + page:_
+
+- `src/app/(dashboard)/layout.tsx` — full rewrite — new shell.
+- `src/app/(dashboard)/dashboard/page.tsx` — full rewrite — new dashboard home.
+
+Total: 17 new source files + 5 test files + 5 updated source files. 654/654 tests pass (628 → 654, net +26), build green, new `/dashboard` route at 4.4 kB first-load JS.
+
+**Decisions made:**
+
+- **Cookie over Redis for selected bot.** A single-value per-user preference doesn't need a server-side store. The cookie is read by `cookies()` in any RSC for free; no roundtrip to Redis, no infrastructure dependency.
+- **Server action for bot switching, not a client fetch.** The form-action pattern (hidden `botId` input, `<form action={selectBotAction}>`) keeps the dropdown functional without JS in degraded modes AND lets the action `revalidatePath('/')` so every cached dashboard page re-renders against the new selection.
+- **Active sidebar state computed via `usePathname()`, not threaded as a prop.** The server layout doesn't have to know which page is rendering; client-side `SidebarNavLink` reads the path itself. The layout stays declarative.
+- **Topbar is a client component (not server).** It needs `usePathname()` to derive the page title. NotificationBell and CopyUrlButton are already client islands inside it, so making the wrapper client doesn't move the SSR boundary materially.
+- **MobileSidebar uses a context provider, not prop drilling.** The hamburger trigger (inside Topbar) and the panel (mounted at layout root) need to share open/close state without threading through every server component in between.
+- **Catmull-Rom → cubic Bézier for the curve (no chart library).** ~50 lines of math, zero dependencies, fully styleable via SVG. Falls back to a dashed baseline on all-zero data so the panel doesn't visually collapse to nothing.
+- **Faded content + Coming Soon pill, not blank placeholder cards.** Preserves the design rhythm (4-card metric row, 2-col grid) so the dashboard feels complete; the "soon" signal is unambiguous via the gray pill + opacity-40 content fade.
+- **Cookie httpOnly true.** The cookie holds a bot ID, not a secret — but XSS can't enumerate the user's bot IDs even with `document.cookie` access. Free hardening.
+- **Registrable-domain heuristic for company-signal pills.** Second-to-last segment for 3+ segment domains catches the common `mail.stripe.com` → "Stripe" shape; public-suffix edge cases (`.co.uk`) are out of scope for a decorative pill.
+
+**Open questions / follow-ups:**
+
+- Slice B: settings page redesign as 5 tabs (Account / Bot configuration / Knowledge base / Security & privacy / AI model & key). The current single-page `BotSettingsForm` + `KnowledgeManager` get folded into the Bot configuration + Knowledge base tabs. AI model & key tab is entirely Coming Soon. Account / Security have placeholder content with Coming Soon pills on the not-yet-wired actions.
+- Slice C: polish — sub-page re-theme (conversations / leads / settings sub-pages need their wrapper layouts updated to fit the new shell without duplicate "back to bot" links), the stub `/docs/guides/embed-widget` page (or accept the external 404 for now), Stage-7 task block in plan.md for: AI model & key page, growth pills wiring (week-over-week comparison), response time tracking, top topics NLP categorization.
+- The dashboard's metric tiles 1-3 show real numbers + faded fake "+18%/+24%/+3 new" growth pills. The numbers are real; the percentages are decorative until Stage 7 builds week-over-week comparison.
+- The "View live bot" topbar button is hidden on small screens (`sm:inline-flex`). Mobile users access the live bot via the sidebar slide-in panel's bot card.
+- BotSwitcher dropdown items submit a form per click. There's no loading indicator between click and revalidation — typically completes < 100ms locally, but slow networks would see a flash. A pending-form indicator could land in Slice C.
+- `MobileSidebarPanel` body-scroll lock uses `document.body.style.overflow = "hidden"` and restores the previous value on cleanup. Works correctly under React Strict Mode's double-render (each mount snapshots the current overflow and the final cleanup restores it).
+- The slice intentionally left out tests for the layout, Sidebar wrapper, SidebarNavLink, ModelStatusCard, Topbar, MobileSidebar, TopTopicsPlaceholder, RecentConversationsList — focused coverage on security-critical / behavior-rich pieces (cookie resolver, MetricTile, RecentLeadsTable, BotSwitcher, ConversationsLineChart). Slice C can backfill if needed.

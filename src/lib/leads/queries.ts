@@ -1,6 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 
-import { db, leads } from "@/lib/db";
+import { bots, db, leads } from "@/lib/db";
 
 // Stage 6 shared lead queries. Called by both the slice-6.2 API routes
 // (paginated list + CSV export) and the slice-6.3 RSC dashboard pages.
@@ -86,4 +86,39 @@ export async function listAllLeadsForExport(args: {
     .where(eq(leads.botId, args.botId))
     .orderBy(desc(leads.capturedAt))
     .limit(MAX_EXPORT_ROWS);
+}
+
+// Cross-bot lead feed for the dashboard home (Slice A redesign).
+// Joins through `bots` so the user_id filter is the trust boundary —
+// every lead returned is owned by the requesting user.
+export type UserLeadRow = {
+  id: string;
+  email: string;
+  contextSummary: string | null;
+  conversationId: string | null;
+  capturedAt: Date;
+  botId: string;
+  botName: string;
+};
+
+export async function listRecentLeadsForUser(args: {
+  userId: string;
+  limit: number;
+}): Promise<UserLeadRow[]> {
+  const { userId, limit } = args;
+  return db
+    .select({
+      id: leads.id,
+      email: leads.email,
+      contextSummary: leads.contextSummary,
+      conversationId: leads.conversationId,
+      capturedAt: leads.capturedAt,
+      botId: leads.botId,
+      botName: bots.name,
+    })
+    .from(leads)
+    .innerJoin(bots, eq(leads.botId, bots.id))
+    .where(eq(bots.userId, userId))
+    .orderBy(desc(leads.capturedAt))
+    .limit(limit);
 }

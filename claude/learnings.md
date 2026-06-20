@@ -760,3 +760,131 @@ When the props ARE the canonical state — read-only displays, derived dashboard
 `router.push` unmounts the current component and mounts a fresh instance, so `useState` initializers run again with the new props. The user's draft is gone — which is fine after a successful save (nothing to preserve) but bad mid-edit. `router.refresh()` re-fetches the RSC tree and patches the DOM, preserving client state. For "after a save, show the updated server values" the choice between them is mostly aesthetic — both work, push is slower (full mount), refresh is faster (state preserved). For "user is mid-edit and we need fresh server data" — neither is right; that's a sync conflict that needs a UI-level resolution (warn the user, give them a merge view). The current pattern (refresh after save) is the standard happy-path choice.
 
 ---
+
+### Cookies As Server-Component-Readable Per-User State (Dashboard Slice A)
+
+> The dashboard sidebar shows a workspace card for the currently-selected bot. The selection needs to persist across page navigations and survive a reload. Where should that single value live?
+
+There are three reasonable places for a small per-user preference that the server needs to read at render time: a cookie, a database column, or a session-store (Redis / KV / etc.). The right answer depends on three questions: who needs to read it, who needs to write it, and how often it changes.
+
+For a "which bot am I viewing in the dashboard" preference, the answers are: the server (every dashboard RSC render needs it for the URL pill, embed snippet, View live bot link), the user via a UI control, and rarely (once or twice a session at most). **A cookie wins on every axis.** The server reads it via `cookies()` in any RSC for free. The write is a single server action call that fires when the user picks a different bot. There's no infrastructure to provision, no DB migration, no Redis lease to manage. The browser persists the value across sessions automatically.
+
+```ts
+// Read (any RSC, layout, or page)
+import { cookies } from "next/headers";
+const selected = cookies().get("probot.selectedBot.v1")?.value ?? null;
+
+// Write (server action only)
+"use server";
+cookies().set("probot.selectedBot.v1", botId, {
+  maxAge: 60 * 60 * 24 * 365,
+  httpOnly: true,
+  sameSite: "lax",
+  path: "/",
+});
+```
+
+The DB column would have been overkill (a write on every selection change for a non-durable preference) and the session store would have introduced an infra dependency for a value that fits in 36 characters. **The general rule: for small per-user preferences that the server needs at render time AND that the user is the only writer, reach for cookies first.** DB columns are right when the preference must survive a logout / device switch; session stores are right when many writers race or the value must be invalidated globally.
+
+> Why `httpOnly: true` when the value isn't a secret?
+
+Two reasons. **Defense in depth.** The bot ID is a UUID, not a credential — XSS reading it can't escalate privilege. But XSS exfiltrating the list of UUIDs a user owns is still information the attacker shouldn't trivially harvest. Setting `httpOnly` blocks `document.cookie` access without breaking any client behavior because the value is never used client-side. **Free hardening.** The cost of `httpOnly: true` here is zero. The cost of forgetting it later when a more-sensitive value moves into the same cookie shape is non-zero. Establish the safe default once.
+
+> What's the trust boundary on read?
+
+The cookie's value is user-controlled. A hostile client can set `probot.selectedBot.v1` to any string — including a UUID belonging to another user. The server's read path must validate the value against the user's owned bot set:
+
+```ts
+function resolveSelectedBotId(validIds: string[], fallbackId: string | null) {
+  const raw = cookies().get(COOKIE)?.value;
+  if (raw && validIds.includes(raw)) return raw;
+  return fallbackId;
+}
+```
+
+This is the same shape as any client-supplied identifier validation — never trust the value on its face; intersect with what the authenticated user can legitimately reference. The `selectBotAction` server action that writes the cookie does the same check before writing, but the read-side filter is the actual tenancy boundary because cookies can be set out-of-band (e.g. via a browser extension or a previous account's session).
+
+---
+
+### Catmull-Rom → Cubic Bézier For Smooth SVG Charts Without A Chart Library (Dashboard Slice A)
+
+> The dashboard's "Conversations" chart needs a smooth curve through 7 daily counts. Chart.js / Recharts feels heavy for one chart. How small can we make this with hand-rolled SVG?
+
+The minimal smooth-line-through-points algorithm is **Catmull-Rom interpolation**, and it translates almost trivially into SVG cubic Bézier (`C` command) segments. The mechanic: for each pair of adjacent data points `(P[i], P[i+1])`, you derive two control points using the two neighboring data points `P[i-1]` and `P[i+2]` for the tangent direction. The curve smoothly interpolates **through** every data point (unlike a Bézier where the points are control handles, not the curve itself).
+
+```ts
+function smoothPath(points: {x:number, y:number}[]): string {
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] ?? points[i];  // wrap at edges
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] ?? p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+```
+
+That's the entire algorithm. ~10 lines, zero dependencies. The `/ 6` factor is the standard Catmull-Rom tension of 1 — tweaking it (`/4` for tighter curves, `/8` for looser) controls how aggressively the curve bulges between points.
+
+**Why this beats reaching for a library:** for a single seven-point line chart with a known data shape, the chart library would pull in 30+ KB of bundled JS for axis scaling, data formatting, tooltip handling, theming, accessibility primitives, and animation hooks that this surface doesn't use. The hand-rolled version is 50 lines including the fill-gradient and dot markers, and it ships zero dependencies. **The general rule: when the chart has a fixed shape (line / bar / sparkline) and a known small data range, hand-rolling SVG is almost always smaller, faster, and more themeable than a library.** Libraries win when you need many chart types, dynamic axis units, or tooltip-heavy interactivity.
+
+> What about the edge cases — one point, two points, zero data?
+
+Each one needs explicit handling because the loop assumes at least two adjacent points. **One point**: emit `M x y` and stop (no curve, just a dot — usually the visible `<circle>` markers cover this). **Two points**: the loop runs once; `p0 = p1` and `p3 = p2` via the wrap, which collapses the Catmull-Rom to essentially a straight line between the two points. **Zero data / all-zero counts**: render a dashed horizontal baseline so the panel doesn't visually collapse to nothing. The empty-state UX matters here — a chart that just disappears when there's no data feels broken; a faint dashed line feels intentional.
+
+> Filling the area under the curve — what changes?
+
+Append `L lastX baseY L firstX baseY Z` to the path. That closes the curve along the chart's bottom edge into a polygon, which `<path fill="url(#gradient)">` then shades. Two paths total — one stroke (the line), one fill (the area). SVG's `<linearGradient>` lets the fill fade to transparent at the bottom for the standard "shaded region under the line" look.
+
+> Why SVG `viewBox` + CSS `width: 100%` instead of fixed pixel dimensions?
+
+`viewBox` defines the coordinate space the path is drawn in. The browser then scales the SVG to whatever pixel dimensions the parent allocates, preserving aspect ratio. This means the chart is fully responsive without any JS-based resize handling — drop it in a flex/grid container at any width and it renders correctly. The internal coords are abstract (e.g., 700×200); the screen pixels float independently.
+
+---
+
+### The Dual-Tree Mobile Shell Pattern — One Trigger, One Panel, One Shared State (Dashboard Slice A)
+
+> The dashboard sidebar needs to slide in from the left on mobile. The hamburger button belongs at the top-left of the topbar; the slide-in panel covers most of the screen with a backdrop. They're rendered in different places but share open/close state. What's the cleanest React pattern?
+
+There are three component pieces that need to coordinate: a **trigger** (the hamburger button, lives inside the Topbar), a **panel** (the slide-in body, lives at the layout root so it can fixed-position over everything), and a **state owner** (open/closed boolean + auto-close logic). Threading state through every intervening component would be brittle and would force the layout's server components to become client components just to pass a boolean. The clean solution is a tiny **context provider** that wraps the whole shell:
+
+```tsx
+// MobileSidebarProvider — owns the state, mounted at layout root
+// MobileSidebarToggle  — uses context, lives inside the Topbar
+// MobileSidebarPanel   — uses context, lives at the layout root
+
+<MobileSidebarProvider>
+  <Sidebar />           // desktop, hidden on mobile
+  <main>
+    <Topbar />          // contains <MobileSidebarToggle /> internally
+    {children}
+  </main>
+  <MobileSidebarPanel>  // mobile-only slide-in, content mirrors <Sidebar />
+    <Sidebar />
+  </MobileSidebarPanel>
+</MobileSidebarProvider>
+```
+
+The trigger and panel are sibling client components communicating via context. The layout stays server-component-friendly (it just renders the provider as a wrapper). The panel mirrors the desktop sidebar's content by re-mounting the same `<Sidebar />` server component inside the slide-in container.
+
+**The auto-close on navigation is the key UX detail.** The provider uses `useEffect(() => setOpen(false), [pathname])` so clicking any nav link inside the panel navigates the user AND closes the panel in one render cycle. Without this the panel stays open over the new page, which is jarring and broken-feeling on mobile.
+
+```tsx
+useEffect(() => { setOpen(false); }, [pathname]);
+```
+
+**The body-scroll-lock is the other piece worth getting right.** While the panel is open, the page underneath should not scroll (or the touch gestures on the panel propagate to the body and the user can scroll the dashboard while the menu is "modal"). The effect snapshots `document.body.style.overflow` on mount, sets it to `"hidden"`, and restores the snapshot on cleanup. Strict Mode's double-render handles this correctly because each mount captures the value at the time of that render.
+
+> Why mirror the sidebar in two trees instead of one responsive container?
+
+The desktop sidebar is a static piece of chrome at the left edge of the layout. The mobile panel is a fixed-position overlay with a backdrop. CSS can change the size and position of a single sidebar via media queries, but it can't toggle "is this an overlay or a layout column?" cleanly — the layout structure differs (`flex` row with fixed sidebar vs. layered with backdrop). Rendering both trees and showing one based on screen size (`hidden lg:flex` for desktop, `lg:hidden` for the mobile panel toggle) is the simplest version of "two render strategies for two structurally different layouts." The duplicate render cost is essentially zero because only one is visible at any time, and the server-rendered HTML is small.
+
+**The general rule for responsive chrome with structural differences:** ship two trees, gate visibility via Tailwind responsive utilities (`hidden lg:flex` / `lg:hidden`), share state via React context. CSS-only responsive sidebars work great when the structural shape is preserved (column width changes, content collapses to icons). They fall apart when one breakpoint needs an overlay and the other needs a layout column.
+
+---

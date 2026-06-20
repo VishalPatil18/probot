@@ -113,3 +113,54 @@ export async function getAnalyticsForUser(
     leadsThisMonth: leadTotals[0]?.thisMonth ?? 0,
   };
 }
+
+// Daily conversation counts for the last N days, scoped to a user.
+// Powers the curvy line chart on the dashboard home. Postgres
+// `date_trunc` rolls timestamps down to day boundaries; we emit one row
+// per day even for zero-count days by left-joining a generated series
+// so the chart doesn't have gaps in its X axis.
+export type DailyCount = { date: string; count: number };
+
+const MAX_DAILY_RANGE = 365;
+
+export async function getDailyConversationCounts(args: {
+  userId: string;
+  days: number;
+}): Promise<DailyCount[]> {
+  const { userId } = args;
+  // Clamp `days` defensively — a million-day request would generate a
+  // million-row series in Postgres. The dashboard caller passes 7
+  // today; the cap is generous (a year) while still bounded.
+  const days = Math.min(
+    MAX_DAILY_RANGE,
+    Math.max(1, Math.floor(args.days)),
+  );
+  // generate_series produces one row per day from N-days-ago to today,
+  // and the left join attaches the conversation count for that day.
+  // `COALESCE(count, 0)` ensures gap-free output.
+  const rows = await db.execute<{ date: string; count: string }>(sql`
+    SELECT
+      to_char(d::date, 'YYYY-MM-DD') AS date,
+      COALESCE(c.count, 0)::text AS count
+    FROM generate_series(
+      (CURRENT_DATE - (${days - 1}::int)),
+      CURRENT_DATE,
+      '1 day'::interval
+    ) AS d
+    LEFT JOIN (
+      SELECT date_trunc('day', ${conversations.startedAt})::date AS day,
+             count(*) AS count
+      FROM ${conversations}
+      INNER JOIN ${bots} ON ${conversations.botId} = ${bots.id}
+      WHERE ${bots.userId} = ${userId}
+        AND ${conversations.startedAt} >= (CURRENT_DATE - (${days - 1}::int))
+      GROUP BY 1
+    ) c ON c.day = d::date
+    ORDER BY d
+  `);
+
+  return rows.rows.map((r) => ({
+    date: r.date,
+    count: Number(r.count),
+  }));
+}
