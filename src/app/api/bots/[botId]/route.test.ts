@@ -97,17 +97,105 @@ describe("PATCH /api/bots/[botId]", () => {
       makeRequest({
         themeColor: "#ff00aa",
         userId: "attacker-userid",
-        isActive: false,
         contextText: "INJECTED",
+        createdAt: "1970-01-01",
       }),
       PARAMS,
     );
     expect(res.status).toBe(200);
-    // Only themeColor was passed to the UPDATE SET
+    // Only themeColor was passed to the UPDATE SET. `isActive` is now a
+    // legitimately whitelisted field (Slice B status toggle) so it's
+    // omitted from this regression — see the dedicated isActive spec.
     const setArg = updateSetMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(setArg).toEqual({ themeColor: "#ff00aa" });
     expect(setArg).not.toHaveProperty("userId");
-    expect(setArg).not.toHaveProperty("isActive");
     expect(setArg).not.toHaveProperty("contextText");
+    expect(setArg).not.toHaveProperty("createdAt");
+  });
+
+  // Stage 6 §6.5: settings page PATCHes identity fields.
+  it("accepts a name+headline PATCH and forwards both to UPDATE SET", async () => {
+    const res = await PATCH(
+      makeRequest({ name: "Jane Doe", headline: "ML Engineer" }),
+      PARAMS,
+    );
+    expect(res.status).toBe(200);
+    const setArg = updateSetMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg).toEqual({ name: "Jane Doe", headline: "ML Engineer" });
+  });
+
+  it("accepts personality + suggestedQuestions in one PATCH", async () => {
+    const res = await PATCH(
+      makeRequest({
+        personality: "creative",
+        suggestedQuestions: ["Tell me about her ML work", "Is she remote?"],
+      }),
+      PARAMS,
+    );
+    expect(res.status).toBe(200);
+    const setArg = updateSetMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg.personality).toBe("creative");
+    expect(setArg.suggestedQuestions).toEqual([
+      "Tell me about her ML work",
+      "Is she remote?",
+    ]);
+  });
+
+  it("rejects an empty name string (Zod min(1))", async () => {
+    const res = await PATCH(makeRequest({ name: "   " }), PARAMS);
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a name > 100 chars", async () => {
+    const res = await PATCH(makeRequest({ name: "x".repeat(101) }), PARAMS);
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an invalid personality value", async () => {
+    const res = await PATCH(
+      makeRequest({ personality: "snarky" }),
+      PARAMS,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects > 6 suggested questions", async () => {
+    const res = await PATCH(
+      makeRequest({
+        suggestedQuestions: ["q1", "q2", "q3", "q4", "q5", "q6", "q7"],
+      }),
+      PARAMS,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts isActive toggle (Slice B status switch)", async () => {
+    const res = await PATCH(makeRequest({ isActive: false }), PARAMS);
+    expect(res.status).toBe(200);
+    const setArg = updateSetMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg).toEqual({ isActive: false });
+  });
+
+  it("rejects a non-boolean isActive", async () => {
+    const res = await PATCH(makeRequest({ isActive: "yes" }), PARAMS);
+    expect(res.status).toBe(400);
+  });
+
+  it("mass-assignment regression: settings PATCH cannot smuggle userId / contextText", async () => {
+    const res = await PATCH(
+      makeRequest({
+        name: "Jane",
+        userId: "attacker",
+        contextText: "INJECTED",
+        emailVerified: new Date(),
+      }),
+      PARAMS,
+    );
+    expect(res.status).toBe(200);
+    const setArg = updateSetMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg).toEqual({ name: "Jane" });
+    expect(setArg).not.toHaveProperty("userId");
+    expect(setArg).not.toHaveProperty("contextText");
+    expect(setArg).not.toHaveProperty("emailVerified");
   });
 });

@@ -322,3 +322,758 @@ Three reasons the schema approach is structurally safer. **Whitelist beats denyl
 It should — but distinguishing "the client intentionally sent an empty body" from "the client's PATCH had a typo that made every field undefined" is harder than blocking empty bodies entirely. An empty SET payload also triggers a Drizzle SQL error (`UPDATE … SET WHERE …` is not valid SQL). The 400 response with a clear "PATCH body must include at least one field" is more useful to the client than a 500 from a SQL syntax error. The refine catches both the intentional-empty case (return clear error, no DB call) and the typo case (return clear error pointing the user at their broken payload). Costs nothing, prevents two bug classes.
 
 ---
+
+### UPSERT With Atomic Counter Increments (Stage 6 Slice 6.1)
+
+> The chat orchestrator does `INSERT INTO conversations (...) ON CONFLICT (bot_id, session_id) DO UPDATE SET message_count = conversations.message_count + 2, last_message_at = NOW()`. Why an UPSERT instead of "SELECT then INSERT or UPDATE"?
+
+The naive "check-then-act" pattern is a classic concurrency bug. Imagine two browser tabs from the same recruiter on the same bot, both submitting a chat message in the same 50 ms window. The flow is: tab A `SELECT WHERE bot_id=? AND session_id=?` → empty → tab A decides to INSERT. Meanwhile tab B does the same SELECT → empty (A's INSERT hasn't committed yet) → tab B also decides to INSERT. Both INSERTs hit the database; the unique index `(bot_id, session_id)` rejects the second one. Now you have a 500 error on tab B because of a race, not a bug. UPSERT collapses the check and the write into a single atomic statement: Postgres acquires the row-level lock on conflict, applies the UPDATE branch, and the SET expression `message_count = conversations.message_count + 2` operates on the **post-lock** value, so concurrent UPSERTs serialize cleanly. Two tabs racing → first one creates the row with `message_count = 2`, second one updates to `message_count = 4`. No 500, no lost write, no manual retry logic. **The general pattern**: any "increment a counter scoped to a key" use case wants `INSERT ... ON CONFLICT DO UPDATE SET counter = table.counter + 1`, not SELECT + branch. Same shape covers rate counters, view counts, last-seen timestamps, retry attempts, lead-capture counts. The expression on the right-hand side of SET refers to the existing row column qualified by the table name (`conversations.message_count`) so it reads the committed-pre-conflict value within the same transactional window. **What this fails for**: counters with side effects (e.g., "increment AND charge the user $X") — those need a transaction wrapping a SELECT FOR UPDATE because the side effect is not part of the UPSERT. For pure counter math, UPSERT is the right tool.
+
+> Why does the same transaction insert the messages right after the upsert? Couldn't they be two separate calls?
+
+Two separate calls open a window where the conversation row exists but the messages don't. If the second call fails (network blip, pool exhaustion, app crash mid-request), the dashboard now shows a conversation row with `message_count = 2` and zero messages — a broken state that nothing detects, nothing repairs. Wrapping both writes in `db.transaction(async (tx) => ...)` makes the writes atomic at the Postgres level: either both commit, or both roll back. The dashboard never sees a half-written conversation. The cost is a tiny bit of transaction overhead (one BEGIN + one COMMIT instead of two autocommit statements). For every "row + its children" pattern — orders + line items, runs + steps, conversations + messages — the transaction is the line between "rare bug we'll spend a Wednesday afternoon investigating" and "structurally impossible state."
+
+---
+
+### Anonymous Session Identity Without Cookies (Stage 6 Slice 6.1)
+
+> The public chat at `/u/<username>/chat` is no-auth — recruiters are anonymous. How does the backend group multiple chat turns into a single "conversation" if there's no user account?
+
+The trick is a client-side session token that is opaque to anyone except the server's analytics tables. On first chat-page mount, the browser checks `sessionStorage.getItem('probot.chat.sessionId')`. If empty, generate a v4 UUID and persist it back to `sessionStorage`. Every subsequent chat request in the same tab includes that UUID in the request body. The server UPSERTs a `conversations` row keyed by `(bot_id, session_id)`, so all turns from one tab coalesce into one analytics record. **Why `sessionStorage` specifically, not `localStorage` or a cookie?** Each has different semantics: `localStorage` persists across tabs and across browser restarts — too sticky. A recruiter visits today, comes back six months later for a different role: those should be two conversations, not one with a six-month gap. `sessionStorage` clears when the tab closes — perfect for "one visit = one conversation". A cookie would also work but carries baggage: cookies trigger consent banners under GDPR (every Stage 7 task you don't want to fight today), are sent with every request to the origin (bandwidth cost), and require a Set-Cookie header on the chat endpoint (server-side complexity). `sessionStorage` is purely client-managed, has no compliance footprint, costs zero bytes per request you don't need. **The generalizable pattern**: when you need stable identity scoped to a thing-not-an-account (a visit, a workflow step, a checkout session, an analytics funnel), reach for `sessionStorage` first. The token never leaves the client, the server never persists it as "user", and the privacy story is "this UUID identifies the conversation, not the person." If you later need cross-visit continuity, you escalate to `localStorage`; if you need cross-device, you escalate to a real account.
+
+> The server validates `sessionId: z.string().uuid()`. Why force UUID format if it's just a key?
+
+Two reasons. **Defense in depth**: the column is `varchar(255)`, so without the UUID check a misbehaving client could send a multi-kilobyte string and burn database row size on every UPSERT. The UUID regex caps the length implicitly and rejects garbage. **Index efficiency**: the unique index on `(bot_id, session_id)` is btree. Fixed-width UUID-shape strings index cleanly. Variable-length arbitrary strings still index, but each lookup involves more comparison work and pages span fewer rows. The format check is free (a regex match), and it locks the contract: clients must send UUID-shape strings, full stop. If we later move to a different ID scheme, we change one regex and the contract changes with it; no leaked-string-format bugs from legacy clients.
+
+---
+
+### Why Persistence Errors Get A Warn, Not A Throw Or A Silent Swallow (Stage 6 Slice 6.1)
+
+> The chat orchestrator's persistence block ends with `} catch (err) { console.warn("[chat] conversation persistence failed", err); }`. Why a warn? An empty catch would be simpler, and a re-throw would surface the error.
+
+This is the "primary-value-vs-secondary-value" tradeoff, applied at runtime. The chat reply is the user's primary expectation: they typed a message, they need a response. Persisting that turn to the `conversations` and `messages` tables is secondary: it powers the bot owner's dashboard, but the recruiter doesn't see it, and the chat is fully functional without it. If the database pool is exhausted or a migration hasn't run, throwing the error breaks the chat for an unrelated reason — the recruiter sees "internal error" and the bot owner loses the lead entirely. Worse: the recruiter never knew there was a backend persistence layer, so the user-facing failure is incomprehensible. Swallowing silently solves the user-facing problem but creates a new one: a misconfigured production database fails persistence on every chat without any signal. The first the bot owner hears about it is "why is my dashboard empty?" — days or weeks after the regression. `console.warn` is the cheap middle path. The reply still ships (primary value preserved), the error appears in the server logs (operators have a signal), and the structured-logger upgrade in Stage 7 will replace the `console.warn` call site without changing the control flow. **The generalizable rule**: when a non-critical side effect can fail, the catch should always log. Empty catches and silent swallows are technical debt that compounds — every `catch {}` you ship is one harder bug to find when something goes wrong. The cost of a log line is zero; the cost of a missing log line during a 2 a.m. incident is hours.
+
+> The reviewer flagged the original `catch {}` as HIGH severity. Why HIGH and not MEDIUM?
+
+Severity in code review tracks impact-on-production-incident, not impact-on-correctness. A silent swallow with no logging is a unique failure class: the bug is invisible. Other HIGH-severity bugs (missing input validation, wrong status code, etc.) at least give you an error to grep for; silent swallows give you nothing — no log line, no metric, no exception trace. The only way to discover them is "user reports X is broken, you spend hours instrumenting the code path to find out the data was being silently dropped at line 282." The actual code change (add a `console.warn`) is trivial, but the principle — never ship an invisible failure path — is structural. Even a `console.warn` is a placeholder; the right answer is a structured logger feeding alerting. But the floor is "at minimum, leave a breadcrumb."
+
+---
+
+### Partial Indexes For Hot Sub-Queries (Stage 6 Slice 6.1)
+
+> The notifications table has `CREATE INDEX notifications_user_unread_idx ON notifications (user_id, created_at DESC) WHERE read_at IS NULL`. Why the WHERE clause inside the index definition?
+
+Postgres supports **partial indexes** — indexes that only include rows matching a predicate. The bell-badge query is `SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL`. A typical full index on `(user_id, created_at)` would include every notification row ever — read or unread. Over a year of usage, a bot owner accumulates thousands of read notifications; the unread count query scans the index pages for that user, filters by `read_at IS NULL` in memory, and returns a small number. The partial index inverts this: it includes ONLY rows where `read_at IS NULL`. The index is tiny (the size of "currently unread notifications," typically <50 rows per user), and the unread-count query becomes a near-instant index-only scan on the matching subset. **The win is two-dimensional**: smaller index = less RAM cache footprint, less disk I/O on lookup; pre-filtered subset = no per-row WHERE evaluation. **The cost is one-dimensional**: when a row's `read_at` changes from NULL to a timestamp (marking it read), Postgres removes the row from the partial index. That's the same write cost as a regular index but slightly more bookkeeping. For "the hot read is a subset of the rows" patterns — unread items, active sessions, pending tasks, failed jobs — partial indexes are usually a strict win. **The general rule**: if a query has a `WHERE x = ? AND <predicate>` shape, and `<predicate>` is satisfied by a small fraction of all rows, the partial index `WHERE <predicate>` is cheaper than the full index. The predicate becomes part of the data structure instead of part of the query plan.
+
+> The `messages.role` and `notifications.kind` columns both have CHECK constraints (e.g., `CHECK (kind IN ('lead_captured'))`). Why enforce at the DB level when the application-level Zod schemas already validate?
+
+Defense in depth, but also defense across time. The Zod schema validates inputs from the HTTP boundary right now. Six months from now, someone writes a one-off SQL migration script to backfill notifications for old leads — and they type `'leads_captured'` (plural) by accident. The Zod check is irrelevant; the migration script doesn't go through Zod. The DB-level CHECK turns the typo into an instant INSERT failure with a clear error message. Same protection applies to direct psql connections, database admin tools, and any future ETL pipeline. **The principle**: validation should live as close to the data as possible. Application code is one layer; the database is the floor. Locking shapes at the DB level means the only way to insert invalid data is to drop the constraint first — which is loud, audited, and intentional. The CHECK constraint cost is essentially nothing (Postgres evaluates it on each write but the predicate is trivial), and the bug it prevents is the kind that silently corrupts analytics for weeks before someone notices.
+
+---
+
+### Cryptographic Randomness In Identifier Fallback Paths (Stage 6 Slice 6.1)
+
+> The session-id store's UUID fallback originally used `Math.random()`. The reviewer flagged it as MEDIUM. Why does randomness quality matter in a fallback that's almost never reached?
+
+Two reasons that compound. **The fallback path is exactly where the attacker arrives.** The primary path (`crypto.randomUUID()`) runs on every modern browser and Node runtime. The only environments that exercise the fallback are unusual: very old WebViews, certain embedded browsers, certain corporate sandbox configurations. Those are also the environments most likely to be running on jailbroken phones, kiosks with shared sessions, or hostile networks — the demographic where the worst-case threat model lives. The "extremely unlikely" path is, in adversarial conditions, the most likely path. **`Math.random()` is not adversary-resistant.** It uses a fast deterministic PRNG (typically xorshift128+ in modern V8). Given a small number of consecutive `Math.random()` outputs, you can recover the internal state and predict the next outputs. For a UUID composed of 122 effective random bits, an attacker who can observe one or two UUIDs from a session can predict subsequent ones with reasonable probability. In our case, predicting another recruiter's sessionId lets you forge a UPSERT key — pollute their conversation row, inject fake `messageCount` increments, even (in Stage 6.4) attach a fake lead to their conversation. The actual impact is bounded (metric pollution, not data exfiltration), but the principle generalizes. **The fix is `crypto.getRandomValues`**, which is available wherever any `crypto` namespace exists — older even than `crypto.randomUUID`. It writes cryptographically random bytes into a typed array; you then assemble those into UUID shape with explicit version-4 and variant-10xx bit-setting per RFC 4122. The code is 6 lines vs. 1, but the randomness is uniform and unpredictable. **The lesson**: any identifier that gates access or authentication-adjacent behavior — session IDs, password reset tokens, CSRF tokens, OAuth states, signed URLs, idempotency keys — needs cryptographic randomness in every path, including fallbacks. `Math.random()` is fine for jitter, shuffle, animation seeds, A/B test bucketing. It is not fine for anything an attacker can benefit from guessing.
+
+> Why the bit manipulation at the end — `bytes[6] = (bytes[6] & 0x0f) | 0x40` — instead of just using the random bytes raw?
+
+UUID format is not just "16 random bytes." RFC 4122 specifies that version-4 UUIDs have specific bits in specific positions: byte 6's high nibble must be `0100` (the version-4 marker), and byte 8's high two bits must be `10` (the variant-10xx marker). These bits are how the format declares "I'm a v4 UUID, generated by a random source." A consumer parsing the UUID can check those bits to validate the format. The Zod check on the server side uses a regex that, among other things, enforces these positions (`/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i` — note the `-4` in the middle and `[89ab]` after). Random bytes have a 1-in-256 chance of matching the v4 bit pattern by coincidence; without the bit-fixing, the fallback would generate format-invalid UUIDs that the server's Zod check rejects ~99.6% of the time. The bit manipulation is the difference between "random bytes" and "RFC-compliant v4 UUID." The `& 0x0f | 0x40` formula clears the existing high nibble and sets it to `0100`; `& 0x3f | 0x80` clears the high two bits and sets them to `10`. Both operations preserve the entropy of the other bits — you lose 6 bits of randomness in exchange for format conformance. 122 effective random bits is still ~5.3 × 10^36 distinct values; collisions are not a concern.
+
+---
+
+### LATERAL Subqueries Over Per-Row Round-Trips (Stage 6 Slice 6.2)
+
+> The conversations list endpoint needs each row to carry a 200-char preview of the first user message. A naïve implementation fetches the conversation rows, then loops in JS firing one `SELECT FROM messages` per row. The dashboard rendering 50 conversations would burn 51 round-trips. What's the SQL-native fix?
+
+A **LATERAL subquery** (technically: a correlated subquery used as a scalar inside SELECT) lets Postgres run "for each conversation row, fetch its first user message" in a single query plan. The shape in Drizzle's `sql` template is:
+
+```ts
+const FIRST_USER_MESSAGE_SQL = sql<string | null>`(
+  SELECT LEFT(${messages.content}, 200)
+  FROM ${messages}
+  WHERE ${messages.conversationId} = ${conversations.id}
+    AND ${messages.role} = 'user'
+  ORDER BY ${messages.createdAt}
+  LIMIT 1
+)`;
+```
+
+That subquery references the outer `conversations.id`, which makes it correlated — Postgres re-evaluates it per outer row. With the composite slice-6.1 index `messages_conv_created_idx` on `(conversation_id, created_at)`, each evaluation is a sub-millisecond index scan returning at most one row. 50 rows × 50 micro-scans = ~5 ms total, versus 51 round-trips × 5 ms network = 255 ms in the naïve version.
+
+**Why "LATERAL" matters as a concept**: SQL has two distinct join-like operations. Regular joins compute a Cartesian product and filter; lateral joins evaluate a per-row subquery whose result depends on the outer row. The keyword `LATERAL` is only required in `FROM` clauses (`SELECT … FROM conversations c, LATERAL (SELECT … FROM messages WHERE conversation_id = c.id) m`). In `SELECT` projections, correlated subqueries are lateral by default — Postgres doesn't need the keyword because it can see the outer column reference. Both forms produce the same execution plan; pick whichever reads better.
+
+**The N+1 anti-pattern** is the broader lesson: every time you write `const rows = await db.select(...); for (const row of rows) { const child = await db.select(...) }`, you've built an N+1. The fix is always one of three shapes: a correlated subquery (this case), an in-list batch (`WHERE child.parent_id IN (...)` then dictionary-merge in JS), or a join (`LEFT JOIN` with the relevant aggregate). Pick the one whose result shape matches your output: scalar per row → correlated subquery, list per row → in-list batch, denormalized flat row → join.
+
+> The same `sql` constant is spread into both the SELECT projection (so the rows have the preview) and the WHERE clause (so `?q=` ILIKE filters on it). Doesn't that compute the subquery twice?
+
+It does, and the code reviewer flagged it as tech debt. The reason it's acceptable at slice-6.2 scale: at a few hundred conversations per bot, the subquery is a sub-millisecond scan and running it twice (once for projection, once for ILIKE) is still under 10 ms total. The cleaner shape — extract the preview to a CTE and reference the CTE from both the projection and the count query — would let Postgres compute the subquery exactly once. The tradeoff is one extra layer of SQL nesting in the source file. Defer until any single bot has 10K+ conversations and the dashboard list page starts feeling slow; until then, the duplicated subquery is the cheaper-to-maintain code.
+
+---
+
+### Idempotent Writes Over Server-Side Rate Limiting (Stage 6 Slice 6.2)
+
+> The chat UI's lead-capture flow could double-submit (user double-clicks "Submit", network retry on a slow connection, a misbehaving widget that fires twice). The POST endpoint has no rate limiter yet. How do we prevent two lead rows + two notifications + two bell-badge increments from one user intention?
+
+**Idempotency on the request body** is the right defense, not rate limiting. Rate limiting protects against malicious bursts; idempotency protects against benign double-submits. They solve different problems and both have a place in a mature system, but if you only have time for one, idempotency is the higher-leverage one because it fixes a UX paper cut that real users hit constantly.
+
+The mechanic: derive a deduplication key from the request, look it up before writing, return the existing row if found. For lead capture the key is `(botId, conversationId, lowercased-email)` — same conversation + same recruiter = same lead, no matter how many times the form gets submitted. The lookup is one indexed `findFirst`; the lowercased-email step is critical because users type emails inconsistently (`Jane@x.com` and `jane@x.com` are the same person and must collide on the dedupe key).
+
+The response shape teaches the client what happened: `{ lead, deduped: true }` on a hit, `{ lead, deduped: false }` on a fresh write. The UI can show "Thanks, we've got your email!" on both — the recruiter doesn't need to know whether they double-submitted, but the dashboard analytics know not to count the second submission.
+
+> What about the case where no conversationId is supplied (e.g. the lead came in via a widget that's not the chat path)? The dedupe key collapses to `(botId, email)` and that could match a stale lead from months ago.
+
+The fallback uses a **24-hour rolling window** on `(botId, email)`: only deduplicate against leads captured in the last 24h. A recruiter who came back six months later for a different role is a separate lead; one who double-clicked thirty seconds ago is the same lead. The window is a heuristic — tune it to match how often the same person legitimately re-engages — but the principle generalizes: when the natural dedupe key is missing, fall back to a windowed key over the broader-matching key. The window bounds the false-positive rate without losing the protection against bursts.
+
+> Why is idempotency a HIGHER-leverage defense than rate limiting for this kind of endpoint?
+
+Because the threat models differ. Rate limiting is for adversaries: someone deliberately spamming the endpoint to fill the database or drain owner attention. Idempotency is for benign clients: users with shaky thumbs, networks that retry, frontends that misfire. The user-facing impact of unsolved rate limiting (spam) requires intent; the impact of unsolved idempotency (random doubled notifications) happens by accident, daily, to your most engaged users. Fix the daily papercut first, and let the harder fight wait for Stage 7's Redis layer.
+
+---
+
+### Anonymous Cross-Origin Writes — Layered Defenses Without A Rate Limiter (Stage 6 Slice 6.2)
+
+> The lead capture endpoint accepts JSON from any origin with no auth. With no rate limiter in this stage, what stops an attacker from filling the leads table and the notification feed?
+
+Four layers of defense, each one cheap and each one solving a different threat shape. **Layer 1: small body cap.** The endpoint caps the request body at 4 KB. The largest legitimate payload is well under 2 KB; any larger request is rejected with 413 before the JSON parser even runs. This blocks the "blast the endpoint with multi-megabyte bodies" attack — a thousand requests/second × 4 KB each is bandwidth-bounded at 32 Mbps, not at server CPU. **Layer 2: Zod schema validation.** Email must match a real email regex (Zod's `.email()`), conversationId must be a UUID, contextSummary must be ≤ 1024 chars. Random garbage gets a 400 in microseconds, never touches the database. The hard cap on `contextSummary` prevents the obvious "write a 100 MB description and burn database row size" attack. **Layer 3: bot must be active.** `WHERE bots.id = ? AND is_active = true` — leads to deactivated bots don't write. A bot owner who turns their bot off should not still be receiving leads. **Layer 4: idempotent dedupe with a 24h fallback window.** As discussed above. An adversary cycling unique emails to defeat dedupe still bounds at one transaction per unique email per 24h window per bot. To make that economically painful for the attacker, they'd need to source thousands of legitimate-looking emails — which is itself a deterrent, and would also fail email-deliverability checks any owner reviewing their lead list would notice immediately.
+
+What's left? A determined attacker with infinite emails and patience can still trickle in noise — say, 100 leads per day from 100 unique sender emails. That's the slot Stage 7's Redis rate limiter fills: a per-bot-per-IP token bucket on the POST endpoint. Until then, the layered defenses above push the cost of a meaningful attack high enough that the more lucrative targets are elsewhere on the internet.
+
+**The generalizable lesson**: layered defenses each handle a specific threat shape, and the security posture is the union of what they each cover. Skipping any one layer leaves a particular shape exposed. Rate limiting is one tool; it's not a replacement for body caps, schema validation, business-rule gating, or idempotency. Reach for all of them on any endpoint that accepts anonymous writes.
+
+---
+
+### When To Inline CORS Headers vs. Configure Them In `next.config.js` (Stage 6 Slice 6.2)
+
+> The chat route (Stage 5) lets `next.config.js` inject CORS headers via the `async headers()` config block, but the leads route (Stage 6) handles CORS in-handler via a `jsonWithCors` helper on every response path. Both work — why two different strategies?
+
+The decision pivot is **whether the path serves more than one method with different CORS requirements.** The chat route is single-purpose: POST is public (CORS), OPTIONS preflight returns 204 with the same headers, there is no GET handler. The path's CORS posture is uniform across methods, so `next.config.js`'s path-level header injection is a clean fit — declare once, apply to every method.
+
+The leads route is dual-purpose: POST is public (CORS, called by the widget from `janedoe.com`), GET is owner-gated (same-origin, called by the dashboard at `probot.dev`). The GET response *technically* doesn't need CORS headers — the dashboard is same-origin, the browser never even checks them. But `next.config.js` would attach them anyway, which is noisy and accidentally documents an intent ("this endpoint is cross-origin") that isn't true for the GET surface. Inline `jsonWithCors` lets the POST surface its CORS posture explicitly and the GET surface stay quiet. Same path, two strategies, no muddled signal.
+
+**A secondary reason to prefer inline**: when the route has multiple error responses (415, 413, 400, 404, 500), each one needs to carry CORS headers — otherwise the browser blocks the response and the widget can't read the error. The `jsonWithCors` helper makes this trivial (every `return jsonWithCors(body, status)` is one line). With `next.config.js`, the headers are attached to every response regardless of status, which is also fine — but you lose the at-a-call-site visibility that the inline helper provides.
+
+**Two strategies coexist; pick by which signal matters more**: declared-once-at-config (for single-purpose CORS paths, terse), or explicit-at-every-response (for mixed paths, self-documenting). Both end at the same wire bytes; the difference is in what future maintainers see when they grep.
+
+---
+
+### RFC 5987 `filename*` For Non-ASCII Downloads (Stage 6 Slice 6.2)
+
+> The CSV export endpoint sets `Content-Disposition: attachment; filename="leads-Jane-Doe-2026-06-19.csv"`. A bot named "Jané Doe" got "leads-Jan-Doe-2026-06-19.csv" — the accent was silently dropped by the ASCII sanitizer. What's the right way to ship the original name to the browser?
+
+The HTTP spec for `Content-Disposition` has two filename parameters that coexist for exactly this reason. **`filename="..."`** is the legacy form: ASCII-only (any non-ASCII goes through implementation-defined behavior, usually replaced or mangled). **`filename*=UTF-8''<percent-encoded>`** is the RFC 5987 form: explicitly UTF-8 encoded, every character preserved. Modern browsers (Chrome, Firefox, Safari, Edge for ~10 years now) prefer `filename*` when both are present; older clients fall back to `filename`. The dual-parameter pattern is the canonical fix:
+
+```
+Content-Disposition: attachment; filename="leads-Jane-Doe-2026-06-19.csv"; filename*=UTF-8''leads-Jan%C3%A9%20Doe-2026-06-19.csv
+```
+
+The ASCII fallback uses a stripped-and-replaced version of the original (so legacy clients still get a sensible filename); the `filename*` carries the percent-encoded UTF-8 (`Jané` → `Jan%C3%A9`) that Chrome decodes back to `Jané` for the download dialog. **Cost**: ~30 bytes per response header. **Win**: every browser shows the user what they expect to see, including emoji, CJK, Arabic, accented Latin, the lot.
+
+> Why percent-encoding inside the header, instead of just emitting the raw UTF-8 bytes?
+
+HTTP headers are nominally ISO-8859-1 (Latin-1) at the wire level, though most clients accept UTF-8 in `Content-Disposition` body. The percent-encoding in RFC 5987 is a defensive belt: it ensures the header value is plain ASCII printable, so it survives every proxy, every logging layer, every HTTP/1.1-conformant intermediary that might mangle high-bit bytes. The `*` suffix on the parameter name (`filename*` vs `filename`) is the marker that tells the client "this value is RFC-5987-encoded — decode the percent-escapes." Browsers without RFC 5987 support ignore parameters with the `*` suffix entirely, which is why the ASCII fallback `filename="..."` must also be present.
+
+**The general principle**: any time a wire format has both a legacy ASCII slot and a newer Unicode slot for the same field, fill both. The legacy slot keeps old clients working; the new slot is for the actual data. Don't pick one — the cost of both is microscopic and the failure mode of either-alone is real user-visible corruption.
+
+---
+
+### CSV Quoting Beyond CR/LF — The U+2028/U+2029 Edge Case (Stage 6 Slice 6.2)
+
+> The CSV serializer originally quoted any cell containing `,`, `"`, `\r`, or `\n`. The code reviewer flagged that U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) should also trigger quoting. Why? They look like normal whitespace.
+
+CSV is an under-specified format with multiple parser implementations in the wild, and the parsers disagree on what counts as a row terminator. RFC 4180 only requires `\r\n`, but Google Sheets and older Excel versions treat U+2028 and U+2029 as row terminators when they appear in unquoted cells. A recruiter pastes "asked about ML experience was very thorough" into the chat (a copy-paste from a rich-text source that uses U+2028 instead of `\n`), the lead-capture endpoint stores it intact, the CSV export serializes it unquoted, the bot owner opens the file in Google Sheets, and the `context_summary` column silently splits across two rows. The lead's email lands on row N, the context tail lands on row N+1 with no email next to it. Data corruption, no error message, owner doesn't notice until someone asks "why is the export weird?"
+
+The fix is one regex character extension: `[",\r\n]` → `[",\r\n  ]`. Any cell containing those code points now gets wrapped in double quotes, and the quote-respecting parsers (which is all of them) treat the contents as opaque text instead of structured CSV.
+
+> Why does the regex need to be built via `new RegExp(string)` instead of a `/.../` literal?
+
+U+2028 and U+2029 are JavaScript source-level line terminators — the lexer treats them as the end of a line, the same way it treats `\n`. They're allowed inside string literals (since ES2019 relaxed the rule), but they still terminate `//` comments and `/.../` regex literals. Embedding them as raw characters in a regex literal closes the regex mid-pattern with a syntax error. The workaround is to build the regex from a string: `new RegExp("[\",\\r\\n\\u2028\\u2029]")`. The string literal accepts the backslash-u escape sequences, and the RegExp constructor parses them as character class entries. Same wire behavior as a regex literal, source-level immune to the line-terminator problem.
+
+**The wider lesson**: every text format has a long tail of characters that mean something special to *some* parser, even if not to the spec. CSV's ` `/` ` are one example; HTML's `‮` (RIGHT-TO-LEFT OVERRIDE) is another; URLs have a whole zoo. When in doubt, quote/escape conservatively at the producer end — the cost of a few extra quote characters is microscopic compared to the cost of one corrupted export reaching a user.
+
+---
+
+### The Single-Statement Ownership Check (Stage 6 Slice 6.2)
+
+> The "mark notification as read" endpoint needs to verify two things: the row exists, AND the row belongs to the requesting user. The naïve approach is a SELECT to confirm both, then an UPDATE. Why does the route do it in one statement instead?
+
+The two-statement approach has three problems. **Time-of-check / time-of-use race.** Between the SELECT (which confirms the user owns the row) and the UPDATE (which sets `read_at`), another request could have deleted the row, transferred it, or modified its `user_id`. The window is tiny but real; under load it materializes occasionally and produces "I checked it was mine, then it wasn't" bugs that are hellish to debug. **Round-trip cost.** Two round-trips to Postgres instead of one — small for a single user, real for a polling client that hits the endpoint every 30 seconds. **Existence-leak via timing.** A 404 from "row exists but isn't yours" is timing-distinguishable from a 404 from "row doesn't exist at all" because the SELECT step has different cost in each case. The cross-tenant existence oracle this creates is small but not zero.
+
+The single-statement approach fixes all three: `UPDATE notifications SET read_at = $1 WHERE id = $2 AND user_id = $3 RETURNING id`. The WHERE clause does both the existence check and the ownership check atomically. Postgres takes the row-level lock once; the row either updates (returns 1 row) or doesn't (returns 0 rows). A 0-row result is mapped to 404 — the route can't distinguish "doesn't exist" from "isn't yours," which is the point: a cross-tenant attacker probing for valid notification IDs gets the same response shape and timing regardless of whether they hit a real ID owned by someone else.
+
+> Why is it important to return 404 (not 403) when the row belongs to someone else?
+
+403 (Forbidden) is a confirmation that the resource exists — it just says "you can't have it." 404 (Not Found) gives no information about whether the resource exists. For a notification ID that's UUID-shaped, distinguishing 403 from 404 lets an attacker enumerate which IDs are real even without being able to read their contents. The owner of one of those IDs might be a competitor, an executive, or anyone whose presence in the system is itself sensitive information. Returning 404 in both cases collapses the oracle. **The general rule**: across tenant boundaries, never give different responses for "this resource exists but is not yours" vs "this resource does not exist." The UI for the authenticated owner is the only surface that gets to know which is which.
+
+---
+
+### URL-State Server Rendering For List + Pagination + Search (Stage 6 Slice 6.3)
+
+> The conversations list page needs pagination + a search input. Most React tutorials would build this as a client component with useState for the query, useEffect to fetch when it changes, a loading skeleton, and an array of items rendered after the fetch. The dashboard pages here are server components with one client component (SearchBar) embedded. Why the split?
+
+The architecture distinguishes two state classes. **Shareable, bookmarkable state lives in the URL.** What page am I on? What search query am I filtering by? These are answers the user might want to copy a link to, return to via the back button, or hand to a teammate. **Ephemeral interaction state lives in client React.** What characters are in the input right now? Has the debounce timer fired? Is the dropdown menu open? These are answers nobody outside the current tab needs to know.
+
+For a list page with pagination + search, the URL state pattern looks like: `/dashboard/bots/<id>/conversations?page=3&q=python`. The RSC reads `searchParams.page` and `searchParams.q` at render time, calls the Drizzle query directly, and ships HTML. Pagination is plain `<Link>` elements that navigate to `?page=N`. Search input is a small client component (`<SearchBar>`) whose only job is to debounce keystrokes, then call `router.replace(...)` with the new URL. When the URL changes, Next 14's App Router fetches the updated RSC payload and seamlessly swaps the list — no loading skeleton, no client-side fetch, no double network round-trip. The browser back/forward, share-this-link, and refresh-this-page all just work because the state is in the URL.
+
+**The pivot that makes this pattern shine is `router.replace` over `router.push`.** Replace doesn't push a new history entry — typing "python" letter by letter doesn't add 6 entries to the browser back stack. The last URL before search becomes the "back" target. Push would clog the history with intermediate states the user never explicitly committed to.
+
+**The other pivot is `useTransition`.** The `replace` call is wrapped in `startTransition(() => router.replace(...))` so React doesn't block the input from accepting more keystrokes while the server-rendered list re-fetches. Without this, the typing experience feels sticky on slow networks; with it, the list updates "in the background" while the input stays responsive.
+
+**Why not just fetch from the API endpoint in a `useEffect`?** Three reasons. (1) The RSC has the database connection right there; an extra HTTP round-trip to your own server is pure latency overhead. (2) The server response is already HTML the browser can render directly; fetching JSON means re-running the rendering on the client. (3) Caching — Next.js can deduplicate identical RSC requests and cache the resulting HTML across users in many cases; the API + client-fetch path doesn't get this for free.
+
+> When `?page=` and `?q=` are both in the URL, what happens to one when the other changes?
+
+You need an opinion baked into the URL builder. The default Pagination component preserves `?q=` across page navigation (extraParams prop). The SearchBar resets `?page=` to 1 on every search change — otherwise a search after navigating to page 5 of the unfiltered list lands on page 5 of the filtered results, which is almost always empty. **The pattern**: orthogonal URL params (filters + pagination) interact in non-obvious ways; nail down which changes reset which during the design phase, not after a user complaint.
+
+> The Pagination component drops `?page=` entirely when it's 1. Why?
+
+A canonical URL has no `?page=1` — it has no `page` param at all. Two URLs that point at the same logical page should produce the same browser bar. Dropping the default value keeps the URL shorter, the share-this-link affordance cleaner, and prevents subtle bugs where "go to page 1" and "no page param" need to be treated as identical in route caches, analytics dashboards, and search indexing. **The general rule**: defaults belong out of the URL; only express the non-default state in query params.
+
+---
+
+### The `noopener noreferrer target="_blank"` Triple For User-Generated Hyperlinks (Stage 6 Slice 6.3)
+
+> The dashboard's transcript viewer renders stored chat messages including any hyperlinks the bot replied with. Markdown like `see [docs](https://example.com)` becomes an `<a>` element. Why does the rendered link need three attributes — `target="_blank"`, `rel="noopener"`, and `rel="noreferrer"` — beyond just the URL?
+
+Each attribute defends a distinct exposure surface, and skipping any one re-opens a real vulnerability class. **`target="_blank"`** opens the link in a new tab. That's a UX choice — the dashboard stays loaded so the user can return to their workflow. But it's also where the security problem starts: by default, the newly-opened tab inherits a `window.opener` reference back to the dashboard page, which means JS running in the destination can call `window.opener.location.replace("https://phishing.example.com")` and silently navigate the original dashboard tab to a credential-harvesting clone. The attack is called **tabnabbing** and it's been exploited in the wild against major sites. The user clicks a benign-looking link, switches back to "the dashboard" five minutes later, and the dashboard now looks normal but is actually the attacker's clone asking them to log in again.
+
+**`rel="noopener"`** is the direct defense: it tells the browser to set `window.opener = null` in the destination tab, severing the back-reference. Most modern browsers now imply `noopener` for `target="_blank"` automatically, but only since ~2018 and only when both attributes are present in a specific shape. Setting it explicitly removes the dependency on the browser version. **`rel="noreferrer"`** is the secondary defense: it strips the `Referer` header from the request to the destination, so the destination site doesn't learn which dashboard page (with its sensitive path: `/dashboard/bots/<botId>/conversations/<convId>`) the link was clicked from. This blocks **referer leakage** of internal URLs.
+
+The three-attribute combo is the canonical safe-external-link pattern. Anything less is a vulnerability:
+- `target="_blank"` without `rel`: tabnabbing exposure + referer leak.
+- `target="_blank" rel="noopener"`: no tabnabbing, but still leaks the internal URL.
+- `target="_blank" rel="noreferrer"`: still leaks tabnabbing on older browsers.
+
+For probot specifically, the threat model is sharper than generic web: the bot owner is logged in to the dashboard, and the stored transcript text is generated by an LLM (which can hallucinate or be prompt-injected into producing arbitrary URLs). A transcript saying "go to https://anthropic.com" might silently render as an `<a href="https://attacker.com">` if the upstream LLM was prompt-injected. The three attributes don't fix the injection — they ensure that even when the injection succeeds, the worst outcome is the user visiting an attacker page in a fresh tab, not their dashboard session getting hijacked.
+
+> The chat MessageBubble has the same SafeLink. Why is the same defense duplicated in the dashboard's TranscriptMessage?
+
+Because the threat is the same: stored text that's rendered as HTML must escape, and any `<a>` it produces must be tab-isolated. The defense isn't "applied to the chat" — it's applied to **every render of user-or-LLM-generated text as HTML**. The dashboard transcript is a second render of the same text, six weeks later, by a different user (the bot owner instead of the recruiter), but the rendering surface is identical. Defense must live at every render site, not at the source — because there's no guarantee that the rendering pipeline scrubs links the same way at every endpoint.
+
+---
+
+### Shared Query Modules — The Caller-Contract Pattern For Tenancy (Stage 6 Slice 6.3)
+
+> When the API routes and the RSC pages need the same database query, the obvious move is to extract it to a shared module. But which side does the tenant check — the shared module or the caller?
+
+Two strategies, real tradeoff. **Option A: Shared module takes `userId` and does the check.** The query becomes `WHERE bot_id = ? AND bot.user_id = ?`, so every caller passes both. Safer by default — a new call site can't accidentally skip the ownership check because the function signature forces them to provide it. But the shape couples the query layer to the auth session, and every call site needs to thread `userId` through whatever helpers they're using.
+
+**Option B: Shared module takes `botId` only and trusts the caller.** The function is just `WHERE bot_id = ?`, and every caller is expected to have verified ownership upstream (in the route, that's `requireBotOwner`; in the RSC page, that's the `findFirst({ where: and(eq(bots.id), eq(bots.userId, ...)) })` pattern). Simpler call sites, more flexibility — but a new caller could forget the upstream guard and silently leak across tenants.
+
+The slice ships Option B with a module-level doc comment that makes the contract explicit. Three reasons. (1) The upstream-check pattern was already established by Stage 5's bot detail page; adopting it everywhere keeps the dashboard codebase consistent. (2) The doc comment is grep-friendly — searching for `listLeads` or `listConversations` immediately shows the contract before any code is written that uses it. (3) The cost of Option A is small per-callsite, but Option B's flexibility pays off when a future internal background job (e.g. a cron that aggregates leads across all bots, regardless of owner) needs the same query — Option A would require an awkward fake `userId` to satisfy the contract.
+
+**The generalizable lesson is "make implicit contracts visible."** If a function has a precondition that callers must enforce — tenancy, sanitization, rate-limit ack, whatever — the worst place to encode the precondition is "in the comments at the call site." The next-worst is "in the developer's head." The best is the function signature (which forces compile-time checks) or, when that's impractical, a doc comment at the module level (which the next contributor reads when they import the function). Skipping the comment is technical debt that compounds: every new caller that gets the precondition right by accident is one more example to lean on when reviewing the next caller, until eventually someone gets it wrong and the bug is invisible because everyone else "knew" the pattern.
+
+> When does the "trust the caller" pattern get dangerous?
+
+When the caller's responsibility includes a check that *can fail silently*. Tenancy checks are loud — they `notFound()` or return 401 — so a forgotten check makes the API obviously broken. Compare with rate-limit checks: if the shared function trusts the caller has rate-limited, and a new caller forgets, no test or user-visible behavior necessarily reveals the gap; the abuse only surfaces in production as elevated DB load. For checks that can be skipped without immediate symptoms, push them into the function signature so they're impossible to skip. For checks with loud failure modes, the doc-comment-contract pattern is fine.
+
+---
+
+### Lazy `useState` Initializer vs. Render-Body `useRef` Writes (Stage 6 Slice 6.4)
+
+> ChatWindow needs to compute a per-tab sessionId exactly once at mount and never recompute it. The first draft used `const ref = useRef(null); if (ref.current === null) ref.current = expensiveCompute()`. A reviewer flagged this as a React anti-pattern. What's the right way?
+
+There are two patterns that look like they do the same thing — write a value once at mount, read it on every subsequent render — but they have different correctness properties under React's runtime guarantees. **Pattern A: write to a `useRef` inside the render body** (the rejected draft). **Pattern B: lazy `useState` initializer** (the canonical fix): `const [value] = useState(() => expensiveCompute())`.
+
+Both produce a stable value across renders. The difference is in how they behave under React Strict Mode — and more generally, what React promises about render functions. **Strict Mode intentionally double-invokes the render function in development** to flush out side effects that don't survive re-renders. With pattern A, the first invocation writes the ref, the second invocation sees the ref already set and skips the compute — *the value is fine*, but the side effects inside `expensiveCompute()` ran on the first pass and were never cleaned up. If those side effects write to sessionStorage, set up a connection, or push to an analytics queue, you get a duplicate that the cleanup function (which only `useEffect` has) cannot undo. With pattern B, React contract-guarantees the initializer runs exactly once per component instance even under Strict Mode — by design, that's what the lazy-initializer form is for.
+
+The broader principle: **`useRef` is for values that persist across renders without triggering re-renders** (DOM nodes, mutable counters, debounce timers). It is not designed as a "compute once" container, and React's render-rules don't protect side effects placed in its initialization path. `useState`'s lazy initializer is the contract-guaranteed "compute once at mount" mechanism. When you find yourself reaching for `useRef` to memoize an expensive compute, you almost always want `useState(() => compute())` instead — and if the value really shouldn't trigger re-renders (which would be exotic for a mount-stable value, since it never changes), the lazy initializer still works because state that's never updated never triggers a re-render.
+
+> Why doesn't `useMemo` work here?
+
+It would *almost* work. `useMemo(() => compute(), [])` runs the compute on the first render and caches the result. But React explicitly reserves the right to drop the cache and recompute on subsequent renders — for memory pressure reasons, for example. The docs say "you may rely on useMemo as a performance optimization, not as a semantic guarantee." If `compute()` has a side effect or returns a fresh identity each call, a dropped cache is a bug. The lazy `useState` initializer has a stronger contract: the value is held in state and persists for the lifetime of the component instance, period. For "compute once and reuse forever," reach for `useState(() => ...)`.
+
+---
+
+### Exhaustiveness Checks With `never` In Discriminated Union Dispatches (Stage 6 Slice 6.4)
+
+> The ChatWindow render loop dispatches on `m.role`. Today there's one system variant (`kind: "lead_capture"`). The first draft checked only `m.role === "system"` and routed all system messages to the lead-capture card. The reviewer flagged this as not future-proof — what's the canonical fix?
+
+The pattern is called an **exhaustiveness check** and it uses TypeScript's `never` type to convert a future-runtime bug into a present-compile-time error. The shape:
+
+```ts
+if (m.role === "system") {
+  if (m.kind === "lead_capture") return <LeadCaptureCard ... />;
+  // Anything else with role === "system" lands here.
+  const _exhaustive: never = m.kind;
+  void _exhaustive;
+  return null;
+}
+```
+
+Today `m.kind` (after the `role === "system"` narrow) is the union `"lead_capture"`. After the `m.kind === "lead_capture"` check, the type system narrows `m.kind` to `never` in the unreachable branch. Assigning `m.kind` to a variable of type `never` typechecks fine because `never` is the bottom type. Now imagine a future variant: `{ role: "system"; kind: "cookie_banner" }`. After the type extension, `m.kind` in the unreachable branch becomes `"cookie_banner"` — and `const _exhaustive: never = "cookie_banner"` is a compile error. The next person to add a system variant has to update this dispatch to handle it; they cannot accidentally ship a binary that silently misroutes the new variant to `<LeadCaptureCard>`.
+
+**This is the canonical pattern for guarding discriminated-union dispatches against future extension.** Use it anywhere you're switching on a `kind`, `type`, `role`, `status`, or any other discriminant. The cost is two lines per dispatch site; the benefit is that adding a new variant turns into a compiler-driven punch list of every place that needs to handle it.
+
+> `void _exhaustive` looks weird. Why not just `const _: never = m.kind`?
+
+Both work. The `void` operator on the unused variable suppresses TypeScript's "unused variable" warning (or your linter's noUnusedLocals rule) without changing semantics. Some projects configure their linters to allow underscore-prefixed unused variables and drop the `void`. Either style preserves the type-check guarantee; pick whichever your codebase's lint config is happiest with.
+
+> Could I use a `switch` statement with a `default: never` instead?
+
+Yes, and for dispatches with three or more branches the switch form is usually cleaner:
+
+```ts
+switch (m.kind) {
+  case "lead_capture": return <LeadCaptureCard ... />;
+  case "cookie_banner": return <CookieBanner ... />;
+  default: {
+    const _: never = m.kind;
+    return null;
+  }
+}
+```
+
+The shape is the same — the unreachable branch asserts `never` on the discriminant — and TypeScript will fail to typecheck the `default` if a new case is added without a matching `case`. For two-branch dispatches, the `if`/`else` form is shorter; for more, the switch wins on readability.
+
+---
+
+### Page Visibility API For Polling — Free Battery, Free Server Cost (Stage 6 Slice 6.4)
+
+> The notification bell polls `/api/notifications/unread-count` every 30 seconds while the dashboard is open. If the user opens the dashboard at 9 a.m. and leaves the tab in the background all day, that's 28,800 polls a day (60s / 30s × 60min × 8hr × 1 tab) on a query they're not even looking at. How do we stop?
+
+The Web Platform exposes a `visibilitychange` event on `document` and a `document.visibilityState` property that flips between `"visible"` and `"hidden"` (and rarely `"prerender"`). The bell's polling loop ties its start/stop to this:
+
+```ts
+useEffect(() => {
+  let intervalId: ReturnType<typeof setInterval> | null = null;
+  function start() {
+    if (intervalId !== null) return;
+    void refresh();
+    intervalId = setInterval(() => void refresh(), 30_000);
+  }
+  function stop() {
+    if (intervalId !== null) { clearInterval(intervalId); intervalId = null; }
+  }
+  function handleVisibility() {
+    document.visibilityState === "visible" ? start() : stop();
+  }
+  if (document.visibilityState === "visible") start();
+  document.addEventListener("visibilitychange", handleVisibility);
+  return () => {
+    stop();
+    document.removeEventListener("visibilitychange", handleVisibility);
+  };
+}, [refresh]);
+```
+
+The result: while the tab is visible, polling runs at the configured cadence. When the user switches tabs, alt-tabs to another app, locks their laptop, or minimizes the browser, the interval is cleared. When they come back, the visibility event fires, `start()` runs, and an immediate `refresh()` brings the badge current before the next 30s tick. **The user sees no behavioral difference** — the bell updates the moment they return to the dashboard — **but the server stops receiving polls during the idle period**.
+
+> Why fire an immediate refresh on visibility-back, instead of waiting for the next 30s tick?
+
+Because the badge is stale by exactly however long the tab was hidden. If a user is gone for 15 minutes, the next interval tick is up to 30 seconds away. Firing `refresh()` immediately on visibility-back closes that gap to one network round-trip — the badge is current within ~200ms of the user looking at it again. The cost is one extra request per visibility transition, which is negligible compared to the polls you saved while hidden.
+
+> What about Battery Status API? Or `navigator.connection.saveData`?
+
+Visibility is the highest-signal lever — most "tab in background" idle is observed via this signal alone. Battery and saveData are smaller wins and worth layering only if you have evidence they help. Per CLAUDE.md §2 (KISS), ship visibility-based pause first; revisit only if poll cost becomes a measured problem. **The general principle: polling cadence should always be conditional on whether the user is actually looking.** This applies beyond browser tabs: a mobile app's polling pauses when the app goes to background; a desktop client's polling pauses when the window is occluded or minimized; a CLI tool that polls a server pauses when stdin is detached. The user-not-looking signal varies by platform; the answer is always "stop spending resources nobody's consuming."
+
+> The polling refresh function swallows errors silently — is that right?
+
+For a polling loop where the next iteration will retry, yes. A single failed poll due to a transient network glitch shouldn't reset the badge to a stale zero, shouldn't pop a toast, shouldn't trigger a retry storm. The next successful poll will reconcile. **The general rule for idempotent polling loops: log on failure, don't surface it; let the next iteration heal.** Pop-up errors are for user-initiated actions where the user is waiting for a result. Background polls are silent successes and silent failures with eventual consistency.
+
+---
+
+### Widening A Mass-Assignment Whitelist Without Reintroducing The Vulnerability (Stage 6 Slice 6.5)
+
+> Slice 5 shipped a PATCH endpoint that accepted only `themeColor`. Slice 6.5 widens it to 5 fields (name, headline, personality, suggestedQuestions, themeColor). How do you widen the surface without losing the mass-assignment defense?
+
+Two patterns. **The wrong one: write a "stripped body" function that deletes fields you don't want.** That's a denylist — and denylists are a maintenance trap. Tomorrow someone adds a new column to the `bots` table — `customDomain`, say. The PATCH handler's `delete body.userId; delete body.isActive; delete body.contextText` block silently doesn't know about it. Now `customDomain` is mass-assignable. The pattern fails open at every schema migration.
+
+**The right one: schema as whitelist, route as schema-consumer.** The Zod object defines exactly the fields the endpoint accepts. Anything not in the schema is dropped by `safeParse` — not "silently dropped," but "never touches the SET payload because the route only reads `parsed.data.X` for X in the schema." Adding a new editable field is a two-place edit: add it to the schema, add the conditional assignment in the route. Missing either step means the field doesn't update — a loud failure mode. Forgetting to add a NEW column (the dangerous case from above) means the schema doesn't list it, so it's not assignable. The system fails closed.
+
+Concretely:
+
+```ts
+// schema.ts
+export const botPatchInput = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  headline: z.string().transform(v => v.trim()).max(120).optional(),
+  personality: z.enum(PERSONALITY_PRESETS).optional(),
+  suggestedQuestions: z.array(z.string().max(200)).max(6).optional(),
+  themeColor: themeColorSchema.optional(),
+}).refine(v => Object.values(v).some(x => x !== undefined),
+  "PATCH body must include at least one field");
+
+// route.ts
+const parsed = botPatchInput.safeParse(body);
+if (!parsed.success) return 400;
+const { themeColor, name, headline, personality, suggestedQuestions } = parsed.data;
+const set: Record<string, unknown> = {};
+if (themeColor !== undefined) set.themeColor = themeColor;
+if (name !== undefined) set.name = name;
+if (headline !== undefined) set.headline = headline;
+if (personality !== undefined) set.personality = personality;
+if (suggestedQuestions !== undefined) set.suggestedQuestions = suggestedQuestions;
+// Note: the destructured variable names ARE the whitelist. There's no
+// way to land userId, isActive, contextText in `set` without explicitly
+// adding them to the destructure AND a conditional assignment.
+```
+
+The shape is grep-friendly: searching for `set.<columnName>` shows you every field that can be PATCHed. Searching for "patchInput" or "Patch" lists every schema that defines a write surface. A future audit asking "can a user PATCH their own `userId`?" gets a binary answer from the schema definition. With the denylist pattern, the answer is "trace control flow and hope you didn't miss a code path."
+
+> Why server-side `.trim()` on `headline` instead of client-side?
+
+Defense at the boundary nearest the data store. Client-side trim works for honest clients but is bypassable — a hostile actor crafts the request directly without going through the React form. Server-side trim guarantees the DB never holds `"   "` regardless of what the client did. The same principle applies to email lowercasing for dedupe keys, username normalization, URL canonicalization. **Trust the request, but enforce invariants on the way in.**
+
+> Should the schema reject `headline: ""` outright?
+
+Empty string is the canonical "no headline" value — the way the UI signals "clear this field." Rejecting `""` would force the client to send something like `null` or omit the field entirely, both of which are weird semantics for an editable text field. The trim transform converts whitespace-only padding to empty, the column allows empty, and the widget renders no headline section when the value is empty. Three consistent layers without forcing the client to know special sentinel values.
+
+---
+
+### `onClick` vs `onMouseDown` For Modal Backdrop Dismissal (Stage 6 Slice 6.5)
+
+> The ConfirmDialog modal closes when the user clicks the backdrop (the darkened area around the panel). The first draft used `onMouseDown`; the reviewer flagged a subtle UX bug. What's the difference?
+
+`onMouseDown` fires the moment the user presses the mouse button. `onClick` fires only after a press-then-release pair where both events happen on the same target. This distinction matters for backdrop dismissal because users sometimes click-and-drag — they start a click inside the modal panel, accidentally drag the cursor onto the backdrop, then release. With `onMouseDown` on the backdrop, the dismissal fires the moment they press the button anywhere on the backdrop — including the case where they pressed inside the panel and dragged out. Wait, let me reread the actual failure case: with `onMouseDown` on the backdrop, the press inside the panel doesn't trigger backdrop dismissal because the press target is the panel. But: press on backdrop → drag onto panel → release — the `mousedown` fired with `target = backdrop`, so dismissal triggers IMMEDIATELY on press, even though the user dragged into the panel before releasing. That's the bug. A user who pressed the backdrop intending to dismiss, then second-guessed mid-click and dragged into the panel, gets dismissed anyway.
+
+`onClick` waits for the full press-release pair on the same target. If the user presses on the backdrop and releases on the panel, no click event fires on the backdrop. If they press on the panel and release on the backdrop, no click fires on the backdrop either. Only press-and-release-both-on-backdrop dismisses.
+
+**The generalizable rule: for destructive or commit-style actions, use `onClick`. For UI state transitions where the user's intent is unambiguous from the press alone, `onMouseDown` is faster-feeling.** Examples of the latter: opening a dropdown menu (press is enough — the user is engaging the trigger), starting a drag operation. Examples of the former: dismissing a modal, submitting a form, firing a destructive action. The half-second of "feels faster" from `onMouseDown` is not worth the "I clicked and the modal dismissed before I could change my mind" experience.
+
+> The pattern `e.target === e.currentTarget` — what's actually being compared?
+
+`currentTarget` is the element the handler is bound to (the backdrop `<div>`). `target` is the deepest element the event originated on (could be the backdrop, or any descendant — the panel, the buttons, the title text). The equality check narrows "anywhere in the backdrop subtree" to "the backdrop itself." Without it, clicking the panel's title text would bubble up to the backdrop's handler and dismiss the dialog — because the click event propagated. The check is the standard "did this event originate on me, not on a descendant?" guard.
+
+You can also write this as `e.target !== panelRef.current` (if you have a ref to the panel) or use `stopPropagation()` on the panel's onClick. Both work; the `target === currentTarget` form is the most compact and doesn't require setting up refs.
+
+---
+
+### State Seeded From Props vs. Synced From Props — Edit Forms Want The Former (Stage 6 Slice 6.5)
+
+> The settings form takes `initialName`, `initialHeadline`, etc. as props and seeds `useState` with them. A reviewer suggested adding `useEffect([initialName], () => setName(initialName))` to sync state when the parent re-renders with new props (e.g. after `router.refresh()`). Why is that the wrong call for an edit form?
+
+Two competing failure modes. **Failure mode A (the synced-from-props pattern):** the user starts editing the name field, types halfway through "Jane Doe", and the parent server-component re-renders for some unrelated reason — maybe a sibling component fired a router.refresh(), maybe a sub-route invalidated its data. The new render passes the SAME `initialName="Jane"` prop (since nothing was saved yet). With a sync-from-props effect, `setName("Jane")` runs and clobbers "Jane D" — the user's typed-but-not-yet-saved input vanishes. **Failure mode B (the seed-once pattern):** the user saves successfully, the parent re-renders with the new `initialName="Jane Doe"`, but the local `name` state is also "Jane Doe" (the user just typed it). State and prop agree; `dirty` is false. The user starts a second edit, types "Jane Doe Updated", `dirty` is true again because the render-body comparison `name !== initialName` uses the latest prop value. No bug. Edit B continues working.
+
+The reviewer's concern was that "state holds the old value forever after the first save." That's incorrect because `dirty` is computed in the render body each render — it always sees the latest `initialName` prop. The state holds the user's current typing; the prop holds the server's last-saved value; the diff between them is `dirty`. Each render evaluates `dirty` fresh.
+
+**The general principle:** an edit form's state IS the user's draft. It should persist across parent re-renders even when the parent's props update. The user has typed something; the form's job is to remember that until the user explicitly discards (cancel) or commits (save). Treating the form as a one-way derived view of props is wrong for editing surfaces — that's the read-only view pattern, not the editor pattern. The correct rule: **read-only views sync from props every render; edit forms seed from props once and persist user input until save or unmount.**
+
+> When IS sync-from-props the right pattern?
+
+When the props ARE the canonical state — read-only displays, derived dashboards, status indicators that follow server state with no user input. Examples: a notification badge whose count is "whatever the server says." Examples of the wrong pattern: any form with user-typed input. The dividing line is whether the user can modify the displayed value. If yes, the value is shared between user and server; the form needs an explicit save action to commit user changes, and the state must persist across re-renders. If no, syncing from props is the simpler, correct pattern.
+
+> The hard navigation pattern (router.push instead of router.refresh) was suggested as an alternative — what's the tradeoff?
+
+`router.push` unmounts the current component and mounts a fresh instance, so `useState` initializers run again with the new props. The user's draft is gone — which is fine after a successful save (nothing to preserve) but bad mid-edit. `router.refresh()` re-fetches the RSC tree and patches the DOM, preserving client state. For "after a save, show the updated server values" the choice between them is mostly aesthetic — both work, push is slower (full mount), refresh is faster (state preserved). For "user is mid-edit and we need fresh server data" — neither is right; that's a sync conflict that needs a UI-level resolution (warn the user, give them a merge view). The current pattern (refresh after save) is the standard happy-path choice.
+
+---
+
+### Cookies As Server-Component-Readable Per-User State (Dashboard Slice A)
+
+> The dashboard sidebar shows a workspace card for the currently-selected bot. The selection needs to persist across page navigations and survive a reload. Where should that single value live?
+
+There are three reasonable places for a small per-user preference that the server needs to read at render time: a cookie, a database column, or a session-store (Redis / KV / etc.). The right answer depends on three questions: who needs to read it, who needs to write it, and how often it changes.
+
+For a "which bot am I viewing in the dashboard" preference, the answers are: the server (every dashboard RSC render needs it for the URL pill, embed snippet, View live bot link), the user via a UI control, and rarely (once or twice a session at most). **A cookie wins on every axis.** The server reads it via `cookies()` in any RSC for free. The write is a single server action call that fires when the user picks a different bot. There's no infrastructure to provision, no DB migration, no Redis lease to manage. The browser persists the value across sessions automatically.
+
+```ts
+// Read (any RSC, layout, or page)
+import { cookies } from "next/headers";
+const selected = cookies().get("probot.selectedBot.v1")?.value ?? null;
+
+// Write (server action only)
+"use server";
+cookies().set("probot.selectedBot.v1", botId, {
+  maxAge: 60 * 60 * 24 * 365,
+  httpOnly: true,
+  sameSite: "lax",
+  path: "/",
+});
+```
+
+The DB column would have been overkill (a write on every selection change for a non-durable preference) and the session store would have introduced an infra dependency for a value that fits in 36 characters. **The general rule: for small per-user preferences that the server needs at render time AND that the user is the only writer, reach for cookies first.** DB columns are right when the preference must survive a logout / device switch; session stores are right when many writers race or the value must be invalidated globally.
+
+> Why `httpOnly: true` when the value isn't a secret?
+
+Two reasons. **Defense in depth.** The bot ID is a UUID, not a credential — XSS reading it can't escalate privilege. But XSS exfiltrating the list of UUIDs a user owns is still information the attacker shouldn't trivially harvest. Setting `httpOnly` blocks `document.cookie` access without breaking any client behavior because the value is never used client-side. **Free hardening.** The cost of `httpOnly: true` here is zero. The cost of forgetting it later when a more-sensitive value moves into the same cookie shape is non-zero. Establish the safe default once.
+
+> What's the trust boundary on read?
+
+The cookie's value is user-controlled. A hostile client can set `probot.selectedBot.v1` to any string — including a UUID belonging to another user. The server's read path must validate the value against the user's owned bot set:
+
+```ts
+function resolveSelectedBotId(validIds: string[], fallbackId: string | null) {
+  const raw = cookies().get(COOKIE)?.value;
+  if (raw && validIds.includes(raw)) return raw;
+  return fallbackId;
+}
+```
+
+This is the same shape as any client-supplied identifier validation — never trust the value on its face; intersect with what the authenticated user can legitimately reference. The `selectBotAction` server action that writes the cookie does the same check before writing, but the read-side filter is the actual tenancy boundary because cookies can be set out-of-band (e.g. via a browser extension or a previous account's session).
+
+---
+
+### Catmull-Rom → Cubic Bézier For Smooth SVG Charts Without A Chart Library (Dashboard Slice A)
+
+> The dashboard's "Conversations" chart needs a smooth curve through 7 daily counts. Chart.js / Recharts feels heavy for one chart. How small can we make this with hand-rolled SVG?
+
+The minimal smooth-line-through-points algorithm is **Catmull-Rom interpolation**, and it translates almost trivially into SVG cubic Bézier (`C` command) segments. The mechanic: for each pair of adjacent data points `(P[i], P[i+1])`, you derive two control points using the two neighboring data points `P[i-1]` and `P[i+2]` for the tangent direction. The curve smoothly interpolates **through** every data point (unlike a Bézier where the points are control handles, not the curve itself).
+
+```ts
+function smoothPath(points: {x:number, y:number}[]): string {
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] ?? points[i];  // wrap at edges
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] ?? p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+```
+
+That's the entire algorithm. ~10 lines, zero dependencies. The `/ 6` factor is the standard Catmull-Rom tension of 1 — tweaking it (`/4` for tighter curves, `/8` for looser) controls how aggressively the curve bulges between points.
+
+**Why this beats reaching for a library:** for a single seven-point line chart with a known data shape, the chart library would pull in 30+ KB of bundled JS for axis scaling, data formatting, tooltip handling, theming, accessibility primitives, and animation hooks that this surface doesn't use. The hand-rolled version is 50 lines including the fill-gradient and dot markers, and it ships zero dependencies. **The general rule: when the chart has a fixed shape (line / bar / sparkline) and a known small data range, hand-rolling SVG is almost always smaller, faster, and more themeable than a library.** Libraries win when you need many chart types, dynamic axis units, or tooltip-heavy interactivity.
+
+> What about the edge cases — one point, two points, zero data?
+
+Each one needs explicit handling because the loop assumes at least two adjacent points. **One point**: emit `M x y` and stop (no curve, just a dot — usually the visible `<circle>` markers cover this). **Two points**: the loop runs once; `p0 = p1` and `p3 = p2` via the wrap, which collapses the Catmull-Rom to essentially a straight line between the two points. **Zero data / all-zero counts**: render a dashed horizontal baseline so the panel doesn't visually collapse to nothing. The empty-state UX matters here — a chart that just disappears when there's no data feels broken; a faint dashed line feels intentional.
+
+> Filling the area under the curve — what changes?
+
+Append `L lastX baseY L firstX baseY Z` to the path. That closes the curve along the chart's bottom edge into a polygon, which `<path fill="url(#gradient)">` then shades. Two paths total — one stroke (the line), one fill (the area). SVG's `<linearGradient>` lets the fill fade to transparent at the bottom for the standard "shaded region under the line" look.
+
+> Why SVG `viewBox` + CSS `width: 100%` instead of fixed pixel dimensions?
+
+`viewBox` defines the coordinate space the path is drawn in. The browser then scales the SVG to whatever pixel dimensions the parent allocates, preserving aspect ratio. This means the chart is fully responsive without any JS-based resize handling — drop it in a flex/grid container at any width and it renders correctly. The internal coords are abstract (e.g., 700×200); the screen pixels float independently.
+
+---
+
+### The Dual-Tree Mobile Shell Pattern — One Trigger, One Panel, One Shared State (Dashboard Slice A)
+
+> The dashboard sidebar needs to slide in from the left on mobile. The hamburger button belongs at the top-left of the topbar; the slide-in panel covers most of the screen with a backdrop. They're rendered in different places but share open/close state. What's the cleanest React pattern?
+
+There are three component pieces that need to coordinate: a **trigger** (the hamburger button, lives inside the Topbar), a **panel** (the slide-in body, lives at the layout root so it can fixed-position over everything), and a **state owner** (open/closed boolean + auto-close logic). Threading state through every intervening component would be brittle and would force the layout's server components to become client components just to pass a boolean. The clean solution is a tiny **context provider** that wraps the whole shell:
+
+```tsx
+// MobileSidebarProvider — owns the state, mounted at layout root
+// MobileSidebarToggle  — uses context, lives inside the Topbar
+// MobileSidebarPanel   — uses context, lives at the layout root
+
+<MobileSidebarProvider>
+  <Sidebar />           // desktop, hidden on mobile
+  <main>
+    <Topbar />          // contains <MobileSidebarToggle /> internally
+    {children}
+  </main>
+  <MobileSidebarPanel>  // mobile-only slide-in, content mirrors <Sidebar />
+    <Sidebar />
+  </MobileSidebarPanel>
+</MobileSidebarProvider>
+```
+
+The trigger and panel are sibling client components communicating via context. The layout stays server-component-friendly (it just renders the provider as a wrapper). The panel mirrors the desktop sidebar's content by re-mounting the same `<Sidebar />` server component inside the slide-in container.
+
+**The auto-close on navigation is the key UX detail.** The provider uses `useEffect(() => setOpen(false), [pathname])` so clicking any nav link inside the panel navigates the user AND closes the panel in one render cycle. Without this the panel stays open over the new page, which is jarring and broken-feeling on mobile.
+
+```tsx
+useEffect(() => { setOpen(false); }, [pathname]);
+```
+
+**The body-scroll-lock is the other piece worth getting right.** While the panel is open, the page underneath should not scroll (or the touch gestures on the panel propagate to the body and the user can scroll the dashboard while the menu is "modal"). The effect snapshots `document.body.style.overflow` on mount, sets it to `"hidden"`, and restores the snapshot on cleanup. Strict Mode's double-render handles this correctly because each mount captures the value at the time of that render.
+
+> Why mirror the sidebar in two trees instead of one responsive container?
+
+The desktop sidebar is a static piece of chrome at the left edge of the layout. The mobile panel is a fixed-position overlay with a backdrop. CSS can change the size and position of a single sidebar via media queries, but it can't toggle "is this an overlay or a layout column?" cleanly — the layout structure differs (`flex` row with fixed sidebar vs. layered with backdrop). Rendering both trees and showing one based on screen size (`hidden lg:flex` for desktop, `lg:hidden` for the mobile panel toggle) is the simplest version of "two render strategies for two structurally different layouts." The duplicate render cost is essentially zero because only one is visible at any time, and the server-rendered HTML is small.
+
+**The general rule for responsive chrome with structural differences:** ship two trees, gate visibility via Tailwind responsive utilities (`hidden lg:flex` / `lg:hidden`), share state via React context. CSS-only responsive sidebars work great when the structural shape is preserved (column width changes, content collapses to icons). They fall apart when one breakpoint needs an overlay and the other needs a layout column.
+
+---
+
+### URL-Driven Tab State + The WAI-ARIA Pairing The Roles Don't Buy You (Dashboard Slice B)
+
+> The settings page has 5 tabs. Tab state needs to be persistent (deep-linkable, back-button-friendly) but the tabs themselves are pure UI navigation. Where should the state live?
+
+There are three reasonable places: component-local `useState`, a URL query param, or a route segment. The first is the wrong choice for anything users might want to share or bookmark — `useState` is invisible to the URL bar. The third (route segment, e.g. `/settings/account` vs. `/settings/bot`) works but adds five file-system entries and forces each tab into its own page. **The URL query param wins for tab strips inside a single page** — `/settings?tab=bot` is one route file with internal panel switching, every tab is deep-linkable, browser back navigates between tabs cleanly, and "share this link" works without losing context.
+
+The implementation uses `useSearchParams()` to read, `router.replace()` (not `push`) to write, and a small mapping from valid tab keys to panel components. Three details matter:
+
+**Drop the default tab from the URL.** A canonical URL has no `?tab=account` if "account" is the default — it just has no `tab` param at all. Two URLs pointing at the same logical view should produce the same browser bar. This matches the slice-6.3 Pagination convention (`?page=1` implicit).
+
+**Validate the incoming `?tab=` value against the known set.** A hostile or stale URL like `?tab=nonsense` should fall back to the default, not crash the page. The check is one line: `const active = TABS.some(t => t.key === requested) ? requested : DEFAULT_TAB`.
+
+**Use `replace`, not `push`.** Tab-switching is fluid navigation; users don't expect each tab change to add a history entry. `replace` keeps the back button useful for "leave this page" instead of "step through every tab I clicked."
+
+> The reviewer flagged that the original draft wrapped `router.replace` in `useTransition`. Why was that wrong?
+
+`useTransition` defers non-urgent state updates so React can interrupt them with higher-priority work — typing in an input, scrolling, etc. It's designed for state updates that trigger expensive renders inside the same React tree. `router.replace()` is a navigation: it doesn't trigger a React re-render in the way `setState` does; the new route's RSC tree is fetched and patched in. Wrapping it in `startTransition` adds zero perceptible benefit (the panel switch is instant because all panels are already rendered as RSC siblings; only one is conditionally shown via context) and slightly obscures the code. **The rule of thumb:** use `useTransition` when you're calling `setState` with a value that triggers an expensive child re-render and you want the input to stay responsive during it. Don't reach for it just because "this might be slow" — that's premature optimization with a measurable readability cost.
+
+> `role="tab"` + `aria-selected` was in the first draft. The reviewer flagged it as incomplete. What was missing?
+
+The WAI-ARIA tabs pattern needs a **two-way pairing** to actually work for screen readers: each tab button must declare which panel it controls (`aria-controls="panel-id"`), and each panel must declare which tab labels it (`aria-labelledby="tab-id"`). Without these, a screen reader sees a `role="tab"` button and reads it as a tab, but doesn't know which `role="tabpanel"` it's connected to. The user hears "Settings, tab, Account, selected" and then has to navigate around to find the panel — there's no announcement that "this panel shows account settings" because nothing tied the two together. The fix is two ID generators and two attribute writes:
+
+```tsx
+<button id={`tab-${key}`} aria-controls={`panel-${key}`} role="tab" />
+<div id={`panel-${key}`} aria-labelledby={`tab-${key}`} role="tabpanel" />
+```
+
+**The wider lesson:** semantic roles alone don't make accessible widgets — the relationships between elements matter as much as the individual labels. WAI-ARIA spec patterns specify the full graph; copying the roles without the pairings ships an incomplete experience that screen reader users can detect immediately.
+
+---
+
+### Reading Live Limits From The Same Module That Enforces Them — Don't Mirror Numbers (Dashboard Slice B)
+
+> The Security tab displays the rate limits ("10/min, 200/day, 8k/msg") as read-only cards. The first draft hardcoded these numbers. The reviewer found a real bug: the actual `PER_DAY` default in the rate limiter was 50, not 200. What was the right pattern?
+
+The bug here is the kind that sneaks past every reviewer except the one who runs `grep` on the constant name. The display number lived in the SecurityTab file; the enforcement number lived in `src/lib/ai/rate-limit.ts`. They started at different values (someone typed 200 from memory in one place; the rate-limit module had 50 as the actual default). Tests didn't catch it because tests don't render real values against constants — they render whatever fixtures the test sets up. Code review didn't catch it because reviewers don't typically grep across files for hardcoded constants. Users would see the bug instantly: "I'm hitting the rate limit at 50 requests but the settings page says 200/day."
+
+The fix is structural, not numeric. **Import the constant from the module that enforces it.** Don't write `const perDay = 200` in the display component; write `import { PER_DAY } from "@/lib/ai/rate-limit"`. Now there's exactly one number in the codebase, and any change — including environment-variable overrides at runtime — flows automatically to the display.
+
+```ts
+// rate-limit.ts (single source of truth)
+export const PER_MINUTE = Number(process.env.PROBOT_RATE_PER_MINUTE ?? 10);
+export const PER_DAY = Number(process.env.PROBOT_RATE_PER_DAY ?? 50);
+
+// SecurityTab.tsx — reads, never duplicates
+import { PER_MINUTE, PER_DAY } from "@/lib/ai/rate-limit";
+```
+
+**The generalizable lesson:** any constant that has BOTH a runtime effect AND a UI display is two-faced data, and the two faces must come from the same source. The classes of bugs this pattern prevents are some of the most insidious — user-visible documentation drift, where the UI confidently claims one thing while the system enforces another. The user trusts the UI; the system enforces the code; the user gets confused or frustrated when the two don't match. The cost of an import statement is zero. The cost of explaining "actually our display is wrong; the real limit is X" to a confused user is non-zero.
+
+> What about the 8000-char input cap that's hardcoded inside the chat route's Zod schema? Same pattern?
+
+Same lesson, slightly different mechanics. The 8000-char limit lives inline in a Zod chain (`z.string().min(1).max(8000)`) where extracting an exported constant from a route file is awkward. The right fix is a small shared module — `src/lib/ai/limits.ts` — that exports both `MESSAGE_INPUT_MAX` (used by the chat route's Zod schema and by SecurityTab's display) and the rate limits. For Slice B I left the 8000 mirrored locally with a comment because the shared module is a Slice C follow-up — but the principle is the same: **anytime a UI surface mirrors a system constraint, the constant should live in one place and be imported into both.**
+
+> Tests didn't catch this. What would have?
+
+A snapshot test of the rendered SecurityTab against a hand-checked "expected display values" fixture would have caught it the first time the value drifted — but only if the fixture was written by someone who checked the rate-limit module, not by someone who typed 200 from memory. Realistically, the most reliable defense is the import pattern itself: when the constant is imported, the test doesn't need to know the value, and the bug becomes impossible to introduce.
+
+---
+
+### "Honest Partial UI" — Read-Only + Coming Soon Beats Half-Working Inputs (Dashboard Slice B)
+
+> The Account tab in the design has Name, Email, Username, Password fields with a Save button. We have zero PUT /api/users endpoint today. What's the right way to ship the tab?
+
+There are three options, two of them wrong. **Option 1: hide the entire tab until the endpoints exist.** Users see a missing tab that the design promised; the dashboard feels incomplete. **Option 2: render fully editable inputs and a working-looking Save button that 500s on submit.** Users edit confidently, click Save, hit an error — the worst outcome because the failure happens after the user invested effort. **Option 3: render the tab with the fields displayed read-only, the Save button disabled, and Coming Soon pills marking what's not yet wired.** Users see the future surface, understand it's not active yet, and aren't misled into thinking their edits would have any effect.
+
+Option 3 is the "honest partial UI" pattern. The rules are simple. **The display reflects reality** — show the current name, email, username from the session so the tab isn't blank. **The controls are visibly disabled** — `<input disabled>` + opacity-60 styling + `cursor-not-allowed` so users can't even start typing. **The marker is explicit** — a Coming Soon pill on every disabled section header, not just a tooltip on hover. **The Save button is disabled too** — no false affordances; users shouldn't be able to click anything that would have committed an edit if the backend were live.
+
+```tsx
+<h3 className="font-bold">Profile</h3>
+<ComingSoonPill />
+// ...
+<input disabled className="bg-neutral-50 opacity-60 cursor-not-allowed" />
+// ...
+<button disabled className="btn btn-primary opacity-60 cursor-not-allowed">
+  Save changes
+</button>
+```
+
+**The generalizable principle:** a UI that promises functionality it can't deliver erodes user trust faster than a UI that ships an incomplete-but-honest preview. Users tolerate "not built yet" gracefully when the labeling is clear; they don't tolerate "looked like it worked but didn't" because that's a broken promise. The Coming Soon pill is the cheapest possible labeling — gray, small, unambiguous, doesn't fight for attention with the actual content.
+
+> When does the read-only preview pattern become misleading instead of helpful?
+
+When the displayed values are so wrong that the user makes decisions on them. SecurityTab's earlier rate-limit display (200/day when the real limit was 50) crossed this line — the user might have planned their chat usage around the displayed number. Account tab's read-only display of the session name/email is safe because those values ARE accurate; the user just can't edit them yet. **The rule:** read-only preview is fine when the displayed value matches reality. It fails when the value is a guess at what the future state will look like. If the displayed value isn't current truth, hide the field or show "—" instead of inventing a number.
+
+> Why ship the whole tab as Coming Soon instead of just the Save button?
+
+Because the disabled-input + Coming Soon pill pattern composes naturally — a single visible pill at the section header tells the user "this whole section is not yet active," and the rest is consistent. Disabling just Save while letting users type into Name would create a "why is the button broken?" moment when they hit submit. The principle holds at every granularity: the boundary of "what works" should match the boundary of "what's visibly interactive." Mixing those boundaries within a single section is the user-frustration zone.
+
+---
+
+### Replace, Don't Delete — Redirecting Deprecated Routes For Bookmark Compatibility (Dashboard Slice C)
+
+> The bot detail page (`/dashboard/bots/[botId]`) used to host Share/Embed/Theme + stat row + sub-nav. After the dashboard home + settings page rewrites, every one of those surfaces moved elsewhere and the route had no reason to exist. The cleanest move is to delete the file. Why redirect instead?
+
+The route file may be redundant but the **URLs that point at it are not**. Bookmarks the user saved months ago, links inside emails the user sent recruiters with "manage your bot at probot.com/dashboard/bots/abc," links inside team Slacks, external blog posts, third-party documentation — all of those still hit the route. A hard 404 breaks every one of them. A `redirect()` preserves the user experience: they click the bookmark, they land where the content moved.
+
+The pattern: keep the route file, replace the content with a tenancy-gated redirect.
+
+```ts
+export default async function BotDetailRedirect({ params }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) notFound();
+
+  const bot = await db.query.bots.findFirst({
+    where: and(eq(bots.id, params.botId), eq(bots.userId, session.user.id)),
+    columns: { id: true },
+  });
+  if (!bot) notFound();
+
+  redirect(`/dashboard/bots/${bot.id}/settings?tab=bot`);
+}
+```
+
+Three things matter here. **The ownership gate fires before the redirect** — a non-owner gets a 404, not a redirect-to-someone-else's-settings (which would leak the existence of the bot ID). **The redirect target uses `bot.id` from the DB row, not the raw URL param** — so if the param shape ever changes (e.g. case sensitivity), the redirect target stays canonical. **The target includes the query param** that lands on the right tab inside the destination page — keeps the user oriented within the new IA.
+
+> When should you actually delete a route file vs. redirect?
+
+Delete when the URL was never user-facing — internal API routes nobody bookmarked, dev-only debug pages, surfaces gated behind feature flags that never shipped to users. Redirect when there's any realistic chance someone has the URL captured somewhere outside the codebase: shared chat links, public profile URLs, content surfaces, settings page deep links. **The cost of a 13-line redirect file is essentially zero; the cost of breaking a year of accumulated external links is real.** Default to redirect.
+
+The redirect's lifetime is the URL's lifetime — once you're confident no external traffic hits the old path (analytics shows zero hits for 6+ months), the redirect can be deleted. Not before.
+
+---
+
+### Tests Forcing Accessibility — `useId()` Came Out Of A Failing `getByLabelText` Call (Dashboard Slice C)
+
+> The slice C test backfill for BotConfigTab failed on the very first spec: `screen.getByLabelText(/bot name/i)` couldn't find the input. The component renders a `<label>` next to an `<input>` inside a wrapper `<div>`. Why didn't it work?
+
+Testing-library's `getByLabelText` mirrors what screen readers see — and **screen readers don't pair adjacent label+input siblings the way humans visually do**. Two ways to pair a label with an input get recognized as accessible: (1) the `<label>` wraps the `<input>` as a parent, or (2) the `<label>` has a `htmlFor` attribute matching the `<input>`'s `id`. A bare sibling pair inside a `<div>` doesn't satisfy either, so screen readers announce "edit text, blank" — they don't know which label the input is for. The test failure was a direct signal of the missing accessibility wiring.
+
+The fix is `useId()`, React 18's stable per-component-instance id generator:
+
+```tsx
+function LabeledInput({ label, value, onChange }) {
+  const inputId = useId();
+  return (
+    <div>
+      <label htmlFor={inputId}>{label}</label>
+      <input id={inputId} value={value} onChange={...} />
+    </div>
+  );
+}
+```
+
+`useId()` is the right tool here because the ids need to be **unique per LabeledInput instance**, **stable across renders** (so the test query matches the same element every time), and **safe under React Strict Mode + SSR** (where naive Math.random or counter approaches produce hydration mismatches). React generates ids that satisfy all three.
+
+> Why not just hardcode the id from the label text?
+
+Two reasons. **Collisions**: rendering two LabeledInputs with the same label text on the same page (rare but real — settings page has "Name" appearing in Account tab AND in Bot configuration tab) would produce duplicate ids, and the second input would steal the click events meant for the first. **SSR/hydration**: a hardcoded id is deterministic across server and client (good), but slugifying a user-supplied label string introduces a tight coupling between the visible text and the underlying DOM contract — change the label and you break the id. `useId()` decouples the two.
+
+> The broader lesson?
+
+**Accessibility tests aren't separate from functional tests** — they're often the same query. When `getByLabelText` fails, the bug is the same bug a blind user would hit. When `getByRole("dialog")` fails, the bug is the same bug a keyboard user would hit. The testing-library API is designed around screen-reader-equivalent queries on purpose. Following the same path makes accessibility passing-through-tests an automatic side effect, not a separate compliance pass.
+
+The flip side: when a test query you'd expect to work fails, **the bug is probably an accessibility gap, not a test bug**. Reach for the semantic fix first (`htmlFor`+`id`, proper `role`, `aria-label` where labels are visually absent), not the test workaround (`querySelector('input')`, `data-testid`, etc.). The latter hides the underlying accessibility problem; the former fixes it AND makes the test pass.
+
+---
+
+### Stage-N Task Block — Append-Only Deferred Work Beats Scattered TODOs (Dashboard Slice C)
+
+> Slices A, B, and C each shipped with deferred items: AI model & key editor, custom instructions field, growth pills wiring, response time tracking, top topics NLP, GDPR endpoints, shared constants module, docs site stub. By the end of slice C there were ten items spread across three session-history entries. How do you keep them from getting lost?
+
+The default failure mode is scattered TODO comments + GitHub issues + Slack messages + half-remembered conversations. Three slices in, the team can't tell which deferred items are real Stage 7 work vs. abandoned ideas vs. already-done. The work-back from "what's left?" becomes archaeology.
+
+The pattern that works: **a single append-only task block in plan.md, scoped to the destination stage**. The slice that defers an item is responsible for writing it down. The block lives at a stable anchor (`#### 7.11 Dashboard Redesign — Stage 7 Follow-ups`) so future contributors can grep for it. Each item is its own subsection with the concrete what + how shape, not just a name:
+
+```markdown
+**B. Custom instructions field (Slice B placeholder → live field)**
+
+- Schema migration: `ALTER TABLE bots ADD COLUMN custom_instructions text`.
+- `botInput` + `botPatchInput` Zod widening: `.max(2000)` cap, trimmed.
+- Prompt builder reads it; append to the system prompt as an
+  "Author instructions" block between the personality prose and the
+  immutable rules so user-supplied content can't override the safety
+  rules.
+```
+
+Three properties matter here. **Append-only**: the block grows; items aren't edited or moved until they ship. **Per-item what+how**: a future contributor reads "B" and knows what to build, not just what's missing. **Anchored at the destination stage**: when a Stage 7 contributor starts work, they read §7 from the top and the §7.11 block is right there, in context with the rest of Stage 7's scope.
+
+> Why not GitHub issues?
+
+GitHub issues are great for community contributions and bug tracking, but they're a separate surface from the planning doc the team uses for "what are we building?" Issues live in the issue tracker; plans live in `plan.md`. Splitting them means a contributor reads plan.md, sees no mention of "AI model & key editor," concludes it's not on the roadmap. Or sees a stale GitHub issue and isn't sure if it's still real. **One source of truth for "what's planned" beats two slightly-out-of-sync sources every time.** GitHub issues are right for bugs and community asks; plan.md is right for engineering scope.
+
+> When does the block format start failing?
+
+When the deferred items grow beyond what one developer can hold in their head — 30+ items, or items with intricate dependency graphs. At that scale, project-management tooling (Linear, Jira, GitHub Projects) starts paying off. But for a 10-item Stage 7 punch list, plan.md is the right granularity. **The cost of a tool is the cognitive overhead of operating it; reach for the tool only when the cost of NOT having it exceeds that overhead.** A Stage 7 contributor opening Linear, filtering by label, finding the deferred items, mapping them back to plan.md context — that's more friction than scrolling to §7.11.
+
+---

@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **Stage 2 complete** - PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **STAGE 6 COMPLETE + Dashboard Redesign DONE** — Stages 1–6 shipped end-to-end. Full dashboard visual redesign (Slices A + B + C) ported from `design/dashboard.html` + `design/settings.html`. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints — type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon — Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Slice C closes out: bot detail page → redirect to settings, sub-page back-links + duplicate empty-state CTAs trimmed, 41-spec test backfill (BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar), `LabeledInput` gets `useId()` for proper label association, Stage 7 task block (§7.11) appended to plan.md tracking 10 deferred items. 689/689 tests, build green. Next: Stage 7 (OAuth, GDPR, hardening, launch). **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -1067,3 +1067,864 @@ _Review fix:_
 - Bot detail page has no "Delete bot" action. Stage 6 will add it as part of the analytics surface.
 
 ---
+
+### 2026-06-19 21:19 - Stage 6 Slice 6.1: schema additions + chat persistence wiring
+
+**What was asked to do:** Ship Slice 6.1 of Stage 6 from `plan.md` §6 — the foundation work: add the `leads` and `notifications` tables, extend `conversations` with `recruiter_email` and the dashboard-friendly composite indexes, and wire the chat orchestrator to actually write `conversations` + `messages` rows so the analytics surface in slices 6.2–6.5 has data to render.
+
+**Locked decisions before any code (Q1-Q9):** Q1 chat persistence is in scope for Stage 6 (the hidden prerequisite — Stage 4 created the tables but no code writes to them, so analytics would render zeros otherwise). Q2 anonymous-recruiter sessionId is a per-tab UUID in `sessionStorage` (no cookie → no consent surface, defers to Stage 7). Q3 lead-capture card shows after the 3rd assistant reply, exactly once per conversation, dismissable (slice 6.4). Q4 notification bell is global on every dashboard page (slice 6.3). Q5 lead `context_summary` is the concatenated first 2–3 recruiter messages truncated to ~300 chars — deterministic + free; LLM-summarization is rejected per CLAUDE.md §7 zero-cost (slice 6.4). Q6 CSV columns: `captured_at, email, bot_name, context_summary, conversation_id` (slice 6.3). Q7 bot detail surface becomes sub-routed: `/dashboard/bots/[botId]/{conversations,leads,settings}` (slices 6.3 + 6.5). Q8 settings page knowledge management reuses the Bot Factory dropzone component (slice 6.5). Q9 slice plan: 6.1 schema + chat persistence (this slice), 6.2 API endpoints, 6.3 dashboard pages, 6.4 lead capture + bell + polling, 6.5 settings + knowledge UI.
+
+**What I did:**
+
+_Schema additions (`src/lib/db/schema.ts`):_
+
+- `conversations` extended with `recruiterEmail: varchar("recruiter_email", { length: 255 })` (nullable). Comment block updated to explain the slice-6.4 lead-capture role and reiterate that the `leads` table is the canonical record.
+- `conversations` gets a new composite index `conversations_bot_started_idx` on `(bot_id, started_at DESC)` — covers the dashboard list-by-recency query in one scan. The existing single-column `botIdIdx` stays (negligible cost; equality lookups can still pick the smaller index).
+- `messages` gets a new composite index `messages_conv_created_idx` on `(conversation_id, created_at)` — covers the transcript-viewer scan in one index, replacing what would otherwise be sort-on-heap after a single-column scan.
+- NEW `leads` table: `id`, `bot_id` (FK cascade), `conversation_id` (FK **SET NULL** — intentionally not cascade so a GDPR-driven conversation purge in Stage 7 still preserves the lead row; the email is business-valuable even if the chat log is gone), `email`, `context_summary` (nullable; filled by slice 6.4), `captured_at`. Composite index `leads_bot_captured_idx` on `(bot_id, captured_at DESC)`.
+- NEW `notifications` table: `id`, `user_id` (FK cascade), `bot_id` (FK cascade, nullable — supports system-level notifications that aren't bot-specific later), `kind` (varchar(40)), `payload` (jsonb), `read_at` (nullable; null = unread), `created_at`. CHECK constraint locks `kind` to the allowed set (`'lead_captured'` only for Stage 6, extensible). Partial index `notifications_user_unread_idx` on `(user_id, created_at DESC) WHERE read_at IS NULL` so the bell-badge unread count is O(unread), not O(total notifications).
+- Type exports added: `Lead`, `NewLead`, `Notification`, `NewNotification`.
+
+_Migration (`drizzle/0008_young_wolfpack.sql`):_
+
+- Generated via `npm run db:generate`. Verified contents: 2 CREATE TABLE statements, 1 ALTER TABLE ADD COLUMN (recruiter_email), 4 FK constraints in DO blocks (idempotent), 4 indexes (the 2 composites on existing tables + the partial-on-NULL on notifications + the bot+captured on leads), 1 CHECK constraint on `notifications.kind`. Fully additive — no schema migrations on existing data.
+
+_Chat persistence wiring (`src/app/api/chat/[botId]/route.ts`):_
+
+- Added `sql` to the `drizzle-orm` import (for the `messageCount + 2` increment expression) and `conversations`, `messages` to the `@/lib/db` import.
+- Zod input schema gained `sessionId: z.string().uuid()` — required. The reasoning is wired into the inline comment: the per-tab UUID lets the orchestrator UPSERT a single conversation row per recruiter visit so the dashboard analytics can coalesce turns.
+- After step 11 (sanitize output) and before the response, a new step 12 wraps the persistence work in a `db.transaction`. Inside: UPSERT into `conversations` keyed by the unique `(bot_id, session_id)` index — on conflict, bump `message_count` by 2 and refresh `last_message_at` to NOW. Returning `{ id: conversations.id }` so we can chain the messages insert. Then insert two `messages` rows (user + assistant) in the same transaction so partial writes are impossible at the Postgres level.
+- The whole persistence block is wrapped in `try/catch`. On error, `console.warn("[chat] conversation persistence failed", err)` — analytics persistence MUST NOT break the user-facing chat reply (the primary value), but a silent swallow would obstruct production incident debugging. The log channel matches the existing `[rag]` warn pattern used a few steps earlier for the analogous "fallback path on retrieval failure" case.
+
+_Browser sessionId helper (`src/lib/client/session-id-store.ts`):_
+
+- NEW module mirroring the `llm-key-store.ts` pattern. `isBrowser()` guard, try/catch around storage access, key `probot.chat.sessionId`. `getOrCreateSessionId()` is the single export — reads from `sessionStorage`, generates + persists a new UUID on miss, regenerates on empty string, falls back to a fresh UUID if `sessionStorage` throws (private mode / quota).
+- UUID generator: prefers `crypto.randomUUID()` when available (every modern browser + Node 14.17+). Fallback uses `crypto.getRandomValues` with explicit version+variant bit-setting per RFC 4122 — universally available wherever any `crypto` namespace exists. This replaces the original `Math.random` draft after a code-review flag: a guessable sessionId would let an adversary forge another recruiter's conversation key and pollute metrics.
+
+_Chat window wiring (`src/components/chat/ChatWindow.tsx`):_
+
+- Imports `getOrCreateSessionId`. Inside `sendMessage`, calls it once per turn (idempotent on the same tab so this is fine) and includes the result in the JSON body alongside `message`.
+
+_Tests:_
+
+- `src/app/api/chat/[botId]/route.test.ts` — extended the `@/lib/db` mock to expose `db.transaction(cb)` (invokes the callback with a stub `tx` that routes `tx.insert(table)` by call order: 1st → conversation chain, 2nd → messages chain), plus opaque `conversations` and `messages` identity objects. Added `resetPersistenceMocks()` called in `beforeEach`. `makeRequest()` and the Azure-flow `makeAzureRequest()` now inject the default `SESSION_ID` into the body so all pre-existing specs keep passing without churn. Two raw-Request specs got `sessionId` added to their body manually. 6 new specs in a `"conversation persistence (Stage 6)"` describe block: happy-path persists (asserts the convo UPSERT values + the messages array shape), missing-sessionId → 400, non-UUID sessionId → 400, persistence-transaction-throws still returns 200 with reply, rate-limit rejection means the transaction is never reached, sanitize-input rejection means the transaction is never reached. 24 → 30 specs in this file.
+- `src/components/chat/ChatWindow.test.tsx` — added `vi.mock("@/lib/client/session-id-store", ...)` with a stable `STABLE_SESSION_ID` constant. Updated the existing "no key in body" spec's equality assertion to include `sessionId`. Added a new spec asserting the sessionId is sent on every turn (two consecutive sends). 9 → 10 specs.
+- `src/lib/client/session-id-store.test.ts` — NEW. 5 specs covering happy path (UUID-v4 shape + sessionStorage persistence), idempotence across calls, reload-reuse (pre-seeded value is returned), empty-string regeneration, and the sessionStorage-throw fallback (monkey-patches `Storage.prototype.getItem`).
+
+_Code-review pass (1 HIGH + 1 MEDIUM fix applied):_
+
+- **HIGH: silent catch with no observability.** The original draft swallowed persistence errors with `catch {}` and no log. Even pre-Stage-7-logger, a `console.warn` is cheap and dramatically cuts incident-debugging time. Applied — log channel matches the project's existing `[rag]` swallow-and-warn pattern in the same file.
+- **MEDIUM: Math.random UUID fallback was guessable.** Replaced with `crypto.getRandomValues` + manual RFC 4122 version/variant bits. The fallback path is unreachable in any modern runtime, but a guessable session ID would let an adversary forge another recruiter's conversation key.
+- The reviewer also flagged "RLS-no-policies on the new tables" as MEDIUM. **Not applied** — this is the project's documented pattern (see schema comment on `users` lines 22-24): RLS is enabled with no policies so Supabase PostgREST `anon`/`authenticated` roles are denied by default; the app's `pg.Pool` connects as the table-owner role which is unaffected because we do NOT use `FORCE ROW LEVEL SECURITY`. All 7 existing tables follow this pattern; the 2 new ones match.
+- LOW findings (mock dispatches by call order, nullable-FK-with-cascade on notifications.botId) were acknowledged design choices in the review brief; not applied.
+
+**Files changed:**
+
+- `src/lib/db/schema.ts` — update — `recruiter_email`, 2 composite indexes, `leads` table, `notifications` table, 4 new type exports.
+- `drizzle/0008_young_wolfpack.sql` — create — generated migration (2 tables, 1 ALTER, 4 FKs, 4 indexes, 1 CHECK).
+- `src/app/api/chat/[botId]/route.ts` — update — `sessionId` Zod field, persistence transaction (step 12), `console.warn` on swallow, `sql` + `conversations`/`messages` imports.
+- `src/app/api/chat/[botId]/route.test.ts` — update — mock extension, `resetPersistenceMocks`, default `sessionId` injection, 6 new specs.
+- `src/lib/client/session-id-store.ts` — create — `getOrCreateSessionId` + crypto-grade UUID fallback.
+- `src/lib/client/session-id-store.test.ts` — create — 5 specs.
+- `src/components/chat/ChatWindow.tsx` — update — call `getOrCreateSessionId`, include in body.
+- `src/components/chat/ChatWindow.test.tsx` — update — mock the store, assert sessionId in body, 1 new spec.
+
+Total: 450/450 tests pass, build green.
+
+**Decisions made:**
+
+- **`leads.conversation_id ON DELETE SET NULL`, not CASCADE.** A GDPR-driven conversation purge in Stage 7 should not destroy the lead — the email is the business-valuable artifact, distinct from the chat log. Set-null preserves the lead while severing the reference.
+- **Per-tab `sessionStorage` over `localStorage` for sessionId.** Per-tab (vs. cross-tab) matches the analytics intent — different tabs from the same recruiter on the same bot are different conversations from the bot owner's perspective. Sessionstorage also has no cookie semantics, so the consent surface stays parked in Stage 7.
+- **Swallow + warn (not swallow-silent, not throw) on persistence failure.** Throwing would break the chat for an analytics-only failure. Silent would obstruct production debugging. `console.warn` is the cheap middle path until Stage 7 wires a structured logger.
+- **Composite indexes added; single-column kept.** The new `(bot_id, started_at DESC)` and `(conversation_id, created_at)` indexes cover the dashboard scans. Keeping the existing single-column indexes is ~7 KB per index and lets the Postgres planner pick whichever is best for equality lookups; not worth the migration noise to drop them.
+- **`notifications.kind` CHECK constraint at the DB level.** Mirrors the `messages.role` pattern. A typo (e.g., `'leads_captured'` instead of `'lead_captured'`) in some future writer would silently break the unread badge query; the CHECK turns that bug into a loud INSERT failure.
+- **Partial index `WHERE read_at IS NULL` on notifications.** The bell badge's hot query is "unread notifications for user X". Indexing only the unread rows keeps the structure tiny and the scan O(unread) — typically O(<10) — instead of O(all notifications ever).
+- **`Math.random` is unacceptable for security-adjacent identifiers, even in fallback paths.** A reviewer-flagged MEDIUM that I would have shipped otherwise: even though `crypto.randomUUID` is universally available, the fallback path is what gets exercised on dusty WebViews — and a guessable sessionId is a non-trivial pollution vector.
+
+**Open questions / follow-ups:**
+
+- The `messageCount += 2` increment assumes every chat turn produces exactly one user + one assistant message. True for the current non-streaming `complete()` path. When streaming lands (out of Stage 1 scope, deferred to Stage 7+), the message-count math will need to change to count assistant-side-events differently.
+- `tokens_used` on `messages` is left NULL. Provider response shapes diverge (`usage` field availability varies), and the dashboard doesn't render this yet. Wire it in slice 6.2 if cheaply available from `provider.complete()`.
+- No integration test that exercises the migration against a real Postgres. Drizzle's generator is deterministic but a `db:push` against a Supabase-style instance is a reasonable manual QA gate before merging.
+- The schema-wide deprecation hints on `pgTable(name, columns, extraConfig)` apply to every table in the file (pre-existing). Migration to the new `pgTable(name, columns, (table) => [...])` signature is a clean refactor opportunity but explicitly out of scope for this surgical slice.
+- Slice 6.2 (next) wires the `/analytics`, `/conversations`, `/leads`, `/notifications` API endpoints on top of this foundation.
+
+---
+
+### 2026-06-19 22:00 - Stage 6 Slice 6.2: dashboard + lead-capture + notification API endpoints
+
+**What was asked to do:** Build the ten Stage 6 read/write endpoints on top of the slice-6.1 schema. Three groups: (1) owner-gated bot endpoints powering the dashboard overview cards, conversation list/detail, and lead list/CSV-export; (2) one anonymous CORS-public endpoint for chat-UI lead capture; (3) four session-scoped notification endpoints behind the dashboard bell badge + 30s polling target. No UI in this slice (lands in 6.3 and 6.4).
+
+**Locked decisions before any code (Q1-Q9):** Q1 pagination shape is `{ items, total, page, limit }` everywhere (page-based, friendly for "page X of Y" UI, matches plan §6.4 query params). Q2 no rate limit on POST `/leads` — explicit deferral to Stage 7's Redis layer; the chat route's upstream per-bot limit is the natural gate and the lead-capture endpoint itself has a 4 KB body cap + idempotent dedupe + 24h email-only fallback window to bound noise. Q3 POST `/leads` is idempotent on `(botId, conversationId, lowercased-email)` — second submit returns `{ deduped: true }` with the existing row instead of polluting the notification feed. Q4 CSV: UTF-8 BOM, RFC 4180 quoting (`,`, `"`, `\r`, `\n`, U+2028, U+2029 → quote), CRLF line endings, ISO-8601 timestamps. Q5 conversation list supports `?q=<text>` ILIKE search on both `recruiter_email` and the first-user-message preview, in addition to pagination. Q6 leads POST is CORS-public. Q7 notification `payload` for `lead_captured` pre-denormalizes `botName` so the bell-list dropdown doesn't need a join per row. Q8 notification ownership on POST `/[id]/read` is checked in the WHERE clause (`AND user_id = session.userId`) — single statement, 0-row update → 404, never a separate SELECT. Q9 single-pass slice (not split 6.2a/b).
+
+**What I did:**
+
+_Helpers (4 new):_
+
+- `src/lib/auth/require-session.ts` — discriminated-union session check parallel to `requireBotOwner`. Returns `{ ok: true, userId, username }` or `{ ok: false, response }` so notification routes can `return result.response` on failure without exception detour.
+- `src/lib/pagination.ts` — `parsePagination(searchParams, opts?)` → `{ page, limit, offset }` or 400 response. `DEFAULT_PAGE=1`, `DEFAULT_LIMIT=20`, `MAX_LIMIT=100`. `Number.isInteger` guards prevent silent NaN propagation from `?page=1.5` or `?page=abc`.
+- `src/lib/csv.ts` — RFC 4180 escaper. `CSV_NEEDS_QUOTE` regex covers `,`, `"`, `\r`, `\n`, U+2028, U+2029 (built via `new RegExp(string)` because U+2028/U+2029 are JS source-level line terminators and would close a regex literal mid-pattern). UTF-8 BOM prefix for Excel mojibake protection, CRLF line endings, generic `toCsv<T>(rows, columns)` with per-column `cell` extractors.
+- `src/lib/leads/schemas.ts` — Zod `leadCaptureInput`: `email` is `.trim().toLowerCase()` for idempotent dedupe + `.email().max(255)`; `conversationId` optional UUID; `contextSummary` optional, capped at 1024 chars to bound row size + prevent abuse.
+
+_Owner-gated bot endpoints (5 new):_
+
+- `GET /api/bots/[botId]/analytics` — Three parallel COUNT queries (conversations totals + this-month, messages-via-join total, leads totals + this-month) instead of the plan's 4-way LEFT JOIN. The JOIN multiplies rows (one bot × many convos × many messages × many leads → cartesian explosion before SUMs); three small COUNTs hit the slice-6.1 indexes and each return one row. Returns the five integers `{ totalConversations, totalMessages, totalLeads, conversationsThisMonth, leadsThisMonth }`. "This month" is rolling 30-day window (not calendar month) per plan §6.5.
+- `GET /api/bots/[botId]/conversations?page&limit&q` — Paginated list. Each row carries `firstUserMessage` as a 200-char LEFT() of the first user-role message via a LATERAL subquery — no N+1 round-trips. `?q=<text>` does case-insensitive `ILIKE %q%` on both `recruiter_email` and the first-message preview. Both columns are scoped to `bot_id` so the filter scans a small per-bot subset covered by the slice-6.1 `conversations_bot_started_idx`.
+- `GET /api/bots/[botId]/conversations/[convId]` — Transcript viewer. `findFirst` with `AND(eq(conversations.id, convId), eq(conversations.botId, bot.id))` so a forged convId targeting another owner's conversation returns 404, not a leak. Messages embedded in chronological order (covered by slice-6.1 `messages_conv_created_idx`).
+- `GET /api/bots/[botId]/leads?page&limit` — Paginated lead list, ordered by `captured_at DESC` (covered by slice-6.1 `leads_bot_captured_idx`).
+- `GET /api/bots/[botId]/leads/export` — CSV download. 50K row hard cap (DoS protection). Columns: `captured_at, email, bot_name, context_summary, conversation_id` (per slice-6.2 Q4 lock). Filename = `leads-<sanitized-bot-name>-<YYYY-MM-DD>.csv` with both ASCII `filename="…"` and RFC 5987 `filename*=UTF-8''…` parameters so non-ASCII bot names render correctly on every browser. `Content-Disposition: attachment; Cache-Control: no-store`.
+
+_Public CORS endpoint (1 new):_
+
+- `POST /api/bots/[botId]/leads` — Anonymous + cross-origin. 12-step flow: content-type → 4 KB body cap (measured from `request.text()`, not the spoofable Content-Length) → JSON parse → Zod validate (lowercases email) → resolve bot with `isActive=true` filter → idempotent dedupe (existing row on `(botId, conversationId, email)` → return `{ deduped: true }`, or the 24h `(botId, email)` fallback when no convId) → `db.transaction` writing three rows atomically: insert lead, update `conversations.recruiter_email` if convId, insert `notifications` row with `kind='lead_captured'` and pre-denormalized `botName` in the payload. CORS handled in-handler via `jsonWithCors()` helper on every response path (no `next.config.js` change needed — the leads route is self-contained, unlike chat which relies on `next.config.js`). `OPTIONS` handler uses the shared `corsPreflight()` from slice 5. On transaction throw: `console.warn` (matches the `[chat]` / `[rag]` warn pattern) + 500 `{ error: "capture_failed" }`. Same `try/catch` rule as slice 6.1: failure logs but doesn't break the chat UI's optimistic-success animation.
+
+_Session-scoped notification endpoints (4 new):_
+
+- `GET /api/notifications?unread&page&limit` — Paginated feed. Returns `{ items, total, page, limit, unreadCount }` so the dropdown can render the badge in sync without a follow-up `/unread-count` round-trip. Optional `?unread=true` narrows to unread rows, hitting the slice-6.1 partial index `notifications_user_unread_idx`.
+- `GET /api/notifications/unread-count` — Returns `{ count }`. Hits the same partial index. Cheap polling target (dashboard bell will hit this every 30s in slice 6.4).
+- `POST /api/notifications/[id]/read` — UUID-shape check first (early 400). UPDATE with `WHERE id = ? AND user_id = session.userId` — single statement, no SELECT. 0 rows affected → 404 (handles both "doesn't exist" and "belongs to another user"; never leaks existence cross-tenant). Returns `{ id, readAt }` where `readAt` is captured once and used for both the persisted column and the response body (post-review fix — two `new Date()` calls produced microsecond skew).
+- `POST /api/notifications/read-all` — Bulk UPDATE on `user_id = session.userId AND read_at IS NULL`. Returns `{ markedRead: <row count> }` so the dashboard can pre-flip its local unread state.
+
+_Code-review pass (1 HIGH + 2 MEDIUM fixes applied):_
+
+- **HIGH: `readAt` clock skew on POST `/notifications/[id]/read`.** Original code did `new Date()` twice — once in the SET payload, once in the response JSON. The two timestamps differed by microseconds (harmless but semantically wrong: the response promised a timestamp that was never persisted). Fixed by capturing `const now = new Date()` once and using it in both places.
+- **MEDIUM: RFC 5987 `filename*` parameter on CSV export.** ASCII-only `safeFilenameSegment` correctly strips unsafe chars, but for non-ASCII bot names ("Jané Doe 日本") the resulting filename degenerated to dashes. Added the parallel `filename*=UTF-8''<percent-encoded>` parameter so every modern browser renders the original name; ASCII `filename="..."` stays as the legacy-client fallback. Test asserts both parameters are present and the percent-encoded UTF-8 (e.g. `Jan%C3%A9`) appears.
+- **MEDIUM: U+2028/U+2029 in CSV cells.** Regex extended from `[",\r\n]` to `[",\r\n  ]` because Google Sheets and older Excel parse those as row terminators in unquoted cells, which would silently split a `context_summary` across CSV rows. The regex is built via `new RegExp(string-literal)` because those code points are JS source-level line terminators that would close a `/.../` regex literal mid-pattern. Test asserts both code points trigger wrapping.
+- **HIGH not applied: rate limit on POST `/leads`.** Reviewer flagged the missing rate limit; this was the user-confirmed Q2 deferral to Stage 7 Redis. Added a doc comment to the route explaining the layered defenses that bound noise in the meantime (4 KB body cap + Zod + idempotent dedupe + 24h fallback window) and that the deferral is explicit.
+- **LOW not applied: `console.warn`.** Reviewer flagged it per a strict reading of CLAUDE.md no-`console.log`, but the project's accepted pattern (post slice-6.1 review) is exactly this — `console.warn("[<surface>] <event>", err)` for warn-and-continue paths, replaced wholesale in Stage 7 by a structured logger. Same pattern in `[chat]` and `[rag]` channels.
+- **LOW not applied: `Access-Control-Expose-Headers`.** Reviewer noted "no fix needed at this stage" — flagged only as a heads-up for future slices that might add a custom response header the widget needs to read.
+
+**Files changed:**
+
+_Helpers:_
+
+- `src/lib/auth/require-session.ts` — create — session check with discriminated union.
+- `src/lib/pagination.ts` — create — `parsePagination` + constants.
+- `src/lib/pagination.test.ts` — create — 8 specs.
+- `src/lib/csv.ts` — create — RFC 4180 escaper + `toCsv<T>`.
+- `src/lib/csv.test.ts` — create — 10 specs (incl. U+2028/U+2029 quoting + null cells).
+- `src/lib/leads/schemas.ts` — create — Zod for lead-capture POST body.
+- `src/lib/leads/schemas.test.ts` — create — 7 specs.
+
+_Endpoints:_
+
+- `src/app/api/bots/[botId]/analytics/route.ts` — create — five-metric overview.
+- `src/app/api/bots/[botId]/analytics/route.test.ts` — create — 3 specs.
+- `src/app/api/bots/[botId]/conversations/route.ts` — create — list + `?q` search.
+- `src/app/api/bots/[botId]/conversations/route.test.ts` — create — 5 specs.
+- `src/app/api/bots/[botId]/conversations/[convId]/route.ts` — create — transcript.
+- `src/app/api/bots/[botId]/conversations/[convId]/route.test.ts` — create — 4 specs.
+- `src/app/api/bots/[botId]/leads/route.ts` — create — GET (owner) + POST (CORS) + OPTIONS.
+- `src/app/api/bots/[botId]/leads/route.test.ts` — create — 14 specs.
+- `src/app/api/bots/[botId]/leads/export/route.ts` — create — CSV export with RFC 5987 filename.
+- `src/app/api/bots/[botId]/leads/export/route.test.ts` — create — 4 specs.
+- `src/app/api/notifications/route.ts` — create — list + unread filter + unread count co-rendered.
+- `src/app/api/notifications/route.test.ts` — create — 4 specs.
+- `src/app/api/notifications/unread-count/route.ts` — create — `{ count }`.
+- `src/app/api/notifications/unread-count/route.test.ts` — create — 3 specs.
+- `src/app/api/notifications/[id]/read/route.ts` — create — single-row UPDATE with ownership.
+- `src/app/api/notifications/[id]/read/route.test.ts` — create — 4 specs.
+- `src/app/api/notifications/read-all/route.ts` — create — bulk UPDATE.
+- `src/app/api/notifications/read-all/route.test.ts` — create — 3 specs.
+
+Total: 13 new source files + 11 new test files. 521/521 tests pass (450 → 521, net +71), build green.
+
+**Decisions made:**
+
+- **Three small COUNTs over one 4-way LEFT JOIN in analytics.** The plan's SQL `SELECT COUNT(DISTINCT c.id), SUM(c.message_count), COUNT(DISTINCT l.id), ... FROM bots b LEFT JOIN conversations c LEFT JOIN messages m LEFT JOIN leads l WHERE b.id = :botId` is correct but explodes cartesian rows before the SUMs/DISTINCTs aggregate them. Three separate `COUNT(*)::int` queries scoped by `bot_id` each scan a small per-bot index slice and return one row. Postgres planner has no surprises here — equivalent to writing the queries yourself in `psql`.
+- **`FIRST_USER_MESSAGE_SQL` as a shared `sql<>` constant.** Drizzle's `sql` template is a descriptor object, so spreading the same reference into both the SELECT projection (to display) and the WHERE clause (for `ILIKE %q%` filtering) is structurally fine — the ORM re-renders it per query. Tradeoff: the count query also runs the subquery, paying the cost even when the preview text is irrelevant. Acceptable at slice-6.2 scale; tech debt logged for if any single bot ever has 10K+ conversations.
+- **Idempotent dedupe over server-side rate limiting.** `(botId, conversationId, lowercased email)` is the natural dedupe key for the chat-driven path. The 24h email-only fallback bounds noise when no convId is supplied (lead capture from a misbehaving widget without sessionId). Both layers together absorb double-submits + drag-out spam without inventing a token bucket; the real rate limit lands with Stage 7's Redis layer.
+- **`bots.findFirst(isActive=true)` on lead capture.** An owner who flips a bot inactive should not still be receiving leads on it (potential GDPR / off-boarding concern). The Stage 1 chat route already has the same gate; leads inherits.
+- **CSV `new RegExp(string)` over regex literal.** U+2028 and U+2029 cannot appear in a regex literal (they close it as line terminators), but can be written via the ` ` / ` ` escape syntax inside a backtick-or-double-quoted string. Building the regex from a string sidesteps the source-level termination problem.
+- **RFC 5987 `filename*` over silent ASCII-only.** A bot named "Jané Doe" exporting leads previously got `leads-Jan-Doe-2026-06-19.csv` with the accent silently dropped. The dual-parameter form (`filename="ascii"; filename*=UTF-8''percent-encoded`) is the WHATWG-recommended shape — browsers prefer `filename*` when present, fall back to `filename` when not.
+- **Capture `readAt` once in notification-read.** The reviewer-flagged HIGH was small in absolute impact (microsecond skew) but worth fixing for semantic correctness — the API contract says "we set readAt to X and returned X"; two `new Date()` calls produce two different X's.
+- **No `next.config.js` CORS change for leads POST.** Unlike the chat route which keeps `POST` body bare and lets `next.config.js` inject CORS headers, the leads route returns through a `jsonWithCors` helper that attaches the headers on every code path. Two CORS strategies coexist in the codebase; this one is self-contained at the route file, which is preferable for endpoints that mix public + owner-gated handlers under the same path.
+
+**Open questions / follow-ups:**
+
+- The `FIRST_USER_MESSAGE_SQL` LATERAL subquery runs in both the rows query AND the count query for conversations list. The count query doesn't need the preview text. Splitting that off into two separate `sql` descriptors (one with preview for the rows query, one without for the count) would let the count avoid the join entirely. Acceptable now; revisit when any bot reaches 10K+ conversations and the dashboard list page starts feeling slow.
+- The 4 KB body cap on POST `/leads` is conservative — the largest legitimate payload is `email` (255) + `conversationId` (36) + `contextSummary` (1024) plus JSON overhead, well under 2 KB. Raise the cap if Stage 6.4 ever needs to send a richer payload.
+- Notification `payload` is `jsonb` with a permissive `Record<string, unknown>` TS type. A future slice could narrow this with a discriminated union keyed on `kind` for stronger type guarantees on the dashboard side. Not blocking; today there's only one `kind`.
+- Slice 6.3 (next) wires the dashboard UI pages on top of these endpoints: overview cards, conversation list/detail, lead list, CSV download. Slice 6.4 adds the in-chat lead-capture card + the bell + 30s polling. Slice 6.5 adds the settings page (editable name/headline/personality/suggested questions + knowledge management UI).
+
+---
+
+### 2026-06-19 22:32 - Stage 6 Slice 6.3: dashboard UI pages + shared query extraction
+
+**What was asked to do:** Build the dashboard UI pages on top of the slice-6.1 schema + slice-6.2 endpoints. Three new sub-routes for each bot (`/conversations`, `/conversations/[convId]`, `/leads`), an aggregated stat row on the dashboard home, and per-bot stat row + sub-nav on the existing bot detail page. Also extract the data-fetching SQL into shared query modules so the API routes (slice 6.2) and the new RSC pages (slice 6.3) call into one place instead of duplicating the same Drizzle queries.
+
+**Locked decisions before any code (Q1-Q10):** Q1 yes, extract shared queries — correctness over churn. Q2 (a) server-render via direct Drizzle queries — matches existing dashboard pattern, no double-network. Q3 (a) linear sub-routes, not tabs in the detail page — bookmarkable, matches plan §6.3. Q4 (a) `useTransition` + `router.replace` for debounced search — Next 14 idiomatic. Q5 (b) react-markdown + remark-gfm for the transcript bubbles — recruiter saw markdown in the chat, the dashboard transcript should match. Q6 lead → conversation link confirmed. Q7 fixed rolling 30-day window; range picker deferred to Stage 7. Q8 empty-state copy drafted, user can revise later. Q9 (a) one global stat row at the top of the dashboard home, then the bot list cards. Q10 single-pass slice (not split 6.3a/b).
+
+**What I did:**
+
+_Shared query modules (3 new — SQL lives in one place):_
+
+- `src/lib/analytics/queries.ts` — `getAnalyticsForBot(botId)` returns the five-metric snapshot the slice-6.2 endpoint already shipped; `getAnalyticsForUser(userId)` adds an aggregated version that joins across all bots the user owns (bots → conversations → messages, bots → leads). Both use parallel small COUNTs over per-tenant index slices rather than a cartesian-explosion 4-way LEFT JOIN.
+- `src/lib/conversations/queries.ts` — `listConversations({ botId, q, limit, offset })` with the LATERAL `firstUserMessage` subquery + optional `?q=` ILIKE on email/preview; `getConversationWithMessages({ botId, conversationId })` for the transcript viewer, with the cross-tenant filter (`AND bot_id = ?`) embedded so a forged convId targeting another owner's conversation returns null.
+- `src/lib/leads/queries.ts` — `listLeads({ botId, limit, offset })` for the paginated list + `listAllLeadsForExport({ botId })` for the CSV with a 50K row cap. Module-level doc comment makes the **tenancy contract** explicit: callers MUST have verified bot ownership upstream; the functions do not check it themselves.
+
+_Slice-6.2 route refactor (no behavior change — all 31 existing route tests still pass):_
+
+- 4 routes refactored to delegate to the shared queries: `analytics/route.ts`, `conversations/route.ts`, `conversations/[convId]/route.ts`, `leads/route.ts` (GET only — POST/OPTIONS handlers unchanged), `leads/export/route.ts`. The routes are now thin: parse pagination, call the shared function, wrap the result in `NextResponse.json`.
+
+_Dashboard components (5 new):_
+
+- `src/components/dashboard/StatCard.tsx` — label + big tabular-num value + optional hint. Reused 9× across pages.
+- `src/components/dashboard/EmptyState.tsx` — title + body + optional action node. Reused for empty conversation list, empty lead list, search-no-results.
+- `src/components/dashboard/Pagination.tsx` — URL-driven prev/next + "Page X of Y" indicator. Renders nothing when total fits in one page so callers don't need to gate. `extraParams` prop preserves other query params (e.g. `?q=`) across pagination clicks. Page 1 omits the `?page=` param entirely (canonical URL).
+- `src/components/dashboard/SearchBar.tsx` — client component, 300ms debounced `?q=` updater. `router.replace` (not `push`) so back button doesn't fill with keystrokes. Wraps the update in `useTransition` so the input stays responsive while the server-rendered list re-fetches. Drops `?page=` on every search change so a search after navigating to page 5 doesn't land on an empty filtered page. Syncs state from URL on `searchParams` change (defense against stale value when external nav happens). `aria-label` mirrors `placeholder`.
+- `src/components/dashboard/TranscriptMessage.tsx` — read-only message bubble. User-role right-aligned in brand-color with `whitespace-pre-wrap`; assistant-role left-aligned in white with `prose prose-sm` markdown styling. Every rendered `<a>` flows through a `SafeLink` component that adds `rel="noopener noreferrer" target="_blank"` — same defense the live chat MessageBubble uses against `window.opener` reach-back from stored transcript text.
+
+_Dashboard pages (3 new, 2 extended):_
+
+- `/dashboard` (extend) — aggregated 5-card stat row at the top (bots, conversations, messages, leads, leads-this-month). Renders only when `totalBots > 0` so first-time visitors still see the existing empty-state CTA instead of a row of zeros. Existing bot-list cards below unchanged.
+- `/dashboard/bots/[botId]` (extend) — adds a 4-card per-bot stat row (conversations, messages, leads, live/off status) above the Share/Embed/Theme sections, plus a "Conversations →" + "Leads →" sub-nav strip. Reuses `getAnalyticsForBot` from the shared module.
+- `/dashboard/bots/[botId]/conversations` (NEW) — paginated list, server-rendered. Each card: recruiter email or "Anonymous" + 2-line clamped first-user-message preview + relative-time `relTime` formatter + message count. Client `<SearchBar>` updates `?q=` in the URL; server reads `searchParams.q` on the next render. Empty-state copy varies: with `?q=`, "No conversations match \"<q>\"" + clear-search hint; without, "No one has chatted with <bot> yet" + a CTA to the bot detail page.
+- `/dashboard/bots/[botId]/conversations/[convId]` (NEW) — transcript viewer. Header card shows recruiter email (or "Anonymous conversation") + start time + message count + safe `mailto:` button (defense-in-depth Zod-like email regex guard before generating the href). Messages rendered chronologically via `TranscriptMessage`.
+- `/dashboard/bots/[botId]/leads` (NEW) — paginated list. Each card: clickable safe-mailto email + context summary + capture timestamp + optional "View conversation →" link. "Export CSV" anchor at top-right (only when `total > 0`) points at `/api/bots/[botId]/leads/export` with `download` attribute; same-origin so the session cookie carries auth, no JS gymnastics.
+
+_Code-review pass (2 HIGH + 2 MEDIUM + 1 LOW fixes applied):_
+
+- **HIGH: SearchBar stale value sync.** Original code seeded `value` from `searchParams` at mount but never re-synced. If the URL's `?q=` changed externally (browser nav, server-driven redirect), the input would render the old value while the list reflected the new one. Fixed with a `useEffect([searchParams, paramName])` that calls `setValue` when the URL diverges from local state. Added a regression test asserting aria-label exposure for screen readers.
+- **HIGH: `ilike` on a LATERAL subquery expression.** Reviewer flagged that passing a raw `sql<>` template (the LATERAL subquery) as the left operand of Drizzle's `ilike()` helper is dialect-dependent — the safer pattern is explicit `sql\`(${FIRST_USER_MESSAGE_SQL}) ILIKE ${pattern}\`` so the operator wraps a parenthesized scalar-subquery operand. Postgres parses scalar subqueries as ILIKE operands fine, but the explicit form removes ambiguity about what Drizzle's helper emits and is grep-friendly when reading the source.
+- **MEDIUM: `mailto:` href XSS defense-in-depth.** Email is Zod-validated at lead-capture time (`.email()`), but a future schema drift or direct-DB write must not let a malformed value flow into an href that a screen reader announces or a click follows. Added `SAFE_EMAIL` regex + `safeMailtoHref()` helper to both the conversation detail page and the leads list page. When validation fails the email renders as plain text instead of a clickable link.
+- **MEDIUM: shared-query tenancy contract docs.** Reviewer flagged that `listLeads`, `listConversations`, etc. take a `botId` and trust the caller has verified ownership. Added a clear module-level doc comment to both `src/lib/leads/queries.ts` and `src/lib/conversations/queries.ts` so a future contributor introducing a new call site can't accidentally skip the upstream guard.
+- **LOW: SearchBar missing aria-label.** Added `aria-label={placeholder}` and a regression test. Screen readers now have a stable label even if the placeholder text is empty.
+
+**Files changed:**
+
+_Shared queries:_
+
+- `src/lib/analytics/queries.ts` — create — `getAnalyticsForBot` + `getAnalyticsForUser`.
+- `src/lib/conversations/queries.ts` — create — `listConversations` + `getConversationWithMessages` + tenancy doc + safe LATERAL ILIKE.
+- `src/lib/leads/queries.ts` — create — `listLeads` + `listAllLeadsForExport` + tenancy doc.
+
+_Slice-6.2 route refactor (no test changes needed — behavior identical):_
+
+- `src/app/api/bots/[botId]/analytics/route.ts` — update — delegates to `getAnalyticsForBot`.
+- `src/app/api/bots/[botId]/conversations/route.ts` — update — delegates to `listConversations`.
+- `src/app/api/bots/[botId]/conversations/[convId]/route.ts` — update — delegates to `getConversationWithMessages`.
+- `src/app/api/bots/[botId]/leads/route.ts` — update — GET delegates to `listLeads`; POST + OPTIONS unchanged.
+- `src/app/api/bots/[botId]/leads/export/route.ts` — update — delegates to `listAllLeadsForExport`.
+
+_Components:_
+
+- `src/components/dashboard/StatCard.tsx` — create — 4 specs.
+- `src/components/dashboard/StatCard.test.tsx` — create.
+- `src/components/dashboard/EmptyState.tsx` — create — 3 specs.
+- `src/components/dashboard/EmptyState.test.tsx` — create.
+- `src/components/dashboard/Pagination.tsx` — create — 6 specs.
+- `src/components/dashboard/Pagination.test.tsx` — create.
+- `src/components/dashboard/SearchBar.tsx` — create — 5 specs (incl. aria-label regression).
+- `src/components/dashboard/SearchBar.test.tsx` — create.
+- `src/components/dashboard/TranscriptMessage.tsx` — create — 4 specs.
+- `src/components/dashboard/TranscriptMessage.test.tsx` — create.
+
+_Pages:_
+
+- `src/app/(dashboard)/dashboard/page.tsx` — update — aggregated stat row.
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — update — per-bot stat row + sub-nav.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/page.tsx` — create — paginated list + search.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/page.test.tsx` — create — 6 specs.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/[convId]/page.tsx` — create — transcript viewer + safe mailto.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/[convId]/page.test.tsx` — create — 5 specs.
+- `src/app/(dashboard)/dashboard/bots/[botId]/leads/page.tsx` — create — list + CSV anchor + safe mailto.
+- `src/app/(dashboard)/dashboard/bots/[botId]/leads/page.test.tsx` — create — 5 specs.
+
+Total: 8 new components/pages + 3 new shared modules + 8 new test files + 5 route refactors + 2 page extensions. 559/559 tests pass (521 → 559, net +38), build green, all 5 new dashboard sub-routes register in the production build.
+
+**Decisions made:**
+
+- **Shared queries take `botId`, not `(botId, userId)`.** The functions trust the caller has done the ownership check. Rationale: forcing every caller to thread `userId` would couple the query layer to the auth-session shape, and the existing dashboard pattern (`requireBotOwner` returns the validated bot, then call queries with `bot.id`) is already grep-friendly. The tradeoff is captured in the module-level doc comment so future contributors don't introduce a bypass.
+- **Server-render with direct Drizzle queries (no client fetch).** RSC reads `searchParams.q` + `searchParams.page` and calls `listConversations` directly. Pagination + search are URL-driven; the only client component on the list page is `<SearchBar>` for the debounced `?q=` update. Result: bookmarkable URLs, server-side caching benefits, no loading skeletons, browser back/forward works for free.
+- **`router.replace` over `router.push` in SearchBar.** Pushing every debounce-flush would clog the history stack (typing "python" → 6 history entries). Replace keeps the most recent search visible to browser back without filling the stack.
+- **Drop `?page=` from the URL on search change.** Searches after navigating to page 5 of the unfiltered list would otherwise land on page 5 of the filtered list, which is almost always empty. Reset to page 1 (implicit by omitting the param) on every search change.
+- **`Page 1` omits `?page=` from the URL.** The canonical URL has no `page` param at all — keeps the address bar clean for the most common state.
+- **Empty-state copy varies on `?q=` presence.** "No conversations match \"python\"" + clear-search hint when filtered; "No one has chatted with <bot> yet" + CTA when unfiltered. Two distinct user states deserve distinct messages.
+- **Transcript bubbles use the same Markdown rendering as the live chat.** The recruiter saw `**bold**` and links rendered in the chat at the time. The dashboard transcript should match what they saw, not a downgraded plain-text version. Cost: re-rendering markdown server-side; benefit: visual fidelity.
+- **`SafeLink` mirrors the live chat MessageBubble.** Stored transcript text could contain `https://evil.com` that the bot replied with months ago. Without `rel="noopener noreferrer"`, clicking such a link gives the destination's JS access to `window.opener` of the dashboard page. The defense is cheap (one component wrapper); skipping it would be a `tabnabbing` exposure.
+- **Explicit `sql\`\`` over Drizzle's `ilike()` for the LATERAL subquery.** The helper's behavior when its first argument is a raw `sql<>` template depends on dialect-internal wrapping. The explicit form removes ambiguity, is grep-friendly, and produces SQL a Postgres engineer can read on sight: `(SELECT LEFT(...) FROM messages WHERE ...) ILIKE '%q%'`.
+- **`mailto:` href validated before render.** Even though emails are Zod-validated at lead capture, the cost of a defense-in-depth regex check before generating an href is ~5 lines and zero runtime. A schema drift, an admin SQL backfill, or any future write path that bypasses the lead-capture endpoint could otherwise land malformed text in the field; the validation ensures it cannot flow into an attribute click target.
+
+**Open questions / follow-ups:**
+
+- The shared query modules don't have direct unit tests. They're transitively covered by the (still-passing) slice-6.2 route tests and the slice-6.3 page tests (which mock the shared modules). Direct unit tests would catch SQL-level regressions before mocks; defer until Stage 7 integration tests run against a real Postgres.
+- The conversations list's LATERAL subquery still runs once for the projection AND once for the count query (acknowledged tech debt from slice-6.2 review). Refactoring to a CTE that runs the subquery once would let Postgres reuse the result. Defer until a bot reaches 10K+ conversations and the list page feels slow.
+- The transcript viewer renders Markdown for every message. For very long conversations (50+ turns), this could be visible CPU cost on the initial render. If profiling shows it, switch to incremental rendering (React.lazy per bubble) or a server-rendered HTML cache. Not blocking today.
+- The dashboard home stat row is only shown when `totalBots > 0`. A user who deleted all their bots would still see this row at 0/0/0 because `totalBots > 0` is false — but they'd also see the empty-bot CTA, so the UX is coherent. If we later add an "archived bots" state, the trigger condition might need rethinking.
+- Slice 6.4 (next) wires the in-chat lead-capture card + the dashboard notification bell + 30s polling on `/api/notifications/unread-count`.
+- Slice 6.5 (final Stage 6 slice) adds the settings page + knowledge management UI: editable name/headline/personality/suggested questions + reuse of the Bot Factory dropzone for knowledge sources.
+
+---
+
+### 2026-06-20 05:57 - Stage 6 Slice 6.4: in-chat lead capture + notification bell + 30s polling
+
+**What was asked to do:** Ship the two coordinated UX surfaces that make Stage 6 a complete loop — the recruiter-side in-chat lead-capture card that appears after the 3rd assistant reply, and the owner-side dashboard notification bell with 30s polling on `/api/notifications/unread-count`. Both halves consume the slice-6.2 endpoints (POST `/leads`, GET `/notifications`, GET `/notifications/unread-count`, POST `/notifications/[id]/read`, POST `/notifications/read-all`). The lead-capture path also requires extending the chat route to return `conversationId` so the card can include it in its POST body for idempotent `(botId, conversationId, email)` dedupe + `conversations.recruiter_email` update.
+
+**Locked decisions before any code (Q1-Q9):** Q1 (a) the lead-capture card is modeled as a new ChatMessage variant `{ role: "system"; kind: "lead_capture" }` rendered inline in the message map — visually coherent, reuses scroll-to-bottom, single state container. Q2 (a) inline "Thanks! {bot} will be in touch" replaces the card on Submit (no toast infra to build). Q3 (a) Skip is permanent for the conversation; no re-show after 5 more replies (respect the dismissal). Q4 (a) clicking a notification row marks read + navigates in one action. Q5 30s polling + Page Visibility API pause when tab hidden. Q6 dropdown closes on outside click, ESC, or notification click. Q7 empty state "You're all caught up." with the "Mark all read" button hidden when nothing is unread. Q8 bell badge caps at "9+" for >= 10. Q9 (a) single-pass slice — both halves ship coherently as Stage 6's "complete loop" moment.
+
+**What I did:**
+
+_Lead capture (recruiter-facing, in chat):_
+
+- `src/lib/client/lead-capture-state.ts` + test (5 specs) — sessionStorage-backed state machine: `pending → shown → captured | dismissed`. Keyed by `(botId, sessionId)` so each conversation gets its own lifecycle independent of other tabs. Garbage stored values, sessionStorage read failures, and key isolation all return `pending` (the benign baseline — worst case is a re-prompt, never a lost dismissal).
+- `src/components/chat/types.ts` — extended `ChatMessage` discriminated union with `{ id; role: "system"; kind: "lead_capture" }`. New variant carries no content — the card component owns its own UI/state.
+- `src/components/chat/MessageBubble.tsx` — narrowed prop type to `Exclude<ChatMessage, { role: "system" }>` so TypeScript catches accidental routing of system messages to the bubble renderer at compile time.
+- `src/components/chat/LeadCaptureCard.tsx` + test (7 specs) — client component with `<input type="email">` + Submit/Skip. State machine: `prompt → submitting → captured`. On valid submit POSTs to `/api/bots/[botId]/leads` with `{ email, conversationId?, contextSummary }`. Captured state replaces the card with an inline green "Thanks! {botName} will be in touch." that stays in the message stream (loop closure for the recruiter). Network failure / 4xx response: returns to `prompt` with inline error.
+- `src/components/chat/ChatWindow.tsx` — three changes: (1) `sessionId` lazy-initialized via `useState(() => …)` so it's mount-stable and the lead-capture state lookup matches the value sent to the chat API. (2) `conversationId` state captured from the chat API response, threaded through to the card. (3) Render loop dispatches `m.role === "system" && m.kind === "lead_capture"` to `<LeadCaptureCard>` with an explicit exhaustiveness `never` check after — a new system variant lands as a compile-time error rather than silently routing to the wrong renderer. (4) On every successful reply the orchestrator counts assistant replies in the next-messages array and pushes a sentinel system message when the count first crosses 3 AND `readLeadCaptureState === "pending"` AND no system message exists yet. The state write `writeLeadCaptureState(..., "shown")` happens in the same render so a reload sees `"shown"` and the eligibility check declines to re-add.
+- `src/app/api/chat/[botId]/route.ts` — now returns `{ reply, conversationId? }`. `conversationId` is captured from the persistence transaction's `RETURNING { id }` and set in the outer scope. When the transaction throws (analytics-failed path), `conversationId` stays undefined; `NextResponse.json` strips undefined fields so the response shape is `{ reply }` and the card falls back to the server's 24h `(botId, email)` dedupe window.
+
+_Notification bell (owner-facing, in dashboard):_
+
+- `src/components/dashboard/NotificationBell.tsx` + test (6 specs) — bell icon button with badge. `useEffect` orchestrates polling: `setInterval(refresh, 30_000)` paused via Page Visibility API (`document.visibilityState !== "visible"` → clear interval; back to visible → fire immediate refresh + restart interval). Outside-click via `mousedown` listener that bails when `rootRef.current.contains(target)` — the bell itself is inside `rootRef` so clicks on it don't immediately close the freshly-opened dropdown. ESC handler also closes. Badge caps at "9+" for >= 10. Aria-label reflects the unread count for screen readers ("Notifications, 3 unread" vs just "Notifications").
+- `src/components/dashboard/NotificationDropdown.tsx` + test (7 specs) — mounted inside `<NotificationBell>` when open. Initial fetch of `/api/notifications?limit=10` populates the list. Per-row click is one action: fire mark-read (idempotent at the server — 404 if already-read is treated as a no-op), call `onItemRead(id)` to decrement the parent badge, `router.push` to `/dashboard/bots/[botId]/leads`, and `onClose()`. "Mark all read" footer button (hidden when nothing is unread) hits `/api/notifications/read-all`; only flips local state on `res.ok` — server-failure leaves the badge as-is so the next poll reconciles without a flicker. Empty state "You're all caught up.", loading skeleton "Loading…", error toast "Couldn't load notifications."
+- `src/app/(dashboard)/layout.tsx` — mounted `<NotificationBell />` in the existing header strip, next to the Docs link. Bell is visible on every dashboard page (Q4 from slice-6.2 prep — recruiter could land on any bot, so the bell follows the user across the dashboard).
+
+_Code-review pass (2 HIGH + 1 MEDIUM + 1 LOW fixes applied):_
+
+- **HIGH: `useRef` lazy-init runs in render body — fragile under Strict Mode.** Original `ChatWindow` used `const sessionIdRef = useRef(null); if (sessionIdRef.current === null && typeof window !== "undefined") { sessionIdRef.current = getOrCreateSessionId(); }`. Strict Mode's double-render runs the side-effecting init twice with no cleanup. Fixed by switching to a lazy `useState` initializer: `const [sessionId] = useState(() => typeof window !== "undefined" ? getOrCreateSessionId() : null)`. React contract-guarantees the initializer runs exactly once even under Strict Mode.
+- **HIGH: dispatch on `m.role === "system"` was not future-proof.** The previous one-condition discriminator silently routed any future system variant to `<LeadCaptureCard>`. Fixed by adding an inner `m.kind === "lead_capture"` check + a trailing `const _: never = m.kind` exhaustiveness assertion. A new variant lands as a compile-time error here instead of silent runtime misbehavior.
+- **MEDIUM: `handleMarkAllRead` fire-and-forget.** Now checks `res.ok`, surfaces an inline "Couldn't clear notifications." error on failure, and skips `onAllRead()` so the local badge state doesn't desync from the server.
+- **LOW: `role="menu"` without `menuitem` children.** Changed to `role="region"` with `aria-label="Notifications"` — semantically correct for a notification panel that's not a command menu. Updated 3 test assertions accordingly.
+- **MEDIUM not applied: `SAFE_EMAIL` regex vs Zod `.email()`.** Reviewer claimed Zod rejects `a@b.c` (1-char TLD); in practice Zod's `.email()` accepts the HTML5-spec shape which includes 1-char TLDs. Tightening would over-reject. Skipped.
+- **LOW not applied: `conversationId` undefined in JSON response.** `NextResponse.json` strips undefined fields via `JSON.stringify`, so the response shape is `{ reply }` (no extra key) when persistence fails. Client-side check `if (body.conversationId)` correctly handles both shapes. No-op fix declined.
+
+**Files changed:**
+
+_Lead capture:_
+
+- `src/lib/client/lead-capture-state.ts` — create — sessionStorage state machine.
+- `src/lib/client/lead-capture-state.test.ts` — create — 5 specs.
+- `src/components/chat/types.ts` — update — added system+lead_capture variant.
+- `src/components/chat/MessageBubble.tsx` — update — narrowed prop type to exclude system variant.
+- `src/components/chat/LeadCaptureCard.tsx` — create — client component.
+- `src/components/chat/LeadCaptureCard.test.tsx` — create — 7 specs.
+- `src/components/chat/ChatWindow.tsx` — update — sessionId via useState, conversationId state, render dispatch with exhaustiveness, lead-capture insertion in success path.
+- `src/components/chat/ChatWindow.test.tsx` — update — stateful lead-capture-state mock + 3 new specs (no card before threshold, card at threshold, dismiss is permanent).
+- `src/app/api/chat/[botId]/route.ts` — update — return `{ reply, conversationId? }`.
+- `src/app/api/chat/[botId]/route.test.ts` — update — 1 new spec (omits conversationId when persistence throws), updated happy-path assertion.
+
+_Notification bell:_
+
+- `src/components/dashboard/NotificationBell.tsx` — create — bell + polling + visibility pause + outside-click/ESC close.
+- `src/components/dashboard/NotificationBell.test.tsx` — create — 6 specs (badge, 9+ cap, polling cadence with `shouldAdvanceTime: true`, open/close).
+- `src/components/dashboard/NotificationDropdown.tsx` — create — fetch + render + mark-read + mark-all + empty/loading/error states.
+- `src/components/dashboard/NotificationDropdown.test.tsx` — create — 7 specs (loading, empty, render, click-marks-read-and-navigates, mark-all-fires-endpoint, mark-all-hidden-when-all-read, fetch error).
+- `src/app/(dashboard)/layout.tsx` — update — mounted `<NotificationBell />` in header.
+
+Total: 10 new source files + 6 test files + 5 updated source files. 588/588 tests pass (559 → 588, net +29), build green.
+
+**Decisions made:**
+
+- **System message variant over a sibling overlay.** Putting the lead-capture card in the message stream (as `{ role: "system"; kind: "lead_capture" }`) means it inherits the scroll-to-bottom behavior, sits naturally between bubbles, and the messages array is the single source of truth for "what is the conversation's current state". A sibling overlay would have required a separate `cardVisible` boolean + manual scroll coordination + duplicate persistence logic. The cost is a new union variant + a narrowed prop type on MessageBubble; the benefit is fewer moving parts.
+- **`useState` lazy initializer, not `useRef` write-on-render.** This is the React-canonical pattern for "compute once at mount and never again." Strict Mode double-render is safe, no cleanup gymnastics, the value is stable across all renders. The render-body ref write would have worked today but set a risky precedent for future contributors.
+- **Exhaustiveness check via `const _: never = m.kind`.** Today the new variant routes correctly; tomorrow's contributor adds `{ kind: "cookie_banner" }` and the compiler flags this line instead of the renderer shipping a lead-capture card with no usable props. One line of code; defends against an entire class of future bugs.
+- **Stateful mock for lead-capture-state in ChatWindow tests.** A static `() => "pending"` mock can't model the dismiss-then-no-rerender behavior. The stateful Map-backed mock lets the test exercise the real state-machine semantics without touching real sessionStorage.
+- **Page Visibility API for polling pause.** A user with the dashboard open in a background tab shouldn't burn 30s polling forever — both for battery on laptops and for server cost (cheap query, but free isn't zero). Pausing on hidden + immediate refresh on visible is the standard pattern; it adds ~10 lines and removes the entire class of "I left the dashboard open overnight and woke up to dead battery" reports.
+- **Single click on a notification = mark-read + navigate.** The reviewer of slice-6.2 prep agreed (Q4) — when a user clicks a notification, they're clearly engaging with it; making them also click a separate "✓" button is friction with no upside. Fire the mark-read in parallel with the navigation since the mark-read endpoint is idempotent and we don't need to await it.
+- **Bell badge caps at "9+", not at 99 or 999.** Real-world unread counts beyond 10 are noise — a user with 47 unread leads has already missed the signal. "9+" tells them "you have a backlog to deal with"; the exact number doesn't change the action. Also keeps the badge visually tiny.
+- **In-chat lead-capture card POSTs from the recruiter's anonymous browser session.** The endpoint is CORS-public and idempotent. The card's email field is HTML5-validated (browser-side) AND regex-validated client-side AND Zod-validated server-side. Three independent layers; the cost is ~20 lines.
+- **Inline error message on submit failure, no toast.** The card is right there; the recruiter is looking at it. A toast would compete for the same attention with worse semantics. The inline error stays under the input where the recruiter is focused.
+
+**Open questions / follow-ups:**
+
+- Real-time notifications: 30s polling is the simple-enough-for-Stage-6 path. Stage 7 can swap to Server-Sent Events or WebSockets if "the bell badge updated 28 seconds late" turns out to matter. The dropdown fetch is also a one-shot per open; making it live-update would be the same protocol upgrade.
+- The lead-capture card's email regex (`SAFE_EMAIL`) and the server's Zod `.email()` aren't enforced to match each other. A future Zod upgrade could change behavior on edge cases (e.g. RFC 6531 internationalized addresses); the client would silently accept what the server rejects. Worth a shared schema module in Stage 7.
+- No retry on transient network failures in the lead-capture POST. A recruiter on flaky wifi sees "Network error. Please try again." and has to retype the email. Acceptable for slice 6.4; an exponential-backoff retry in the fetch wrapper would be Stage 7 work.
+- Notification dropdown clicks navigate to `/dashboard/bots/[botId]/leads`, not directly to the specific lead. A "?highlight=leadId" query param + scroll-and-flash on the leads page would be a small UX upgrade.
+- Bell polling cadence is hardcoded at 30s. Per-user preference (or per-deployment env var) could land in Stage 7 once we have a preferences surface.
+- Slice 6.5 (final Stage 6 slice) wires the settings page: editable name/headline/personality/suggested questions + reuse of the Bot Factory dropzone for knowledge sources. After 6.5, Stage 6 is a complete product loop and we move to Stage 7's launch-prep work.
+
+---
+
+### 2026-06-20 06:38 - Stage 6 Slice 6.5: settings page + knowledge management UI (Stage 6 COMPLETE)
+
+**What was asked to do:** Ship the final Stage 6 slice — the bot settings page that lets owners edit identity (name, headline, personality, suggested questions) via PATCH, plus the dashboard-side knowledge management UI (list sources, drag-drop upload, per-source delete with a design-system confirmation modal, "Reprocess all"). After this slice, Stage 6 is a complete product loop: BYO-key chat → ingestion → RAG → multi-tenant public chat → embeddable widget → analytics + lead capture + notifications + editable settings. Plan §6 is done.
+
+**Locked decisions before any code (Q1-Q9):** Q1 dedicated `KnowledgeManager` component for the dashboard (no Bot-Factory wizard extraction — the wizard's "create new bot" copy doesn't fit "manage existing knowledge"). Q2 whole-form Save button at the bottom of the identity form — explicit, no surprises. Q3 chip-based suggested-questions editor matching the Bot Factory affordance but as its own component. Q4 `window.confirm`-style confirmation flow, BUT styled per the design system — built a `ConfirmDialog` component (native window.confirm cannot be themed). Q5 inline "Reprocessed N tokens" status next to the button. Q6 Bot Factory radio cards for personality (richer than a select for the dashboard surface). Q7 whole-form Save (single PATCH per click). Q8 drag-and-drop upload zone (parity with Bot Factory's dropzone UX). Q9 single-pass slice.
+
+**What I did:**
+
+_Schema + route widening:_
+
+- `src/lib/bots/schemas.ts` — widened `botPatchInput` from `{themeColor?}` (slice 5) to `{name?, headline?, personality?, suggestedQuestions?, themeColor?}`. Each field independently optional; the `.refine()` "must include at least one field" check stays. `name` is `.trim().min(1).max(100)`; `headline` is `.transform(trim).max(120)` so whitespace-only PATCHes can't leave blank-looking strings in the DB; `personality` is the `PERSONALITY_PRESETS` enum; `suggestedQuestions` is the bounded array (max 6, each ≤ 200 chars).
+- `src/app/api/bots/[botId]/route.ts` — PATCH handler unpacks the five whitelisted fields from `parsed.data` and builds the SET payload via explicit conditional assignment. The Zod schema IS the mass-assignment whitelist: fields like `userId`, `isActive`, `contextText`, `emailVerified` are not in `botPatchInput` so they can never reach the SET object even if a hostile client sends them. Returning shape extended to include all four newly-editable fields.
+- `src/app/api/bots/[botId]/route.test.ts` — extended from 6 to 13 specs: each new field validates (happy path, name>100, empty name, bad personality enum, >6 suggested questions, name+headline PATCH, personality+suggestedQuestions PATCH, settings mass-assignment regression).
+
+_Reusable components (4 new):_
+
+- `src/components/dashboard/ConfirmDialog.tsx` — design-system styled modal. `role="dialog"`, `aria-modal="true"`, ESC to cancel, backdrop **click** (not mousedown — review fix; mousedown would close on accidental drag-out from inner panel). `destructive` prop swaps the confirm button to rose-600 for delete actions. Confirm button auto-focuses for keyboard flow. 7 specs.
+- `src/components/dashboard/SuggestedQuestionsEditor.tsx` — chip-based add/remove. Add via button or Enter. Cap at 6 with input + button disabled state at the cap. **Dedupe with explicit "Already in the list" hint** (review fix — silent dedupe was a HIGH-flagged UX defect; users typed something, hit Add, and nothing visible happened). Chip key is the question value itself (not `idx-q` composite — review fix; values are deduped so the value alone is a stable key). 8 specs.
+- `src/components/dashboard/BotSettingsForm.tsx` — whole-form Save with diff-based PATCH (only sends changed fields, saves DB write churn + cleaner audit trail). Uses Bot Factory radio cards for personality (sr-only radio + visual `<label>` styling, accessible via keyboard arrows). State seeded from props once at mount — **intentionally** does NOT sync state from changed initial* props mid-edit (would clobber the user's in-flight typing if the parent server-component re-renders mid-session). `router.refresh()` on success so the page's RSC tree picks up the new values. Saved! transient clears after 1.5s. 7 specs.
+- `src/components/dashboard/KnowledgeManager.tsx` — fetches `GET /api/bots/[botId]/knowledge` on mount, renders source list with name + type + chunk count + token count (formatted as "9.3K tokens" for readability). Drag-and-drop OR click-to-choose PDF upload — drops non-PDF files with an inline error. Per-source delete via `<ConfirmDialog destructive>`. "Reprocess all" button hits `/knowledge/reprocess` and shows transient "Reprocessed (14,551 tokens)." status. Empty state when no sources. 7 specs.
+
+_Page + nav (2 new/updated):_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` — server component, standard `findFirst({where: and(eq(bots.id), eq(bots.userId))})` → `notFound()` tenancy pattern (same as the other slice-6.3 sub-routes). Renders two sections: Identity → `<BotSettingsForm>`; Knowledge sources → `<KnowledgeManager>`. Defense-in-depth fallback to "professional" when the DB stores an unknown personality string (with a comment explaining this should be unreachable since `PERSONALITY_PRESETS` is Zod-enforced at create + PATCH). 4 specs.
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — added "Settings →" link to the sub-nav strip next to Conversations / Leads.
+
+_Code-review pass (1 HIGH + 1 MEDIUM + 2 LOW fixes applied; 1 HIGH skipped as incorrect analysis):_
+
+- **HIGH applied: silent dedupe in SuggestedQuestionsEditor.** Users typed a duplicate question, hit Add, the input cleared, and nothing visible happened. Added a "Already in the list" hint that surfaces beside the "X of 6 questions" counter so the user knows why their Add appeared to do nothing.
+- **HIGH skipped: stale initial-props state after router.refresh().** Reviewer claimed `dirty = name !== initialName` would be evaluated against frozen initials. Wrong — that expression is in the render body, evaluated each render with the latest prop value. After `router.refresh()` the server re-renders with new `initialName` and the client's `dirty` check correctly compares to the latest prop. Syncing state from props on prop change (the reviewer's suggested fix) would actually be worse — it would clobber the user's in-flight typed values whenever the parent re-renders mid-edit. Added a comment to document the intentional pattern.
+- **MEDIUM applied: ConfirmDialog backdrop drag-close.** Switched from `onMouseDown` to `onClick` on the backdrop. With mousedown, a user who drag-released from inside the panel onto the backdrop would dismiss the dialog. The `click` event by spec requires both press and release on the same target, so this edge case is impossible.
+- **MEDIUM applied: headline whitespace-only PATCH.** Added `.transform((v) => v.trim())` to `botPatchInput.headline` so `{ headline: "   " }` stores the empty string (the canonical "no headline" value) instead of three spaces that render as a blank-looking headline in the widget.
+- **MEDIUM acknowledged: file input value reset ordering safe.** Reviewer confirmed `e.target.value = ""` after `handleUpload(e.target.files)` is safe because `Array.from(files)` captures the FileList synchronously before the reset. Added a "do not swap these lines" comment to prevent a future maintainer from reordering.
+- **LOW applied: chip key composite → just `q`.** Dedupe enforcement at add-time means `q` alone is unique; the index component partially defeated React's reconciliation on remove-from-middle. Now `key={q}`.
+- **LOW applied: personality fallback comment.** Documented that the `isPersonality(bot.personality) ? … : "professional"` fallback is defense-in-depth — unreachable in practice since the value is Zod-enforced at every write path.
+
+**Files changed:**
+
+_Schema + route:_
+
+- `src/lib/bots/schemas.ts` — update — widened `botPatchInput` to 5 fields.
+- `src/app/api/bots/[botId]/route.ts` — update — SET-payload + returning extended.
+- `src/app/api/bots/[botId]/route.test.ts` — update — +7 specs (13 total).
+
+_Components:_
+
+- `src/components/dashboard/ConfirmDialog.tsx` — create — design-system modal.
+- `src/components/dashboard/ConfirmDialog.test.tsx` — create — 7 specs.
+- `src/components/dashboard/SuggestedQuestionsEditor.tsx` — create — chip editor.
+- `src/components/dashboard/SuggestedQuestionsEditor.test.tsx` — create — 8 specs.
+- `src/components/dashboard/BotSettingsForm.tsx` — create — diff-based whole-form save.
+- `src/components/dashboard/BotSettingsForm.test.tsx` — create — 7 specs.
+- `src/components/dashboard/KnowledgeManager.tsx` — create — list + drag-drop + delete + reprocess.
+- `src/components/dashboard/KnowledgeManager.test.tsx` — create — 7 specs.
+
+_Page + nav:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` — create — server component.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.test.tsx` — create — 4 specs.
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — update — added Settings → link.
+
+Total: 10 new source files + 6 test files + 3 updates. 628/628 tests pass (588 → 628, net +40), build green, new `/dashboard/bots/[botId]/settings` route registered (4.36 kB).
+
+**Decisions made:**
+
+- **Zod schema IS the mass-assignment whitelist.** Slice 5 established the pattern for PATCH (themeColor only); slice 6.5 widens to 5 fields with the same shape. Fields not in `botPatchInput` literally cannot reach the SET object — there's no per-field `delete body.x` denylist that could be forgotten.
+- **Trim `headline` server-side, not client-side.** Client-side trim is bypassable; server-side trim ensures the DB never holds whitespace-only padding. Same pattern Zod applies to email/username at registration.
+- **Diff-based PATCH client side.** Only fields that changed go in the body. Cleaner audit trail, smaller request bodies, and the `.refine()` "at least one field" check is naturally satisfied (if nothing changed, Save is disabled).
+- **Whole-form Save over per-section saves.** Two save buttons (Identity, Suggested questions) create "did the second save actually happen?" anxiety. One button keeps mental model simple.
+- **Design-system `ConfirmDialog` over `window.confirm`.** Native `window.confirm` cannot be themed — looks out of place against the dashboard. Building the modal is ~80 lines and reusable for any future destructive action.
+- **`onClick` on backdrop, not `onMouseDown`.** Click requires press + release on the same target by HTML spec, so accidental drag-out from inner panel doesn't dismiss. Snappier-feeling `mousedown` is the wrong tradeoff for destructive flows.
+- **State seeded from props once, not synced on prop change.** Edit forms hold user input; parent re-renders with new initial values are expected (e.g. after `router.refresh()`), but the user's typed-but-unsaved input must NOT be clobbered. The `dirty` check compares to the latest prop value in the render body, so subsequent edits remain correctly diffed against the fresh initials.
+- **Personality fallback to "professional", not throw.** A direct-DB write that leaves an unknown personality value would otherwise crash the page render. The fallback degrades gracefully — UI shows "Professional", first save writes the validated value back, the row heals silently.
+- **Dedupe with visible hint.** Users who type a duplicate suggested question and hit Add deserve an answer for why the input cleared but the chip list didn't grow. A `role="status"` hint is one line and removes the entire "did Add work?" confusion.
+- **Drag-and-drop AND click-to-choose.** Filtering dropped files to `application/pdf` only prevents a 415 round-trip when someone drags a `.txt` or image; the inline error guides them to the right file type.
+
+**Stage 6 closeout — what works after this slice:**
+
+- BYO-key chat with multi-provider abstraction (Stage 1).
+- PDF + text ingestion with chunking + per-bot context cap (Stage 2).
+- RAG with optional embedding key (Stage 3).
+- Public multi-tenant chat at `/u/<username>/chat` + onboarding + avatars (Stage 4).
+- Embeddable widget with Shadow DOM + theme color + signature badge (Stage 5).
+- Stage 6 complete loop:
+  - 6.1: schema + chat persistence (conversations + messages now actually written).
+  - 6.2: 10 API endpoints (analytics, conversations, leads, notifications).
+  - 6.3: dashboard UI (overview, sub-routes, transcript viewer, CSV export).
+  - 6.4: in-chat lead capture + notification bell with 30s polling.
+  - 6.5: settings page + knowledge management UI.
+
+**Stage 6 limitations (resolved in Stage 7):**
+
+- No persistent rate limits (in-memory only). Stage 7 Redis layer fixes this.
+- No OAuth, no email verification / password reset. Stage 7.
+- No landing page, no GDPR flows, no self-host packaging. Stage 7.
+- No structured logger (still `console.warn` for swallow-and-log paths). Stage 7.
+
+**Open questions / follow-ups:**
+
+- The settings page edits 4 identity fields. `contextText` (the manually-typed text block from the Bot Factory) is intentionally NOT editable here — that field is derived from the `knowledge_base` chunks via `assembleAndSaveBotContext`. If a user wants to edit the manual text block specifically, they go back to the Bot Factory wizard. Acceptable; the KnowledgeManager surface covers the "manage knowledge" need.
+- No bulk-delete in KnowledgeManager — each source is deleted one at a time. Acceptable for typical bot counts (1-5 PDFs); add multi-select if users start complaining.
+- The reprocess button's "X tokens" status is transient (stays until next action). A persistent "last reprocessed at" timestamp would be nice but isn't blocking.
+- `BotSettingsForm` doesn't expose `themeColor` (lives on the bot detail page via `<ThemeColorPicker>`). Could consolidate but the detail page already shows it in context with the embed snippet preview.
+- Next step is Stage 7. The build plan describes hardening, OAuth, landing page, GDPR, self-host packaging, monitoring, structured logger. That's a different beast — multiple parallel workstreams; will need a fresh planning pass.
+
+---
+
+### 2026-06-20 07:53 - Dashboard redesign Slice A: layout shell + dashboard home rebuild
+
+**What was asked to do:** Port `design/dashboard.html` (left sidebar + sticky topbar + 4 metric tiles + 7-day chart + top topics + recent leads table + recent conversations + share-your-bot card) into the existing React codebase. Apply the shell to all `(dashboard)` pages. Wire pieces that have data; mark unwired pieces with a faded "Coming soon" pill. The redesign was split into 3 slices; Slice A covers the shell + dashboard home.
+
+**Locked decisions before any code (Q1-Q10):** Q1 the new sidebar+topbar shell applies to all dashboard pages (sub-pages get re-themed in Slice C). Q2 selected bot persists in a per-browser cookie (read by `cookies()` in any RSC; no server-side storage / Redis needed for a single-value preference). Q3 docs links go to `https://docs.probot.dev/guides/embed-widget` (external — a stub page lands in Slice C). Q4 faded content + Coming Soon pill (not blank placeholder cards). Q5 curvy smooth line chart over the conversation counts (Catmull-Rom → cubic Bézier, SVG-native, no chart lib). Q6 multi-bot users: the user's first/most-recently-updated bot is the fallback; selection is per-browser via cookie + dropdown switcher above the workspace nav. Q7 mobile gets a hamburger button + slide-in panel with the full sidebar. Q8 NotificationBell migrates from the old single-row header into the new topbar. Q9 first-time users (no bots) see a focused empty-state CTA. Q10 single-pass slice (Slice A); Slices B (settings 5-tab redesign) and C (polish + sub-page re-theme) ship separately.
+
+**What I did:**
+
+_Server / data layer (4 new modules):_
+
+- `src/lib/server/selected-bot.ts` + test — cookie-backed bot selection. `resolveSelectedBotId(validIds, fallbackId)` reads the cookie and validates the value is in the user's owned bot set; stale or hostile cookie values fall through to the fallback. `writeSelectedBotCookie(botId)` is the writer (httpOnly per the review fix — XSS can't enumerate the user's bot IDs).
+- `src/lib/analytics/queries.ts` — added `getDailyConversationCounts({userId, days})` using Postgres `generate_series` to emit one row per day even on zero-count days. `days` is clamped `[1, 365]` defensively. SQL is Drizzle's parameterized `sql\`\`` template — no string interpolation.
+- `src/lib/conversations/queries.ts` — added `listRecentConversationsForUser({userId, limit})` joining `conversations` × `bots` so the dashboard can show cross-bot recent activity.
+- `src/lib/leads/queries.ts` — added `listRecentLeadsForUser({userId, limit})` joining `leads` × `bots` for the recent leads table.
+- `src/lib/ai/provider-labels.ts` — moved the inline PROVIDER_LABELS map from BotFactoryForm into a shared module; `describeProvider(provider, model)` is the consumer-facing helper.
+- `src/app/(dashboard)/actions.ts` — `selectBotAction(formData)` server action. Validates session + bot ownership in a single `findFirst({where: and(eq(bots.id), eq(bots.userId))})` before writing the cookie; a forged form payload pointing at another user's bot is silently rejected.
+
+_Shell components (under `src/components/dashboard/`):_
+
+- `ComingSoonPill.tsx` — gray "Coming soon" pill primitive, two sizes.
+- `ModelStatusCard.tsx` — bottom-of-sidebar widget showing `describeProvider(user.llmProvider, user.llmModel)` with a brand-deep gradient background. Active indicator + "Manage model & key" CTA.
+- `BotSwitcher.tsx` + test — dropdown above the workspace nav. Single-bot users see a static card (button disabled, no caret). Multi-bot users get a click-to-open menu; each item is a `<form action={selectBotAction}>` with hidden `botId` input. Outside-mousedown + ESC close the dropdown.
+- `Sidebar.tsx` — desktop sidebar shell (`hidden lg:flex` wrapper in the layout). Renders logo + BotSwitcher + nav sections (Workspace / Build / Account) + ModelStatusCard + user card with sign-out icon link. All SVG glyphs (no external icon-font dependency).
+- `SidebarNavLink.tsx` — client component. Active highlight computed via `usePathname()` so the server layout doesn't have to thread the current path. Exact-match for `/dashboard`, prefix-match for everything else. Supports external links (`target="_blank" rel="noopener noreferrer"`), inline count badges (muted gray for "Conversations", brand-color for "Leads" when > 0).
+- `MobileSidebar.tsx` — three exports: `MobileSidebarProvider` (context owning open/close state, mounted at the layout root, auto-closes on `usePathname()` change), `MobileSidebarToggle` (hamburger button, `lg:hidden`, lives inside the Topbar), `MobileSidebarPanel` (slide-in fixed panel with backdrop + body-scroll-lock + ESC close, mounted at the layout root and re-rendering the desktop Sidebar's content).
+- `Topbar.tsx` — client component (so it can read `usePathname()` for the page title). Renders hamburger + page title + URL pill with `<CopyUrlButton>` + `<NotificationBell>` + "View live bot" CTA. Title derived from a tiny path-to-title map; conversation transcript paths show "Conversation" (singular), list paths show "Conversations" (plural).
+
+_Dashboard sections:_
+
+- `MetricTile.tsx` + test — icon (forum / chat / contact_mail / bolt) + big number + label + optional faded growth pill ("+18%" at opacity-30) + optional Coming Soon pill (also fades the value to opacity-40).
+- `ConversationsLineChart.tsx` + test — SVG smooth Bézier curve. `toCoords` converts day counts to (x, y) pixels relative to a `viewBox`. `smoothPath` does Catmull-Rom → cubic Bézier conversion with neighbor-wrap-around at the edges. `fillPath` closes the curve along the baseline for a gradient fill. Falls back to a dashed baseline line on all-zero data so the panel doesn't visually collapse. "Today" label on the last point; weekday short name everywhere else.
+- `TopTopicsPlaceholder.tsx` — faded skeleton bars (5 fixed labels at fixed percentages) + Coming Soon pill in the header.
+- `RecentLeadsTable.tsx` + test — table with Email · Asked about · Company signal · When · View chat columns. `companyFromEmail` uses a registrable-domain heuristic (second-to-last segment for 3+ segment domains so `mail.stripe.com` → "Stripe" not "Mail"). Public providers (gmail, outlook, etc.) get no pill. "View all" link goes to the first lead's bot's leads page; row click opens the transcript.
+- `RecentConversationsList.tsx` — 3 rows with avatar + recruiter email (or "Anonymous visitor") + truncated first-user-message preview + relative-time badge. "View all N conversations" footer link.
+
+_Layout + page:_
+
+- `src/app/(dashboard)/layout.tsx` — full rewrite. Fetches `[ownedBots, analytics, userRow]` in parallel via Promise.all. Resolves the selected bot via cookie. Computes user initials, public URL. Renders `<MobileSidebarProvider>` wrapping: desktop sidebar `<aside className="fixed hidden h-screen w-64 ... lg:flex lg:flex-col">` containing `<Sidebar>`, a main column with `<Topbar>` + `{children}`, and `<MobileSidebarPanel>` mirroring the sidebar content at the layout root.
+- `src/app/(dashboard)/dashboard/page.tsx` — full rewrite. Empty state (no bots) renders a focused CTA; populated state renders Welcome greeting + 4 MetricTiles + ConversationsLineChart + TopTopicsPlaceholder + RecentLeadsTable + RecentConversationsList + Share-your-bot card (reuses slice-5 `<EmbedSnippet>` with the 3 cards: Public URL / Website embed / Email signature) + "Full embed guide →" link.
+
+_Code-review pass (0 CRITICAL/HIGH; 3 MEDIUM + 1 LOW applied):_
+
+- **MEDIUM applied: `httpOnly: true` on the bot selection cookie.** The value is bot ID (not a secret), but XSS can't enumerate the user's bot IDs from `document.cookie` with httpOnly. The cookie is only ever read server-side via `cookies()`; client JS has no need to see it.
+- **MEDIUM applied: `getDailyConversationCounts` clamps `days` to [1, 365].** Defensive cap so a future caller passing `days = 1_000_000` doesn't generate a million-row `generate_series` in Postgres.
+- **MEDIUM applied: `companyFromEmail` uses second-to-last domain segment for 3+ part domains.** `mail.stripe.com` → "Stripe" instead of "Mail". `.co.uk`-style public-suffix edge cases aren't handled (heuristic, not authoritative), but the decoration is correct for the common shapes. Added a regression test.
+- **LOW applied: dropped the redundant ownership re-query in the dashboard page.** `ownedBots` is already pre-filtered by `eq(bots.userId, userId)`, so `selectedBot = ownedBots.find(...)` is ownership-verified by construction — no need for an extra DB round-trip.
+
+**Files changed:**
+
+_Server / queries:_
+
+- `src/lib/server/selected-bot.ts` — create — cookie resolver + writer.
+- `src/lib/server/selected-bot.test.ts` — create — 6 specs (tenancy boundary).
+- `src/lib/analytics/queries.ts` — update — `getDailyConversationCounts` with clamped days.
+- `src/lib/conversations/queries.ts` — update — `listRecentConversationsForUser`.
+- `src/lib/leads/queries.ts` — update — `listRecentLeadsForUser`.
+- `src/lib/ai/provider-labels.ts` — create — shared provider labels.
+- `src/app/(dashboard)/actions.ts` — create — `selectBotAction` server action.
+
+_Components:_
+
+- `src/components/dashboard/ComingSoonPill.tsx` — create.
+- `src/components/dashboard/ModelStatusCard.tsx` — create.
+- `src/components/dashboard/BotSwitcher.tsx` — create.
+- `src/components/dashboard/BotSwitcher.test.tsx` — create — 5 specs.
+- `src/components/dashboard/Sidebar.tsx` — create.
+- `src/components/dashboard/SidebarNavLink.tsx` — create.
+- `src/components/dashboard/MobileSidebar.tsx` — create — Provider + Toggle + Panel.
+- `src/components/dashboard/Topbar.tsx` — create.
+- `src/components/dashboard/MetricTile.tsx` — create.
+- `src/components/dashboard/MetricTile.test.tsx` — create — 4 specs.
+- `src/components/dashboard/ConversationsLineChart.tsx` — create.
+- `src/components/dashboard/ConversationsLineChart.test.tsx` — create — 4 specs.
+- `src/components/dashboard/TopTopicsPlaceholder.tsx` — create.
+- `src/components/dashboard/RecentLeadsTable.tsx` — create.
+- `src/components/dashboard/RecentLeadsTable.test.tsx` — create — 7 specs.
+- `src/components/dashboard/RecentConversationsList.tsx` — create.
+
+_Layout + page:_
+
+- `src/app/(dashboard)/layout.tsx` — full rewrite — new shell.
+- `src/app/(dashboard)/dashboard/page.tsx` — full rewrite — new dashboard home.
+
+Total: 17 new source files + 5 test files + 5 updated source files. 654/654 tests pass (628 → 654, net +26), build green, new `/dashboard` route at 4.4 kB first-load JS.
+
+**Decisions made:**
+
+- **Cookie over Redis for selected bot.** A single-value per-user preference doesn't need a server-side store. The cookie is read by `cookies()` in any RSC for free; no roundtrip to Redis, no infrastructure dependency.
+- **Server action for bot switching, not a client fetch.** The form-action pattern (hidden `botId` input, `<form action={selectBotAction}>`) keeps the dropdown functional without JS in degraded modes AND lets the action `revalidatePath('/')` so every cached dashboard page re-renders against the new selection.
+- **Active sidebar state computed via `usePathname()`, not threaded as a prop.** The server layout doesn't have to know which page is rendering; client-side `SidebarNavLink` reads the path itself. The layout stays declarative.
+- **Topbar is a client component (not server).** It needs `usePathname()` to derive the page title. NotificationBell and CopyUrlButton are already client islands inside it, so making the wrapper client doesn't move the SSR boundary materially.
+- **MobileSidebar uses a context provider, not prop drilling.** The hamburger trigger (inside Topbar) and the panel (mounted at layout root) need to share open/close state without threading through every server component in between.
+- **Catmull-Rom → cubic Bézier for the curve (no chart library).** ~50 lines of math, zero dependencies, fully styleable via SVG. Falls back to a dashed baseline on all-zero data so the panel doesn't visually collapse to nothing.
+- **Faded content + Coming Soon pill, not blank placeholder cards.** Preserves the design rhythm (4-card metric row, 2-col grid) so the dashboard feels complete; the "soon" signal is unambiguous via the gray pill + opacity-40 content fade.
+- **Cookie httpOnly true.** The cookie holds a bot ID, not a secret — but XSS can't enumerate the user's bot IDs even with `document.cookie` access. Free hardening.
+- **Registrable-domain heuristic for company-signal pills.** Second-to-last segment for 3+ segment domains catches the common `mail.stripe.com` → "Stripe" shape; public-suffix edge cases (`.co.uk`) are out of scope for a decorative pill.
+
+**Open questions / follow-ups:**
+
+- Slice B: settings page redesign as 5 tabs (Account / Bot configuration / Knowledge base / Security & privacy / AI model & key). The current single-page `BotSettingsForm` + `KnowledgeManager` get folded into the Bot configuration + Knowledge base tabs. AI model & key tab is entirely Coming Soon. Account / Security have placeholder content with Coming Soon pills on the not-yet-wired actions.
+- Slice C: polish — sub-page re-theme (conversations / leads / settings sub-pages need their wrapper layouts updated to fit the new shell without duplicate "back to bot" links), the stub `/docs/guides/embed-widget` page (or accept the external 404 for now), Stage-7 task block in plan.md for: AI model & key page, growth pills wiring (week-over-week comparison), response time tracking, top topics NLP categorization.
+- The dashboard's metric tiles 1-3 show real numbers + faded fake "+18%/+24%/+3 new" growth pills. The numbers are real; the percentages are decorative until Stage 7 builds week-over-week comparison.
+- The "View live bot" topbar button is hidden on small screens (`sm:inline-flex`). Mobile users access the live bot via the sidebar slide-in panel's bot card.
+- BotSwitcher dropdown items submit a form per click. There's no loading indicator between click and revalidation — typically completes < 100ms locally, but slow networks would see a flash. A pending-form indicator could land in Slice C.
+- `MobileSidebarPanel` body-scroll lock uses `document.body.style.overflow = "hidden"` and restores the previous value on cleanup. Works correctly under React Strict Mode's double-render (each mount snapshots the current overflow and the final cleanup restores it).
+- The slice intentionally left out tests for the layout, Sidebar wrapper, SidebarNavLink, ModelStatusCard, Topbar, MobileSidebar, TopTopicsPlaceholder, RecentConversationsList — focused coverage on security-critical / behavior-rich pieces (cookie resolver, MetricTile, RecentLeadsTable, BotSwitcher, ConversationsLineChart). Slice C can backfill if needed.
+
+---
+
+### 2026-06-20 08:17 - Dashboard redesign Slice B: 5-tab settings page
+
+**What was asked to do:** Port `design/settings.html` into the existing settings route. Five tabs (Account, Bot configuration, Knowledge base, Security & privacy, AI model & API key) with URL-driven state. Reuse existing functionality where it's wired; mark unwired surfaces with Coming Soon pills. Per the locked decisions: AI model & key tab is entirely Coming Soon; Account/Security have Coming Soon pills on unwired actions; Bot configuration + Knowledge base fold in existing slice 6.5 functionality.
+
+**What I did:**
+
+_Schema + route widening:_
+
+- `src/lib/bots/schemas.ts` — added `isActive: z.boolean().optional()` to `botPatchInput` so the Bot configuration tab's live/off toggle can write the bit. The slice-1 chat route and the slice-6.2 lead-capture endpoint both already gate on `bots.is_active`, so the toggle has real effect immediately.
+- `src/app/api/bots/[botId]/route.ts` — destructures `isActive` and includes it in both the SET payload and the `returning()` projection. Comment block updated to reflect the new whitelist (the old comment listed `isActive` as a blocked field, which was wrong after the widening — review fix).
+- `src/app/api/bots/[botId]/route.test.ts` — +2 specs (isActive happy-path; rejects non-boolean). Existing mass-assignment regression rewritten: previously asserted `isActive` was dropped, now asserts `userId`/`contextText`/`createdAt` are dropped while `isActive` is legitimately accepted.
+
+_Tab framework + 5 tabs (new directory `src/components/dashboard/settings/`):_
+
+- `SettingsTabs.tsx` — `<SettingsTabs>` + `<SettingsTabPanel>` pair. Tab state in URL via `?tab=`, written with `router.replace` (no history clog). Default tab is "account" — when active, the param is dropped (canonical URL). Unknown `?tab=` values fall through to the default. WAI-ARIA tabs pattern wired with `role="tablist"`/`role="tab"`/`role="tabpanel"` + `aria-controls`/`aria-labelledby` pairing (review fix — initial draft had the role attrs but no id linkage).
+- `AccountTab.tsx` — read-only profile (avatar with initials, name, email, username with `probot.com/u/` prefix) + read-only password placeholder. All inputs disabled; Save button disabled. Section headers carry Coming Soon pills.
+- `BotConfigTab.tsx` — status toggle (writes `isActive`), name, headline, personality cards (radio cards with inline SVG icons), Coming Soon Custom instructions textarea, theme color preset swatches + native `<input type="color">`, suggested questions section (reuses slice-6.5 `<SuggestedQuestionsEditor>`). Whole-form Save → PATCH with diffed body (only changed fields), `router.refresh()` on success. State-from-props-once pattern same as slice-6.5 BotSettingsForm (intentional — preserves in-flight user edits across parent re-renders).
+- `KnowledgeTab.tsx` — from-scratch rewrite of slice-6.5 KnowledgeManager with the design's layout. Same underlying `/knowledge` endpoints (GET list, POST multipart, DELETE source, POST reprocess). Type-iconed source rows (PDF / text glyphs) with small icon-only delete button, dashed "Add source" upload zone, "Re-index all" button in the section header. Drag-drop still works; ConfirmDialog still used for delete confirmation.
+- `SecurityTab.tsx` — rate-limit display cards reading `PER_MINUTE` and `PER_DAY` from `src/lib/ai/rate-limit.ts` directly (review fix — initial draft hardcoded 10/200 which silently disagreed with the actual `PER_DAY` default of 50). `MESSAGE_INPUT_MAX = 8000` mirrors the Zod cap on `/api/chat/[botId]` (sharing a constants module is a Slice C follow-up). Data & privacy rows (Export, Retention) + Danger zone (Delete account) are all Coming Soon — endpoints land in Stage 7 with the GDPR workstream.
+- `AIModelKeyTab.tsx` — entire tab is Coming Soon. Renders a faded preview of the future provider/key editor (4-card provider grid, model dropdown, API key input with show/hide) so users see what's coming. Active "key stored locally only" badge mirrors the BYO-key promise.
+
+_Page rewrite:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` — full rewrite. Fetches `[bot, userRow]` in parallel (bot needs the new `isActive`/`themeColor` columns; userRow needs `llmProvider`/`llmModel` for AIModelKeyTab). Mounts `<SettingsTabs>` with the 5 `<SettingsTabPanel>` children. Ownership gate via standard `findFirst({where: and(eq(id), eq(userId))})` → `notFound()`. Defense-in-depth personality fallback retained (slice 6.5 review note still applies).
+
+_Removed:_
+
+- `src/components/dashboard/BotSettingsForm.tsx` + test (replaced by `BotConfigTab` — adds status toggle + theme swatches inline + Coming Soon custom instructions).
+- `src/components/dashboard/KnowledgeManager.tsx` + test (replaced by `KnowledgeTab` — same endpoints, design-matched layout).
+
+_Code-review pass (2 HIGH + 2 MEDIUM + 2 LOW fixes applied):_
+
+- **HIGH: stale comments in PATCH route.** Two block comments still claimed `isActive` was a blocked field; with the Slice B widening that became wrong and would confuse a future security audit. Updated both blocks to list real blocked fields (`userId`, `contextText`, `createdAt`, `updatedAt`) and call out that `isActive` is legitimately accepted now via the schema widening.
+- **HIGH: SecurityTab rate-limit display was wrong.** Initial draft hardcoded `perDay: 200`; the actual default in `src/lib/ai/rate-limit.ts` is `50`. Users on stock defaults would have seen "200/day" in the UI while the enforced limit was 50 — a live correctness bug. Fixed by importing `PER_MINUTE` and `PER_DAY` from the rate limiter module so the display tracks the live values (including env overrides).
+- **MEDIUM: `createContext` imported mid-file.** Moved to the top with the other React imports (matches the project's convention; the original placement worked at runtime but was visually misleading).
+- **MEDIUM: `useTransition` wrap around `router.replace` was unused.** The pending signal was destructured away with `, ` and `router.replace` is a navigation, not a state update that benefits from concurrent rendering. Removed the wrap; `router.replace` called directly.
+- **LOW: WAI-ARIA tab/panel pairing.** Added `id` to each `<button role="tab">` and each `<div role="tabpanel">`, with `aria-controls` (button → panel) and `aria-labelledby` (panel → button) so screen readers announce the relationship correctly.
+- **LOW: `JSX.Element` → `React.ReactNode`.** The `PERSONALITY_CARDS.icon` type was `JSX.Element` which excludes fragments. The `creative` variant uses `<>...</>` and worked only because TS narrows JSX fragments to `JSX.Element`. Switched to `ReactNode` for consistency with project convention.
+
+**Files changed:**
+
+_Schema + route:_
+
+- `src/lib/bots/schemas.ts` — update — `isActive` added to `botPatchInput`.
+- `src/app/api/bots/[botId]/route.ts` — update — SET payload + returning + comment cleanup.
+- `src/app/api/bots/[botId]/route.test.ts` — update — 2 new specs, regression updated.
+
+_Components:_
+
+- `src/components/dashboard/settings/SettingsTabs.tsx` — create — tab strip + URL state.
+- `src/components/dashboard/settings/AccountTab.tsx` — create.
+- `src/components/dashboard/settings/BotConfigTab.tsx` — create.
+- `src/components/dashboard/settings/KnowledgeTab.tsx` — create.
+- `src/components/dashboard/settings/SecurityTab.tsx` — create.
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` — create.
+
+_Page + cleanup:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` — full rewrite.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.test.tsx` — full rewrite — 9 specs covering notFound paths, all 5 tabs renderable via `?tab=`, default tab, unknown-tab fallback, unknown-personality fallback.
+- `src/components/dashboard/BotSettingsForm.tsx` + `.test.tsx` — delete (replaced).
+- `src/components/dashboard/KnowledgeManager.tsx` + `.test.tsx` — delete (replaced).
+
+Total: 6 new components + 5 file updates + 4 file deletions. 648/648 tests pass (654 → 648; deleted 14 obsolete BotSettingsForm/KnowledgeManager specs, added 5 settings-page specs + 2 PATCH specs + 1 reused). Build green.
+
+**Decisions made:**
+
+- **Tab state in the URL via `?tab=`, not internal state.** Deep links into a specific tab work (e.g. `?tab=kb` opens the Knowledge base tab), browser back navigates between tabs, share-this-link works without losing context. Matches the slice-6.3 conversations-list `?q=` precedent.
+- **Default tab is "account" and the URL drops `?tab=account` to keep it canonical.** Two URLs that point at the same logical view produce the same browser bar. Same pattern as `?page=1` being implicit in the slice-6.3 Pagination component.
+- **`router.replace` (not `push`).** Tab-switching is a fluid navigation, not a "commit" the user wants to step back through. Push would clog the history with intermediate states.
+- **Read-only Account tab over half-functional editing.** No PUT /api/users endpoint exists, so faking editable inputs that don't save would mislead the user. Read-only display of the current values + Coming Soon pills makes the boundary explicit.
+- **Hard-import `PER_MINUTE` / `PER_DAY` from `rate-limit.ts` in SecurityTab.** The original hardcoded numbers silently disagreed with reality on day one — a live correctness bug, not theoretical drift. The shared-module import makes the display track whatever the deployment is actually running.
+- **`KnowledgeTab` is a from-scratch rewrite, not a wrapper around `KnowledgeManager`.** The visual delta from the old component to the design's reference is substantial (icon-by-type rows vs. plain rows; dashed "Add source" zone vs. drag-drop card; header "Re-index all" vs. inline button). A wrapper would have piled style hacks on top of the old markup; rewriting was cleaner.
+- **`isActive` widening is the only schema change in this slice.** Custom instructions (mentioned in the design's bot config tab) would need a new column + migration; deferred to Stage 7 since the schema add isn't blocking the tab UI from rendering as Coming Soon.
+- **ARIA tabs pattern wired completely.** `role="tablist"`/`role="tab"` + `aria-selected` were in the initial draft; `aria-controls`/`aria-labelledby` + matching `id`s were added per the review. WAI-ARIA requires the full pairing for screen readers to announce panel-tab relationships.
+- **Removed obsolete components instead of deprecating them.** `BotSettingsForm` and `KnowledgeManager` had no consumers after the rewrite (the only importer was the settings page). Keeping them around would have created drift risk. Deletion is the right cleanup.
+
+**Open questions / follow-ups:**
+
+- The Account tab's Save button has no endpoint to wire up. Stage 7's auth/account workstream adds PUT /api/users with `{ name?, email?, username?, password? }` validation + bcrypt for password.
+- Custom instructions field on Bot configuration tab needs a schema column (`bots.custom_instructions text`) + Zod widening + a textarea wire-up. Deferred to Stage 7.
+- AI model & key tab needs the real provider switcher + key input UI. The browser key-store (`llm-key-store.ts`) already exists from Stage 1; the Stage 7 tab just needs to surface it.
+- Shared `src/lib/constants/limits.ts` module would consolidate `PER_MINUTE`/`PER_DAY` from rate-limit and the chat route's 8000-char input cap. Slice C follow-up.
+- Slice C wraps up the redesign with sub-page re-theming + docs stub + Stage 7 task block in plan.md.
+- The slice intentionally has no dedicated unit tests for individual tab components — the settings page test covers integration (tab routing, panel rendering, fallback). Slice C can backfill if it surfaces specific behavioral gaps.
+
+---
+
+### 2026-06-20 12:53 - Dashboard redesign Slice C: sub-page polish + test backfill + Stage 7 task block
+
+**What was asked to do:** Close out the dashboard redesign. Sub-pages (conversations, transcript, leads, bot detail) need to fit the new shell without duplicate back-links + heavy chrome. Backfill unit tests for Slice A/B components that were intentionally left untested in the earlier slices. Append a Stage 7 task block to plan.md capturing every deferred item from Slices A/B/C so nothing falls through the cracks.
+
+**What I did:**
+
+_Sub-page cleanup:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — full rewrite as a redirect. The bot detail page was a multi-section surface (Share/Embed/Theme + stat row + Conversations/Leads/Settings sub-nav) that's fully redundant after Slices A and B: dashboard home owns the share-your-bot card + aggregated stats, settings owns the Bot configuration tab + theme + knowledge management, sidebar owns the per-bot nav. The new page does the standard owner-gate then `redirect()`s to `/dashboard/bots/<id>/settings?tab=bot`, so existing bookmarks land somewhere useful.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/page.tsx` — trimmed the "← Back to {bot.name}" link (sidebar is the canonical nav now), updated wrapper from `mx-auto max-w-4xl px-4 py-10` to `max-w-4xl px-6 py-8 lg:px-8` to match dashboard home / settings page chrome. Empty-state CTA "Get your URL" removed (sidebar workspace card + dashboard home Share-your-bot panel both surface the public URL — duplicate would point at the now-redirected bot detail route).
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/[convId]/page.tsx` — trimmed "← Back to conversations" link, updated wrapper, dropped now-unused `Link` import.
+- `src/app/(dashboard)/dashboard/bots/[botId]/leads/page.tsx` — trimmed "← Back to {bot.name}" link, updated wrapper, removed "Get your URL" empty-state CTA (same reasoning as the conversations page).
+
+_plan.md update:_
+
+- Appended `#### 7.11 Dashboard Redesign — Stage 7 Follow-ups` with 10 task items (A through J): AI model & key live editor, custom instructions field + schema column, Account tab editing endpoints (PUT /api/users), live growth pills (week-over-week analytics), response time metric (latency_ms column + capture in chat route), top topics NLP categorization, BotSwitcher pending-state indicator, GDPR endpoints (Export / Retention / Delete account), shared limits constants module (`src/lib/constants/limits.ts`), docs site stub for the external `https://docs.probot.dev/guides/embed-widget` URL.
+
+_Test backfill (+41 specs):_
+
+- `src/components/dashboard/settings/BotConfigTab.test.tsx` — 10 specs covering initial value render, disabled-Save when unchanged, diff-based PATCH body, isActive status toggle wiring, Saved! transient + router.refresh, whitespace-name client-side block, 4xx server-error inline message, personality radio card switching, Coming Soon custom-instructions textarea is disabled, theme preset swatch click enables Save + posts new color. Replaces the 7 deleted slice-6.5 BotSettingsForm specs with broader coverage.
+- `src/components/dashboard/settings/KnowledgeTab.test.tsx` — 7 specs covering initial fetch + render with header summary, empty state, ConfirmDialog confirm fires DELETE, Cancel closes dialog without DELETE, drag-drop upload POSTs multipart, "Re-index all" POSTs to reprocess + shows token-count status, initial fetch error renders alert. Replaces the 7 deleted slice-6.5 KnowledgeManager specs at parity.
+- `src/components/dashboard/Topbar.test.tsx` — 11 specs covering path-to-title derivation (Dashboard / Conversations / Conversation singular / Leads / Settings / Bot Factory / unknown→fallback) + URL pill conditional + View live bot link conditional + `target=_blank rel=noopener noreferrer` on the live bot link.
+- `src/components/dashboard/SidebarNavLink.test.tsx` — 7 specs covering exact-match active state for `/dashboard`, prefix-match for nested routes (transcript path activates Conversations nav), brand vs. muted badge tones, external link `target=_blank rel=noopener noreferrer`, external links never marked active.
+- `src/components/dashboard/MobileSidebar.test.tsx` — 6 specs covering provider + toggle + panel: starts closed, opens on trigger click, closes via X button / ESC / backdrop click, body-scroll-lock applies while open + restores on close.
+
+_Test-driven component improvement:_
+
+- `BotConfigTab.tsx` `LabeledInput` helper now uses `useId()` to pair `<label htmlFor>` with `<input id>`. Without this, testing-library's `getByLabelText` couldn't associate sibling label+input, and screen readers wouldn't announce the relationship either. Real accessibility fix that surfaced because the test required it.
+
+_Code-review pass (1 MEDIUM + 2 LOW applied; 1 LOW skipped as not-a-bug):_
+
+- **MEDIUM applied: stale "Get your URL" empty-state CTAs.** Both the conversations and leads pages had `<Link href={\`/dashboard/bots/${bot.id}\`}>Get your URL</Link>` buttons that now point at the redirected bot detail route. The sidebar workspace card + dashboard home Share-your-bot panel already surface the public URL, so the CTAs were duplicate chrome. Removed both with explanatory JSX comments at the empty-state sites.
+- **LOW applied: CopyUrlButton test stub interface.** The Topbar test's inline stub accepted only `{ url }` while the real component takes `{ url, label?, className? }`. Extended the stub to match so future test additions on this file don't silently lose label/className assertions.
+- **LOW applied: Toggle wrapped in `<label>` was a redundant-click hazard.** The Bot status toggle's outer container was a `<label>` (which can synthetically re-fire clicks on the inner button on some assistive-tech configurations). Switched to `<div>`; the Toggle button is self-labelled via `aria-label="Bot status"` so no semantic loss.
+- **LOW skipped: plan.md date stamp.** Reviewer flagged `(2026-06-20)` as one-day-ahead, but the current date per the session is indeed 2026-06-20 — the reviewer was working off stale context.
+
+**Files changed:**
+
+_Sub-page cleanup:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — full rewrite — redirect to settings.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/page.tsx` — update — trim back-link + CTA, update wrapper.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/[convId]/page.tsx` — update — trim back-link, drop Link import, update wrapper.
+- `src/app/(dashboard)/dashboard/bots/[botId]/leads/page.tsx` — update — trim back-link + CTA, update wrapper.
+
+_plan.md:_
+
+- `claude/plan.md` — append — section 7.11 with 10 follow-up items.
+
+_Tests:_
+
+- `src/components/dashboard/settings/BotConfigTab.test.tsx` — create — 10 specs.
+- `src/components/dashboard/settings/KnowledgeTab.test.tsx` — create — 7 specs.
+- `src/components/dashboard/Topbar.test.tsx` — create — 11 specs.
+- `src/components/dashboard/SidebarNavLink.test.tsx` — create — 7 specs.
+- `src/components/dashboard/MobileSidebar.test.tsx` — create — 6 specs.
+
+_Component fixes (review pass):_
+
+- `src/components/dashboard/settings/BotConfigTab.tsx` — update — `useId()` for LabeledInput, `<label>` → `<div>` around the status toggle.
+
+Total: 4 sub-pages cleaned + 1 plan.md append + 5 new test files + 1 component improvement. 689/689 tests pass (648 → 689, net +41 — the backfill plus the bot detail page test was deleted with the page rewrite). Build green.
+
+**Decisions made:**
+
+- **Bot detail page → redirect, not deleted.** Bookmarks + old `/dashboard/bots/<id>` links still resolve via the redirect to settings. Pure delete would 404 those.
+- **All sub-page back-links removed, including transcript → conversation list.** Initial draft kept the transcript back-link as a "useful contextual breadcrumb," but the sidebar's "Conversations" link goes to the same destination and removing it keeps the chrome consistent across all sub-pages. One canonical nav.
+- **Empty-state CTAs removed, not redirected.** A "Get your URL" button that now points at a redirect would be visible UX cruft — better to remove and let the user discover the URL via the sidebar workspace card or dashboard home Share-your-bot panel.
+- **`useId()` over manual id strings in LabeledInput.** Stable, unique-per-instance ids that survive React Strict Mode's double-render. Without proper label/input pairing, `getByLabelText` queries fail and screen readers can't announce the field's purpose.
+- **Test backfill prioritized behavior-rich components.** AccountTab, SecurityTab, AIModelKeyTab are essentially static display components (Coming Soon for most controls) — smoke tests would have been low-value rote. BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar have real interactive behavior worth verifying.
+- **Stage 7 task block as a structured punch-list, not prose.** Each deferred item gets a sub-section (A through J) with the concrete what + how shape. Easier to pick up later — a Stage 7 contributor reads "B: add `bots.custom_instructions text` column" not "we should probably wire custom instructions someday."
+- **Stub the right interface in test mocks.** The Topbar test's CopyUrlButton mock initially accepted only `{ url }`. A future test that asserts on the rendered label text would silently get the stub's `Copy ${url}` instead of the real component's `label || "Copy link"`. Matching the full interface up-front prevents the silent drift.
+
+**Open questions / follow-ups (post-Slice-C):**
+
+- Dashboard redesign is COMPLETE. Three slices shipped end-to-end: A (shell + home), B (5-tab settings), C (polish + tests + task block). The visual port from `design/dashboard.html` + `design/settings.html` is done.
+- Stage 7 follow-ups are tracked in `plan.md` §7.11 (A through J). The most user-visible deferred items are the AI model & key live editor, custom instructions field, and Account tab editing endpoints — pick them up when the broader Stage 7 OAuth / GDPR / hardening workstream starts.
+- Test coverage gap: the 5 settings tabs include 2 (AccountTab, SecurityTab, AIModelKeyTab) without dedicated unit tests. They're essentially static display components — a smoke test asserting "renders without crashing" is low value. Will revisit if specific behavioral bugs surface.
+- Selected-bot cookie has no UI for "clear selection" — once set, it persists until the user picks a different bot or the cookie expires (1 year). Acceptable today; if Stage 7 adds explicit workspace switching the action might want a "reset to most recent" option.
+- The `/docs/guides/embed-widget` external URL still 404s today since probot.dev isn't live yet. Sidebar + dashboard "Full embed guide" links open in a new tab; users see the 404 page from the external host. Acceptable until the launch push; tracked as 7.11.J.
+
+---
+
+### 2026-06-20 13:12 - Dashboard redesign polish pass: shell alignment + signout modal + Bot Factory cleanup
+
+**What was asked to do:** Four UX/visual fixes after using the redesigned dashboard:
+1. Remove the duplicate "ProBot" branding from the Bot Factory page (already shown in sidebar).
+2. Make the Bot Factory wizard step indicator static (sticky under the topbar) instead of scrolling with the page.
+3. Sign-out from the sidebar should open a confirmation modal in-place (matching ConfirmDialog size), not redirect to next-auth's separate confirmation page.
+4. Match the sidebar's logo header height to the topbar height so the two columns align horizontally.
+5. The topbar's URL pill "Copy" word should be a copy icon (matching the design's reference).
+
+**What I did:**
+
+_Fix 1 — Topbar Copy icon:_
+
+- `src/components/dashboard/CopyUrlButton.tsx` — added an optional `iconOnly?: boolean` prop. When true, renders a clipboard SVG glyph instead of the text label; flips to a check-mark SVG for the 1.5s "Copied!" transient. The button's `aria-label` + `title` still carry the human-readable state for screen readers and tooltips. Existing call sites (Bot Factory step 5, dashboard home bot card) continue to render text-label variants — the prop is opt-in.
+- `src/components/dashboard/Topbar.tsx` — URL pill now uses `<CopyUrlButton iconOnly />` so the brand-colored clipboard glyph matches the design's `content_copy` material icon reference.
+
+_Fix 2 — Sidebar header height aligns with topbar:_
+
+- `src/components/dashboard/Sidebar.tsx` — the brand row was `p-4` (padding-based height around the logo + text). Switched to `flex h-16 shrink-0 items-center px-4` so the row is exactly 64px tall — same as the topbar's `h-16`. The sidebar's "ProBot" logo now sits at the same horizontal baseline as the topbar's page title.
+
+_Fix 3 — Sign-out confirmation modal:_
+
+- `src/components/dashboard/SignOutButton.tsx` (NEW) — client component. Renders the same logout-icon button the sidebar used to ship, but on click opens a `<ConfirmDialog>` (the design-system modal from slice 6.5) with title "Sign out of ProBot?" and a "You'll need to log back in" body. Confirm fires `signOut({ callbackUrl: "/login" })` from `next-auth/react`; the post-logout landing is `/login`. Cancel just dismisses the modal. While `pending`, the cancel handler short-circuits so a mid-signout click doesn't reopen the form.
+- `src/components/dashboard/Sidebar.tsx` — replaced the `<Link href="/api/auth/signout">…</Link>` block with `<SignOutButton />`. Removes the visual jump to next-auth's stock confirmation page and the trip back via `?callbackUrl=`.
+
+_Fix 4 — Bot Factory page cleanup:_
+
+- `src/components/bot-factory/BotFactoryForm.tsx` — three changes inside the same file:
+  - Outer wrapper: dropped `min-h-screen` from the form's outer `<div>`. The dashboard layout's main column already takes its own height; adding `100vh` inside it pushed the page taller than the viewport and forced a redundant outer scroll.
+  - Inner content column: dropped `overflow-y-auto`. The natural document scroll now handles overflow; no nested scroll context competes with the page.
+  - `StepperHeader`: removed the redundant "ProBot" text (the sidebar already shows it). Changed sticky positioning from `sticky top-0 z-30` to `sticky top-16 z-20` — the step strip now sits flush under the topbar (which lives at `top-0 z-30`) instead of competing with it. Height tightened from `h-16` to `h-14` since the step pills don't need a topbar-equivalent.
+
+_Tests + build:_
+
+- 689/689 tests pass after all four fixes. Production build green. No new test files — the fixes are visual/behavioral tweaks on existing components and the CopyUrlButton's `iconOnly` variant doesn't change the existing render contract (default-false). SignOutButton has no dedicated test yet; behavior is light enough (open dialog → confirm → call signOut) that integration coverage via the Sidebar render would catch regressions. Backfill if a real bug surfaces.
+
+**Files changed:**
+
+- `src/components/dashboard/CopyUrlButton.tsx` — update — add `iconOnly` prop + SVG icons.
+- `src/components/dashboard/Topbar.tsx` — update — use `iconOnly` variant for the URL pill copy button.
+- `src/components/dashboard/Sidebar.tsx` — update — `h-16` brand row + replace signout Link with `<SignOutButton />`.
+- `src/components/dashboard/SignOutButton.tsx` — create — confirm-modal client component.
+- `src/components/bot-factory/BotFactoryForm.tsx` — update — drop `min-h-screen` + `overflow-y-auto` from wrappers, strip "ProBot" + reposition sticky on `StepperHeader`.
+
+**Decisions made:**
+
+- **`iconOnly` as an opt-in prop, not a separate component.** A `<CopyIcon />` companion component would duplicate the clipboard-state machine (copied/error/idle). Keeping it as a render-time flag on the existing component preserves the state behavior — same accessible name, same transient feedback timing, same tooltip — while changing only the visible glyph.
+- **`SignOutButton` is its own client component, not inline in Sidebar.** The Sidebar is a server component used in two trees (desktop sidebar + mobile slide-in panel). Embedding the modal state inline would force the Sidebar to become a client component, growing the client bundle for every dashboard page. Hoisting the small interactive piece keeps the sidebar's parent server-rendered.
+- **`callbackUrl: "/login"` over `callbackUrl: "/"`.** A logged-out user landing on `/` would either see a marketing page (which doesn't exist yet) or get redirected back to `/login` anyway. Going straight to `/login` is one fewer redirect and gives the user a clear "next action" (log back in or close the tab).
+- **`StepperHeader` at `sticky top-16` not `sticky top-0`.** The dashboard layout's topbar owns the `top-0` slot. Stacking two sticky elements at `top-0` makes whichever lost the z-index battle invisible. `top-16` (the topbar's height) puts the step strip immediately under the topbar where users expect it.
+- **`z-20` for the step strip vs. `z-30` for the topbar.** Even with `top-16` placement, edge-case viewport sizes or transient animations could overlap the two. The lower z-index makes the topbar always paint on top — the correct precedence.
+- **Bot Factory's nested scroll removal trusts the document.** Native document scroll is faster, has correct momentum on touch devices, and respects browser zoom + accessibility settings. Replacing it with an inner `overflow-y-auto` div was a holdover from the pre-redesign full-screen wizard layout.
+- **Sidebar brand row height matched to topbar exactly.** Visual alignment across the two columns matters for the "page chrome feels like one continuous bar" effect. Approximate matching (with `p-4` getting ~60px) creates a 4px misalignment that's small enough to be uncomfortable rather than obviously wrong.
+
+**Open questions / follow-ups:**
+
+- `SignOutButton` has no dedicated unit test. Cover if it surfaces a bug (sign-out is a destructive action — worth a defensive test eventually).
+- LivePreview pane in Bot Factory is not sticky — when the user scrolls the form content, the preview scrolls away with it. A future polish slice could make it `sticky top-32` (below topbar + step strip) so it stays visible during long form scrolls.
+- The Bot Factory's right-column preview width is hardcoded `[1fr_440px]`. With the sidebar taking 256px on desktop, the form area can get cramped on mid-width screens (1024-1280px). A future responsive pass might collapse the preview to a smaller breakpoint or stack it below the form on `lg` screens.
+
+---
+
+### 2026-06-20 14:00 - Dashboard layout: main = viewport − topbar; Bot Factory fixed-height with internal column scroll
+
+**What was asked to do:** Make `<main>` fill the screen below the topbar on desktop (`100vh − 4rem`). The Bot Factory page specifically should fill that space without scrolling the page itself — overflow should happen inside the form column, not on the document.
+
+**What I did:**
+
+_Layout — main is the scroll container on desktop:_
+
+- `src/app/(dashboard)/layout.tsx` — the right column went from a natural-height block (`<div className="flex-1 lg:ml-64">`) to a fixed-height vertical flex stack (`lg:flex lg:h-screen lg:flex-col`). The topbar takes its existing `h-16`; `<main>` absorbs the remaining `calc(100vh − 4rem)` via `lg:flex-1` and becomes the scroll container with `lg:overflow-y-auto`. `lg:min-h-0` lets the flex item shrink below its content (the default `min-height: auto` would have prevented `overflow-y-auto` from kicking in).
+- Mobile (no `lg`): the right column has no flex/h-screen, so it lays out naturally and the document scrolls. The topbar's `sticky top-0` keeps it pinned. Other dashboard pages (home / conversations / leads / settings) keep their existing scroll behavior — but on desktop the scroll happens inside `main`, not on the document. Topbar + sidebar stay visually pinned regardless of how far you scroll.
+
+_Bot Factory — fixed-height with internal column scrolls:_
+
+- `src/components/bot-factory/BotFactoryForm.tsx` outer wrapper: changed from `flex flex-col` (natural height) to `flex flex-col lg:h-full lg:overflow-hidden`. The wrapper now takes exactly `main`'s height (= `calc(100vh − 4rem)`) and hides any overflow — so `main` never has anything to scroll on this page.
+- Grid container: added `lg:flex-1 lg:min-h-0` so the grid absorbs the remaining height after the step strip and the flex children can actually shrink below their content (the `min-h-0` is critical — same reason as in the layout).
+- Left form column: re-added `lg:overflow-y-auto`. The previous polish slice removed this in favor of document scroll, but the new model puts the scroll context here.
+- Right LivePreview column: added `lg:overflow-y-auto` for safety — the card is short today, but if it grows the scroll happens inside the column instead of breaking the layout.
+- `StepperHeader`: `sticky top-16 z-20` is kept for mobile (where the document scrolls under it), but on desktop it becomes `lg:static lg:z-auto` because the parent wrapper is `overflow-hidden` and nothing is scrolling above the strip — it just sits as the first flex child. `shrink-0` prevents the strip from being squeezed when the grid demands height.
+
+_Tests + build:_
+
+- 689/689 tests pass. Production build green. No new test files — all changes are CSS-only structural; existing tests don't assert on layout dimensions.
+
+**Files changed:**
+
+- `src/app/(dashboard)/layout.tsx` — update — right column becomes `lg:flex lg:h-screen lg:flex-col`; main becomes `lg:flex-1 lg:overflow-y-auto lg:min-h-0`.
+- `src/components/bot-factory/BotFactoryForm.tsx` — update — outer wrapper `lg:h-full lg:overflow-hidden`, grid `lg:flex-1 lg:min-h-0`, form column `lg:overflow-y-auto`, LivePreview `lg:overflow-y-auto`, StepperHeader `lg:static`.
+
+**Decisions made:**
+
+- **Main is the scroll container on desktop, document is the scroll container on mobile.** This dual model is the standard desktop-app-meets-mobile-web pattern. Desktop users get a fixed chrome (sidebar + topbar always visible) with content scrolling inside; mobile users get the native document scroll (sticky chrome via `sticky top-0`) so browser-level affordances like pull-to-refresh + URL-bar-hiding still work. Switching to internal scroll on mobile would lose those.
+- **`lg:min-h-0` everywhere a flex child needs to shrink.** This is the magic CSS rule that makes flex+overflow play nicely. Without it, `flex: 1 1 auto` has an implicit `min-height: auto` which means "at least as tall as my content," which means `overflow-y-auto` never has anything to do. Setting `min-h-0` unblocks the scroll behavior. Came up twice: once on `main`, once on the Bot Factory grid.
+- **`lg:overflow-hidden` on the Bot Factory wrapper, NOT on `main`.** If `main` had `overflow-hidden`, all dashboard pages would be capped at viewport height with no scroll — which would break long pages like the dashboard home. Putting `overflow-hidden` on the per-page wrapper (Bot Factory only) is the opt-in: pages that want the fixed-height-no-page-scroll behavior add it themselves; pages that want natural scrolling inherit `main`'s `overflow-y-auto` and just scroll inside main.
+- **StepperHeader switches `sticky top-16 z-20` → `lg:static lg:z-auto`.** On mobile the strip needs to stick to the viewport (under the sticky topbar) as the document scrolls. On desktop the strip lives inside a non-scrolling parent — sticky has nothing to do, and dropping `z-auto` lets it stack naturally with the rest of the column.
+- **Scroll container moved from document to main on desktop = subtle UX wins.** The topbar + sidebar never visually drift — they stay anchored, which matches users' mental model of "the app chrome doesn't move." The desktop app feels more like a real desktop app, less like a long-form web page. Mobile keeps the lighter web-document feel.
+
+**Open questions / follow-ups:**
+
+- The Settings page's tab strip is NOT currently sticky inside main. When users scroll a long settings tab (e.g. Bot configuration with lots of personality + suggested questions content), the tab strip scrolls out of view. Future polish: add `sticky top-0 bg-bg-app z-10` to the SettingsTabs strip so it stays visible while the tab panel scrolls.
+- The `lg:h-screen` on the right column is technically `100vh`, which on iOS Safari includes the URL bar area in landscape mode — could cause a small visual shift. Using `lg:h-dvh` (dynamic viewport height) instead is the modern fix but has slightly less browser support. Acceptable for now; revisit if iOS users report layout shifts.
+- Scroll restoration: the browser's default scroll-restoration-on-back targets the document. With main as scroll container on desktop, the back button might not restore main's scroll position. Next 14's App Router handles this for client navigations (router push/back) but for hard navigations the position may reset. Acceptable behavior; if it becomes an issue, the fix is `scroll-snap` or manual restoration via `sessionStorage`.
+- `lg:h-screen` + `lg:overflow-y-auto` change means existing tests that render the layout don't catch any scroll-related regressions (they assert on rendered DOM, not visual flow). Manual QA is the canonical check for this kind of layout change.

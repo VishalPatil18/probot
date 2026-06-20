@@ -1,8 +1,19 @@
+import { desc, eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import {
+  MobileSidebarPanel,
+  MobileSidebarProvider,
+} from "@/components/dashboard/MobileSidebar";
+import { Sidebar } from "@/components/dashboard/Sidebar";
+import { Topbar } from "@/components/dashboard/Topbar";
+import { getAnalyticsForUser } from "@/lib/analytics/queries";
 import { authOptions } from "@/lib/auth/auth";
+import { bots, db, users } from "@/lib/db";
+import { resolveSelectedBotId } from "@/lib/server/selected-bot";
+import { getOrigin } from "@/lib/server/origin";
 import { isPlaceholderUsername } from "@/lib/users/placeholder";
 
 interface DashboardLayoutProps {
@@ -15,9 +26,11 @@ interface DashboardLayoutProps {
 // dashboard page renders so public chat URLs (/u/<username>/chat) never
 // expose the throwaway slug.
 //
-// Auth check also lives here so individual dashboard pages don't have to
-// duplicate it. Unauthenticated users go to /login with a `next` param so
-// they return here after sign-in.
+// Slice A redesign: the layout now wraps every dashboard page in the
+// sidebar + topbar shell that mirrors design/dashboard.html. The
+// selected bot id rides a per-browser cookie so the URL pill, embed
+// snippet, and "View live bot" surfaces stay consistent as the user
+// navigates between pages.
 export default async function DashboardLayout({
   children,
 }: DashboardLayoutProps) {
@@ -29,20 +42,90 @@ export default async function DashboardLayout({
     redirect("/onboarding");
   }
 
+  const userId = session.user.id;
+  const username = session.user.username;
+
+  const [ownedBots, analytics, userRow] = await Promise.all([
+    db
+      .select({ id: bots.id, name: bots.name, updatedAt: bots.updatedAt })
+      .from(bots)
+      .where(eq(bots.userId, userId))
+      .orderBy(desc(bots.updatedAt)),
+    getAnalyticsForUser(userId),
+    db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { llmProvider: true, llmModel: true },
+    }),
+  ]);
+
+  const botList = ownedBots.map((b) => ({ id: b.id, name: b.name }));
+  const fallbackId = botList[0]?.id ?? null;
+  const selectedBotId = resolveSelectedBotId(
+    botList.map((b) => b.id),
+    fallbackId,
+  );
+  const selectedBot = botList.find((b) => b.id === selectedBotId) ?? null;
+  const selectedBotName = selectedBot?.name ?? username;
+
+  const origin = getOrigin();
+  const publicUrl = `${origin}/u/${username}/chat`;
+
+  const userName = session.user.name ?? username;
+  const userEmail = session.user.email ?? "";
+  const initials = computeInitials(userName);
+
+  const sidebarProps = {
+    bots: botList,
+    selectedBotId,
+    selectedBotName,
+    publicUrl,
+    counts: {
+      conversations: analytics.totalConversations,
+      leads: analytics.totalLeads,
+    },
+    user: { name: userName, email: userEmail, initials },
+    llmProvider: userRow?.llmProvider ?? null,
+    llmModel: userRow?.llmModel ?? null,
+  };
+
   return (
-    <div className="min-h-screen">
-      <header className="flex items-center justify-between border-b border-gray-200 px-6 py-3">
-        <span className="text-sm font-semibold">ProBot</span>
-        <a
-          href="https://docs.probot.dev"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm font-medium text-blue-600 hover:underline"
-        >
-          Docs
-        </a>
-      </header>
-      <main>{children}</main>
-    </div>
+    <MobileSidebarProvider>
+      <div className="flex min-h-screen bg-bg-app text-ink">
+        <aside className="fixed hidden h-screen w-64 shrink-0 border-r border-border-base bg-white lg:flex lg:flex-col">
+          <Sidebar {...sidebarProps} />
+        </aside>
+
+        {/* On desktop the right column is a vertical flex stack of fixed
+            height (full viewport). The topbar takes `h-16` and `main`
+            absorbs the remaining `calc(100vh - 4rem)` via `flex-1`.
+            `main` is the scroll container — long pages scroll inside it,
+            the topbar + sidebar stay pinned, and the document itself
+            never scrolls. Mobile: no flex/h-screen, document scroll. */}
+        <div className="flex-1 lg:ml-64 lg:flex lg:h-screen lg:flex-col">
+          <Topbar
+            publicUrl={selectedBotId ? publicUrl : null}
+            liveBotUrl={selectedBotId ? publicUrl : null}
+          />
+          <main className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            {children}
+          </main>
+        </div>
+
+        <MobileSidebarPanel>
+          <Sidebar {...sidebarProps} />
+        </MobileSidebarPanel>
+      </div>
+    </MobileSidebarProvider>
+  );
+}
+
+function computeInitials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? "")
+      .join("") || "U"
   );
 }

@@ -1332,6 +1332,120 @@ All items from SRS Section 9, verified and production-ready:
 - Vercel Analytics for performance monitoring
 - Custom logging for: chat API errors, rate limit hits, ingestion failures
 
+#### 7.11 Dashboard Redesign — Stage 7 Follow-ups
+
+Items deferred from Slices A / B / C of the dashboard visual redesign
+(2026-06-20). Each is a self-contained Stage 7 task; the corresponding
+UI surface already exists with a "Coming soon" pill and renders the
+faded preview of the future state.
+
+**A. AI model & API key tab (Slice B placeholder → live editor)**
+
+- Build the dashboard surface at `?tab=model` to switch providers and
+  paste/edit/remove the BYO key. The browser key store
+  (`src/lib/client/llm-key-store.ts` from Stage 1) is the storage layer;
+  the tab just needs the UI wired to its `getApiKey` / `setApiKey` /
+  `clearApiKey` helpers + an Azure-creds variant for the dual-field case.
+- Model dropdown contents come from a small per-provider catalog:
+  `{ anthropic: ['claude-opus-4', 'claude-sonnet-4', 'claude-haiku-4-5'],
+  google: ['gemini-2.5-pro', 'gemini-2.5-flash'], openai: ['gpt-4o',
+  'gpt-4o-mini', 'o3-mini'] }`. Extract from the Bot Factory's existing
+  catalog.
+- Show "key validated · last used X ago" by inspecting localStorage's
+  last-used timestamp (write it in the chat route's success path,
+  client-side after the response).
+- Telemetry toggle is optional — keep it off by default, store the
+  preference in localStorage only (no server roundtrip).
+
+**B. Custom instructions field (Slice B placeholder → live field)**
+
+- Schema migration: `ALTER TABLE bots ADD COLUMN custom_instructions text`.
+  Default empty string. Bot Factory wizard + Bot Configuration tab both
+  edit it.
+- `botInput` + `botPatchInput` Zod widening: `.max(2000)` cap, trimmed.
+- Prompt builder reads it; append to the system prompt as an
+  "Author instructions" block between the personality prose and the
+  immutable rules so user-supplied content can't override the safety
+  rules.
+
+**C. Account tab editing endpoints (Slice B placeholder → live form)**
+
+- `PUT /api/account` with Zod-validated `{ name?, email?, username?,
+  currentPassword?, newPassword? }`. Trims, lowercases email, enforces
+  USERNAME_REGEX + reserved-slug check (same as registration), bcrypt
+  password verification before update.
+- Email change requires a verification round-trip (Resend magic link
+  to the NEW address). Lands the changed value only after the user
+  clicks the link.
+- Photo upload: out of scope; users keep their Stage-4 animal-icon
+  avatars + the seeded initials avatar.
+
+**D. Live "growth %" pills on dashboard MetricTiles (Slice A faded → live)**
+
+- Add `getWeekOverWeekDelta(userId)` to `src/lib/analytics/queries.ts`.
+  Returns `{ conversations: { current, previous }, leads: { current,
+  previous }, messages: ... }` for the trailing 7 days vs. the 7 days
+  before that.
+- Format as "+18%" / "-3%" / "= 0%" in the MetricTile. Removes the
+  faded opacity + Coming Soon pill.
+
+**E. Response-time metric (Slice A Coming Soon → live)**
+
+- Persist `tokens_used` AND `latency_ms` on the `messages` table for
+  assistant rows. Migration: `ALTER TABLE messages ADD COLUMN
+  latency_ms integer`. The chat route already times the provider call
+  before sanitize-output; capture that span.
+- New analytics function: `getAvgAssistantLatency(userId, days)`
+  averaging the last 7 days of assistant messages. Format as "X.Xs" in
+  the MetricTile.
+
+**F. Top topics asked (Slice A Coming Soon → live)**
+
+- NLP categorization is a non-trivial subsystem; treat as a separate
+  workstream. Minimum viable: a small classifier (k-means or a single
+  embedding-distance threshold against a fixed topic taxonomy) running
+  in a background job on every new conversation. Stage 7's MVP can
+  defer to a Stage 8 task; for now keep the placeholder Coming Soon.
+
+**G. Bot switcher pending-state indicator (Slice A polish)**
+
+- The slice-A BotSwitcher submits a form per dropdown click. On slow
+  networks the form post + revalidation flash is visible. Add a
+  `useFormStatus`-based spinner overlay on the clicked row so the user
+  sees the loading state.
+
+**H. Export / Retention / Delete account (Slice B Coming Soon → live)**
+
+- Three endpoints, each Stage-7-GDPR-scoped:
+  - `POST /api/account/export` — streams ZIP of conversations + leads +
+    knowledge base sources as JSON. Generated on-demand (no background
+    job at this stage).
+  - Retention configuration: `users.retention_days` column (default 90)
+    + nightly cron deleting `conversations` + `messages` older than the
+    user's setting.
+  - `DELETE /api/account` — soft-delete with 30-day grace period; cron
+    hard-deletes after 30 days. Cascades to bots, conversations, leads,
+    knowledge_base, notifications, sessions.
+
+**I. Shared limits constants module (Slice B follow-up)**
+
+- Create `src/lib/constants/limits.ts` exporting `PER_MINUTE`, `PER_DAY`,
+  `MESSAGE_INPUT_MAX`, `KNOWLEDGE_MAX_PDF_BYTES`, `KNOWLEDGE_MAX_PDF_FILES`,
+  `LEAD_CONTEXT_SUMMARY_MAX`. Move existing constants from `rate-limit.ts`,
+  `chat/route.ts` Zod schema, `ingestion/constants.ts`, `leads/schemas.ts`.
+  Replace mirrored hardcoded values in `SecurityTab.tsx` and any other
+  display surfaces.
+
+**J. Docs site stub (Slice A/C follow-up)**
+
+- Sidebar "Embed & share" + dashboard "Full embed guide" both point at
+  `https://docs.probot.dev/guides/embed-widget` which 404s today. Either:
+  (a) Build a real docs site (Mintlify, Docusaurus, or a static
+  `/docs/` route in this Next app), OR (b) keep the external URL and
+  ensure it resolves once probot.dev is live in the Stage 7 launch
+  push. Decision deferred until the open-source landing-page work
+  starts.
+
 ### Deliverables
 
 - [x] Redis-backed rate limiting (Upstash) - uniform defaults, env-configurable, per-bot overrides

@@ -285,11 +285,21 @@ export function BotFactoryForm({
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
+    // Desktop: fill the layout's main column (which is itself
+    // `calc(100vh - 4rem)`) and hide overflow so the page itself never
+    // scrolls. Inside, the grid takes the remaining height after the
+    // step strip; each grid column scrolls independently. Mobile: just
+    // a natural flex column; document scroll handles overflow.
+    <div className="flex flex-col lg:h-full lg:overflow-hidden">
       <StepperHeader step={step} />
 
-      <div className="flex-1 grid lg:grid-cols-[1fr_440px] max-w-[1280px] mx-auto w-full">
-        <div className="px-6 lg:px-12 py-10 overflow-y-auto">
+      {/* `lg:min-h-0` is critical — flex children default to
+          `min-height: auto`, which prevents them from shrinking below
+          their content. Setting `min-h-0` lets the grid actually
+          consume `flex-1` so the inner columns' `overflow-y-auto`
+          works. */}
+      <div className="grid w-full max-w-[1280px] mx-auto lg:grid-cols-[1fr_440px] lg:flex-1 lg:min-h-0">
+        <div className="px-6 lg:px-12 py-10 lg:overflow-y-auto">
           <div className="max-w-lg">
             {step === 1 && (
               <StepIdentity form={form} patch={patch} username={username} />
@@ -362,12 +372,15 @@ function nextLabel(step: number, submitting: boolean): string {
 
 function StepperHeader({ step }: { step: number }) {
   const labels = ["Identity", "Knowledge", "Personality", "AI Model", "Deploy"];
+  // Mobile: `sticky top-16` so the strip stays visible just under the
+  // dashboard topbar while the document scrolls.
+  // Desktop: `lg:static` — the parent BotFactory wrapper is fixed-height
+  // and doesn't scroll, so sticky has nothing to do; the strip simply
+  // sits as the first flex child above the scrolling grid columns.
+  // ProBot branding lives in the sidebar — no need to duplicate it here.
   return (
-    <header className="bg-white border-b border-border-base sticky top-0 z-30">
-      <div className="px-6 h-16 flex items-center gap-4 max-w-[1280px] mx-auto w-full">
-        <span className="font-display text-lg font-extrabold tracking-tight">
-          ProBot
-        </span>
+    <header className="bg-white border-b border-border-base sticky top-16 z-20 lg:static lg:z-auto shrink-0">
+      <div className="px-6 h-14 flex items-center max-w-[1280px] mx-auto w-full">
         <div className="flex-1 flex items-center justify-center gap-3">
           {labels.map((label, i) => {
             const n = i + 1;
@@ -1064,7 +1077,10 @@ function LivePreview({ form }: { form: FormState }) {
   }, [form.name]);
 
   return (
-    <div className="hidden lg:flex border-l border-border-base bg-white flex-col items-center justify-center p-8">
+    // `lg:overflow-y-auto` — internal scroll if the preview card ever
+    // grows past the column's available height (Bot Factory wrapper is
+    // fixed at `lg:h-full`, so each grid column gets its own scroll).
+    <div className="hidden lg:flex border-l border-border-base bg-white flex-col items-center justify-center p-8 lg:overflow-y-auto">
       <p className="text-[11px] font-bold text-muted uppercase tracking-widest mb-4">
         Live preview
       </p>
