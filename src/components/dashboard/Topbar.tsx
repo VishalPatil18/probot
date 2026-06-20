@@ -26,8 +26,8 @@ export function Topbar({ publicUrl, liveBotUrl }: Props) {
   const title = deriveTitle(pathname);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border-base bg-bg-app/85 backdrop-blur">
-      <div className="flex h-16 items-center gap-4 px-6 lg:px-8">
+    <header className="sticky top-0 z-30 bg-bg-app/85 backdrop-blur">
+      <div className="flex h-16 items-center gap-4 px-6 border-b border-border-base lg:px-8">
         <MobileSidebarToggle />
         <h1 className="font-display text-xl font-bold">{title}</h1>
         {publicUrl ? (
@@ -35,7 +35,7 @@ export function Topbar({ publicUrl, liveBotUrl }: Props) {
             <span className="truncate">{stripScheme(publicUrl)}</span>
             <CopyUrlButton
               url={publicUrl}
-              label="Copy"
+              iconOnly
               className="text-brand hover:text-brand-deep"
             />
           </div>

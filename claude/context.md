@@ -1821,3 +1821,110 @@ Total: 4 sub-pages cleaned + 1 plan.md append + 5 new test files + 1 component i
 - Test coverage gap: the 5 settings tabs include 2 (AccountTab, SecurityTab, AIModelKeyTab) without dedicated unit tests. They're essentially static display components — a smoke test asserting "renders without crashing" is low value. Will revisit if specific behavioral bugs surface.
 - Selected-bot cookie has no UI for "clear selection" — once set, it persists until the user picks a different bot or the cookie expires (1 year). Acceptable today; if Stage 7 adds explicit workspace switching the action might want a "reset to most recent" option.
 - The `/docs/guides/embed-widget` external URL still 404s today since probot.dev isn't live yet. Sidebar + dashboard "Full embed guide" links open in a new tab; users see the 404 page from the external host. Acceptable until the launch push; tracked as 7.11.J.
+
+---
+
+### 2026-06-20 13:12 - Dashboard redesign polish pass: shell alignment + signout modal + Bot Factory cleanup
+
+**What was asked to do:** Four UX/visual fixes after using the redesigned dashboard:
+1. Remove the duplicate "ProBot" branding from the Bot Factory page (already shown in sidebar).
+2. Make the Bot Factory wizard step indicator static (sticky under the topbar) instead of scrolling with the page.
+3. Sign-out from the sidebar should open a confirmation modal in-place (matching ConfirmDialog size), not redirect to next-auth's separate confirmation page.
+4. Match the sidebar's logo header height to the topbar height so the two columns align horizontally.
+5. The topbar's URL pill "Copy" word should be a copy icon (matching the design's reference).
+
+**What I did:**
+
+_Fix 1 — Topbar Copy icon:_
+
+- `src/components/dashboard/CopyUrlButton.tsx` — added an optional `iconOnly?: boolean` prop. When true, renders a clipboard SVG glyph instead of the text label; flips to a check-mark SVG for the 1.5s "Copied!" transient. The button's `aria-label` + `title` still carry the human-readable state for screen readers and tooltips. Existing call sites (Bot Factory step 5, dashboard home bot card) continue to render text-label variants — the prop is opt-in.
+- `src/components/dashboard/Topbar.tsx` — URL pill now uses `<CopyUrlButton iconOnly />` so the brand-colored clipboard glyph matches the design's `content_copy` material icon reference.
+
+_Fix 2 — Sidebar header height aligns with topbar:_
+
+- `src/components/dashboard/Sidebar.tsx` — the brand row was `p-4` (padding-based height around the logo + text). Switched to `flex h-16 shrink-0 items-center px-4` so the row is exactly 64px tall — same as the topbar's `h-16`. The sidebar's "ProBot" logo now sits at the same horizontal baseline as the topbar's page title.
+
+_Fix 3 — Sign-out confirmation modal:_
+
+- `src/components/dashboard/SignOutButton.tsx` (NEW) — client component. Renders the same logout-icon button the sidebar used to ship, but on click opens a `<ConfirmDialog>` (the design-system modal from slice 6.5) with title "Sign out of ProBot?" and a "You'll need to log back in" body. Confirm fires `signOut({ callbackUrl: "/login" })` from `next-auth/react`; the post-logout landing is `/login`. Cancel just dismisses the modal. While `pending`, the cancel handler short-circuits so a mid-signout click doesn't reopen the form.
+- `src/components/dashboard/Sidebar.tsx` — replaced the `<Link href="/api/auth/signout">…</Link>` block with `<SignOutButton />`. Removes the visual jump to next-auth's stock confirmation page and the trip back via `?callbackUrl=`.
+
+_Fix 4 — Bot Factory page cleanup:_
+
+- `src/components/bot-factory/BotFactoryForm.tsx` — three changes inside the same file:
+  - Outer wrapper: dropped `min-h-screen` from the form's outer `<div>`. The dashboard layout's main column already takes its own height; adding `100vh` inside it pushed the page taller than the viewport and forced a redundant outer scroll.
+  - Inner content column: dropped `overflow-y-auto`. The natural document scroll now handles overflow; no nested scroll context competes with the page.
+  - `StepperHeader`: removed the redundant "ProBot" text (the sidebar already shows it). Changed sticky positioning from `sticky top-0 z-30` to `sticky top-16 z-20` — the step strip now sits flush under the topbar (which lives at `top-0 z-30`) instead of competing with it. Height tightened from `h-16` to `h-14` since the step pills don't need a topbar-equivalent.
+
+_Tests + build:_
+
+- 689/689 tests pass after all four fixes. Production build green. No new test files — the fixes are visual/behavioral tweaks on existing components and the CopyUrlButton's `iconOnly` variant doesn't change the existing render contract (default-false). SignOutButton has no dedicated test yet; behavior is light enough (open dialog → confirm → call signOut) that integration coverage via the Sidebar render would catch regressions. Backfill if a real bug surfaces.
+
+**Files changed:**
+
+- `src/components/dashboard/CopyUrlButton.tsx` — update — add `iconOnly` prop + SVG icons.
+- `src/components/dashboard/Topbar.tsx` — update — use `iconOnly` variant for the URL pill copy button.
+- `src/components/dashboard/Sidebar.tsx` — update — `h-16` brand row + replace signout Link with `<SignOutButton />`.
+- `src/components/dashboard/SignOutButton.tsx` — create — confirm-modal client component.
+- `src/components/bot-factory/BotFactoryForm.tsx` — update — drop `min-h-screen` + `overflow-y-auto` from wrappers, strip "ProBot" + reposition sticky on `StepperHeader`.
+
+**Decisions made:**
+
+- **`iconOnly` as an opt-in prop, not a separate component.** A `<CopyIcon />` companion component would duplicate the clipboard-state machine (copied/error/idle). Keeping it as a render-time flag on the existing component preserves the state behavior — same accessible name, same transient feedback timing, same tooltip — while changing only the visible glyph.
+- **`SignOutButton` is its own client component, not inline in Sidebar.** The Sidebar is a server component used in two trees (desktop sidebar + mobile slide-in panel). Embedding the modal state inline would force the Sidebar to become a client component, growing the client bundle for every dashboard page. Hoisting the small interactive piece keeps the sidebar's parent server-rendered.
+- **`callbackUrl: "/login"` over `callbackUrl: "/"`.** A logged-out user landing on `/` would either see a marketing page (which doesn't exist yet) or get redirected back to `/login` anyway. Going straight to `/login` is one fewer redirect and gives the user a clear "next action" (log back in or close the tab).
+- **`StepperHeader` at `sticky top-16` not `sticky top-0`.** The dashboard layout's topbar owns the `top-0` slot. Stacking two sticky elements at `top-0` makes whichever lost the z-index battle invisible. `top-16` (the topbar's height) puts the step strip immediately under the topbar where users expect it.
+- **`z-20` for the step strip vs. `z-30` for the topbar.** Even with `top-16` placement, edge-case viewport sizes or transient animations could overlap the two. The lower z-index makes the topbar always paint on top — the correct precedence.
+- **Bot Factory's nested scroll removal trusts the document.** Native document scroll is faster, has correct momentum on touch devices, and respects browser zoom + accessibility settings. Replacing it with an inner `overflow-y-auto` div was a holdover from the pre-redesign full-screen wizard layout.
+- **Sidebar brand row height matched to topbar exactly.** Visual alignment across the two columns matters for the "page chrome feels like one continuous bar" effect. Approximate matching (with `p-4` getting ~60px) creates a 4px misalignment that's small enough to be uncomfortable rather than obviously wrong.
+
+**Open questions / follow-ups:**
+
+- `SignOutButton` has no dedicated unit test. Cover if it surfaces a bug (sign-out is a destructive action — worth a defensive test eventually).
+- LivePreview pane in Bot Factory is not sticky — when the user scrolls the form content, the preview scrolls away with it. A future polish slice could make it `sticky top-32` (below topbar + step strip) so it stays visible during long form scrolls.
+- The Bot Factory's right-column preview width is hardcoded `[1fr_440px]`. With the sidebar taking 256px on desktop, the form area can get cramped on mid-width screens (1024-1280px). A future responsive pass might collapse the preview to a smaller breakpoint or stack it below the form on `lg` screens.
+
+---
+
+### 2026-06-20 14:00 - Dashboard layout: main = viewport − topbar; Bot Factory fixed-height with internal column scroll
+
+**What was asked to do:** Make `<main>` fill the screen below the topbar on desktop (`100vh − 4rem`). The Bot Factory page specifically should fill that space without scrolling the page itself — overflow should happen inside the form column, not on the document.
+
+**What I did:**
+
+_Layout — main is the scroll container on desktop:_
+
+- `src/app/(dashboard)/layout.tsx` — the right column went from a natural-height block (`<div className="flex-1 lg:ml-64">`) to a fixed-height vertical flex stack (`lg:flex lg:h-screen lg:flex-col`). The topbar takes its existing `h-16`; `<main>` absorbs the remaining `calc(100vh − 4rem)` via `lg:flex-1` and becomes the scroll container with `lg:overflow-y-auto`. `lg:min-h-0` lets the flex item shrink below its content (the default `min-height: auto` would have prevented `overflow-y-auto` from kicking in).
+- Mobile (no `lg`): the right column has no flex/h-screen, so it lays out naturally and the document scrolls. The topbar's `sticky top-0` keeps it pinned. Other dashboard pages (home / conversations / leads / settings) keep their existing scroll behavior — but on desktop the scroll happens inside `main`, not on the document. Topbar + sidebar stay visually pinned regardless of how far you scroll.
+
+_Bot Factory — fixed-height with internal column scrolls:_
+
+- `src/components/bot-factory/BotFactoryForm.tsx` outer wrapper: changed from `flex flex-col` (natural height) to `flex flex-col lg:h-full lg:overflow-hidden`. The wrapper now takes exactly `main`'s height (= `calc(100vh − 4rem)`) and hides any overflow — so `main` never has anything to scroll on this page.
+- Grid container: added `lg:flex-1 lg:min-h-0` so the grid absorbs the remaining height after the step strip and the flex children can actually shrink below their content (the `min-h-0` is critical — same reason as in the layout).
+- Left form column: re-added `lg:overflow-y-auto`. The previous polish slice removed this in favor of document scroll, but the new model puts the scroll context here.
+- Right LivePreview column: added `lg:overflow-y-auto` for safety — the card is short today, but if it grows the scroll happens inside the column instead of breaking the layout.
+- `StepperHeader`: `sticky top-16 z-20` is kept for mobile (where the document scrolls under it), but on desktop it becomes `lg:static lg:z-auto` because the parent wrapper is `overflow-hidden` and nothing is scrolling above the strip — it just sits as the first flex child. `shrink-0` prevents the strip from being squeezed when the grid demands height.
+
+_Tests + build:_
+
+- 689/689 tests pass. Production build green. No new test files — all changes are CSS-only structural; existing tests don't assert on layout dimensions.
+
+**Files changed:**
+
+- `src/app/(dashboard)/layout.tsx` — update — right column becomes `lg:flex lg:h-screen lg:flex-col`; main becomes `lg:flex-1 lg:overflow-y-auto lg:min-h-0`.
+- `src/components/bot-factory/BotFactoryForm.tsx` — update — outer wrapper `lg:h-full lg:overflow-hidden`, grid `lg:flex-1 lg:min-h-0`, form column `lg:overflow-y-auto`, LivePreview `lg:overflow-y-auto`, StepperHeader `lg:static`.
+
+**Decisions made:**
+
+- **Main is the scroll container on desktop, document is the scroll container on mobile.** This dual model is the standard desktop-app-meets-mobile-web pattern. Desktop users get a fixed chrome (sidebar + topbar always visible) with content scrolling inside; mobile users get the native document scroll (sticky chrome via `sticky top-0`) so browser-level affordances like pull-to-refresh + URL-bar-hiding still work. Switching to internal scroll on mobile would lose those.
+- **`lg:min-h-0` everywhere a flex child needs to shrink.** This is the magic CSS rule that makes flex+overflow play nicely. Without it, `flex: 1 1 auto` has an implicit `min-height: auto` which means "at least as tall as my content," which means `overflow-y-auto` never has anything to do. Setting `min-h-0` unblocks the scroll behavior. Came up twice: once on `main`, once on the Bot Factory grid.
+- **`lg:overflow-hidden` on the Bot Factory wrapper, NOT on `main`.** If `main` had `overflow-hidden`, all dashboard pages would be capped at viewport height with no scroll — which would break long pages like the dashboard home. Putting `overflow-hidden` on the per-page wrapper (Bot Factory only) is the opt-in: pages that want the fixed-height-no-page-scroll behavior add it themselves; pages that want natural scrolling inherit `main`'s `overflow-y-auto` and just scroll inside main.
+- **StepperHeader switches `sticky top-16 z-20` → `lg:static lg:z-auto`.** On mobile the strip needs to stick to the viewport (under the sticky topbar) as the document scrolls. On desktop the strip lives inside a non-scrolling parent — sticky has nothing to do, and dropping `z-auto` lets it stack naturally with the rest of the column.
+- **Scroll container moved from document to main on desktop = subtle UX wins.** The topbar + sidebar never visually drift — they stay anchored, which matches users' mental model of "the app chrome doesn't move." The desktop app feels more like a real desktop app, less like a long-form web page. Mobile keeps the lighter web-document feel.
+
+**Open questions / follow-ups:**
+
+- The Settings page's tab strip is NOT currently sticky inside main. When users scroll a long settings tab (e.g. Bot configuration with lots of personality + suggested questions content), the tab strip scrolls out of view. Future polish: add `sticky top-0 bg-bg-app z-10` to the SettingsTabs strip so it stays visible while the tab panel scrolls.
+- The `lg:h-screen` on the right column is technically `100vh`, which on iOS Safari includes the URL bar area in landscape mode — could cause a small visual shift. Using `lg:h-dvh` (dynamic viewport height) instead is the modern fix but has slightly less browser support. Acceptable for now; revisit if iOS users report layout shifts.
+- Scroll restoration: the browser's default scroll-restoration-on-back targets the document. With main as scroll container on desktop, the back button might not restore main's scroll position. Next 14's App Router handles this for client navigations (router push/back) but for hard navigations the position may reset. Acceptable behavior; if it becomes an issue, the fix is `scroll-snap` or manual restoration via `sessionStorage`.
+- `lg:h-screen` + `lg:overflow-y-auto` change means existing tests that render the layout don't catch any scroll-related regressions (they assert on rendered DOM, not visual flow). Manual QA is the canonical check for this kind of layout change.

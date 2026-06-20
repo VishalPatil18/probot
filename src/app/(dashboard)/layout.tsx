@@ -95,12 +95,20 @@ export default async function DashboardLayout({
           <Sidebar {...sidebarProps} />
         </aside>
 
-        <div className="flex-1 lg:ml-64">
+        {/* On desktop the right column is a vertical flex stack of fixed
+            height (full viewport). The topbar takes `h-16` and `main`
+            absorbs the remaining `calc(100vh - 4rem)` via `flex-1`.
+            `main` is the scroll container — long pages scroll inside it,
+            the topbar + sidebar stay pinned, and the document itself
+            never scrolls. Mobile: no flex/h-screen, document scroll. */}
+        <div className="flex-1 lg:ml-64 lg:flex lg:h-screen lg:flex-col">
           <Topbar
             publicUrl={selectedBotId ? publicUrl : null}
             liveBotUrl={selectedBotId ? publicUrl : null}
           />
-          <main>{children}</main>
+          <main className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            {children}
+          </main>
         </div>
 
         <MobileSidebarPanel>

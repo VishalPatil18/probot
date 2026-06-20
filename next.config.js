@@ -36,6 +36,15 @@ const nextConfig = {
       { source: "/api/bots/:botId/config", headers: corsHeaders },
     ];
   },
+  async rewrites() {
+    return [
+      { source: "/docs", destination: "https://probot.mintlify.dev/docs" },
+      {
+        source: "/docs/:path*",
+        destination: "https://probot.mintlify.dev/docs/:path*",
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

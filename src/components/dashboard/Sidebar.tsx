@@ -4,6 +4,7 @@ import { BotSwitcher } from "./BotSwitcher";
 import { ComingSoonPill } from "./ComingSoonPill";
 import { ModelStatusCard } from "./ModelStatusCard";
 import { SidebarNavLink } from "./SidebarNavLink";
+import { SignOutButton } from "./SignOutButton";
 
 type SidebarBot = {
   id: string;
@@ -52,7 +53,10 @@ export function Sidebar({
 }: Props) {
   return (
     <aside className="flex h-full flex-col">
-      <div className="border-b border-border-base p-4">
+      {/* Fixed `h-16` matches the topbar height so the sidebar's brand
+          row and the topbar's title row align horizontally across the
+          two columns. */}
+      <div className="flex h-16 shrink-0 items-center border-b border-border-base px-4">
         <Link
           href="/dashboard"
           className="flex items-center gap-2.5 px-2 py-1"
@@ -153,26 +157,7 @@ export function Sidebar({
             <p className="truncate text-xs font-bold">{user.name}</p>
             <p className="truncate text-[10px] text-muted">{user.email}</p>
           </div>
-          <Link
-            href="/api/auth/signout"
-            className="text-muted hover:text-ink"
-            aria-label="Sign out"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </Link>
+          <SignOutButton />
         </div>
       </div>
     </aside>
