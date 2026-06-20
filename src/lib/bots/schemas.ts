@@ -75,7 +75,7 @@ export const botPatchInput = z
       .max(120, "Headline must be ≤ 120 chars")
       // Trim at parse time so a hostile / sloppy client can't store
       // whitespace-only padding that renders as a blank-looking headline
-      // in the chat UI. After trim, the empty string is still valid —
+      // in the chat UI. After trim, the empty string is still valid -
       // it's the way the UI signals "clear the headline".
       .transform((v) => v.trim())
       .optional(),

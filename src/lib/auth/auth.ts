@@ -137,7 +137,7 @@ export const authOptions: NextAuthOptions = {
       // this, OAuth/magic-link users land in a redirect loop: dashboard
       // layout sees the stale "user-<8hex>" placeholder and bounces them
       // back to /onboarding. The cost is one DB query per authenticated
-      // request — acceptable here and easy to cache later.
+      // request - acceptable here and easy to cache later.
       if (token.id) {
         const row = await db.query.users.findFirst({
           where: eq(users.id, token.id),

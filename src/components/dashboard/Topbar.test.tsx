@@ -36,11 +36,7 @@ vi.mock("./CopyUrlButton", () => ({
     label?: string;
     className?: string;
   }) => (
-    <button
-      type="button"
-      className={className}
-      aria-label={`${label}: ${url}`}
-    >
+    <button type="button" className={className} aria-label={`${label}: ${url}`}>
       {label}
     </button>
   ),
@@ -48,7 +44,7 @@ vi.mock("./CopyUrlButton", () => ({
 
 import { Topbar } from "./Topbar";
 
-describe("Topbar — title derivation from pathname", () => {
+describe("Topbar - title derivation from pathname", () => {
   beforeEach(() => {
     pathname = "/dashboard";
   });
@@ -80,9 +76,7 @@ describe("Topbar — title derivation from pathname", () => {
   it("renders 'Leads' on the leads list path", () => {
     pathname = "/dashboard/bots/abc/leads";
     render(<Topbar publicUrl={null} liveBotUrl={null} />);
-    expect(
-      screen.getByRole("heading", { name: "Leads" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Leads" })).toBeInTheDocument();
   });
 
   it("renders 'Settings' on the settings path", () => {
@@ -110,7 +104,7 @@ describe("Topbar — title derivation from pathname", () => {
   });
 });
 
-describe("Topbar — URL pill + View live bot", () => {
+describe("Topbar - URL pill + View live bot", () => {
   it("renders the URL pill when publicUrl is provided", () => {
     pathname = "/dashboard";
     render(
@@ -120,9 +114,7 @@ describe("Topbar — URL pill + View live bot", () => {
       />,
     );
     // Scheme stripped for display
-    expect(
-      screen.getByText("probot.com/u/jane/chat"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("probot.com/u/jane/chat")).toBeInTheDocument();
   });
 
   it("hides the URL pill when publicUrl is null", () => {
@@ -146,9 +138,7 @@ describe("Topbar — URL pill + View live bot", () => {
       />,
     );
     const link = screen.getByRole("link", { name: /view live bot/i });
-    expect(link.getAttribute("href")).toBe(
-      "https://probot.com/u/jane/chat",
-    );
+    expect(link.getAttribute("href")).toBe("https://probot.com/u/jane/chat");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
   });

@@ -1,6 +1,6 @@
 /*
  * ProBot widget styles. All selectors are scoped to the Shadow DOM root the
- * widget creates — there is no `:host { all: initial }` reset because
+ * widget creates - there is no `:host { all: initial }` reset because
  * `mode: "closed"` already isolates from host-page styles.
  *
  * Theme color is applied per-instance via the `--probot-theme` CSS custom

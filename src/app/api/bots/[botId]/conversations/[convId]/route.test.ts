@@ -76,7 +76,7 @@ describe("GET /api/bots/[botId]/conversations/[convId]", () => {
   it("returns 404 when the conversation belongs to a different bot (tenant isolation)", async () => {
     requireBotOwnerMock.mockResolvedValueOnce(ownerOk());
     // findFirst is called with an AND(conversations.id, conversations.botId)
-    // — the route relies on that filter. We simulate "not found" since the
+    // - the route relies on that filter. We simulate "not found" since the
     // mock doesn't actually evaluate the where clause; the test asserts the
     // contract (route returns 404 when the row isn't returned).
     findFirstMock.mockResolvedValueOnce(undefined);

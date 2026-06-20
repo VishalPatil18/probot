@@ -16,7 +16,7 @@ const DEBOUNCE_MS = 300;
 // fill with every keystroke) and wraps the update in `useTransition` so
 // the input stays responsive while the server-rendered list re-fetches.
 //
-// Resets `?page=` to 1 implicitly by not including it in the new URL —
+// Resets `?page=` to 1 implicitly by not including it in the new URL -
 // otherwise a search after navigating to page 5 would land on page 5 of
 // the filtered results, which is almost always empty.
 export function SearchBar({

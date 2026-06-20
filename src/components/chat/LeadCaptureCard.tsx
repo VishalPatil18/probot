@@ -23,7 +23,7 @@ const SAFE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // "dismissed" status so the card never reappears in this conversation.
 //
 // After Submit, the card switches to an inline "Thanks!" confirmation
-// that stays in the message stream rather than disappearing — the
+// that stays in the message stream rather than disappearing - the
 // recruiter sees the closure of the loop.
 export function LeadCaptureCard({
   botId,

@@ -9,7 +9,7 @@ type Props = {
   model: string | null;
 };
 
-// Slice B — AI model & API key tab. Entire tab is Coming Soon for the
+// Slice B - AI model & API key tab. Entire tab is Coming Soon for the
 // dashboard: today's BYO-key flow happens during onboarding + via the
 // browser key-store; this surface lands in Stage 7 when the in-app
 // provider/key editor ships. We render a faded preview of the design's
@@ -36,9 +36,9 @@ export function AIModelKeyTab({ provider, model }: Props) {
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
         <p className="text-sm leading-relaxed text-ink">
-          <strong>Your API key never leaves this device.</strong> ProBot
-          stores it locally in your browser and never transmits or tracks
-          it. You bring the model, you own the credentials.
+          <strong>Your API key never leaves this device.</strong> ProBot stores
+          it locally in your browser and never transmits or tracks it. You bring
+          the model, you own the credentials.
         </p>
       </div>
 
@@ -48,8 +48,8 @@ export function AIModelKeyTab({ provider, model }: Props) {
           <ComingSoonPill />
         </div>
         <p className="mb-5 text-xs text-muted">
-          Choose any supported LLM. Switch any time — answers stay
-          grounded in your knowledge base via RAG.
+          Choose any supported LLM. Switch any time - answers stay grounded in
+          your knowledge base via RAG.
         </p>
 
         <label className="mb-2 block text-xs font-semibold">Provider</label>
@@ -101,8 +101,8 @@ export function AIModelKeyTab({ provider, model }: Props) {
           </span>
         </div>
         <p className="mb-5 text-xs text-muted">
-          The dashboard provider/key editor lands in Stage 7. Until then,
-          set up keys via the bot wizard at /dashboard/bots/new.
+          The dashboard provider/key editor lands in Stage 7. Until then, set up
+          keys via the bot wizard at /dashboard/bots/new.
         </p>
         <div className="flex items-center gap-2 rounded-xl border border-border-base bg-neutral-50 p-2 opacity-60">
           <svg

@@ -18,10 +18,9 @@ vi.mock("@/lib/bots/require-bot-owner", () => ({
 }));
 
 vi.mock("@/lib/ingestion/extract-pdf", async () => {
-  const actual =
-    await vi.importActual<typeof import("@/lib/ingestion/extract-pdf")>(
-      "@/lib/ingestion/extract-pdf",
-    );
+  const actual = await vi.importActual<
+    typeof import("@/lib/ingestion/extract-pdf")
+  >("@/lib/ingestion/extract-pdf");
   return {
     ...actual,
     extractPdfText: (...args: unknown[]) => extractPdfTextMock(...args),
@@ -232,10 +231,7 @@ describe("POST /api/bots/[botId]/knowledge", () => {
     extractPdfTextMock.mockRejectedValueOnce(
       new IngestionError("file_too_large", "too big"),
     );
-    const res = await POST(
-      multipart({ files: [pdfFile("big.pdf")] }),
-      PARAMS,
-    );
+    const res = await POST(multipart({ files: [pdfFile("big.pdf")] }), PARAMS);
     expect(res.status).toBe(413);
   });
 
@@ -243,10 +239,7 @@ describe("POST /api/bots/[botId]/knowledge", () => {
     extractPdfTextMock.mockRejectedValueOnce(
       new IngestionError("pdf_unreadable", "corrupt"),
     );
-    const res = await POST(
-      multipart({ files: [pdfFile("bad.pdf")] }),
-      PARAMS,
-    );
+    const res = await POST(multipart({ files: [pdfFile("bad.pdf")] }), PARAMS);
     expect(res.status).toBe(422);
   });
 
@@ -297,7 +290,7 @@ describe("POST /api/bots/[botId]/knowledge", () => {
       expect(body.embedded).toBe(true);
     });
 
-    it("does NOT fail the request when embedChunks throws — returns 200 with bounded embeddingError category", async () => {
+    it("does NOT fail the request when embedChunks throws - returns 200 with bounded embeddingError category", async () => {
       // Use a plain Error to test the worst-case fallback path. The route
       // must NOT echo raw error messages (which could carry the BYO key).
       embedChunksMock.mockRejectedValueOnce(
@@ -310,19 +303,23 @@ describe("POST /api/bots/[botId]/knowledge", () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as Record<string, unknown>;
       expect(body.embedded).toBe(false);
-      // Generic bounded label — no raw error message
+      // Generic bounded label - no raw error message
       expect(body.embeddingError).toBe("embedding_failed");
       // Body must NEVER contain the key fragment
       const raw = JSON.stringify(body);
       expect(raw).not.toContain("sk-openai-leak-canary");
-      // legacy assemble still ran — bot falls back to full-context
+      // legacy assemble still ran - bot falls back to full-context
       expect(assembleAndSaveBotContextMock).toHaveBeenCalledWith(BOT_ID);
     });
 
     it("maps EmbeddingError categories into embeddingError without leaking message", async () => {
       const { EmbeddingError } = await import("@/lib/ai/embeddings");
       embedChunksMock.mockRejectedValueOnce(
-        new EmbeddingError("openai", "invalid_key", "key sk-openai-leak-XXX bad"),
+        new EmbeddingError(
+          "openai",
+          "invalid_key",
+          "key sk-openai-leak-XXX bad",
+        ),
       );
       const res = await POST(
         multipart({ text: "my bio", embeddingKey: EMBEDDING_KEY }),

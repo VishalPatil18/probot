@@ -78,7 +78,9 @@ export const bots = pgTable(
     // Stage 5: per-bot theme color (hex #RRGGBB) used by the embeddable
     // widget and signature badge. Default matches the brand purple so bots
     // created before Stage 5 render coherently when the column backfills.
-    themeColor: varchar("theme_color", { length: 7 }).notNull().default("#7c5cff"),
+    themeColor: varchar("theme_color", { length: 7 })
+      .notNull()
+      .default("#7c5cff"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
       .notNull()
@@ -222,7 +224,7 @@ export const conversations = pgTable(
 
 // messages
 // One row per chat turn (user + assistant), child of conversations. Created
-// in Stage 4 for the Stage 6 analytics surface — no code writes yet.
+// in Stage 4 for the Stage 6 analytics surface - no code writes yet.
 // `tokens_used` is nullable because the provider response may not include a
 // usage breakdown for every model.
 export const messages = pgTable(
@@ -262,7 +264,7 @@ export const messages = pgTable(
 // leads (Stage 6 §6.1)
 // Captured recruiter emails per bot. `conversation_id` is ON DELETE SET NULL
 // (not cascade) so a GDPR-driven conversation purge in Stage 7 still
-// preserves the lead — the email is business-valuable even if the chat log
+// preserves the lead - the email is business-valuable even if the chat log
 // is gone. `context_summary` is filled by the lead-capture client in slice
 // 6.4 with a truncated concatenation of the first 2-3 recruiter messages
 // (deterministic + free; LLM-generated summaries would violate CLAUDE.md §7).
@@ -295,7 +297,7 @@ export const leads = pgTable(
 
 // notifications (Stage 6 §6.6)
 // In-app notifications surfaced by the dashboard bell. No email transport in
-// Stage 6 — that lands post-Stage 7 once Resend is wired for auth emails.
+// Stage 6 - that lands post-Stage 7 once Resend is wired for auth emails.
 // `kind` is extensible; only 'lead_captured' is emitted in Stage 6. CHECK
 // constraint mirrors the messages.role pattern so a typo cannot silently
 // corrupt the unread badge query. Partial index on `read_at IS NULL` keeps

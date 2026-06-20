@@ -61,7 +61,7 @@ describe("signatureBadgeHtml", () => {
       origin: "https://probot.dev",
     });
     expect(html).toContain("probot.dev/u/jane");
-    // The visible body should NOT show the leading https:// — only the
+    // The visible body should NOT show the leading https:// - only the
     // href attribute carries it. Anchor text is the user-facing slug.
     const innerText = html.replace(/<a [^>]+>/, "").replace(/<\/a>/, "");
     expect(innerText).not.toContain("https://");

@@ -1,5 +1,5 @@
 /*
- * ProBot embeddable widget — Stage 5
+ * ProBot embeddable widget - Stage 5
  *
  * Usage:
  *   <script src="https://probot.dev/widget.js" data-bot-id="<uuid>"></script>
@@ -36,7 +36,7 @@ export interface WidgetConfig {
 }
 
 // Escape user-controlled strings before interpolating into HTML. We render
-// `bot.name`, `owner.name`, `bot.headline`, and `suggestedQuestions[]` —
+// `bot.name`, `owner.name`, `bot.headline`, and `suggestedQuestions[]` -
 // all of which come from the bot owner's free-text input. Owners can be
 // adversarial vs. the visitors browsing the embed surface.
 export function escapeHtml(value: string): string {
@@ -202,7 +202,7 @@ export async function mount(
     if (!res.ok) return;
     raw = await res.json();
   } catch {
-    // Silent failure — the widget should never throw on the host page.
+    // Silent failure - the widget should never throw on the host page.
     return;
   }
 
@@ -249,7 +249,7 @@ export async function mount(
 }
 
 // Auto-mount on script execution. `document.currentScript` is the script
-// tag the browser is currently executing — only present for sync,
+// tag the browser is currently executing - only present for sync,
 // non-module scripts (which is exactly how we ship widget.js).
 if (typeof document !== "undefined") {
   void mount(document.currentScript as HTMLScriptElement | null);

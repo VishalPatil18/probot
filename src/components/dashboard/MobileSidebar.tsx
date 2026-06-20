@@ -35,7 +35,7 @@ export function MobileSidebarProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  // Auto-close on path change — clicking a nav link inside the panel
+  // Auto-close on path change - clicking a nav link inside the panel
   // navigates the user; the panel should not stay open over the new page.
   useEffect(() => {
     setOpen(false);
@@ -44,7 +44,7 @@ export function MobileSidebarProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={{ open, setOpen }}>{children}</Ctx.Provider>;
 }
 
-// Hamburger button — visible only below lg breakpoint. Lives inside the
+// Hamburger button - visible only below lg breakpoint. Lives inside the
 // Topbar so its position reads naturally as "top-left page chrome."
 export function MobileSidebarToggle() {
   const { setOpen } = useMobileSidebar();
@@ -100,7 +100,11 @@ export function MobileSidebarPanel({ children }: { children: ReactNode }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-40 lg:hidden"
+      role="dialog"
+      aria-modal="true"
+    >
       <div
         className="absolute inset-0 bg-black/40"
         onClick={close}

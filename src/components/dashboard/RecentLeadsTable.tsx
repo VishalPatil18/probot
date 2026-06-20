@@ -8,7 +8,7 @@ type Props = {
   leads: UserLeadRow[];
 };
 
-// Company signal pill — derives a human-readable company name from the
+// Company signal pill - derives a human-readable company name from the
 // recruiter's email domain. Strips common public providers so a personal
 // gmail doesn't render as "Gmail" (it stays unlabeled).
 const PUBLIC_DOMAINS = new Set([
@@ -35,9 +35,7 @@ function companyFromEmail(email: string): string | null {
   const parts = domain.split(".");
   if (parts.length === 0) return null;
   const base =
-    parts.length >= 3
-      ? parts[parts.length - 2] ?? ""
-      : parts[0] ?? "";
+    parts.length >= 3 ? (parts[parts.length - 2] ?? "") : (parts[0] ?? "");
   if (base.length === 0) return null;
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
@@ -106,7 +104,7 @@ export function RecentLeadsTable({ leads }: Props) {
                       {lead.email}
                     </td>
                     <td className="px-6 py-3 text-muted">
-                      {lead.contextSummary ?? "—"}
+                      {lead.contextSummary ?? "-"}
                     </td>
                     <td className="hidden px-6 py-3 sm:table-cell">
                       {company ? (

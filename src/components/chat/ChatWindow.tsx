@@ -42,7 +42,9 @@ function shouldShowLeadCard(
 // 300 chars. The server caps at 1024 so 300 leaves comfortable headroom.
 function buildContextSummary(messages: ChatMessage[]): string {
   const firstUserMessages = messages
-    .filter((m): m is Extract<ChatMessage, { role: "user" }> => m.role === "user")
+    .filter(
+      (m): m is Extract<ChatMessage, { role: "user" }> => m.role === "user",
+    )
     .slice(0, 3)
     .map((m) => m.text);
   const joined = firstUserMessages.join(" · ");
@@ -87,7 +89,7 @@ export function ChatWindow({
   const [conversationId, setConversationId] = useState<string | null>(null);
   // sessionId memoized once at mount so sessionStorage state lookups are
   // stable across renders (the lead-capture state machine is keyed by it).
-  // Lazy `useState` initializer over a render-body ref write — Strict
+  // Lazy `useState` initializer over a render-body ref write - Strict
   // Mode's double-render would run the ref-write side effect twice with
   // no cleanup; `useState`'s initializer is contract-guaranteed once.
   const [sessionId] = useState<string | null>(() =>
@@ -159,7 +161,10 @@ export function ChatWindow({
       const res = await fetch(`/api/chat/${botId}`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message: trimmed, sessionId: effectiveSessionId }),
+        body: JSON.stringify({
+          message: trimmed,
+          sessionId: effectiveSessionId,
+        }),
       });
 
       if (res.status === 429) {
@@ -189,8 +194,8 @@ export function ChatWindow({
       if (body.conversationId) {
         setConversationId(body.conversationId);
       }
-      // Append the assistant reply AND — if this turn crosses the
-      // lead-capture threshold for the first time — a sentinel system
+      // Append the assistant reply AND - if this turn crosses the
+      // lead-capture threshold for the first time - a sentinel system
       // message that the renderer maps to <LeadCaptureCard>. Doing both
       // updates in one setMessages call avoids a flash of "card not yet
       // there" between renders.

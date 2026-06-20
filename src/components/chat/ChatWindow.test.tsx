@@ -19,7 +19,7 @@ vi.mock("@/lib/client/session-id-store", () => ({
 }));
 
 // Stateful mock so writeLeadCaptureState("dismissed") flows through to the
-// next readLeadCaptureState call — matches the real sessionStorage
+// next readLeadCaptureState call - matches the real sessionStorage
 // semantics that ChatWindow relies on for "card stays dismissed after the
 // next reply" behavior.
 const leadCaptureState = new Map<string, string>();
@@ -90,7 +90,10 @@ describe("ChatWindow", () => {
     const headers = init.headers as Record<string, string>;
     expect(headers["x-llm-api-key"]).toBe("sk-ant-leak-canary-9876543210");
     expect(init.body).not.toContain("sk-ant-leak-canary");
-    const parsedBody = JSON.parse(init.body as string) as Record<string, unknown>;
+    const parsedBody = JSON.parse(init.body as string) as Record<
+      string,
+      unknown
+    >;
     expect(parsedBody).toEqual({
       message: "tell me about her",
       sessionId: STABLE_SESSION_ID,
@@ -133,9 +136,7 @@ describe("ChatWindow", () => {
       screen.getByRole("button", { name: /what are her top skills/i }),
     );
 
-    expect(
-      await screen.findByText(/python, ml, and rag/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/python, ml, and rag/i)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /what are her top skills/i }),
     ).not.toBeInTheDocument();
@@ -250,7 +251,9 @@ describe("ChatWindow", () => {
       getApiKeyMock.mockReturnValue("sk-ant-test-1234567890");
       render(<ChatWindow {...defaultProps} />);
       await sendN(2);
-      expect(screen.queryByText(/want jane doe to get back to you/i)).toBeNull();
+      expect(
+        screen.queryByText(/want jane doe to get back to you/i),
+      ).toBeNull();
     });
 
     it("shows the card inline after the 3rd assistant reply", async () => {

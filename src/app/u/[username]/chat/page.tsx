@@ -29,7 +29,7 @@ type ResolvedBot = {
 };
 
 // Wrapped in React `cache()` so `generateMetadata` and the page component
-// share a single set of DB queries per request — avoids the 2x lookup
+// share a single set of DB queries per request - avoids the 2x lookup
 // (users + bots) running 4 times total per page load.
 const resolve = cache(async function resolve(
   username: string,
@@ -92,7 +92,7 @@ export async function generateMetadata({
 }
 
 export default async function PublicChatPage({ params }: PageProps) {
-  // Stage 4: PUBLIC — no auth required. Anyone with the URL can chat.
+  // Stage 4: PUBLIC - no auth required. Anyone with the URL can chat.
   const resolved = await resolve(params.username);
   if (!resolved) notFound();
   const { owner, bot } = resolved;

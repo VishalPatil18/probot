@@ -2,11 +2,11 @@ import { PER_DAY, PER_MINUTE } from "@/lib/ai/rate-limit";
 
 import { ComingSoonPill } from "../ComingSoonPill";
 
-// Slice B — Security & privacy tab. Rate-limit values come straight
+// Slice B - Security & privacy tab. Rate-limit values come straight
 // from the live rate limiter so the display reflects whatever
 // `PROBOT_RATE_PER_MINUTE` / `PROBOT_RATE_PER_DAY` env overrides the
 // deployment uses, not stale hardcoded numbers. Export, retention, and
-// Delete account are Coming Soon — those endpoints land in Stage 7
+// Delete account are Coming Soon - those endpoints land in Stage 7
 // alongside the broader GDPR workstream.
 //
 // `MESSAGE_INPUT_MAX` mirrors the Zod `.max(8000)` cap on the chat
@@ -22,20 +22,12 @@ export function SecurityTab() {
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <h3 className="mb-1 font-bold">Rate limits</h3>
         <p className="mb-5 text-xs text-muted">
-          Protect your bot (and your LLM credits) from abuse. Fully
-          configurable when self-hosting.
+          Protect your bot (and your LLM credits) from abuse. Fully configurable
+          when self-hosting.
         </p>
         <div className="grid gap-4 text-center sm:grid-cols-3">
-          <LimitCard
-            value={PER_MINUTE}
-            suffix="/min"
-            label="Per recruiter"
-          />
-          <LimitCard
-            value={PER_DAY}
-            suffix="/day"
-            label="Per bot"
-          />
+          <LimitCard value={PER_MINUTE} suffix="/min" label="Per recruiter" />
+          <LimitCard value={PER_DAY} suffix="/day" label="Per bot" />
           <LimitCard
             value={`${MESSAGE_INPUT_MAX / 1000}k`}
             suffix="/msg"
@@ -86,8 +78,8 @@ export function SecurityTab() {
           <ComingSoonPill />
         </div>
         <p className="mb-4 text-xs text-muted">
-          Deletes your bot, knowledge base, and all data within 30 days.
-          This cannot be undone.
+          Deletes your bot, knowledge base, and all data within 30 days. This
+          cannot be undone.
         </p>
         <button
           type="button"

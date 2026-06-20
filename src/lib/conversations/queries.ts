@@ -5,7 +5,7 @@ import { bots, conversations, db, messages } from "@/lib/db";
 // Stage 6 shared conversation queries. Called by both the slice-6.2 API
 // routes and the slice-6.3 RSC dashboard pages.
 //
-// **Caller contract — tenancy is the caller's responsibility.** These
+// **Caller contract - tenancy is the caller's responsibility.** These
 // functions take a `botId` and trust the caller has already verified the
 // session user owns it. `getConversationWithMessages` also filters by
 // `bot_id` to prevent cross-bot ID forgery; `listConversations` filters

@@ -8,13 +8,13 @@ import { bots, db } from "@/lib/db";
 // PATCH /api/bots/[botId]
 //
 // Stage 5: partial-update endpoint behind the bot detail page. Currently
-// only handles `themeColor` — additional editable fields (headline, etc.)
+// only handles `themeColor` - additional editable fields (headline, etc.)
 // can be added to `botPatchInput` without touching this handler since the
 // SET object is built from the parsed Zod object.
 //
 // Mass-assignment safety: the Zod schema explicitly whitelists fields, so a
 // request with `{userId: "...", contextText: "INJECTED", createdAt: "..."}`
-// is silently dropped — the route never trusts the raw body shape.
+// is silently dropped - the route never trusts the raw body shape.
 export async function PATCH(
   request: Request,
   { params }: { params: { botId: string } },
@@ -40,11 +40,11 @@ export async function PATCH(
 
   // Build the SET payload from defined fields only. Spread-conditional so
   // omitted fields retain their existing DB value. The Zod schema is the
-  // mass-assignment whitelist — fields like `userId`, `contextText`,
+  // mass-assignment whitelist - fields like `userId`, `contextText`,
   // `createdAt`, and `updatedAt` are not in `botPatchInput` so they can
   // never appear here even if a hostile client puts them in the body.
   // (Slice B widened the whitelist to include `isActive` for the status
-  // toggle, so it IS legitimately accepted now — see the schema.)
+  // toggle, so it IS legitimately accepted now - see the schema.)
   const {
     themeColor,
     name,

@@ -25,16 +25,13 @@ function truncate(s: string | null, max: number): string {
   return `${s.slice(0, max - 1)}…`;
 }
 
-export function RecentConversationsList({
-  conversations,
-  totalCount,
-}: Props) {
+export function RecentConversationsList({ conversations, totalCount }: Props) {
   if (conversations.length === 0) {
     return (
       <div className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <h3 className="mb-4 font-bold">Recent conversations</h3>
         <p className="rounded-xl border-2 border-dashed border-border-base p-6 text-center text-sm text-muted">
-          No conversations yet — share your bot URL to get started.
+          No conversations yet - share your bot URL to get started.
         </p>
       </div>
     );

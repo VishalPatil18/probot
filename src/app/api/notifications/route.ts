@@ -12,7 +12,7 @@ import { parsePagination } from "@/lib/pagination";
 // dropdown can cheaply show "what's new since I last looked." The slice-
 // 6.1 partial index `notifications_user_unread_idx` covers that query.
 //
-// Always returns the unread count too — the bell badge polls
+// Always returns the unread count too - the bell badge polls
 // /unread-count for cheap updates, but the list response includes the
 // count so the dropdown can render the badge in sync without a second
 // round-trip.

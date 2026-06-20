@@ -98,7 +98,7 @@ export default async function DashboardLayout({
         {/* On desktop the right column is a vertical flex stack of fixed
             height (full viewport). The topbar takes `h-16` and `main`
             absorbs the remaining `calc(100vh - 4rem)` via `flex-1`.
-            `main` is the scroll container — long pages scroll inside it,
+            `main` is the scroll container - long pages scroll inside it,
             the topbar + sidebar stay pinned, and the document itself
             never scrolls. Mobile: no flex/h-screen, document scroll. */}
         <div className="flex-1 lg:ml-64 lg:flex lg:h-screen lg:flex-col">

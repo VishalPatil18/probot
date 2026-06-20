@@ -293,7 +293,7 @@ export function BotFactoryForm({
     <div className="flex flex-col lg:h-full lg:overflow-hidden">
       <StepperHeader step={step} />
 
-      {/* `lg:min-h-0` is critical — flex children default to
+      {/* `lg:min-h-0` is critical - flex children default to
           `min-height: auto`, which prevents them from shrinking below
           their content. Setting `min-h-0` lets the grid actually
           consume `flex-1` so the inner columns' `overflow-y-auto`
@@ -374,10 +374,10 @@ function StepperHeader({ step }: { step: number }) {
   const labels = ["Identity", "Knowledge", "Personality", "AI Model", "Deploy"];
   // Mobile: `sticky top-16` so the strip stays visible just under the
   // dashboard topbar while the document scrolls.
-  // Desktop: `lg:static` — the parent BotFactory wrapper is fixed-height
+  // Desktop: `lg:static` - the parent BotFactory wrapper is fixed-height
   // and doesn't scroll, so sticky has nothing to do; the strip simply
   // sits as the first flex child above the scrolling grid columns.
-  // ProBot branding lives in the sidebar — no need to duplicate it here.
+  // ProBot branding lives in the sidebar - no need to duplicate it here.
   return (
     <header className="bg-white border-b border-border-base sticky top-16 z-20 lg:static lg:z-auto shrink-0">
       <div className="px-6 h-14 flex items-center max-w-[1280px] mx-auto w-full">
@@ -714,9 +714,9 @@ function StepKnowledge({
               />
               <p className="text-[11px] text-muted">
                 When provided, your knowledge is embedded with OpenAI and the
-                bot uses semantic search at chat time for more accurate
-                answers. Stored in your browser only, never on our servers.
-                Leave blank to use full-context (default).
+                bot uses semantic search at chat time for more accurate answers.
+                Stored in your browser only, never on our servers. Leave blank
+                to use full-context (default).
               </p>
             </div>
           )}
@@ -1077,7 +1077,7 @@ function LivePreview({ form }: { form: FormState }) {
   }, [form.name]);
 
   return (
-    // `lg:overflow-y-auto` — internal scroll if the preview card ever
+    // `lg:overflow-y-auto` - internal scroll if the preview card ever
     // grows past the column's available height (Bot Factory wrapper is
     // fixed at `lg:h-full`, so each grid column gets its own scroll).
     <div className="hidden lg:flex border-l border-border-base bg-white flex-col items-center justify-center p-8 lg:overflow-y-auto">

@@ -128,7 +128,7 @@ export async function POST(
     );
   }
 
-  // 9b. Stage 3 RAG retrieval. Embedding key is optional — when absent OR
+  // 9b. Stage 3 RAG retrieval. Embedding key is optional - when absent OR
   // when no chunks pass the similarity floor, we fall through to the legacy
   // full-context path. Retrieval failures (bad key, OpenAI down, etc.) also
   // fall back silently rather than 5xx the chat request.
@@ -164,7 +164,10 @@ export async function POST(
           ? err.toJSON()
           : { category: "retrieval_failed" };
       // eslint-disable-next-line no-console -- intentional ops signal; safe shape, no raw error
-      console.warn("[rag] retrieval failed, falling back to context_text", signal);
+      console.warn(
+        "[rag] retrieval failed, falling back to context_text",
+        signal,
+      );
       relevantChunks = undefined;
     }
   }
@@ -251,13 +254,13 @@ export async function POST(
   const reply = sanitizeOutput(providerReply);
 
   // 12. Persist conversation + messages (Stage 6 analytics).
-  // UPSERT on (bot_id, session_id) — concurrent tabs on the same bot for
+  // UPSERT on (bot_id, session_id) - concurrent tabs on the same bot for
   // the same recruiter coalesce into one conversation. Both message inserts
   // happen in the same transaction so partial writes can't skew metrics.
   // Wrapped in try/catch so analytics persistence MUST NOT break the
   // user-facing chat reply (the primary value). Logged via Stage 7 once a
   // structured logger lands. On success, capture the conversation id so we
-  // can return it to the client — the in-chat lead-capture card (slice
+  // can return it to the client - the in-chat lead-capture card (slice
   // 6.4) sends it on POST /api/bots/[botId]/leads to enable the idempotent
   // (botId, conversationId, email) dedupe + recruiter_email update path.
   let conversationId: string | undefined;
@@ -286,7 +289,7 @@ export async function POST(
       ]);
     });
   } catch (err) {
-    // Swallow — analytics persistence never blocks chat. Log so operators
+    // Swallow - analytics persistence never blocks chat. Log so operators
     // can still spot pool exhaustion / missing migrations / etc. before
     // Stage 7 wires a structured logger. Matches the [rag] warn pattern
     // used above for the analogous "fallback path on retrieval failure"

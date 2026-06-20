@@ -76,7 +76,7 @@ export default async function ConversationsListPage({
         />
       </div>
 
-      {/* No CTA on the empty state — sidebar workspace card + dashboard
+      {/* No CTA on the empty state - sidebar workspace card + dashboard
           home Share-your-bot panel both surface the public URL. A
           "Get your URL" button here would duplicate that chrome. */}
       {items.length === 0 ? (

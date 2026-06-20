@@ -18,14 +18,16 @@ vi.mock("./Sidebar", () => ({
 
 import { SidebarNavLink } from "./SidebarNavLink";
 
-describe("SidebarNavLink — active state via usePathname", () => {
+describe("SidebarNavLink - active state via usePathname", () => {
   beforeEach(() => {
     pathname = "/dashboard";
   });
 
   it("marks the /dashboard row active on the exact home path", () => {
     pathname = "/dashboard";
-    render(<SidebarNavLink href="/dashboard" icon="dashboard" label="Dashboard" />);
+    render(
+      <SidebarNavLink href="/dashboard" icon="dashboard" label="Dashboard" />,
+    );
     const link = screen.getByRole("link", { name: /dashboard/i });
     expect(link.className).toContain("text-brand");
     expect(link.className).toContain("bg-blue-50");
@@ -33,7 +35,9 @@ describe("SidebarNavLink — active state via usePathname", () => {
 
   it("does NOT mark /dashboard active on a sub-path (exact match only)", () => {
     pathname = "/dashboard/bots/abc/conversations";
-    render(<SidebarNavLink href="/dashboard" icon="dashboard" label="Dashboard" />);
+    render(
+      <SidebarNavLink href="/dashboard" icon="dashboard" label="Dashboard" />,
+    );
     const link = screen.getByRole("link", { name: /dashboard/i });
     expect(link.className).not.toContain("text-brand");
   });

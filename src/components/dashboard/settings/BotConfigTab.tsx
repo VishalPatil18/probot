@@ -27,9 +27,7 @@ const PERSONALITY_CARDS: Record<
 > = {
   professional: {
     title: "Professional",
-    icon: (
-      <path d="M16 11V7a4 4 0 0 0-8 0v4M8 11h8M5 11h14l-1 9H6l-1-9z" />
-    ),
+    icon: <path d="M16 11V7a4 4 0 0 0-8 0v4M8 11h8M5 11h14l-1 9H6l-1-9z" />,
   },
   creative: {
     title: "Creative",
@@ -48,14 +46,9 @@ const PERSONALITY_CARDS: Record<
   },
 };
 
-const THEME_PRESETS = [
-  "#7c5cff",
-  "#10a37f",
-  "#9b5cff",
-  "#404040",
-];
+const THEME_PRESETS = ["#7c5cff", "#10a37f", "#9b5cff", "#404040"];
 
-// Slice B — Bot Configuration tab. Single PATCH per save, diffed against
+// Slice B - Bot Configuration tab. Single PATCH per save, diffed against
 // initial values so only changed fields are sent. Status toggle uses
 // the slice-B isActive widening; theme color preset swatches replace
 // the slice-5 dedicated <ThemeColorPicker> component for visual parity
@@ -144,7 +137,7 @@ export function BotConfigTab({
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="font-bold">Bot status</h3>
-          {/* Plain <div>, not <label> — the Toggle button is its own
+          {/* Plain <div>, not <label> - the Toggle button is its own
               labelled control via aria-label. Wrapping it in a <label>
               creates a redundant-click hazard on some AT configurations
               (the label fires a synthetic click on the inner button). */}
@@ -237,7 +230,9 @@ export function BotConfigTab({
         </div>
 
         <div>
-          <label className="mb-2 block text-xs font-semibold">Theme color</label>
+          <label className="mb-2 block text-xs font-semibold">
+            Theme color
+          </label>
           <div className="flex items-center gap-2">
             {THEME_PRESETS.map((hex) => {
               const on = themeColor.toLowerCase() === hex.toLowerCase();
@@ -320,10 +315,7 @@ function LabeledInput({
   const inputId = useId();
   return (
     <div>
-      <label
-        htmlFor={inputId}
-        className="mb-1.5 block text-xs font-semibold"
-      >
+      <label htmlFor={inputId} className="mb-1.5 block text-xs font-semibold">
         {label}
       </label>
       <input

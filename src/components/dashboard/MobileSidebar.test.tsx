@@ -24,7 +24,7 @@ function Harness({ panelChildren }: { panelChildren?: React.ReactNode }) {
   );
 }
 
-describe("MobileSidebar — provider + toggle + panel", () => {
+describe("MobileSidebar - provider + toggle + panel", () => {
   beforeEach(() => {
     pathname = "/dashboard";
     document.body.style.overflow = "";
@@ -76,7 +76,7 @@ describe("MobileSidebar — provider + toggle + panel", () => {
       screen.getByRole("button", { name: /open navigation menu/i }),
     );
     // The backdrop is the first absolutely-positioned div inside the dialog
-    const backdrop = container.querySelector('div[aria-hidden]');
+    const backdrop = container.querySelector("div[aria-hidden]");
     if (!backdrop) throw new Error("backdrop not found");
     fireEvent.click(backdrop);
     expect(screen.queryByText("Panel content")).toBeNull();

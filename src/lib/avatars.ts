@@ -26,7 +26,7 @@ export const AVATAR_HOSTNAME = "res.cloudinary.com";
 
 const AVATAR_SET: ReadonlySet<string> = new Set(ANIMAL_AVATARS);
 
-// First avatar is the documented fallback — pulled out as a const so the
+// First avatar is the documented fallback - pulled out as a const so the
 // signature of pickDefaultAvatar is `string` (not `string | undefined`)
 // under `noUncheckedIndexedAccess`. The runtime modulo math always lands
 // in-bounds; the `?? FALLBACK_AVATAR` branch is purely for the type system.
@@ -34,7 +34,7 @@ const FALLBACK_AVATAR: string = ANIMAL_AVATARS[0];
 
 // Deterministic per-user default. The same seed (user id) always returns the
 // same animal so re-renders and re-derivations match. The distribution is
-// good enough for an aesthetic default — not a security primitive.
+// good enough for an aesthetic default - not a security primitive.
 export function pickDefaultAvatar(seed: string): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) {

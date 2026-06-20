@@ -9,7 +9,7 @@ type Props = {
   currentImage: string | null;
 };
 
-// Stage 4: dual-field onboarding — username + avatar. The avatar grid shows
+// Stage 4: dual-field onboarding - username + avatar. The avatar grid shows
 // the 13 curated animal icons plus, when the user already has a non-animal
 // `users.image` (e.g. Google/GitHub photo from OAuth), that image as a first
 // "Keep current" card. Selecting an animal replaces the current image on
@@ -20,9 +20,7 @@ export function OnboardingForm({ currentImage }: Props) {
     currentImage !== null && !isAllowedAvatar(currentImage);
 
   const [username, setUsername] = useState("");
-  const [image, setImage] = useState<string>(
-    currentImage ?? ANIMAL_AVATARS[0],
-  );
+  const [image, setImage] = useState<string>(currentImage ?? ANIMAL_AVATARS[0]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,10 +74,7 @@ export function OnboardingForm({ currentImage }: Props) {
       className="space-y-8 rounded-2xl border border-border-base bg-white p-6 shadow-sm"
     >
       <div>
-        <label
-          htmlFor="onb-username"
-          className="block text-sm font-semibold"
-        >
+        <label htmlFor="onb-username" className="block text-sm font-semibold">
           Username
         </label>
         <input

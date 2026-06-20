@@ -1332,7 +1332,7 @@ All items from SRS Section 9, verified and production-ready:
 - Vercel Analytics for performance monitoring
 - Custom logging for: chat API errors, rate limit hits, ingestion failures
 
-#### 7.11 Dashboard Redesign — Stage 7 Follow-ups
+#### 7.11 Dashboard Redesign - Stage 7 Follow-ups
 
 Items deferred from Slices A / B / C of the dashboard visual redesign
 (2026-06-20). Each is a self-contained Stage 7 task; the corresponding
@@ -1348,13 +1348,13 @@ faded preview of the future state.
   `clearApiKey` helpers + an Azure-creds variant for the dual-field case.
 - Model dropdown contents come from a small per-provider catalog:
   `{ anthropic: ['claude-opus-4', 'claude-sonnet-4', 'claude-haiku-4-5'],
-  google: ['gemini-2.5-pro', 'gemini-2.5-flash'], openai: ['gpt-4o',
-  'gpt-4o-mini', 'o3-mini'] }`. Extract from the Bot Factory's existing
+google: ['gemini-2.5-pro', 'gemini-2.5-flash'], openai: ['gpt-4o',
+'gpt-4o-mini', 'o3-mini'] }`. Extract from the Bot Factory's existing
   catalog.
 - Show "key validated · last used X ago" by inspecting localStorage's
   last-used timestamp (write it in the chat route's success path,
   client-side after the response).
-- Telemetry toggle is optional — keep it off by default, store the
+- Telemetry toggle is optional - keep it off by default, store the
   preference in localStorage only (no server roundtrip).
 
 **B. Custom instructions field (Slice B placeholder → live field)**
@@ -1371,7 +1371,7 @@ faded preview of the future state.
 **C. Account tab editing endpoints (Slice B placeholder → live form)**
 
 - `PUT /api/account` with Zod-validated `{ name?, email?, username?,
-  currentPassword?, newPassword? }`. Trims, lowercases email, enforces
+currentPassword?, newPassword? }`. Trims, lowercases email, enforces
   USERNAME_REGEX + reserved-slug check (same as registration), bcrypt
   password verification before update.
 - Email change requires a verification round-trip (Resend magic link
@@ -1384,7 +1384,7 @@ faded preview of the future state.
 
 - Add `getWeekOverWeekDelta(userId)` to `src/lib/analytics/queries.ts`.
   Returns `{ conversations: { current, previous }, leads: { current,
-  previous }, messages: ... }` for the trailing 7 days vs. the 7 days
+previous }, messages: ... }` for the trailing 7 days vs. the 7 days
   before that.
 - Format as "+18%" / "-3%" / "= 0%" in the MetricTile. Removes the
   faded opacity + Coming Soon pill.
@@ -1393,7 +1393,7 @@ faded preview of the future state.
 
 - Persist `tokens_used` AND `latency_ms` on the `messages` table for
   assistant rows. Migration: `ALTER TABLE messages ADD COLUMN
-  latency_ms integer`. The chat route already times the provider call
+latency_ms integer`. The chat route already times the provider call
   before sanitize-output; capture that span.
 - New analytics function: `getAvgAssistantLatency(userId, days)`
   averaging the last 7 days of assistant messages. Format as "X.Xs" in
@@ -1417,13 +1417,13 @@ faded preview of the future state.
 **H. Export / Retention / Delete account (Slice B Coming Soon → live)**
 
 - Three endpoints, each Stage-7-GDPR-scoped:
-  - `POST /api/account/export` — streams ZIP of conversations + leads +
+  - `POST /api/account/export` - streams ZIP of conversations + leads +
     knowledge base sources as JSON. Generated on-demand (no background
     job at this stage).
   - Retention configuration: `users.retention_days` column (default 90)
-    + nightly cron deleting `conversations` + `messages` older than the
-    user's setting.
-  - `DELETE /api/account` — soft-delete with 30-day grace period; cron
+    - nightly cron deleting `conversations` + `messages` older than the
+      user's setting.
+  - `DELETE /api/account` - soft-delete with 30-day grace period; cron
     hard-deletes after 30 days. Cascades to bots, conversations, leads,
     knowledge_base, notifications, sessions.
 

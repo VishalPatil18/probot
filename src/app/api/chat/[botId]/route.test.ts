@@ -8,7 +8,7 @@ const checkRateLimitMock = vi.fn();
 // Stage 6 persistence mocks. The route inserts a conversation row (UPSERT
 // on bot_id/session_id) then 2 message rows in a single transaction. We
 // stub `db.transaction(cb)` to invoke `cb(tx)` and route `tx.insert(table)`
-// by call order — first call returns the conversation chain, subsequent
+// by call order - first call returns the conversation chain, subsequent
 // calls return the messages chain. Tests reset call count in `beforeEach`.
 let insertCallCount = 0;
 const convoValuesMock = vi.fn();
@@ -38,7 +38,9 @@ function resetPersistenceMocks() {
   messagesValuesMock.mockResolvedValue(undefined);
 
   transactionMock.mockImplementation(
-    async (cb: (tx: { insert: (table: unknown) => unknown }) => Promise<unknown>) =>
+    async (
+      cb: (tx: { insert: (table: unknown) => unknown }) => Promise<unknown>,
+    ) =>
       cb({
         insert: () => {
           insertCallCount += 1;
@@ -166,7 +168,10 @@ describe("POST /api/chat/[botId]", () => {
       PARAMS,
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { reply: string; conversationId?: string };
+    const body = (await res.json()) as {
+      reply: string;
+      conversationId?: string;
+    };
     expect(body.reply).toBe("Sure - Jane is great.");
     // Slice 6.4: conversationId comes from the persistence transaction's
     // returning() call. The shared mock resolves it to "conv-1".
@@ -179,7 +184,10 @@ describe("POST /api/chat/[botId]", () => {
     });
     const res = await POST(makeRequest({ message: "hi" }), PARAMS);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { reply: string; conversationId?: string };
+    const body = (await res.json()) as {
+      reply: string;
+      conversationId?: string;
+    };
     expect(body.reply).toBe("Sure - Jane is great.");
     expect(body.conversationId).toBeUndefined();
   });
@@ -397,7 +405,10 @@ describe("POST /api/chat/[botId]", () => {
     const EMBEDDING_KEY = "sk-openai-emb-XYZ-1234567890";
 
     it("skips retrieval entirely when no x-embedding-api-key header is present", async () => {
-      const res = await POST(makeRequest({ message: "tell me about ML" }), PARAMS);
+      const res = await POST(
+        makeRequest({ message: "tell me about ML" }),
+        PARAMS,
+      );
       expect(res.status).toBe(200);
       expect(retrieveRelevantMock).not.toHaveBeenCalled();
       const [args] = completeMock.mock.calls[0] as [{ system: string }];
@@ -407,7 +418,12 @@ describe("POST /api/chat/[botId]", () => {
 
     it("calls retrieveRelevant with the sanitized message + bot id when key is present", async () => {
       retrieveRelevantMock.mockResolvedValueOnce([
-        { contentText: "Jane led Acme's RAG search", similarity: 0.91, sourceName: "resume.pdf", chunkIndex: 0 },
+        {
+          contentText: "Jane led Acme's RAG search",
+          similarity: 0.91,
+          sourceName: "resume.pdf",
+          chunkIndex: 0,
+        },
       ]);
       const res = await POST(
         makeRequest(
@@ -428,8 +444,18 @@ describe("POST /api/chat/[botId]", () => {
 
     it("uses retrieved chunks in the system prompt when retrieval succeeds", async () => {
       retrieveRelevantMock.mockResolvedValueOnce([
-        { contentText: "CHUNK_ONE_TEXT", similarity: 0.91, sourceName: "resume.pdf", chunkIndex: 0 },
-        { contentText: "CHUNK_TWO_TEXT", similarity: 0.72, sourceName: "resume.pdf", chunkIndex: 3 },
+        {
+          contentText: "CHUNK_ONE_TEXT",
+          similarity: 0.91,
+          sourceName: "resume.pdf",
+          chunkIndex: 0,
+        },
+        {
+          contentText: "CHUNK_TWO_TEXT",
+          similarity: 0.72,
+          sourceName: "resume.pdf",
+          chunkIndex: 3,
+        },
       ]);
       const res = await POST(
         makeRequest(
@@ -460,7 +486,9 @@ describe("POST /api/chat/[botId]", () => {
     });
 
     it("falls back to bot.contextText when retrieveRelevant throws (e.g. bad embedding key)", async () => {
-      retrieveRelevantMock.mockRejectedValueOnce(new Error("OpenAI rejected the API key"));
+      retrieveRelevantMock.mockRejectedValueOnce(
+        new Error("OpenAI rejected the API key"),
+      );
       const res = await POST(
         makeRequest(
           { message: "hi" },
@@ -473,7 +501,7 @@ describe("POST /api/chat/[botId]", () => {
       expect(args.system).toContain(bot.contextText);
     });
 
-    it("treats a malformed (too-short) x-embedding-api-key header as missing — no retrieval, no 4xx", async () => {
+    it("treats a malformed (too-short) x-embedding-api-key header as missing - no retrieval, no 4xx", async () => {
       const res = await POST(
         makeRequest({ message: "hi" }, { "x-embedding-api-key": "abc" }),
         PARAMS,
@@ -589,7 +617,7 @@ describe("OPTIONS /api/chat/[botId] (CORS preflight)", () => {
     expect(res.status).toBe(204);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(res.headers.get("Access-Control-Allow-Methods")).toContain("POST");
-    // Widget passes the BYO key headers — must be on the allowlist
+    // Widget passes the BYO key headers - must be on the allowlist
     expect(res.headers.get("Access-Control-Allow-Headers")).toContain(
       "x-llm-api-key",
     );

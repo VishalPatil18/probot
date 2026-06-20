@@ -5,7 +5,7 @@ import { getEmbedder } from "@/lib/ai/embeddings";
 import type { EmbeddingProvider } from "@/lib/ai/embeddings";
 
 // Stage 3 retrieval defaults. Top-5 with a cosine similarity floor of 0.5
-// — below this, results are treated as irrelevant and the chat route falls
+// - below this, results are treated as irrelevant and the chat route falls
 // back to `bots.context_text` (Stage 2 full-context path). Matches the
 // blueprint locked in claude/plan.md §3.
 export const DEFAULT_TOP_K = 5;
@@ -32,7 +32,7 @@ export interface RetrieveParams {
 }
 
 // Format a JS number[] as a pgvector literal string. pgvector accepts
-// '[0.1,0.2,...]'::vector — node-postgres binds the string as $N then the
+// '[0.1,0.2,...]'::vector - node-postgres binds the string as $N then the
 // SQL cast converts it. We do NOT use exponential notation; pgvector parses
 // fixed-decimal more reliably across versions.
 function toVectorLiteral(values: number[]): string {
@@ -50,7 +50,7 @@ type RetrievalRow = {
 // Embeds the query, runs a top-K cosine-similarity search over the bot's
 // chunks, filters to results above the similarity floor, and returns them in
 // descending-similarity order. Returns [] when no chunks for the bot have
-// embeddings (e.g. Stage 1/2 bots) — the caller treats this as a signal to
+// embeddings (e.g. Stage 1/2 bots) - the caller treats this as a signal to
 // fall back to the legacy full-context path.
 export async function retrieveRelevant(
   params: RetrieveParams,

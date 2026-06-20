@@ -22,7 +22,7 @@ const profileInput = z.object({
   image: z.string().url().max(2000),
 });
 
-// Postgres unique_violation code. Same defense-in-depth as register route —
+// Postgres unique_violation code. Same defense-in-depth as register route -
 // even with the pre-check, two concurrent PATCHes could race past it.
 function isUniqueViolation(err: unknown): boolean {
   return (
@@ -68,13 +68,9 @@ export async function PATCH(request: Request): Promise<Response> {
   }
 
   const imageOk =
-    isAllowedAvatar(parsed.data.image) ||
-    parsed.data.image === existing.image;
+    isAllowedAvatar(parsed.data.image) || parsed.data.image === existing.image;
   if (!imageOk) {
-    return NextResponse.json(
-      { error: "invalid_avatar" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "invalid_avatar" }, { status: 400 });
   }
 
   try {
@@ -87,10 +83,7 @@ export async function PATCH(request: Request): Promise<Response> {
       .where(eq(users.id, userId));
   } catch (err) {
     if (isUniqueViolation(err)) {
-      return NextResponse.json(
-        { error: "username_taken" },
-        { status: 409 },
-      );
+      return NextResponse.json({ error: "username_taken" }, { status: 409 });
     }
     throw err;
   }

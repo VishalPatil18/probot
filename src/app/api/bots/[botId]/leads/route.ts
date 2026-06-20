@@ -10,20 +10,20 @@ import { parsePagination } from "@/lib/pagination";
 
 // /api/bots/[botId]/leads
 //
-// GET  (owner-gated, same-origin) — paginated lead list for the dashboard.
-// POST (public, CORS allow-list)   — chat-UI lead capture call.
+// GET  (owner-gated, same-origin) - paginated lead list for the dashboard.
+// POST (public, CORS allow-list)   - chat-UI lead capture call.
 //
 // The POST handler is the only Stage 6 write surface that is anonymous +
 // cross-origin (the embeddable widget on a third-party site). It is
 // idempotent on (conversationId, lowercased email) so a double-submit
 // from the UI produces a single lead row + a single notification row.
 //
-// **No rate limiting in slice 6.2** — explicit deferral to Stage 7's
+// **No rate limiting in slice 6.2** - explicit deferral to Stage 7's
 // Redis layer (per the slice-6.2 design Q2 lock). The 4 KB body cap, Zod
 // schema, idempotent dedupe, and 24h email-only window combine to make
 // raw brute-force noise expensive without rate-limit middleware. A spam
 // attack that cycles emails to defeat the dedupe still bounds at one DB
-// transaction per unique email per 24h window per bot — acceptable for
+// transaction per unique email per 24h window per bot - acceptable for
 // slice 6.2 scope; revisit if observed in practice.
 
 const MAX_BODY_BYTES = 4096;
@@ -87,7 +87,7 @@ export async function POST(
   }
   const { email, conversationId, contextSummary } = parsed.data;
 
-  // 4. Resolve bot (anonymous endpoint — we need bot.user_id for the
+  // 4. Resolve bot (anonymous endpoint - we need bot.user_id for the
   // notification row + bot.name for the notification payload).
   const bot = await db.query.bots.findFirst({
     where: and(eq(bots.id, params.botId), eq(bots.isActive, true)),
@@ -102,11 +102,7 @@ export async function POST(
   // second notification. Without a conversationId we still dedupe on
   // (botId, email) within the last 24h to absorb the widget's double-
   // click fallback when the conversation hasn't been established.
-  const existing = await findExistingLead(
-    bot.id,
-    email,
-    conversationId,
-  );
+  const existing = await findExistingLead(bot.id, email, conversationId);
   if (existing) {
     return jsonWithCors({ lead: existing, deduped: true }, 200);
   }

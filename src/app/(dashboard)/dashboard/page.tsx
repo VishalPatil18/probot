@@ -21,7 +21,7 @@ import { getOrigin } from "@/lib/server/origin";
 
 const EMBED_GUIDE_URL = "https://docs.probot.dev/guides/embed-widget";
 
-// Dashboard home — ported from design/dashboard.html.
+// Dashboard home - ported from design/dashboard.html.
 //
 // Layout chrome (sidebar + topbar) is provided by `(dashboard)/layout.tsx`.
 // This page renders the inner content: weekly greeting, 4 metric tiles
@@ -51,7 +51,7 @@ export default async function DashboardPage() {
       listRecentConversationsForUser({ userId, limit: 3 }),
     ]);
 
-  // Greeting empty state — user has zero bots; collapse the dashboard
+  // Greeting empty state - user has zero bots; collapse the dashboard
   // grid to a focused "create your first bot" CTA.
   if (ownedBots.length === 0) {
     return (
@@ -61,8 +61,8 @@ export default async function DashboardPage() {
             Welcome to ProBot 👋
           </h2>
           <p className="mt-2 text-sm text-muted">
-            Build your first bot in under a minute — drop in your resume,
-            pick a model, share the URL.
+            Build your first bot in under a minute - drop in your resume, pick a
+            model, share the URL.
           </p>
           <Link
             href="/dashboard/bots/new"
@@ -86,7 +86,7 @@ export default async function DashboardPage() {
   const origin = getOrigin();
 
   // `ownedBots` is already pre-filtered by `eq(bots.userId, userId)` and
-  // includes the themeColor column we need for the embed snippet — so
+  // includes the themeColor column we need for the embed snippet - so
   // `selectedBot` is ownership-verified by construction. No need to
   // re-query for confirmation.
 
@@ -104,7 +104,8 @@ export default async function DashboardPage() {
         <p className="mt-1 text-sm text-muted">
           Your bot answered{" "}
           <strong className="text-ink">
-            {thisWeekConvos} {thisWeekConvos === 1 ? "conversation" : "conversations"}
+            {thisWeekConvos}{" "}
+            {thisWeekConvos === 1 ? "conversation" : "conversations"}
           </strong>{" "}
           this week
           {newLeadsThisMonth > 0 ? (
@@ -142,12 +143,7 @@ export default async function DashboardPage() {
           icon="contact_mail"
           fadedGrowth="+3 new"
         />
-        <MetricTile
-          label="Response time"
-          value="1.4s"
-          icon="bolt"
-          comingSoon
-        />
+        <MetricTile label="Response time" value="1.4s" icon="bolt" comingSoon />
       </div>
 
       {/* chart + topics */}
@@ -199,7 +195,6 @@ export default async function DashboardPage() {
           </a>
         </div>
       </div>
-
     </div>
   );
 }

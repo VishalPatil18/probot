@@ -27,7 +27,7 @@ const ICON_PATHS: Record<Props["icon"], JSX.Element> = {
 };
 
 // Dashboard top-row metric tile. The number stays at full opacity even
-// when `comingSoon` is true — the value itself is real or placeholder
+// when `comingSoon` is true - the value itself is real or placeholder
 // "1.4s"; the faded pill carries the not-yet-wired-up signal.
 export function MetricTile({
   label,

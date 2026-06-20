@@ -11,7 +11,7 @@ export function OPTIONS(): Response {
   return corsPreflight();
 }
 
-// GET /api/bots/[botId]/config — PUBLIC (no auth).
+// GET /api/bots/[botId]/config - PUBLIC (no auth).
 //
 // Stage 4 plan.md §4.4: returns the non-sensitive bot config used by the
 // public chat page and the Stage 5 embeddable widget. Intentionally
@@ -21,7 +21,7 @@ export function OPTIONS(): Response {
 //   - owner branding (ownerName, ownerImage, ownerUsername)
 //
 // What is NOT returned (and must never be):
-//   - bot.contextText (the assembled knowledge base — owner's career data,
+//   - bot.contextText (the assembled knowledge base - owner's career data,
 //     potentially private prose. The chat endpoint streams it through the
 //     LLM but never echoes it raw.)
 //   - owner email / name / llmProvider / llmModel
@@ -71,7 +71,7 @@ export async function GET(
       },
     },
     {
-      // Public data — let the CDN absorb repeated fetches so an enumeration
+      // Public data - let the CDN absorb repeated fetches so an enumeration
       // attacker hits cache, not the origin. 60s s-maxage matches the rate
       // at which bot edits should reasonably propagate. A proper per-IP
       // rate limit lands with the broader Redis work in Stage 7.
