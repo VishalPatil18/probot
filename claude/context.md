@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **STAGE 6 COMPLETE + Dashboard Redesign Slice A** — Stages 1–6 shipped end-to-end. Slice A of the dashboard visual redesign (porting `design/dashboard.html`) is now live: new sidebar (logo + bot switcher + nav with count badges + model status card + user card) applied to every `(dashboard)` page, sticky topbar (hamburger + page title from `usePathname()` + URL pill + NotificationBell + View live bot CTA), dashboard home rewrite (welcome greeting + 4 metric tiles with faded growth/Coming Soon pills + 7-day SVG smooth Bézier line chart + Top topics placeholder + recent leads table with company-signal pill + recent conversations + share-your-bot reusing slice-5 EmbedSnippet). Mobile uses a slide-in panel with the same sidebar content. Selected bot persists in an httpOnly cookie (server-validated against owned bots on every render). 654/654 tests, build green. Slices B (settings 5-tab redesign) + C (sub-page re-theme + docs stub) still to ship. **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **STAGE 6 COMPLETE + Dashboard Redesign Slices A & B** — Stages 1–6 shipped end-to-end. Dashboard redesign Slice A (sidebar + topbar shell + dashboard home rewrite) and Slice B (5-tab settings page) are now live. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints — type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon — Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Obsolete `BotSettingsForm` + `KnowledgeManager` deleted (replaced by `BotConfigTab` + `KnowledgeTab`). 648/648 tests, build green. Slice C (sub-page re-theme + docs stub + Stage 7 task block) still to ship. **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -1650,3 +1650,91 @@ Total: 17 new source files + 5 test files + 5 updated source files. 654/654 test
 - BotSwitcher dropdown items submit a form per click. There's no loading indicator between click and revalidation — typically completes < 100ms locally, but slow networks would see a flash. A pending-form indicator could land in Slice C.
 - `MobileSidebarPanel` body-scroll lock uses `document.body.style.overflow = "hidden"` and restores the previous value on cleanup. Works correctly under React Strict Mode's double-render (each mount snapshots the current overflow and the final cleanup restores it).
 - The slice intentionally left out tests for the layout, Sidebar wrapper, SidebarNavLink, ModelStatusCard, Topbar, MobileSidebar, TopTopicsPlaceholder, RecentConversationsList — focused coverage on security-critical / behavior-rich pieces (cookie resolver, MetricTile, RecentLeadsTable, BotSwitcher, ConversationsLineChart). Slice C can backfill if needed.
+
+---
+
+### 2026-06-20 08:17 - Dashboard redesign Slice B: 5-tab settings page
+
+**What was asked to do:** Port `design/settings.html` into the existing settings route. Five tabs (Account, Bot configuration, Knowledge base, Security & privacy, AI model & API key) with URL-driven state. Reuse existing functionality where it's wired; mark unwired surfaces with Coming Soon pills. Per the locked decisions: AI model & key tab is entirely Coming Soon; Account/Security have Coming Soon pills on unwired actions; Bot configuration + Knowledge base fold in existing slice 6.5 functionality.
+
+**What I did:**
+
+_Schema + route widening:_
+
+- `src/lib/bots/schemas.ts` — added `isActive: z.boolean().optional()` to `botPatchInput` so the Bot configuration tab's live/off toggle can write the bit. The slice-1 chat route and the slice-6.2 lead-capture endpoint both already gate on `bots.is_active`, so the toggle has real effect immediately.
+- `src/app/api/bots/[botId]/route.ts` — destructures `isActive` and includes it in both the SET payload and the `returning()` projection. Comment block updated to reflect the new whitelist (the old comment listed `isActive` as a blocked field, which was wrong after the widening — review fix).
+- `src/app/api/bots/[botId]/route.test.ts` — +2 specs (isActive happy-path; rejects non-boolean). Existing mass-assignment regression rewritten: previously asserted `isActive` was dropped, now asserts `userId`/`contextText`/`createdAt` are dropped while `isActive` is legitimately accepted.
+
+_Tab framework + 5 tabs (new directory `src/components/dashboard/settings/`):_
+
+- `SettingsTabs.tsx` — `<SettingsTabs>` + `<SettingsTabPanel>` pair. Tab state in URL via `?tab=`, written with `router.replace` (no history clog). Default tab is "account" — when active, the param is dropped (canonical URL). Unknown `?tab=` values fall through to the default. WAI-ARIA tabs pattern wired with `role="tablist"`/`role="tab"`/`role="tabpanel"` + `aria-controls`/`aria-labelledby` pairing (review fix — initial draft had the role attrs but no id linkage).
+- `AccountTab.tsx` — read-only profile (avatar with initials, name, email, username with `probot.com/u/` prefix) + read-only password placeholder. All inputs disabled; Save button disabled. Section headers carry Coming Soon pills.
+- `BotConfigTab.tsx` — status toggle (writes `isActive`), name, headline, personality cards (radio cards with inline SVG icons), Coming Soon Custom instructions textarea, theme color preset swatches + native `<input type="color">`, suggested questions section (reuses slice-6.5 `<SuggestedQuestionsEditor>`). Whole-form Save → PATCH with diffed body (only changed fields), `router.refresh()` on success. State-from-props-once pattern same as slice-6.5 BotSettingsForm (intentional — preserves in-flight user edits across parent re-renders).
+- `KnowledgeTab.tsx` — from-scratch rewrite of slice-6.5 KnowledgeManager with the design's layout. Same underlying `/knowledge` endpoints (GET list, POST multipart, DELETE source, POST reprocess). Type-iconed source rows (PDF / text glyphs) with small icon-only delete button, dashed "Add source" upload zone, "Re-index all" button in the section header. Drag-drop still works; ConfirmDialog still used for delete confirmation.
+- `SecurityTab.tsx` — rate-limit display cards reading `PER_MINUTE` and `PER_DAY` from `src/lib/ai/rate-limit.ts` directly (review fix — initial draft hardcoded 10/200 which silently disagreed with the actual `PER_DAY` default of 50). `MESSAGE_INPUT_MAX = 8000` mirrors the Zod cap on `/api/chat/[botId]` (sharing a constants module is a Slice C follow-up). Data & privacy rows (Export, Retention) + Danger zone (Delete account) are all Coming Soon — endpoints land in Stage 7 with the GDPR workstream.
+- `AIModelKeyTab.tsx` — entire tab is Coming Soon. Renders a faded preview of the future provider/key editor (4-card provider grid, model dropdown, API key input with show/hide) so users see what's coming. Active "key stored locally only" badge mirrors the BYO-key promise.
+
+_Page rewrite:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` — full rewrite. Fetches `[bot, userRow]` in parallel (bot needs the new `isActive`/`themeColor` columns; userRow needs `llmProvider`/`llmModel` for AIModelKeyTab). Mounts `<SettingsTabs>` with the 5 `<SettingsTabPanel>` children. Ownership gate via standard `findFirst({where: and(eq(id), eq(userId))})` → `notFound()`. Defense-in-depth personality fallback retained (slice 6.5 review note still applies).
+
+_Removed:_
+
+- `src/components/dashboard/BotSettingsForm.tsx` + test (replaced by `BotConfigTab` — adds status toggle + theme swatches inline + Coming Soon custom instructions).
+- `src/components/dashboard/KnowledgeManager.tsx` + test (replaced by `KnowledgeTab` — same endpoints, design-matched layout).
+
+_Code-review pass (2 HIGH + 2 MEDIUM + 2 LOW fixes applied):_
+
+- **HIGH: stale comments in PATCH route.** Two block comments still claimed `isActive` was a blocked field; with the Slice B widening that became wrong and would confuse a future security audit. Updated both blocks to list real blocked fields (`userId`, `contextText`, `createdAt`, `updatedAt`) and call out that `isActive` is legitimately accepted now via the schema widening.
+- **HIGH: SecurityTab rate-limit display was wrong.** Initial draft hardcoded `perDay: 200`; the actual default in `src/lib/ai/rate-limit.ts` is `50`. Users on stock defaults would have seen "200/day" in the UI while the enforced limit was 50 — a live correctness bug. Fixed by importing `PER_MINUTE` and `PER_DAY` from the rate limiter module so the display tracks the live values (including env overrides).
+- **MEDIUM: `createContext` imported mid-file.** Moved to the top with the other React imports (matches the project's convention; the original placement worked at runtime but was visually misleading).
+- **MEDIUM: `useTransition` wrap around `router.replace` was unused.** The pending signal was destructured away with `, ` and `router.replace` is a navigation, not a state update that benefits from concurrent rendering. Removed the wrap; `router.replace` called directly.
+- **LOW: WAI-ARIA tab/panel pairing.** Added `id` to each `<button role="tab">` and each `<div role="tabpanel">`, with `aria-controls` (button → panel) and `aria-labelledby` (panel → button) so screen readers announce the relationship correctly.
+- **LOW: `JSX.Element` → `React.ReactNode`.** The `PERSONALITY_CARDS.icon` type was `JSX.Element` which excludes fragments. The `creative` variant uses `<>...</>` and worked only because TS narrows JSX fragments to `JSX.Element`. Switched to `ReactNode` for consistency with project convention.
+
+**Files changed:**
+
+_Schema + route:_
+
+- `src/lib/bots/schemas.ts` — update — `isActive` added to `botPatchInput`.
+- `src/app/api/bots/[botId]/route.ts` — update — SET payload + returning + comment cleanup.
+- `src/app/api/bots/[botId]/route.test.ts` — update — 2 new specs, regression updated.
+
+_Components:_
+
+- `src/components/dashboard/settings/SettingsTabs.tsx` — create — tab strip + URL state.
+- `src/components/dashboard/settings/AccountTab.tsx` — create.
+- `src/components/dashboard/settings/BotConfigTab.tsx` — create.
+- `src/components/dashboard/settings/KnowledgeTab.tsx` — create.
+- `src/components/dashboard/settings/SecurityTab.tsx` — create.
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` — create.
+
+_Page + cleanup:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` — full rewrite.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.test.tsx` — full rewrite — 9 specs covering notFound paths, all 5 tabs renderable via `?tab=`, default tab, unknown-tab fallback, unknown-personality fallback.
+- `src/components/dashboard/BotSettingsForm.tsx` + `.test.tsx` — delete (replaced).
+- `src/components/dashboard/KnowledgeManager.tsx` + `.test.tsx` — delete (replaced).
+
+Total: 6 new components + 5 file updates + 4 file deletions. 648/648 tests pass (654 → 648; deleted 14 obsolete BotSettingsForm/KnowledgeManager specs, added 5 settings-page specs + 2 PATCH specs + 1 reused). Build green.
+
+**Decisions made:**
+
+- **Tab state in the URL via `?tab=`, not internal state.** Deep links into a specific tab work (e.g. `?tab=kb` opens the Knowledge base tab), browser back navigates between tabs, share-this-link works without losing context. Matches the slice-6.3 conversations-list `?q=` precedent.
+- **Default tab is "account" and the URL drops `?tab=account` to keep it canonical.** Two URLs that point at the same logical view produce the same browser bar. Same pattern as `?page=1` being implicit in the slice-6.3 Pagination component.
+- **`router.replace` (not `push`).** Tab-switching is a fluid navigation, not a "commit" the user wants to step back through. Push would clog the history with intermediate states.
+- **Read-only Account tab over half-functional editing.** No PUT /api/users endpoint exists, so faking editable inputs that don't save would mislead the user. Read-only display of the current values + Coming Soon pills makes the boundary explicit.
+- **Hard-import `PER_MINUTE` / `PER_DAY` from `rate-limit.ts` in SecurityTab.** The original hardcoded numbers silently disagreed with reality on day one — a live correctness bug, not theoretical drift. The shared-module import makes the display track whatever the deployment is actually running.
+- **`KnowledgeTab` is a from-scratch rewrite, not a wrapper around `KnowledgeManager`.** The visual delta from the old component to the design's reference is substantial (icon-by-type rows vs. plain rows; dashed "Add source" zone vs. drag-drop card; header "Re-index all" vs. inline button). A wrapper would have piled style hacks on top of the old markup; rewriting was cleaner.
+- **`isActive` widening is the only schema change in this slice.** Custom instructions (mentioned in the design's bot config tab) would need a new column + migration; deferred to Stage 7 since the schema add isn't blocking the tab UI from rendering as Coming Soon.
+- **ARIA tabs pattern wired completely.** `role="tablist"`/`role="tab"` + `aria-selected` were in the initial draft; `aria-controls`/`aria-labelledby` + matching `id`s were added per the review. WAI-ARIA requires the full pairing for screen readers to announce panel-tab relationships.
+- **Removed obsolete components instead of deprecating them.** `BotSettingsForm` and `KnowledgeManager` had no consumers after the rewrite (the only importer was the settings page). Keeping them around would have created drift risk. Deletion is the right cleanup.
+
+**Open questions / follow-ups:**
+
+- The Account tab's Save button has no endpoint to wire up. Stage 7's auth/account workstream adds PUT /api/users with `{ name?, email?, username?, password? }` validation + bcrypt for password.
+- Custom instructions field on Bot configuration tab needs a schema column (`bots.custom_instructions text`) + Zod widening + a textarea wire-up. Deferred to Stage 7.
+- AI model & key tab needs the real provider switcher + key input UI. The browser key-store (`llm-key-store.ts`) already exists from Stage 1; the Stage 7 tab just needs to surface it.
+- Shared `src/lib/constants/limits.ts` module would consolidate `PER_MINUTE`/`PER_DAY` from rate-limit and the chat route's 8000-char input cap. Slice C follow-up.
+- Slice C wraps up the redesign with sub-page re-theming + docs stub + Stage 7 task block in plan.md.
+- The slice intentionally has no dedicated unit tests for individual tab components — the settings page test covers integration (tab routing, panel rendering, fallback). Slice C can backfill if it surfaces specific behavioral gaps.

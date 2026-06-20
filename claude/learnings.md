@@ -888,3 +888,94 @@ The desktop sidebar is a static piece of chrome at the left edge of the layout. 
 **The general rule for responsive chrome with structural differences:** ship two trees, gate visibility via Tailwind responsive utilities (`hidden lg:flex` / `lg:hidden`), share state via React context. CSS-only responsive sidebars work great when the structural shape is preserved (column width changes, content collapses to icons). They fall apart when one breakpoint needs an overlay and the other needs a layout column.
 
 ---
+
+### URL-Driven Tab State + The WAI-ARIA Pairing The Roles Don't Buy You (Dashboard Slice B)
+
+> The settings page has 5 tabs. Tab state needs to be persistent (deep-linkable, back-button-friendly) but the tabs themselves are pure UI navigation. Where should the state live?
+
+There are three reasonable places: component-local `useState`, a URL query param, or a route segment. The first is the wrong choice for anything users might want to share or bookmark — `useState` is invisible to the URL bar. The third (route segment, e.g. `/settings/account` vs. `/settings/bot`) works but adds five file-system entries and forces each tab into its own page. **The URL query param wins for tab strips inside a single page** — `/settings?tab=bot` is one route file with internal panel switching, every tab is deep-linkable, browser back navigates between tabs cleanly, and "share this link" works without losing context.
+
+The implementation uses `useSearchParams()` to read, `router.replace()` (not `push`) to write, and a small mapping from valid tab keys to panel components. Three details matter:
+
+**Drop the default tab from the URL.** A canonical URL has no `?tab=account` if "account" is the default — it just has no `tab` param at all. Two URLs pointing at the same logical view should produce the same browser bar. This matches the slice-6.3 Pagination convention (`?page=1` implicit).
+
+**Validate the incoming `?tab=` value against the known set.** A hostile or stale URL like `?tab=nonsense` should fall back to the default, not crash the page. The check is one line: `const active = TABS.some(t => t.key === requested) ? requested : DEFAULT_TAB`.
+
+**Use `replace`, not `push`.** Tab-switching is fluid navigation; users don't expect each tab change to add a history entry. `replace` keeps the back button useful for "leave this page" instead of "step through every tab I clicked."
+
+> The reviewer flagged that the original draft wrapped `router.replace` in `useTransition`. Why was that wrong?
+
+`useTransition` defers non-urgent state updates so React can interrupt them with higher-priority work — typing in an input, scrolling, etc. It's designed for state updates that trigger expensive renders inside the same React tree. `router.replace()` is a navigation: it doesn't trigger a React re-render in the way `setState` does; the new route's RSC tree is fetched and patched in. Wrapping it in `startTransition` adds zero perceptible benefit (the panel switch is instant because all panels are already rendered as RSC siblings; only one is conditionally shown via context) and slightly obscures the code. **The rule of thumb:** use `useTransition` when you're calling `setState` with a value that triggers an expensive child re-render and you want the input to stay responsive during it. Don't reach for it just because "this might be slow" — that's premature optimization with a measurable readability cost.
+
+> `role="tab"` + `aria-selected` was in the first draft. The reviewer flagged it as incomplete. What was missing?
+
+The WAI-ARIA tabs pattern needs a **two-way pairing** to actually work for screen readers: each tab button must declare which panel it controls (`aria-controls="panel-id"`), and each panel must declare which tab labels it (`aria-labelledby="tab-id"`). Without these, a screen reader sees a `role="tab"` button and reads it as a tab, but doesn't know which `role="tabpanel"` it's connected to. The user hears "Settings, tab, Account, selected" and then has to navigate around to find the panel — there's no announcement that "this panel shows account settings" because nothing tied the two together. The fix is two ID generators and two attribute writes:
+
+```tsx
+<button id={`tab-${key}`} aria-controls={`panel-${key}`} role="tab" />
+<div id={`panel-${key}`} aria-labelledby={`tab-${key}`} role="tabpanel" />
+```
+
+**The wider lesson:** semantic roles alone don't make accessible widgets — the relationships between elements matter as much as the individual labels. WAI-ARIA spec patterns specify the full graph; copying the roles without the pairings ships an incomplete experience that screen reader users can detect immediately.
+
+---
+
+### Reading Live Limits From The Same Module That Enforces Them — Don't Mirror Numbers (Dashboard Slice B)
+
+> The Security tab displays the rate limits ("10/min, 200/day, 8k/msg") as read-only cards. The first draft hardcoded these numbers. The reviewer found a real bug: the actual `PER_DAY` default in the rate limiter was 50, not 200. What was the right pattern?
+
+The bug here is the kind that sneaks past every reviewer except the one who runs `grep` on the constant name. The display number lived in the SecurityTab file; the enforcement number lived in `src/lib/ai/rate-limit.ts`. They started at different values (someone typed 200 from memory in one place; the rate-limit module had 50 as the actual default). Tests didn't catch it because tests don't render real values against constants — they render whatever fixtures the test sets up. Code review didn't catch it because reviewers don't typically grep across files for hardcoded constants. Users would see the bug instantly: "I'm hitting the rate limit at 50 requests but the settings page says 200/day."
+
+The fix is structural, not numeric. **Import the constant from the module that enforces it.** Don't write `const perDay = 200` in the display component; write `import { PER_DAY } from "@/lib/ai/rate-limit"`. Now there's exactly one number in the codebase, and any change — including environment-variable overrides at runtime — flows automatically to the display.
+
+```ts
+// rate-limit.ts (single source of truth)
+export const PER_MINUTE = Number(process.env.PROBOT_RATE_PER_MINUTE ?? 10);
+export const PER_DAY = Number(process.env.PROBOT_RATE_PER_DAY ?? 50);
+
+// SecurityTab.tsx — reads, never duplicates
+import { PER_MINUTE, PER_DAY } from "@/lib/ai/rate-limit";
+```
+
+**The generalizable lesson:** any constant that has BOTH a runtime effect AND a UI display is two-faced data, and the two faces must come from the same source. The classes of bugs this pattern prevents are some of the most insidious — user-visible documentation drift, where the UI confidently claims one thing while the system enforces another. The user trusts the UI; the system enforces the code; the user gets confused or frustrated when the two don't match. The cost of an import statement is zero. The cost of explaining "actually our display is wrong; the real limit is X" to a confused user is non-zero.
+
+> What about the 8000-char input cap that's hardcoded inside the chat route's Zod schema? Same pattern?
+
+Same lesson, slightly different mechanics. The 8000-char limit lives inline in a Zod chain (`z.string().min(1).max(8000)`) where extracting an exported constant from a route file is awkward. The right fix is a small shared module — `src/lib/ai/limits.ts` — that exports both `MESSAGE_INPUT_MAX` (used by the chat route's Zod schema and by SecurityTab's display) and the rate limits. For Slice B I left the 8000 mirrored locally with a comment because the shared module is a Slice C follow-up — but the principle is the same: **anytime a UI surface mirrors a system constraint, the constant should live in one place and be imported into both.**
+
+> Tests didn't catch this. What would have?
+
+A snapshot test of the rendered SecurityTab against a hand-checked "expected display values" fixture would have caught it the first time the value drifted — but only if the fixture was written by someone who checked the rate-limit module, not by someone who typed 200 from memory. Realistically, the most reliable defense is the import pattern itself: when the constant is imported, the test doesn't need to know the value, and the bug becomes impossible to introduce.
+
+---
+
+### "Honest Partial UI" — Read-Only + Coming Soon Beats Half-Working Inputs (Dashboard Slice B)
+
+> The Account tab in the design has Name, Email, Username, Password fields with a Save button. We have zero PUT /api/users endpoint today. What's the right way to ship the tab?
+
+There are three options, two of them wrong. **Option 1: hide the entire tab until the endpoints exist.** Users see a missing tab that the design promised; the dashboard feels incomplete. **Option 2: render fully editable inputs and a working-looking Save button that 500s on submit.** Users edit confidently, click Save, hit an error — the worst outcome because the failure happens after the user invested effort. **Option 3: render the tab with the fields displayed read-only, the Save button disabled, and Coming Soon pills marking what's not yet wired.** Users see the future surface, understand it's not active yet, and aren't misled into thinking their edits would have any effect.
+
+Option 3 is the "honest partial UI" pattern. The rules are simple. **The display reflects reality** — show the current name, email, username from the session so the tab isn't blank. **The controls are visibly disabled** — `<input disabled>` + opacity-60 styling + `cursor-not-allowed` so users can't even start typing. **The marker is explicit** — a Coming Soon pill on every disabled section header, not just a tooltip on hover. **The Save button is disabled too** — no false affordances; users shouldn't be able to click anything that would have committed an edit if the backend were live.
+
+```tsx
+<h3 className="font-bold">Profile</h3>
+<ComingSoonPill />
+// ...
+<input disabled className="bg-neutral-50 opacity-60 cursor-not-allowed" />
+// ...
+<button disabled className="btn btn-primary opacity-60 cursor-not-allowed">
+  Save changes
+</button>
+```
+
+**The generalizable principle:** a UI that promises functionality it can't deliver erodes user trust faster than a UI that ships an incomplete-but-honest preview. Users tolerate "not built yet" gracefully when the labeling is clear; they don't tolerate "looked like it worked but didn't" because that's a broken promise. The Coming Soon pill is the cheapest possible labeling — gray, small, unambiguous, doesn't fight for attention with the actual content.
+
+> When does the read-only preview pattern become misleading instead of helpful?
+
+When the displayed values are so wrong that the user makes decisions on them. SecurityTab's earlier rate-limit display (200/day when the real limit was 50) crossed this line — the user might have planned their chat usage around the displayed number. Account tab's read-only display of the session name/email is safe because those values ARE accurate; the user just can't edit them yet. **The rule:** read-only preview is fine when the displayed value matches reality. It fails when the value is a guess at what the future state will look like. If the displayed value isn't current truth, hide the field or show "—" instead of inventing a number.
+
+> Why ship the whole tab as Coming Soon instead of just the Save button?
+
+Because the disabled-input + Coming Soon pill pattern composes naturally — a single visible pill at the section header tells the user "this whole section is not yet active," and the rest is consistent. Disabling just Save while letting users type into Name would create a "why is the button broken?" moment when they hit submit. The principle holds at every granularity: the boundary of "what works" should match the boundary of "what's visibly interactive." Mixing those boundaries within a single section is the user-frustration zone.
+
+---

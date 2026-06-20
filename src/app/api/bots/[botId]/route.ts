@@ -13,8 +13,8 @@ import { bots, db } from "@/lib/db";
 // SET object is built from the parsed Zod object.
 //
 // Mass-assignment safety: the Zod schema explicitly whitelists fields, so a
-// request with `{userId: "...", isActive: false}` is silently dropped — the
-// route never trusts the raw body shape.
+// request with `{userId: "...", contextText: "INJECTED", createdAt: "..."}`
+// is silently dropped — the route never trusts the raw body shape.
 export async function PATCH(
   request: Request,
   { params }: { params: { botId: string } },
@@ -40,11 +40,19 @@ export async function PATCH(
 
   // Build the SET payload from defined fields only. Spread-conditional so
   // omitted fields retain their existing DB value. The Zod schema is the
-  // mass-assignment whitelist — fields like `userId`, `isActive`, and
-  // `contextText` are not in `botPatchInput` so they can never appear
-  // here even if a hostile client puts them in the body.
-  const { themeColor, name, headline, personality, suggestedQuestions } =
-    parsed.data;
+  // mass-assignment whitelist — fields like `userId`, `contextText`,
+  // `createdAt`, and `updatedAt` are not in `botPatchInput` so they can
+  // never appear here even if a hostile client puts them in the body.
+  // (Slice B widened the whitelist to include `isActive` for the status
+  // toggle, so it IS legitimately accepted now — see the schema.)
+  const {
+    themeColor,
+    name,
+    headline,
+    personality,
+    suggestedQuestions,
+    isActive,
+  } = parsed.data;
   const set: Record<string, unknown> = {};
   if (themeColor !== undefined) set.themeColor = themeColor;
   if (name !== undefined) set.name = name;
@@ -53,6 +61,7 @@ export async function PATCH(
   if (suggestedQuestions !== undefined) {
     set.suggestedQuestions = suggestedQuestions;
   }
+  if (isActive !== undefined) set.isActive = isActive;
 
   // The Zod schema's `.refine()` already guarantees at least one field is
   // present, so the SET object is never empty by the time we get here.
@@ -67,6 +76,7 @@ export async function PATCH(
       personality: bots.personality,
       suggestedQuestions: bots.suggestedQuestions,
       themeColor: bots.themeColor,
+      isActive: bots.isActive,
     });
 
   return NextResponse.json({ bot: updated });
