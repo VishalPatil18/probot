@@ -4,8 +4,15 @@ import remarkGfm from "remark-gfm";
 
 import type { ChatMessage } from "./types";
 
+// MessageBubble renders the recruiter+assistant bubble variants only.
+// The slice-6.4 `system+lead_capture` variant is dispatched to its own
+// component (LeadCaptureCard) by the ChatWindow render loop, so we
+// narrow this prop to the bubble-shaped variants and let TypeScript
+// reject any accidental routing of system messages here.
+type BubbleMessage = Exclude<ChatMessage, { role: "system" }>;
+
 type Props = {
-  message: ChatMessage;
+  message: BubbleMessage;
 };
 
 function SafeLink({

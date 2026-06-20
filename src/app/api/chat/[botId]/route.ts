@@ -256,7 +256,11 @@ export async function POST(
   // happen in the same transaction so partial writes can't skew metrics.
   // Wrapped in try/catch so analytics persistence MUST NOT break the
   // user-facing chat reply (the primary value). Logged via Stage 7 once a
-  // structured logger lands.
+  // structured logger lands. On success, capture the conversation id so we
+  // can return it to the client — the in-chat lead-capture card (slice
+  // 6.4) sends it on POST /api/bots/[botId]/leads to enable the idempotent
+  // (botId, conversationId, email) dedupe + recruiter_email update path.
+  let conversationId: string | undefined;
   try {
     await db.transaction(async (tx) => {
       const [convo] = await tx
@@ -271,6 +275,7 @@ export async function POST(
         })
         .returning({ id: conversations.id });
       if (!convo) return;
+      conversationId = convo.id;
       await tx.insert(messages).values([
         {
           conversationId: convo.id,
@@ -285,10 +290,12 @@ export async function POST(
     // can still spot pool exhaustion / missing migrations / etc. before
     // Stage 7 wires a structured logger. Matches the [rag] warn pattern
     // used above for the analogous "fallback path on retrieval failure"
-    // case.
+    // case. `conversationId` stays undefined in this branch; the
+    // lead-capture client then falls back to the 24h (botId, email)
+    // dedupe window without the convo-scoped enrichment.
     console.warn("[chat] conversation persistence failed", err);
   }
 
   // 13. Done
-  return NextResponse.json({ reply });
+  return NextResponse.json({ reply, conversationId });
 }

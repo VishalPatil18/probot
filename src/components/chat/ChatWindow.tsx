@@ -5,12 +5,51 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ProviderName } from "@/lib/ai/providers";
 import { getEmbeddingApiKey } from "@/lib/client/embedding-key-store";
+import {
+  readLeadCaptureState,
+  writeLeadCaptureState,
+} from "@/lib/client/lead-capture-state";
 import { getApiKey, getAzureCreds } from "@/lib/client/llm-key-store";
 import { getOrCreateSessionId } from "@/lib/client/session-id-store";
 
+import { LeadCaptureCard } from "./LeadCaptureCard";
 import { LoadingAnimation } from "./LoadingAnimation";
 import { MessageBubble } from "./MessageBubble";
 import type { ChatMessage } from "./types";
+
+const LEAD_CAPTURE_THRESHOLD = 3;
+const CONTEXT_SUMMARY_MAX = 300;
+
+// Stage 6 §6.2: lead-capture card eligibility. Returns true when the user
+// has seen at least N assistant replies and the sessionStorage status is
+// still "pending" (i.e. the card hasn't been shown/dismissed/captured).
+function shouldShowLeadCard(
+  messages: ChatMessage[],
+  botId: string,
+  sessionId: string | null,
+): boolean {
+  if (!sessionId) return false;
+  const assistantReplies = messages.filter(
+    (m) => m.role === "assistant" && "text" in m,
+  ).length;
+  if (assistantReplies < LEAD_CAPTURE_THRESHOLD) return false;
+  if (messages.some((m) => m.role === "system")) return false;
+  return readLeadCaptureState(botId, sessionId) === "pending";
+}
+
+// Build the contextSummary sent to /api/bots/[botId]/leads. Concatenates
+// the first up-to-3 user messages with " · " separator, truncated to
+// 300 chars. The server caps at 1024 so 300 leaves comfortable headroom.
+function buildContextSummary(messages: ChatMessage[]): string {
+  const firstUserMessages = messages
+    .filter((m): m is Extract<ChatMessage, { role: "user" }> => m.role === "user")
+    .slice(0, 3)
+    .map((m) => m.text);
+  const joined = firstUserMessages.join(" · ");
+  return joined.length > CONTEXT_SUMMARY_MAX
+    ? `${joined.slice(0, CONTEXT_SUMMARY_MAX - 1)}…`
+    : joined;
+}
 
 const INPUT_MAX = 8000;
 
@@ -42,6 +81,18 @@ export function ChatWindow({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [missingKey, setMissingKey] = useState(false);
+  // Stage 6 §6.2: conversationId comes back in the chat response after the
+  // first successful turn. The lead-capture card sends it on POST /leads
+  // for idempotent (botId, conversationId, email) dedupe.
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  // sessionId memoized once at mount so sessionStorage state lookups are
+  // stable across renders (the lead-capture state machine is keyed by it).
+  // Lazy `useState` initializer over a render-body ref write — Strict
+  // Mode's double-render would run the ref-write side effect twice with
+  // no cleanup; `useState`'s initializer is contract-guaranteed once.
+  const [sessionId] = useState<string | null>(() =>
+    typeof window !== "undefined" ? getOrCreateSessionId() : null,
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -97,14 +148,18 @@ export function ChatWindow({
 
     // Stage 6 §6.1: per-tab session ID lets the server UPSERT a
     // `conversations` row and coalesce multiple turns from the same tab
-    // into a single conversation for dashboard analytics.
-    const sessionId = getOrCreateSessionId();
+    // into a single conversation for dashboard analytics. The mount-
+    // stable state value (lazy-init in useState) keeps the send path
+    // and the lead-capture state lookup agreeing on the same value.
+    // Fallback to a per-call call only if SSR somehow rendered with
+    // null and the user managed to send a message before hydration.
+    const effectiveSessionId = sessionId ?? getOrCreateSessionId();
 
     try {
       const res = await fetch(`/api/chat/${botId}`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message: trimmed, sessionId }),
+        body: JSON.stringify({ message: trimmed, sessionId: effectiveSessionId }),
       });
 
       if (res.status === 429) {
@@ -127,11 +182,35 @@ export function ChatWindow({
         return;
       }
 
-      const body = (await res.json()) as { reply: string };
-      setMessages((prev) => [
-        ...prev,
-        { id: newId(), role: "assistant", text: body.reply },
-      ]);
+      const body = (await res.json()) as {
+        reply: string;
+        conversationId?: string;
+      };
+      if (body.conversationId) {
+        setConversationId(body.conversationId);
+      }
+      // Append the assistant reply AND — if this turn crosses the
+      // lead-capture threshold for the first time — a sentinel system
+      // message that the renderer maps to <LeadCaptureCard>. Doing both
+      // updates in one setMessages call avoids a flash of "card not yet
+      // there" between renders.
+      setMessages((prev) => {
+        const next: ChatMessage[] = [
+          ...prev,
+          { id: newId(), role: "assistant", text: body.reply },
+        ];
+        if (shouldShowLeadCard(next, botId, sessionId)) {
+          next.push({
+            id: newId(),
+            role: "system",
+            kind: "lead_capture",
+          });
+          if (sessionId) {
+            writeLeadCaptureState(botId, sessionId, "shown");
+          }
+        }
+        return next;
+      });
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -184,9 +263,42 @@ export function ChatWindow({
             />
           )}
 
-          {messages.map((m) => (
-            <MessageBubble key={m.id} message={m} />
-          ))}
+          {messages.map((m) => {
+            // Discriminate on `role` first, then on `kind` for the system
+            // variants. The trailing `never` check makes a new system
+            // variant (e.g. `{ role: "system"; kind: "cookie_banner" }`)
+            // a compile-time error here instead of silently routing to
+            // the lead-capture card.
+            if (m.role === "system") {
+              if (m.kind === "lead_capture") {
+                return (
+                  <LeadCaptureCard
+                    key={m.id}
+                    botId={botId}
+                    botName={botName}
+                    conversationId={conversationId}
+                    contextSummary={buildContextSummary(messages)}
+                    onDismiss={() => {
+                      setMessages((prev) => prev.filter((x) => x.id !== m.id));
+                      if (sessionId) {
+                        writeLeadCaptureState(botId, sessionId, "dismissed");
+                      }
+                    }}
+                    onCaptured={() => {
+                      if (sessionId) {
+                        writeLeadCaptureState(botId, sessionId, "captured");
+                      }
+                    }}
+                  />
+                );
+              }
+              // Exhaustiveness: any new system `kind` lands here.
+              const _exhaustive: never = m.kind;
+              void _exhaustive;
+              return null;
+            }
+            return <MessageBubble key={m.id} message={m} />;
+          })}
 
           {loading && <LoadingAnimation messages={loadingMessages} />}
         </div>

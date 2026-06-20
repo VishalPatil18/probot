@@ -18,6 +18,19 @@ vi.mock("@/lib/client/session-id-store", () => ({
   getOrCreateSessionId: () => getSessionIdMock(),
 }));
 
+// Stateful mock so writeLeadCaptureState("dismissed") flows through to the
+// next readLeadCaptureState call — matches the real sessionStorage
+// semantics that ChatWindow relies on for "card stays dismissed after the
+// next reply" behavior.
+const leadCaptureState = new Map<string, string>();
+vi.mock("@/lib/client/lead-capture-state", () => ({
+  readLeadCaptureState: (botId: string, sessionId: string) =>
+    leadCaptureState.get(`${botId}:${sessionId}`) ?? "pending",
+  writeLeadCaptureState: (botId: string, sessionId: string, status: string) => {
+    leadCaptureState.set(`${botId}:${sessionId}`, status);
+  },
+}));
+
 import { ChatWindow } from "./ChatWindow";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -42,6 +55,7 @@ describe("ChatWindow", () => {
     getAzureCredsMock.mockReset();
     getSessionIdMock.mockReset().mockReturnValue(STABLE_SESSION_ID);
     fetchMock.mockReset();
+    leadCaptureState.clear();
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -95,7 +109,10 @@ describe("ChatWindow", () => {
     await user.click(screen.getByRole("button", { name: /send message/i }));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(getSessionIdMock).toHaveBeenCalledTimes(2);
+    // Slice 6.4: sessionId is memoized in a ref at mount, so the store
+    // helper is called exactly once per ChatWindow instance. The same
+    // sessionId then rides every request.
+    expect(getSessionIdMock).toHaveBeenCalledTimes(1);
     const bodies = fetchMock.mock.calls.map((call) => {
       const [, init] = call as [string, RequestInit];
       return JSON.parse(init.body as string) as { sessionId: string };
@@ -211,5 +228,60 @@ describe("ChatWindow", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/no api key/i);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Stage 6 §6.2: lead-capture card appears after the 3rd assistant reply.
+  describe("lead capture card (Stage 6)", () => {
+    async function sendN(turns: number) {
+      const user = userEvent.setup();
+      for (let i = 1; i <= turns; i++) {
+        fetchMock.mockResolvedValueOnce(
+          jsonResponse(200, {
+            reply: `reply ${i}`,
+            conversationId: "conv-xyz",
+          }),
+        );
+        await user.type(screen.getByRole("textbox"), `q${i}`);
+        await user.click(screen.getByRole("button", { name: /send message/i }));
+      }
+    }
+
+    it("does NOT show the card after 1 or 2 assistant replies", async () => {
+      getApiKeyMock.mockReturnValue("sk-ant-test-1234567890");
+      render(<ChatWindow {...defaultProps} />);
+      await sendN(2);
+      expect(screen.queryByText(/want jane doe to get back to you/i)).toBeNull();
+    });
+
+    it("shows the card inline after the 3rd assistant reply", async () => {
+      getApiKeyMock.mockReturnValue("sk-ant-test-1234567890");
+      render(<ChatWindow {...defaultProps} />);
+      await sendN(3);
+      expect(
+        await screen.findByText(/want jane doe to get back to you/i),
+      ).toBeInTheDocument();
+    });
+
+    it("removes the card when Skip is clicked and does not re-show on the next reply", async () => {
+      getApiKeyMock.mockReturnValue("sk-ant-test-1234567890");
+      const user = userEvent.setup();
+      render(<ChatWindow {...defaultProps} />);
+      await sendN(3);
+      await user.click(screen.getByRole("button", { name: /skip/i }));
+      expect(
+        screen.queryByText(/want jane doe to get back to you/i),
+      ).toBeNull();
+      // Subsequent reply must NOT bring the card back (handled by the
+      // `messages.some(role === "system")` guard in shouldShowLeadCard,
+      // but defense-in-depth via writeLeadCaptureState("dismissed").)
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, { reply: "reply 4", conversationId: "conv-xyz" }),
+      );
+      await user.type(screen.getByRole("textbox"), "q4");
+      await user.click(screen.getByRole("button", { name: /send message/i }));
+      expect(
+        screen.queryByText(/want jane doe to get back to you/i),
+      ).toBeNull();
+    });
   });
 });

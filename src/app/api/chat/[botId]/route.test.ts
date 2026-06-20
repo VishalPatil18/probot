@@ -160,14 +160,28 @@ describe("POST /api/chat/[botId]", () => {
     resetPersistenceMocks();
   });
 
-  it("returns 200 with { reply } on the happy path", async () => {
+  it("returns 200 with { reply, conversationId } on the happy path", async () => {
     const res = await POST(
       makeRequest({ message: "What are her skills?" }),
       PARAMS,
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { reply: string };
+    const body = (await res.json()) as { reply: string; conversationId?: string };
     expect(body.reply).toBe("Sure - Jane is great.");
+    // Slice 6.4: conversationId comes from the persistence transaction's
+    // returning() call. The shared mock resolves it to "conv-1".
+    expect(body.conversationId).toBe("conv-1");
+  });
+
+  it("omits conversationId from the response when the persistence transaction throws", async () => {
+    transactionMock.mockImplementationOnce(async () => {
+      throw new Error("db lost");
+    });
+    const res = await POST(makeRequest({ message: "hi" }), PARAMS);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { reply: string; conversationId?: string };
+    expect(body.reply).toBe("Sure - Jane is great.");
+    expect(body.conversationId).toBeUndefined();
   });
 
   it("returns 415 on wrong content-type", async () => {

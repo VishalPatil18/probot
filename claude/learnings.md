@@ -570,3 +570,107 @@ The slice ships Option B with a module-level doc comment that makes the contract
 When the caller's responsibility includes a check that *can fail silently*. Tenancy checks are loud — they `notFound()` or return 401 — so a forgotten check makes the API obviously broken. Compare with rate-limit checks: if the shared function trusts the caller has rate-limited, and a new caller forgets, no test or user-visible behavior necessarily reveals the gap; the abuse only surfaces in production as elevated DB load. For checks that can be skipped without immediate symptoms, push them into the function signature so they're impossible to skip. For checks with loud failure modes, the doc-comment-contract pattern is fine.
 
 ---
+
+### Lazy `useState` Initializer vs. Render-Body `useRef` Writes (Stage 6 Slice 6.4)
+
+> ChatWindow needs to compute a per-tab sessionId exactly once at mount and never recompute it. The first draft used `const ref = useRef(null); if (ref.current === null) ref.current = expensiveCompute()`. A reviewer flagged this as a React anti-pattern. What's the right way?
+
+There are two patterns that look like they do the same thing — write a value once at mount, read it on every subsequent render — but they have different correctness properties under React's runtime guarantees. **Pattern A: write to a `useRef` inside the render body** (the rejected draft). **Pattern B: lazy `useState` initializer** (the canonical fix): `const [value] = useState(() => expensiveCompute())`.
+
+Both produce a stable value across renders. The difference is in how they behave under React Strict Mode — and more generally, what React promises about render functions. **Strict Mode intentionally double-invokes the render function in development** to flush out side effects that don't survive re-renders. With pattern A, the first invocation writes the ref, the second invocation sees the ref already set and skips the compute — *the value is fine*, but the side effects inside `expensiveCompute()` ran on the first pass and were never cleaned up. If those side effects write to sessionStorage, set up a connection, or push to an analytics queue, you get a duplicate that the cleanup function (which only `useEffect` has) cannot undo. With pattern B, React contract-guarantees the initializer runs exactly once per component instance even under Strict Mode — by design, that's what the lazy-initializer form is for.
+
+The broader principle: **`useRef` is for values that persist across renders without triggering re-renders** (DOM nodes, mutable counters, debounce timers). It is not designed as a "compute once" container, and React's render-rules don't protect side effects placed in its initialization path. `useState`'s lazy initializer is the contract-guaranteed "compute once at mount" mechanism. When you find yourself reaching for `useRef` to memoize an expensive compute, you almost always want `useState(() => compute())` instead — and if the value really shouldn't trigger re-renders (which would be exotic for a mount-stable value, since it never changes), the lazy initializer still works because state that's never updated never triggers a re-render.
+
+> Why doesn't `useMemo` work here?
+
+It would *almost* work. `useMemo(() => compute(), [])` runs the compute on the first render and caches the result. But React explicitly reserves the right to drop the cache and recompute on subsequent renders — for memory pressure reasons, for example. The docs say "you may rely on useMemo as a performance optimization, not as a semantic guarantee." If `compute()` has a side effect or returns a fresh identity each call, a dropped cache is a bug. The lazy `useState` initializer has a stronger contract: the value is held in state and persists for the lifetime of the component instance, period. For "compute once and reuse forever," reach for `useState(() => ...)`.
+
+---
+
+### Exhaustiveness Checks With `never` In Discriminated Union Dispatches (Stage 6 Slice 6.4)
+
+> The ChatWindow render loop dispatches on `m.role`. Today there's one system variant (`kind: "lead_capture"`). The first draft checked only `m.role === "system"` and routed all system messages to the lead-capture card. The reviewer flagged this as not future-proof — what's the canonical fix?
+
+The pattern is called an **exhaustiveness check** and it uses TypeScript's `never` type to convert a future-runtime bug into a present-compile-time error. The shape:
+
+```ts
+if (m.role === "system") {
+  if (m.kind === "lead_capture") return <LeadCaptureCard ... />;
+  // Anything else with role === "system" lands here.
+  const _exhaustive: never = m.kind;
+  void _exhaustive;
+  return null;
+}
+```
+
+Today `m.kind` (after the `role === "system"` narrow) is the union `"lead_capture"`. After the `m.kind === "lead_capture"` check, the type system narrows `m.kind` to `never` in the unreachable branch. Assigning `m.kind` to a variable of type `never` typechecks fine because `never` is the bottom type. Now imagine a future variant: `{ role: "system"; kind: "cookie_banner" }`. After the type extension, `m.kind` in the unreachable branch becomes `"cookie_banner"` — and `const _exhaustive: never = "cookie_banner"` is a compile error. The next person to add a system variant has to update this dispatch to handle it; they cannot accidentally ship a binary that silently misroutes the new variant to `<LeadCaptureCard>`.
+
+**This is the canonical pattern for guarding discriminated-union dispatches against future extension.** Use it anywhere you're switching on a `kind`, `type`, `role`, `status`, or any other discriminant. The cost is two lines per dispatch site; the benefit is that adding a new variant turns into a compiler-driven punch list of every place that needs to handle it.
+
+> `void _exhaustive` looks weird. Why not just `const _: never = m.kind`?
+
+Both work. The `void` operator on the unused variable suppresses TypeScript's "unused variable" warning (or your linter's noUnusedLocals rule) without changing semantics. Some projects configure their linters to allow underscore-prefixed unused variables and drop the `void`. Either style preserves the type-check guarantee; pick whichever your codebase's lint config is happiest with.
+
+> Could I use a `switch` statement with a `default: never` instead?
+
+Yes, and for dispatches with three or more branches the switch form is usually cleaner:
+
+```ts
+switch (m.kind) {
+  case "lead_capture": return <LeadCaptureCard ... />;
+  case "cookie_banner": return <CookieBanner ... />;
+  default: {
+    const _: never = m.kind;
+    return null;
+  }
+}
+```
+
+The shape is the same — the unreachable branch asserts `never` on the discriminant — and TypeScript will fail to typecheck the `default` if a new case is added without a matching `case`. For two-branch dispatches, the `if`/`else` form is shorter; for more, the switch wins on readability.
+
+---
+
+### Page Visibility API For Polling — Free Battery, Free Server Cost (Stage 6 Slice 6.4)
+
+> The notification bell polls `/api/notifications/unread-count` every 30 seconds while the dashboard is open. If the user opens the dashboard at 9 a.m. and leaves the tab in the background all day, that's 28,800 polls a day (60s / 30s × 60min × 8hr × 1 tab) on a query they're not even looking at. How do we stop?
+
+The Web Platform exposes a `visibilitychange` event on `document` and a `document.visibilityState` property that flips between `"visible"` and `"hidden"` (and rarely `"prerender"`). The bell's polling loop ties its start/stop to this:
+
+```ts
+useEffect(() => {
+  let intervalId: ReturnType<typeof setInterval> | null = null;
+  function start() {
+    if (intervalId !== null) return;
+    void refresh();
+    intervalId = setInterval(() => void refresh(), 30_000);
+  }
+  function stop() {
+    if (intervalId !== null) { clearInterval(intervalId); intervalId = null; }
+  }
+  function handleVisibility() {
+    document.visibilityState === "visible" ? start() : stop();
+  }
+  if (document.visibilityState === "visible") start();
+  document.addEventListener("visibilitychange", handleVisibility);
+  return () => {
+    stop();
+    document.removeEventListener("visibilitychange", handleVisibility);
+  };
+}, [refresh]);
+```
+
+The result: while the tab is visible, polling runs at the configured cadence. When the user switches tabs, alt-tabs to another app, locks their laptop, or minimizes the browser, the interval is cleared. When they come back, the visibility event fires, `start()` runs, and an immediate `refresh()` brings the badge current before the next 30s tick. **The user sees no behavioral difference** — the bell updates the moment they return to the dashboard — **but the server stops receiving polls during the idle period**.
+
+> Why fire an immediate refresh on visibility-back, instead of waiting for the next 30s tick?
+
+Because the badge is stale by exactly however long the tab was hidden. If a user is gone for 15 minutes, the next interval tick is up to 30 seconds away. Firing `refresh()` immediately on visibility-back closes that gap to one network round-trip — the badge is current within ~200ms of the user looking at it again. The cost is one extra request per visibility transition, which is negligible compared to the polls you saved while hidden.
+
+> What about Battery Status API? Or `navigator.connection.saveData`?
+
+Visibility is the highest-signal lever — most "tab in background" idle is observed via this signal alone. Battery and saveData are smaller wins and worth layering only if you have evidence they help. Per CLAUDE.md §2 (KISS), ship visibility-based pause first; revisit only if poll cost becomes a measured problem. **The general principle: polling cadence should always be conditional on whether the user is actually looking.** This applies beyond browser tabs: a mobile app's polling pauses when the app goes to background; a desktop client's polling pauses when the window is occluded or minimized; a CLI tool that polls a server pauses when stdin is detached. The user-not-looking signal varies by platform; the answer is always "stop spending resources nobody's consuming."
+
+> The polling refresh function swallows errors silently — is that right?
+
+For a polling loop where the next iteration will retry, yes. A single failed poll due to a transient network glitch shouldn't reset the badge to a stale zero, shouldn't pop a toast, shouldn't trigger a retry storm. The next successful poll will reconcile. **The general rule for idempotent polling loops: log on failure, don't surface it; let the next iteration heal.** Pop-up errors are for user-initiated actions where the user is waiting for a result. Background polls are silent successes and silent failures with eventual consistency.
+
+---
