@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { corsPreflight, PUBLIC_CORS_HEADERS } from "@/lib/bots/cors-headers";
 import { bots, conversations, db, leads, notifications } from "@/lib/db";
+import { listLeads } from "@/lib/leads/queries";
 import { leadCaptureInput } from "@/lib/leads/schemas";
 import { parsePagination } from "@/lib/pagination";
 
@@ -38,39 +39,19 @@ export async function GET(
 ): Promise<Response> {
   const owner = await requireBotOwner(params.botId);
   if (!owner.ok) return owner.response;
-  const { bot } = owner;
 
   const url = new URL(request.url);
   const pag = parsePagination(url.searchParams);
   if (!pag.ok) return pag.response;
   const { page, limit, offset } = pag.pagination;
 
-  const [rows, totalRows] = await Promise.all([
-    db
-      .select({
-        id: leads.id,
-        email: leads.email,
-        contextSummary: leads.contextSummary,
-        conversationId: leads.conversationId,
-        capturedAt: leads.capturedAt,
-      })
-      .from(leads)
-      .where(eq(leads.botId, bot.id))
-      .orderBy(desc(leads.capturedAt))
-      .limit(limit)
-      .offset(offset),
-    db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(leads)
-      .where(eq(leads.botId, bot.id)),
-  ]);
-
-  return NextResponse.json({
-    items: rows,
-    total: totalRows[0]?.total ?? 0,
-    page,
+  const { items, total } = await listLeads({
+    botId: owner.bot.id,
     limit,
+    offset,
   });
+
+  return NextResponse.json({ items, total, page, limit });
 }
 
 export async function POST(

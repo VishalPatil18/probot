@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import Link from "next/link";
 
 import { CopyUrlButton } from "@/components/dashboard/CopyUrlButton";
+import { StatCard } from "@/components/dashboard/StatCard";
+import { getAnalyticsForUser } from "@/lib/analytics/queries";
 import { authOptions } from "@/lib/auth/auth";
 import { bots, db } from "@/lib/db";
 import { getOrigin } from "@/lib/server/origin";
@@ -23,17 +25,20 @@ export default async function DashboardPage() {
   }
 
   const username = session.user.username;
-  const ownedBots = await db
-    .select({
-      id: bots.id,
-      name: bots.name,
-      headline: bots.headline,
-      isActive: bots.isActive,
-      updatedAt: bots.updatedAt,
-    })
-    .from(bots)
-    .where(eq(bots.userId, session.user.id))
-    .orderBy(desc(bots.updatedAt));
+  const [ownedBots, analytics] = await Promise.all([
+    db
+      .select({
+        id: bots.id,
+        name: bots.name,
+        headline: bots.headline,
+        isActive: bots.isActive,
+        updatedAt: bots.updatedAt,
+      })
+      .from(bots)
+      .where(eq(bots.userId, session.user.id))
+      .orderBy(desc(bots.updatedAt)),
+    getAnalyticsForUser(session.user.id),
+  ]);
 
   const origin = getOrigin();
 
@@ -53,6 +58,23 @@ export default async function DashboardPage() {
           + New bot
         </Link>
       </header>
+
+      {analytics.totalBots > 0 ? (
+        <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <StatCard label="Bots" value={analytics.totalBots} />
+          <StatCard
+            label="Conversations"
+            value={analytics.totalConversations}
+          />
+          <StatCard label="Messages" value={analytics.totalMessages} />
+          <StatCard label="Leads" value={analytics.totalLeads} />
+          <StatCard
+            label="Leads this month"
+            value={analytics.leadsThisMonth}
+            hint="Last 30 days"
+          />
+        </div>
+      ) : null}
 
       {ownedBots.length === 0 ? (
         <div className="rounded-2xl border-2 border-dashed border-border-base bg-white p-10 text-center">

@@ -507,3 +507,66 @@ The single-statement approach fixes all three: `UPDATE notifications SET read_at
 403 (Forbidden) is a confirmation that the resource exists — it just says "you can't have it." 404 (Not Found) gives no information about whether the resource exists. For a notification ID that's UUID-shaped, distinguishing 403 from 404 lets an attacker enumerate which IDs are real even without being able to read their contents. The owner of one of those IDs might be a competitor, an executive, or anyone whose presence in the system is itself sensitive information. Returning 404 in both cases collapses the oracle. **The general rule**: across tenant boundaries, never give different responses for "this resource exists but is not yours" vs "this resource does not exist." The UI for the authenticated owner is the only surface that gets to know which is which.
 
 ---
+
+### URL-State Server Rendering For List + Pagination + Search (Stage 6 Slice 6.3)
+
+> The conversations list page needs pagination + a search input. Most React tutorials would build this as a client component with useState for the query, useEffect to fetch when it changes, a loading skeleton, and an array of items rendered after the fetch. The dashboard pages here are server components with one client component (SearchBar) embedded. Why the split?
+
+The architecture distinguishes two state classes. **Shareable, bookmarkable state lives in the URL.** What page am I on? What search query am I filtering by? These are answers the user might want to copy a link to, return to via the back button, or hand to a teammate. **Ephemeral interaction state lives in client React.** What characters are in the input right now? Has the debounce timer fired? Is the dropdown menu open? These are answers nobody outside the current tab needs to know.
+
+For a list page with pagination + search, the URL state pattern looks like: `/dashboard/bots/<id>/conversations?page=3&q=python`. The RSC reads `searchParams.page` and `searchParams.q` at render time, calls the Drizzle query directly, and ships HTML. Pagination is plain `<Link>` elements that navigate to `?page=N`. Search input is a small client component (`<SearchBar>`) whose only job is to debounce keystrokes, then call `router.replace(...)` with the new URL. When the URL changes, Next 14's App Router fetches the updated RSC payload and seamlessly swaps the list — no loading skeleton, no client-side fetch, no double network round-trip. The browser back/forward, share-this-link, and refresh-this-page all just work because the state is in the URL.
+
+**The pivot that makes this pattern shine is `router.replace` over `router.push`.** Replace doesn't push a new history entry — typing "python" letter by letter doesn't add 6 entries to the browser back stack. The last URL before search becomes the "back" target. Push would clog the history with intermediate states the user never explicitly committed to.
+
+**The other pivot is `useTransition`.** The `replace` call is wrapped in `startTransition(() => router.replace(...))` so React doesn't block the input from accepting more keystrokes while the server-rendered list re-fetches. Without this, the typing experience feels sticky on slow networks; with it, the list updates "in the background" while the input stays responsive.
+
+**Why not just fetch from the API endpoint in a `useEffect`?** Three reasons. (1) The RSC has the database connection right there; an extra HTTP round-trip to your own server is pure latency overhead. (2) The server response is already HTML the browser can render directly; fetching JSON means re-running the rendering on the client. (3) Caching — Next.js can deduplicate identical RSC requests and cache the resulting HTML across users in many cases; the API + client-fetch path doesn't get this for free.
+
+> When `?page=` and `?q=` are both in the URL, what happens to one when the other changes?
+
+You need an opinion baked into the URL builder. The default Pagination component preserves `?q=` across page navigation (extraParams prop). The SearchBar resets `?page=` to 1 on every search change — otherwise a search after navigating to page 5 of the unfiltered list lands on page 5 of the filtered results, which is almost always empty. **The pattern**: orthogonal URL params (filters + pagination) interact in non-obvious ways; nail down which changes reset which during the design phase, not after a user complaint.
+
+> The Pagination component drops `?page=` entirely when it's 1. Why?
+
+A canonical URL has no `?page=1` — it has no `page` param at all. Two URLs that point at the same logical page should produce the same browser bar. Dropping the default value keeps the URL shorter, the share-this-link affordance cleaner, and prevents subtle bugs where "go to page 1" and "no page param" need to be treated as identical in route caches, analytics dashboards, and search indexing. **The general rule**: defaults belong out of the URL; only express the non-default state in query params.
+
+---
+
+### The `noopener noreferrer target="_blank"` Triple For User-Generated Hyperlinks (Stage 6 Slice 6.3)
+
+> The dashboard's transcript viewer renders stored chat messages including any hyperlinks the bot replied with. Markdown like `see [docs](https://example.com)` becomes an `<a>` element. Why does the rendered link need three attributes — `target="_blank"`, `rel="noopener"`, and `rel="noreferrer"` — beyond just the URL?
+
+Each attribute defends a distinct exposure surface, and skipping any one re-opens a real vulnerability class. **`target="_blank"`** opens the link in a new tab. That's a UX choice — the dashboard stays loaded so the user can return to their workflow. But it's also where the security problem starts: by default, the newly-opened tab inherits a `window.opener` reference back to the dashboard page, which means JS running in the destination can call `window.opener.location.replace("https://phishing.example.com")` and silently navigate the original dashboard tab to a credential-harvesting clone. The attack is called **tabnabbing** and it's been exploited in the wild against major sites. The user clicks a benign-looking link, switches back to "the dashboard" five minutes later, and the dashboard now looks normal but is actually the attacker's clone asking them to log in again.
+
+**`rel="noopener"`** is the direct defense: it tells the browser to set `window.opener = null` in the destination tab, severing the back-reference. Most modern browsers now imply `noopener` for `target="_blank"` automatically, but only since ~2018 and only when both attributes are present in a specific shape. Setting it explicitly removes the dependency on the browser version. **`rel="noreferrer"`** is the secondary defense: it strips the `Referer` header from the request to the destination, so the destination site doesn't learn which dashboard page (with its sensitive path: `/dashboard/bots/<botId>/conversations/<convId>`) the link was clicked from. This blocks **referer leakage** of internal URLs.
+
+The three-attribute combo is the canonical safe-external-link pattern. Anything less is a vulnerability:
+- `target="_blank"` without `rel`: tabnabbing exposure + referer leak.
+- `target="_blank" rel="noopener"`: no tabnabbing, but still leaks the internal URL.
+- `target="_blank" rel="noreferrer"`: still leaks tabnabbing on older browsers.
+
+For probot specifically, the threat model is sharper than generic web: the bot owner is logged in to the dashboard, and the stored transcript text is generated by an LLM (which can hallucinate or be prompt-injected into producing arbitrary URLs). A transcript saying "go to https://anthropic.com" might silently render as an `<a href="https://attacker.com">` if the upstream LLM was prompt-injected. The three attributes don't fix the injection — they ensure that even when the injection succeeds, the worst outcome is the user visiting an attacker page in a fresh tab, not their dashboard session getting hijacked.
+
+> The chat MessageBubble has the same SafeLink. Why is the same defense duplicated in the dashboard's TranscriptMessage?
+
+Because the threat is the same: stored text that's rendered as HTML must escape, and any `<a>` it produces must be tab-isolated. The defense isn't "applied to the chat" — it's applied to **every render of user-or-LLM-generated text as HTML**. The dashboard transcript is a second render of the same text, six weeks later, by a different user (the bot owner instead of the recruiter), but the rendering surface is identical. Defense must live at every render site, not at the source — because there's no guarantee that the rendering pipeline scrubs links the same way at every endpoint.
+
+---
+
+### Shared Query Modules — The Caller-Contract Pattern For Tenancy (Stage 6 Slice 6.3)
+
+> When the API routes and the RSC pages need the same database query, the obvious move is to extract it to a shared module. But which side does the tenant check — the shared module or the caller?
+
+Two strategies, real tradeoff. **Option A: Shared module takes `userId` and does the check.** The query becomes `WHERE bot_id = ? AND bot.user_id = ?`, so every caller passes both. Safer by default — a new call site can't accidentally skip the ownership check because the function signature forces them to provide it. But the shape couples the query layer to the auth session, and every call site needs to thread `userId` through whatever helpers they're using.
+
+**Option B: Shared module takes `botId` only and trusts the caller.** The function is just `WHERE bot_id = ?`, and every caller is expected to have verified ownership upstream (in the route, that's `requireBotOwner`; in the RSC page, that's the `findFirst({ where: and(eq(bots.id), eq(bots.userId, ...)) })` pattern). Simpler call sites, more flexibility — but a new caller could forget the upstream guard and silently leak across tenants.
+
+The slice ships Option B with a module-level doc comment that makes the contract explicit. Three reasons. (1) The upstream-check pattern was already established by Stage 5's bot detail page; adopting it everywhere keeps the dashboard codebase consistent. (2) The doc comment is grep-friendly — searching for `listLeads` or `listConversations` immediately shows the contract before any code is written that uses it. (3) The cost of Option A is small per-callsite, but Option B's flexibility pays off when a future internal background job (e.g. a cron that aggregates leads across all bots, regardless of owner) needs the same query — Option A would require an awkward fake `userId` to satisfy the contract.
+
+**The generalizable lesson is "make implicit contracts visible."** If a function has a precondition that callers must enforce — tenancy, sanitization, rate-limit ack, whatever — the worst place to encode the precondition is "in the comments at the call site." The next-worst is "in the developer's head." The best is the function signature (which forces compile-time checks) or, when that's impractical, a doc comment at the module level (which the next contributor reads when they import the function). Skipping the comment is technical debt that compounds: every new caller that gets the precondition right by accident is one more example to lean on when reviewing the next caller, until eventually someone gets it wrong and the bug is invisible because everyone else "knew" the pattern.
+
+> When does the "trust the caller" pattern get dangerous?
+
+When the caller's responsibility includes a check that *can fail silently*. Tenancy checks are loud — they `notFound()` or return 401 — so a forgotten check makes the API obviously broken. Compare with rate-limit checks: if the shared function trusts the caller has rate-limited, and a new caller forgets, no test or user-visible behavior necessarily reveals the gap; the abuse only surfaces in production as elevated DB load. For checks that can be skipped without immediate symptoms, push them into the function signature so they're impossible to skip. For checks with loud failure modes, the doc-comment-contract pattern is fine.
+
+---

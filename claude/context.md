@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **Stage 6 Slice 6.2 complete** — Stages 1–5 shipped end-to-end (BYO-key chat, PDF ingestion, RAG, multi-tenant public chat, embeddable widget). Slice 6.1 laid the Stage 6 schema + chat persistence; slice 6.2 (current) wires the ten API endpoints the dashboard will consume — analytics overview, conversation list (with `?q` search) + detail, lead list + CSV export (with RFC 5987 `filename*` + U+2028/U+2029 quoting), the anonymous CORS-public lead-capture POST (idempotent on convId+email, atomic 3-row transaction), and the four session-scoped notification endpoints (list, unread-count poll target, single-mark-read, bulk read-all). 521/521 tests, build green. Slices 6.3–6.5 (dashboard UI, in-chat lead card + bell + polling, settings page) still to ship. **Earlier status note (kept for context):** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **Stage 6 Slice 6.3 complete** — Stages 1–5 shipped end-to-end (BYO-key chat, PDF ingestion, RAG, multi-tenant public chat, embeddable widget). Slice 6.1 laid the Stage 6 schema + chat persistence; slice 6.2 wired the ten API endpoints; slice 6.3 (current) ships the dashboard UI: aggregated stat row on the dashboard home, per-bot stat row + sub-nav on the bot detail page, three new sub-routes per bot (`/conversations` paginated list with debounced `?q=` search, `/conversations/[convId]` markdown transcript viewer with safe `mailto:`, `/leads` list with CSV export anchor). SQL extracted to three shared query modules (`@/lib/{analytics,conversations,leads}/queries`) so the API routes and the RSC pages share one source of truth. Five reusable dashboard components (StatCard, EmptyState, Pagination, SearchBar, TranscriptMessage). 559/559 tests, build green. Slice 6.4 (in-chat lead card + bell + polling) and 6.5 (settings + knowledge UI) still to ship. **Earlier status note (kept for context):** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -1246,3 +1246,111 @@ Total: 13 new source files + 11 new test files. 521/521 tests pass (450 → 521,
 - The 4 KB body cap on POST `/leads` is conservative — the largest legitimate payload is `email` (255) + `conversationId` (36) + `contextSummary` (1024) plus JSON overhead, well under 2 KB. Raise the cap if Stage 6.4 ever needs to send a richer payload.
 - Notification `payload` is `jsonb` with a permissive `Record<string, unknown>` TS type. A future slice could narrow this with a discriminated union keyed on `kind` for stronger type guarantees on the dashboard side. Not blocking; today there's only one `kind`.
 - Slice 6.3 (next) wires the dashboard UI pages on top of these endpoints: overview cards, conversation list/detail, lead list, CSV download. Slice 6.4 adds the in-chat lead-capture card + the bell + 30s polling. Slice 6.5 adds the settings page (editable name/headline/personality/suggested questions + knowledge management UI).
+
+---
+
+### 2026-06-19 22:32 - Stage 6 Slice 6.3: dashboard UI pages + shared query extraction
+
+**What was asked to do:** Build the dashboard UI pages on top of the slice-6.1 schema + slice-6.2 endpoints. Three new sub-routes for each bot (`/conversations`, `/conversations/[convId]`, `/leads`), an aggregated stat row on the dashboard home, and per-bot stat row + sub-nav on the existing bot detail page. Also extract the data-fetching SQL into shared query modules so the API routes (slice 6.2) and the new RSC pages (slice 6.3) call into one place instead of duplicating the same Drizzle queries.
+
+**Locked decisions before any code (Q1-Q10):** Q1 yes, extract shared queries — correctness over churn. Q2 (a) server-render via direct Drizzle queries — matches existing dashboard pattern, no double-network. Q3 (a) linear sub-routes, not tabs in the detail page — bookmarkable, matches plan §6.3. Q4 (a) `useTransition` + `router.replace` for debounced search — Next 14 idiomatic. Q5 (b) react-markdown + remark-gfm for the transcript bubbles — recruiter saw markdown in the chat, the dashboard transcript should match. Q6 lead → conversation link confirmed. Q7 fixed rolling 30-day window; range picker deferred to Stage 7. Q8 empty-state copy drafted, user can revise later. Q9 (a) one global stat row at the top of the dashboard home, then the bot list cards. Q10 single-pass slice (not split 6.3a/b).
+
+**What I did:**
+
+_Shared query modules (3 new — SQL lives in one place):_
+
+- `src/lib/analytics/queries.ts` — `getAnalyticsForBot(botId)` returns the five-metric snapshot the slice-6.2 endpoint already shipped; `getAnalyticsForUser(userId)` adds an aggregated version that joins across all bots the user owns (bots → conversations → messages, bots → leads). Both use parallel small COUNTs over per-tenant index slices rather than a cartesian-explosion 4-way LEFT JOIN.
+- `src/lib/conversations/queries.ts` — `listConversations({ botId, q, limit, offset })` with the LATERAL `firstUserMessage` subquery + optional `?q=` ILIKE on email/preview; `getConversationWithMessages({ botId, conversationId })` for the transcript viewer, with the cross-tenant filter (`AND bot_id = ?`) embedded so a forged convId targeting another owner's conversation returns null.
+- `src/lib/leads/queries.ts` — `listLeads({ botId, limit, offset })` for the paginated list + `listAllLeadsForExport({ botId })` for the CSV with a 50K row cap. Module-level doc comment makes the **tenancy contract** explicit: callers MUST have verified bot ownership upstream; the functions do not check it themselves.
+
+_Slice-6.2 route refactor (no behavior change — all 31 existing route tests still pass):_
+
+- 4 routes refactored to delegate to the shared queries: `analytics/route.ts`, `conversations/route.ts`, `conversations/[convId]/route.ts`, `leads/route.ts` (GET only — POST/OPTIONS handlers unchanged), `leads/export/route.ts`. The routes are now thin: parse pagination, call the shared function, wrap the result in `NextResponse.json`.
+
+_Dashboard components (5 new):_
+
+- `src/components/dashboard/StatCard.tsx` — label + big tabular-num value + optional hint. Reused 9× across pages.
+- `src/components/dashboard/EmptyState.tsx` — title + body + optional action node. Reused for empty conversation list, empty lead list, search-no-results.
+- `src/components/dashboard/Pagination.tsx` — URL-driven prev/next + "Page X of Y" indicator. Renders nothing when total fits in one page so callers don't need to gate. `extraParams` prop preserves other query params (e.g. `?q=`) across pagination clicks. Page 1 omits the `?page=` param entirely (canonical URL).
+- `src/components/dashboard/SearchBar.tsx` — client component, 300ms debounced `?q=` updater. `router.replace` (not `push`) so back button doesn't fill with keystrokes. Wraps the update in `useTransition` so the input stays responsive while the server-rendered list re-fetches. Drops `?page=` on every search change so a search after navigating to page 5 doesn't land on an empty filtered page. Syncs state from URL on `searchParams` change (defense against stale value when external nav happens). `aria-label` mirrors `placeholder`.
+- `src/components/dashboard/TranscriptMessage.tsx` — read-only message bubble. User-role right-aligned in brand-color with `whitespace-pre-wrap`; assistant-role left-aligned in white with `prose prose-sm` markdown styling. Every rendered `<a>` flows through a `SafeLink` component that adds `rel="noopener noreferrer" target="_blank"` — same defense the live chat MessageBubble uses against `window.opener` reach-back from stored transcript text.
+
+_Dashboard pages (3 new, 2 extended):_
+
+- `/dashboard` (extend) — aggregated 5-card stat row at the top (bots, conversations, messages, leads, leads-this-month). Renders only when `totalBots > 0` so first-time visitors still see the existing empty-state CTA instead of a row of zeros. Existing bot-list cards below unchanged.
+- `/dashboard/bots/[botId]` (extend) — adds a 4-card per-bot stat row (conversations, messages, leads, live/off status) above the Share/Embed/Theme sections, plus a "Conversations →" + "Leads →" sub-nav strip. Reuses `getAnalyticsForBot` from the shared module.
+- `/dashboard/bots/[botId]/conversations` (NEW) — paginated list, server-rendered. Each card: recruiter email or "Anonymous" + 2-line clamped first-user-message preview + relative-time `relTime` formatter + message count. Client `<SearchBar>` updates `?q=` in the URL; server reads `searchParams.q` on the next render. Empty-state copy varies: with `?q=`, "No conversations match \"<q>\"" + clear-search hint; without, "No one has chatted with <bot> yet" + a CTA to the bot detail page.
+- `/dashboard/bots/[botId]/conversations/[convId]` (NEW) — transcript viewer. Header card shows recruiter email (or "Anonymous conversation") + start time + message count + safe `mailto:` button (defense-in-depth Zod-like email regex guard before generating the href). Messages rendered chronologically via `TranscriptMessage`.
+- `/dashboard/bots/[botId]/leads` (NEW) — paginated list. Each card: clickable safe-mailto email + context summary + capture timestamp + optional "View conversation →" link. "Export CSV" anchor at top-right (only when `total > 0`) points at `/api/bots/[botId]/leads/export` with `download` attribute; same-origin so the session cookie carries auth, no JS gymnastics.
+
+_Code-review pass (2 HIGH + 2 MEDIUM + 1 LOW fixes applied):_
+
+- **HIGH: SearchBar stale value sync.** Original code seeded `value` from `searchParams` at mount but never re-synced. If the URL's `?q=` changed externally (browser nav, server-driven redirect), the input would render the old value while the list reflected the new one. Fixed with a `useEffect([searchParams, paramName])` that calls `setValue` when the URL diverges from local state. Added a regression test asserting aria-label exposure for screen readers.
+- **HIGH: `ilike` on a LATERAL subquery expression.** Reviewer flagged that passing a raw `sql<>` template (the LATERAL subquery) as the left operand of Drizzle's `ilike()` helper is dialect-dependent — the safer pattern is explicit `sql\`(${FIRST_USER_MESSAGE_SQL}) ILIKE ${pattern}\`` so the operator wraps a parenthesized scalar-subquery operand. Postgres parses scalar subqueries as ILIKE operands fine, but the explicit form removes ambiguity about what Drizzle's helper emits and is grep-friendly when reading the source.
+- **MEDIUM: `mailto:` href XSS defense-in-depth.** Email is Zod-validated at lead-capture time (`.email()`), but a future schema drift or direct-DB write must not let a malformed value flow into an href that a screen reader announces or a click follows. Added `SAFE_EMAIL` regex + `safeMailtoHref()` helper to both the conversation detail page and the leads list page. When validation fails the email renders as plain text instead of a clickable link.
+- **MEDIUM: shared-query tenancy contract docs.** Reviewer flagged that `listLeads`, `listConversations`, etc. take a `botId` and trust the caller has verified ownership. Added a clear module-level doc comment to both `src/lib/leads/queries.ts` and `src/lib/conversations/queries.ts` so a future contributor introducing a new call site can't accidentally skip the upstream guard.
+- **LOW: SearchBar missing aria-label.** Added `aria-label={placeholder}` and a regression test. Screen readers now have a stable label even if the placeholder text is empty.
+
+**Files changed:**
+
+_Shared queries:_
+
+- `src/lib/analytics/queries.ts` — create — `getAnalyticsForBot` + `getAnalyticsForUser`.
+- `src/lib/conversations/queries.ts` — create — `listConversations` + `getConversationWithMessages` + tenancy doc + safe LATERAL ILIKE.
+- `src/lib/leads/queries.ts` — create — `listLeads` + `listAllLeadsForExport` + tenancy doc.
+
+_Slice-6.2 route refactor (no test changes needed — behavior identical):_
+
+- `src/app/api/bots/[botId]/analytics/route.ts` — update — delegates to `getAnalyticsForBot`.
+- `src/app/api/bots/[botId]/conversations/route.ts` — update — delegates to `listConversations`.
+- `src/app/api/bots/[botId]/conversations/[convId]/route.ts` — update — delegates to `getConversationWithMessages`.
+- `src/app/api/bots/[botId]/leads/route.ts` — update — GET delegates to `listLeads`; POST + OPTIONS unchanged.
+- `src/app/api/bots/[botId]/leads/export/route.ts` — update — delegates to `listAllLeadsForExport`.
+
+_Components:_
+
+- `src/components/dashboard/StatCard.tsx` — create — 4 specs.
+- `src/components/dashboard/StatCard.test.tsx` — create.
+- `src/components/dashboard/EmptyState.tsx` — create — 3 specs.
+- `src/components/dashboard/EmptyState.test.tsx` — create.
+- `src/components/dashboard/Pagination.tsx` — create — 6 specs.
+- `src/components/dashboard/Pagination.test.tsx` — create.
+- `src/components/dashboard/SearchBar.tsx` — create — 5 specs (incl. aria-label regression).
+- `src/components/dashboard/SearchBar.test.tsx` — create.
+- `src/components/dashboard/TranscriptMessage.tsx` — create — 4 specs.
+- `src/components/dashboard/TranscriptMessage.test.tsx` — create.
+
+_Pages:_
+
+- `src/app/(dashboard)/dashboard/page.tsx` — update — aggregated stat row.
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — update — per-bot stat row + sub-nav.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/page.tsx` — create — paginated list + search.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/page.test.tsx` — create — 6 specs.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/[convId]/page.tsx` — create — transcript viewer + safe mailto.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/[convId]/page.test.tsx` — create — 5 specs.
+- `src/app/(dashboard)/dashboard/bots/[botId]/leads/page.tsx` — create — list + CSV anchor + safe mailto.
+- `src/app/(dashboard)/dashboard/bots/[botId]/leads/page.test.tsx` — create — 5 specs.
+
+Total: 8 new components/pages + 3 new shared modules + 8 new test files + 5 route refactors + 2 page extensions. 559/559 tests pass (521 → 559, net +38), build green, all 5 new dashboard sub-routes register in the production build.
+
+**Decisions made:**
+
+- **Shared queries take `botId`, not `(botId, userId)`.** The functions trust the caller has done the ownership check. Rationale: forcing every caller to thread `userId` would couple the query layer to the auth-session shape, and the existing dashboard pattern (`requireBotOwner` returns the validated bot, then call queries with `bot.id`) is already grep-friendly. The tradeoff is captured in the module-level doc comment so future contributors don't introduce a bypass.
+- **Server-render with direct Drizzle queries (no client fetch).** RSC reads `searchParams.q` + `searchParams.page` and calls `listConversations` directly. Pagination + search are URL-driven; the only client component on the list page is `<SearchBar>` for the debounced `?q=` update. Result: bookmarkable URLs, server-side caching benefits, no loading skeletons, browser back/forward works for free.
+- **`router.replace` over `router.push` in SearchBar.** Pushing every debounce-flush would clog the history stack (typing "python" → 6 history entries). Replace keeps the most recent search visible to browser back without filling the stack.
+- **Drop `?page=` from the URL on search change.** Searches after navigating to page 5 of the unfiltered list would otherwise land on page 5 of the filtered list, which is almost always empty. Reset to page 1 (implicit by omitting the param) on every search change.
+- **`Page 1` omits `?page=` from the URL.** The canonical URL has no `page` param at all — keeps the address bar clean for the most common state.
+- **Empty-state copy varies on `?q=` presence.** "No conversations match \"python\"" + clear-search hint when filtered; "No one has chatted with <bot> yet" + CTA when unfiltered. Two distinct user states deserve distinct messages.
+- **Transcript bubbles use the same Markdown rendering as the live chat.** The recruiter saw `**bold**` and links rendered in the chat at the time. The dashboard transcript should match what they saw, not a downgraded plain-text version. Cost: re-rendering markdown server-side; benefit: visual fidelity.
+- **`SafeLink` mirrors the live chat MessageBubble.** Stored transcript text could contain `https://evil.com` that the bot replied with months ago. Without `rel="noopener noreferrer"`, clicking such a link gives the destination's JS access to `window.opener` of the dashboard page. The defense is cheap (one component wrapper); skipping it would be a `tabnabbing` exposure.
+- **Explicit `sql\`\`` over Drizzle's `ilike()` for the LATERAL subquery.** The helper's behavior when its first argument is a raw `sql<>` template depends on dialect-internal wrapping. The explicit form removes ambiguity, is grep-friendly, and produces SQL a Postgres engineer can read on sight: `(SELECT LEFT(...) FROM messages WHERE ...) ILIKE '%q%'`.
+- **`mailto:` href validated before render.** Even though emails are Zod-validated at lead capture, the cost of a defense-in-depth regex check before generating an href is ~5 lines and zero runtime. A schema drift, an admin SQL backfill, or any future write path that bypasses the lead-capture endpoint could otherwise land malformed text in the field; the validation ensures it cannot flow into an attribute click target.
+
+**Open questions / follow-ups:**
+
+- The shared query modules don't have direct unit tests. They're transitively covered by the (still-passing) slice-6.2 route tests and the slice-6.3 page tests (which mock the shared modules). Direct unit tests would catch SQL-level regressions before mocks; defer until Stage 7 integration tests run against a real Postgres.
+- The conversations list's LATERAL subquery still runs once for the projection AND once for the count query (acknowledged tech debt from slice-6.2 review). Refactoring to a CTE that runs the subquery once would let Postgres reuse the result. Defer until a bot reaches 10K+ conversations and the list page feels slow.
+- The transcript viewer renders Markdown for every message. For very long conversations (50+ turns), this could be visible CPU cost on the initial render. If profiling shows it, switch to incremental rendering (React.lazy per bubble) or a server-rendered HTML cache. Not blocking today.
+- The dashboard home stat row is only shown when `totalBots > 0`. A user who deleted all their bots would still see this row at 0/0/0 because `totalBots > 0` is false — but they'd also see the empty-bot CTA, so the UX is coherent. If we later add an "archived bots" state, the trigger condition might need rethinking.
+- Slice 6.4 (next) wires the in-chat lead-capture card + the dashboard notification bell + 30s polling on `/api/notifications/unread-count`.
+- Slice 6.5 (final Stage 6 slice) adds the settings page + knowledge management UI: editable name/headline/personality/suggested questions + reuse of the Bot Factory dropzone for knowledge sources.

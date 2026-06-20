@@ -4,7 +4,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { EmbedSnippet } from "@/components/dashboard/EmbedSnippet";
+import { StatCard } from "@/components/dashboard/StatCard";
 import { ThemeColorPicker } from "@/components/dashboard/ThemeColorPicker";
+import { getAnalyticsForBot } from "@/lib/analytics/queries";
 import { authOptions } from "@/lib/auth/auth";
 import { bots, db } from "@/lib/db";
 import { getOrigin } from "@/lib/server/origin";
@@ -41,6 +43,7 @@ export default async function BotDetailPage({
 
   const origin = getOrigin();
   const username = session.user.username;
+  const analytics = await getAnalyticsForBot(bot.id);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
@@ -84,6 +87,40 @@ export default async function BotDetailPage({
           </Link>
         </div>
       </header>
+
+      <section className="mb-8">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard
+            label="Conversations"
+            value={analytics.totalConversations}
+            hint={`${analytics.conversationsThisMonth} in last 30 days`}
+          />
+          <StatCard
+            label="Messages"
+            value={analytics.totalMessages}
+          />
+          <StatCard
+            label="Leads"
+            value={analytics.totalLeads}
+            hint={`${analytics.leadsThisMonth} in last 30 days`}
+          />
+          <StatCard label="Status" value={bot.isActive ? "Live" : "Off"} />
+        </div>
+        <nav className="mt-4 flex flex-wrap gap-2 text-sm">
+          <Link
+            href={`/dashboard/bots/${bot.id}/conversations`}
+            className="rounded-xl border border-border-base bg-white px-3 py-2 font-semibold hover:bg-neutral-50"
+          >
+            Conversations →
+          </Link>
+          <Link
+            href={`/dashboard/bots/${bot.id}/leads`}
+            className="rounded-xl border border-border-base bg-white px-3 py-2 font-semibold hover:bg-neutral-50"
+          >
+            Leads →
+          </Link>
+        </nav>
+      </section>
 
       <section className="mb-8">
         <h2 className="mb-4 font-display text-xl font-semibold">
