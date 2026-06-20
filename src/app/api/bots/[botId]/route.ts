@@ -39,10 +39,19 @@ export async function PATCH(
   }
 
   // Build the SET payload from defined fields only. Spread-conditional so
-  // omitted fields retain their existing DB value.
+  // omitted fields retain their existing DB value. The Zod schema is the
+  // mass-assignment whitelist — fields like `userId`, `isActive`, and
+  // `contextText` are not in `botPatchInput` so they can never appear
+  // here even if a hostile client puts them in the body.
+  const { themeColor, name, headline, personality, suggestedQuestions } =
+    parsed.data;
   const set: Record<string, unknown> = {};
-  if (parsed.data.themeColor !== undefined) {
-    set.themeColor = parsed.data.themeColor;
+  if (themeColor !== undefined) set.themeColor = themeColor;
+  if (name !== undefined) set.name = name;
+  if (headline !== undefined) set.headline = headline;
+  if (personality !== undefined) set.personality = personality;
+  if (suggestedQuestions !== undefined) {
+    set.suggestedQuestions = suggestedQuestions;
   }
 
   // The Zod schema's `.refine()` already guarantees at least one field is
@@ -53,6 +62,10 @@ export async function PATCH(
     .where(eq(bots.id, bot.id))
     .returning({
       id: bots.id,
+      name: bots.name,
+      headline: bots.headline,
+      personality: bots.personality,
+      suggestedQuestions: bots.suggestedQuestions,
       themeColor: bots.themeColor,
     });
 

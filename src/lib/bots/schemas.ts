@@ -53,11 +53,37 @@ export const botInput = z.object({
 export type BotInput = z.infer<typeof botInput>;
 
 // Stage 5: partial-update schema for the PATCH endpoint behind the bot
-// detail page. Limited to fields the detail page actually edits so we
-// don't accidentally widen the surface (and let an attacker mass-assign
-// e.g. `userId` or `isActive`).
+// detail page. Limited to fields the detail page + settings page actually
+// edit so we don't accidentally widen the surface (and let an attacker
+// mass-assign e.g. `userId`, `isActive`, or `contextText`).
+//
+// Stage 6 slice 6.5 widened from `themeColor` only to also include the
+// bot identity fields the settings page edits. Each field is independently
+// optional so callers can PATCH any subset; the `.refine()` rejects the
+// fully-empty body so an SQL `UPDATE … SET WHERE …` with no SET clause
+// can never reach the database.
 export const botPatchInput = z
   .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Name must not be empty")
+      .max(100, "Name must be ≤ 100 chars")
+      .optional(),
+    headline: z
+      .string()
+      .max(120, "Headline must be ≤ 120 chars")
+      // Trim at parse time so a hostile / sloppy client can't store
+      // whitespace-only padding that renders as a blank-looking headline
+      // in the chat UI. After trim, the empty string is still valid —
+      // it's the way the UI signals "clear the headline".
+      .transform((v) => v.trim())
+      .optional(),
+    personality: z.enum(PERSONALITY_PRESETS).optional(),
+    suggestedQuestions: z
+      .array(z.string().max(200, "Each question must be ≤ 200 chars"))
+      .max(6, "At most 6 suggested questions")
+      .optional(),
     themeColor: themeColorSchema.optional(),
   })
   .refine(

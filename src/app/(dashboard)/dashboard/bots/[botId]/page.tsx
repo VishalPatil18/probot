@@ -119,6 +119,12 @@ export default async function BotDetailPage({
           >
             Leads →
           </Link>
+          <Link
+            href={`/dashboard/bots/${bot.id}/settings`}
+            className="rounded-xl border border-border-base bg-white px-3 py-2 font-semibold hover:bg-neutral-50"
+          >
+            Settings →
+          </Link>
         </nav>
       </section>
 

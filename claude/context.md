@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **Stage 6 Slice 6.4 complete** — Stages 1–5 shipped end-to-end (BYO-key chat, PDF ingestion, RAG, multi-tenant public chat, embeddable widget). Slices 6.1–6.3 laid the schema, the API endpoints, and the dashboard UI. Slice 6.4 (current) closes the user-visible Stage 6 loop: the recruiter-side in-chat lead-capture card (appears after the 3rd assistant reply, dismissable, posts to the slice-6.2 anonymous CORS-public `/leads` endpoint) and the owner-side dashboard notification bell (30s polling with Page Visibility API pause, click-to-mark-read + navigate, mark-all-read footer). Chat API extended to return `{ reply, conversationId? }` so the card can include `conversationId` for idempotent dedupe. 588/588 tests, build green. Slice 6.5 (settings page + knowledge UI) is the final Stage 6 slice. **Earlier status note (kept for context):** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **STAGE 6 COMPLETE** — Stages 1–6 shipped end-to-end. Slice 6.5 closes Stage 6 with the bot settings page (editable name/headline/personality/suggested questions via widened PATCH endpoint) + knowledge management UI (list sources, drag-drop PDF upload, per-source delete with a design-system ConfirmDialog modal, reprocess all). Full Stage 6 feature set: schema + chat persistence (6.1), ten API endpoints (6.2), dashboard UI with overview/conversations/leads/CSV (6.3), in-chat lead capture + notification bell with 30s polling (6.4), settings + knowledge management (6.5). 628/628 tests, build green. Next: Stage 7 (open-source hardening, OAuth + email verification + password reset, Redis-backed rate limiting, GDPR flows, landing page, self-host packaging, structured logging, monitoring). **Earlier status note (kept for context):** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -1434,3 +1434,110 @@ Total: 10 new source files + 6 test files + 5 updated source files. 588/588 test
 - Notification dropdown clicks navigate to `/dashboard/bots/[botId]/leads`, not directly to the specific lead. A "?highlight=leadId" query param + scroll-and-flash on the leads page would be a small UX upgrade.
 - Bell polling cadence is hardcoded at 30s. Per-user preference (or per-deployment env var) could land in Stage 7 once we have a preferences surface.
 - Slice 6.5 (final Stage 6 slice) wires the settings page: editable name/headline/personality/suggested questions + reuse of the Bot Factory dropzone for knowledge sources. After 6.5, Stage 6 is a complete product loop and we move to Stage 7's launch-prep work.
+
+---
+
+### 2026-06-20 06:38 - Stage 6 Slice 6.5: settings page + knowledge management UI (Stage 6 COMPLETE)
+
+**What was asked to do:** Ship the final Stage 6 slice — the bot settings page that lets owners edit identity (name, headline, personality, suggested questions) via PATCH, plus the dashboard-side knowledge management UI (list sources, drag-drop upload, per-source delete with a design-system confirmation modal, "Reprocess all"). After this slice, Stage 6 is a complete product loop: BYO-key chat → ingestion → RAG → multi-tenant public chat → embeddable widget → analytics + lead capture + notifications + editable settings. Plan §6 is done.
+
+**Locked decisions before any code (Q1-Q9):** Q1 dedicated `KnowledgeManager` component for the dashboard (no Bot-Factory wizard extraction — the wizard's "create new bot" copy doesn't fit "manage existing knowledge"). Q2 whole-form Save button at the bottom of the identity form — explicit, no surprises. Q3 chip-based suggested-questions editor matching the Bot Factory affordance but as its own component. Q4 `window.confirm`-style confirmation flow, BUT styled per the design system — built a `ConfirmDialog` component (native window.confirm cannot be themed). Q5 inline "Reprocessed N tokens" status next to the button. Q6 Bot Factory radio cards for personality (richer than a select for the dashboard surface). Q7 whole-form Save (single PATCH per click). Q8 drag-and-drop upload zone (parity with Bot Factory's dropzone UX). Q9 single-pass slice.
+
+**What I did:**
+
+_Schema + route widening:_
+
+- `src/lib/bots/schemas.ts` — widened `botPatchInput` from `{themeColor?}` (slice 5) to `{name?, headline?, personality?, suggestedQuestions?, themeColor?}`. Each field independently optional; the `.refine()` "must include at least one field" check stays. `name` is `.trim().min(1).max(100)`; `headline` is `.transform(trim).max(120)` so whitespace-only PATCHes can't leave blank-looking strings in the DB; `personality` is the `PERSONALITY_PRESETS` enum; `suggestedQuestions` is the bounded array (max 6, each ≤ 200 chars).
+- `src/app/api/bots/[botId]/route.ts` — PATCH handler unpacks the five whitelisted fields from `parsed.data` and builds the SET payload via explicit conditional assignment. The Zod schema IS the mass-assignment whitelist: fields like `userId`, `isActive`, `contextText`, `emailVerified` are not in `botPatchInput` so they can never reach the SET object even if a hostile client sends them. Returning shape extended to include all four newly-editable fields.
+- `src/app/api/bots/[botId]/route.test.ts` — extended from 6 to 13 specs: each new field validates (happy path, name>100, empty name, bad personality enum, >6 suggested questions, name+headline PATCH, personality+suggestedQuestions PATCH, settings mass-assignment regression).
+
+_Reusable components (4 new):_
+
+- `src/components/dashboard/ConfirmDialog.tsx` — design-system styled modal. `role="dialog"`, `aria-modal="true"`, ESC to cancel, backdrop **click** (not mousedown — review fix; mousedown would close on accidental drag-out from inner panel). `destructive` prop swaps the confirm button to rose-600 for delete actions. Confirm button auto-focuses for keyboard flow. 7 specs.
+- `src/components/dashboard/SuggestedQuestionsEditor.tsx` — chip-based add/remove. Add via button or Enter. Cap at 6 with input + button disabled state at the cap. **Dedupe with explicit "Already in the list" hint** (review fix — silent dedupe was a HIGH-flagged UX defect; users typed something, hit Add, and nothing visible happened). Chip key is the question value itself (not `idx-q` composite — review fix; values are deduped so the value alone is a stable key). 8 specs.
+- `src/components/dashboard/BotSettingsForm.tsx` — whole-form Save with diff-based PATCH (only sends changed fields, saves DB write churn + cleaner audit trail). Uses Bot Factory radio cards for personality (sr-only radio + visual `<label>` styling, accessible via keyboard arrows). State seeded from props once at mount — **intentionally** does NOT sync state from changed initial* props mid-edit (would clobber the user's in-flight typing if the parent server-component re-renders mid-session). `router.refresh()` on success so the page's RSC tree picks up the new values. Saved! transient clears after 1.5s. 7 specs.
+- `src/components/dashboard/KnowledgeManager.tsx` — fetches `GET /api/bots/[botId]/knowledge` on mount, renders source list with name + type + chunk count + token count (formatted as "9.3K tokens" for readability). Drag-and-drop OR click-to-choose PDF upload — drops non-PDF files with an inline error. Per-source delete via `<ConfirmDialog destructive>`. "Reprocess all" button hits `/knowledge/reprocess` and shows transient "Reprocessed (14,551 tokens)." status. Empty state when no sources. 7 specs.
+
+_Page + nav (2 new/updated):_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` — server component, standard `findFirst({where: and(eq(bots.id), eq(bots.userId))})` → `notFound()` tenancy pattern (same as the other slice-6.3 sub-routes). Renders two sections: Identity → `<BotSettingsForm>`; Knowledge sources → `<KnowledgeManager>`. Defense-in-depth fallback to "professional" when the DB stores an unknown personality string (with a comment explaining this should be unreachable since `PERSONALITY_PRESETS` is Zod-enforced at create + PATCH). 4 specs.
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — added "Settings →" link to the sub-nav strip next to Conversations / Leads.
+
+_Code-review pass (1 HIGH + 1 MEDIUM + 2 LOW fixes applied; 1 HIGH skipped as incorrect analysis):_
+
+- **HIGH applied: silent dedupe in SuggestedQuestionsEditor.** Users typed a duplicate question, hit Add, the input cleared, and nothing visible happened. Added a "Already in the list" hint that surfaces beside the "X of 6 questions" counter so the user knows why their Add appeared to do nothing.
+- **HIGH skipped: stale initial-props state after router.refresh().** Reviewer claimed `dirty = name !== initialName` would be evaluated against frozen initials. Wrong — that expression is in the render body, evaluated each render with the latest prop value. After `router.refresh()` the server re-renders with new `initialName` and the client's `dirty` check correctly compares to the latest prop. Syncing state from props on prop change (the reviewer's suggested fix) would actually be worse — it would clobber the user's in-flight typed values whenever the parent re-renders mid-edit. Added a comment to document the intentional pattern.
+- **MEDIUM applied: ConfirmDialog backdrop drag-close.** Switched from `onMouseDown` to `onClick` on the backdrop. With mousedown, a user who drag-released from inside the panel onto the backdrop would dismiss the dialog. The `click` event by spec requires both press and release on the same target, so this edge case is impossible.
+- **MEDIUM applied: headline whitespace-only PATCH.** Added `.transform((v) => v.trim())` to `botPatchInput.headline` so `{ headline: "   " }` stores the empty string (the canonical "no headline" value) instead of three spaces that render as a blank-looking headline in the widget.
+- **MEDIUM acknowledged: file input value reset ordering safe.** Reviewer confirmed `e.target.value = ""` after `handleUpload(e.target.files)` is safe because `Array.from(files)` captures the FileList synchronously before the reset. Added a "do not swap these lines" comment to prevent a future maintainer from reordering.
+- **LOW applied: chip key composite → just `q`.** Dedupe enforcement at add-time means `q` alone is unique; the index component partially defeated React's reconciliation on remove-from-middle. Now `key={q}`.
+- **LOW applied: personality fallback comment.** Documented that the `isPersonality(bot.personality) ? … : "professional"` fallback is defense-in-depth — unreachable in practice since the value is Zod-enforced at every write path.
+
+**Files changed:**
+
+_Schema + route:_
+
+- `src/lib/bots/schemas.ts` — update — widened `botPatchInput` to 5 fields.
+- `src/app/api/bots/[botId]/route.ts` — update — SET-payload + returning extended.
+- `src/app/api/bots/[botId]/route.test.ts` — update — +7 specs (13 total).
+
+_Components:_
+
+- `src/components/dashboard/ConfirmDialog.tsx` — create — design-system modal.
+- `src/components/dashboard/ConfirmDialog.test.tsx` — create — 7 specs.
+- `src/components/dashboard/SuggestedQuestionsEditor.tsx` — create — chip editor.
+- `src/components/dashboard/SuggestedQuestionsEditor.test.tsx` — create — 8 specs.
+- `src/components/dashboard/BotSettingsForm.tsx` — create — diff-based whole-form save.
+- `src/components/dashboard/BotSettingsForm.test.tsx` — create — 7 specs.
+- `src/components/dashboard/KnowledgeManager.tsx` — create — list + drag-drop + delete + reprocess.
+- `src/components/dashboard/KnowledgeManager.test.tsx` — create — 7 specs.
+
+_Page + nav:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` — create — server component.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.test.tsx` — create — 4 specs.
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — update — added Settings → link.
+
+Total: 10 new source files + 6 test files + 3 updates. 628/628 tests pass (588 → 628, net +40), build green, new `/dashboard/bots/[botId]/settings` route registered (4.36 kB).
+
+**Decisions made:**
+
+- **Zod schema IS the mass-assignment whitelist.** Slice 5 established the pattern for PATCH (themeColor only); slice 6.5 widens to 5 fields with the same shape. Fields not in `botPatchInput` literally cannot reach the SET object — there's no per-field `delete body.x` denylist that could be forgotten.
+- **Trim `headline` server-side, not client-side.** Client-side trim is bypassable; server-side trim ensures the DB never holds whitespace-only padding. Same pattern Zod applies to email/username at registration.
+- **Diff-based PATCH client side.** Only fields that changed go in the body. Cleaner audit trail, smaller request bodies, and the `.refine()` "at least one field" check is naturally satisfied (if nothing changed, Save is disabled).
+- **Whole-form Save over per-section saves.** Two save buttons (Identity, Suggested questions) create "did the second save actually happen?" anxiety. One button keeps mental model simple.
+- **Design-system `ConfirmDialog` over `window.confirm`.** Native `window.confirm` cannot be themed — looks out of place against the dashboard. Building the modal is ~80 lines and reusable for any future destructive action.
+- **`onClick` on backdrop, not `onMouseDown`.** Click requires press + release on the same target by HTML spec, so accidental drag-out from inner panel doesn't dismiss. Snappier-feeling `mousedown` is the wrong tradeoff for destructive flows.
+- **State seeded from props once, not synced on prop change.** Edit forms hold user input; parent re-renders with new initial values are expected (e.g. after `router.refresh()`), but the user's typed-but-unsaved input must NOT be clobbered. The `dirty` check compares to the latest prop value in the render body, so subsequent edits remain correctly diffed against the fresh initials.
+- **Personality fallback to "professional", not throw.** A direct-DB write that leaves an unknown personality value would otherwise crash the page render. The fallback degrades gracefully — UI shows "Professional", first save writes the validated value back, the row heals silently.
+- **Dedupe with visible hint.** Users who type a duplicate suggested question and hit Add deserve an answer for why the input cleared but the chip list didn't grow. A `role="status"` hint is one line and removes the entire "did Add work?" confusion.
+- **Drag-and-drop AND click-to-choose.** Filtering dropped files to `application/pdf` only prevents a 415 round-trip when someone drags a `.txt` or image; the inline error guides them to the right file type.
+
+**Stage 6 closeout — what works after this slice:**
+
+- BYO-key chat with multi-provider abstraction (Stage 1).
+- PDF + text ingestion with chunking + per-bot context cap (Stage 2).
+- RAG with optional embedding key (Stage 3).
+- Public multi-tenant chat at `/u/<username>/chat` + onboarding + avatars (Stage 4).
+- Embeddable widget with Shadow DOM + theme color + signature badge (Stage 5).
+- Stage 6 complete loop:
+  - 6.1: schema + chat persistence (conversations + messages now actually written).
+  - 6.2: 10 API endpoints (analytics, conversations, leads, notifications).
+  - 6.3: dashboard UI (overview, sub-routes, transcript viewer, CSV export).
+  - 6.4: in-chat lead capture + notification bell with 30s polling.
+  - 6.5: settings page + knowledge management UI.
+
+**Stage 6 limitations (resolved in Stage 7):**
+
+- No persistent rate limits (in-memory only). Stage 7 Redis layer fixes this.
+- No OAuth, no email verification / password reset. Stage 7.
+- No landing page, no GDPR flows, no self-host packaging. Stage 7.
+- No structured logger (still `console.warn` for swallow-and-log paths). Stage 7.
+
+**Open questions / follow-ups:**
+
+- The settings page edits 4 identity fields. `contextText` (the manually-typed text block from the Bot Factory) is intentionally NOT editable here — that field is derived from the `knowledge_base` chunks via `assembleAndSaveBotContext`. If a user wants to edit the manual text block specifically, they go back to the Bot Factory wizard. Acceptable; the KnowledgeManager surface covers the "manage knowledge" need.
+- No bulk-delete in KnowledgeManager — each source is deleted one at a time. Acceptable for typical bot counts (1-5 PDFs); add multi-select if users start complaining.
+- The reprocess button's "X tokens" status is transient (stays until next action). A persistent "last reprocessed at" timestamp would be nice but isn't blocking.
+- `BotSettingsForm` doesn't expose `themeColor` (lives on the bot detail page via `<ThemeColorPicker>`). Could consolidate but the detail page already shows it in context with the embed snippet preview.
+- Next step is Stage 7. The build plan describes hardening, OAuth, landing page, GDPR, self-host packaging, monitoring, structured logger. That's a different beast — multiple parallel workstreams; will need a fresh planning pass.

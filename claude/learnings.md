@@ -674,3 +674,89 @@ Visibility is the highest-signal lever — most "tab in background" idle is obse
 For a polling loop where the next iteration will retry, yes. A single failed poll due to a transient network glitch shouldn't reset the badge to a stale zero, shouldn't pop a toast, shouldn't trigger a retry storm. The next successful poll will reconcile. **The general rule for idempotent polling loops: log on failure, don't surface it; let the next iteration heal.** Pop-up errors are for user-initiated actions where the user is waiting for a result. Background polls are silent successes and silent failures with eventual consistency.
 
 ---
+
+### Widening A Mass-Assignment Whitelist Without Reintroducing The Vulnerability (Stage 6 Slice 6.5)
+
+> Slice 5 shipped a PATCH endpoint that accepted only `themeColor`. Slice 6.5 widens it to 5 fields (name, headline, personality, suggestedQuestions, themeColor). How do you widen the surface without losing the mass-assignment defense?
+
+Two patterns. **The wrong one: write a "stripped body" function that deletes fields you don't want.** That's a denylist — and denylists are a maintenance trap. Tomorrow someone adds a new column to the `bots` table — `customDomain`, say. The PATCH handler's `delete body.userId; delete body.isActive; delete body.contextText` block silently doesn't know about it. Now `customDomain` is mass-assignable. The pattern fails open at every schema migration.
+
+**The right one: schema as whitelist, route as schema-consumer.** The Zod object defines exactly the fields the endpoint accepts. Anything not in the schema is dropped by `safeParse` — not "silently dropped," but "never touches the SET payload because the route only reads `parsed.data.X` for X in the schema." Adding a new editable field is a two-place edit: add it to the schema, add the conditional assignment in the route. Missing either step means the field doesn't update — a loud failure mode. Forgetting to add a NEW column (the dangerous case from above) means the schema doesn't list it, so it's not assignable. The system fails closed.
+
+Concretely:
+
+```ts
+// schema.ts
+export const botPatchInput = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  headline: z.string().transform(v => v.trim()).max(120).optional(),
+  personality: z.enum(PERSONALITY_PRESETS).optional(),
+  suggestedQuestions: z.array(z.string().max(200)).max(6).optional(),
+  themeColor: themeColorSchema.optional(),
+}).refine(v => Object.values(v).some(x => x !== undefined),
+  "PATCH body must include at least one field");
+
+// route.ts
+const parsed = botPatchInput.safeParse(body);
+if (!parsed.success) return 400;
+const { themeColor, name, headline, personality, suggestedQuestions } = parsed.data;
+const set: Record<string, unknown> = {};
+if (themeColor !== undefined) set.themeColor = themeColor;
+if (name !== undefined) set.name = name;
+if (headline !== undefined) set.headline = headline;
+if (personality !== undefined) set.personality = personality;
+if (suggestedQuestions !== undefined) set.suggestedQuestions = suggestedQuestions;
+// Note: the destructured variable names ARE the whitelist. There's no
+// way to land userId, isActive, contextText in `set` without explicitly
+// adding them to the destructure AND a conditional assignment.
+```
+
+The shape is grep-friendly: searching for `set.<columnName>` shows you every field that can be PATCHed. Searching for "patchInput" or "Patch" lists every schema that defines a write surface. A future audit asking "can a user PATCH their own `userId`?" gets a binary answer from the schema definition. With the denylist pattern, the answer is "trace control flow and hope you didn't miss a code path."
+
+> Why server-side `.trim()` on `headline` instead of client-side?
+
+Defense at the boundary nearest the data store. Client-side trim works for honest clients but is bypassable — a hostile actor crafts the request directly without going through the React form. Server-side trim guarantees the DB never holds `"   "` regardless of what the client did. The same principle applies to email lowercasing for dedupe keys, username normalization, URL canonicalization. **Trust the request, but enforce invariants on the way in.**
+
+> Should the schema reject `headline: ""` outright?
+
+Empty string is the canonical "no headline" value — the way the UI signals "clear this field." Rejecting `""` would force the client to send something like `null` or omit the field entirely, both of which are weird semantics for an editable text field. The trim transform converts whitespace-only padding to empty, the column allows empty, and the widget renders no headline section when the value is empty. Three consistent layers without forcing the client to know special sentinel values.
+
+---
+
+### `onClick` vs `onMouseDown` For Modal Backdrop Dismissal (Stage 6 Slice 6.5)
+
+> The ConfirmDialog modal closes when the user clicks the backdrop (the darkened area around the panel). The first draft used `onMouseDown`; the reviewer flagged a subtle UX bug. What's the difference?
+
+`onMouseDown` fires the moment the user presses the mouse button. `onClick` fires only after a press-then-release pair where both events happen on the same target. This distinction matters for backdrop dismissal because users sometimes click-and-drag — they start a click inside the modal panel, accidentally drag the cursor onto the backdrop, then release. With `onMouseDown` on the backdrop, the dismissal fires the moment they press the button anywhere on the backdrop — including the case where they pressed inside the panel and dragged out. Wait, let me reread the actual failure case: with `onMouseDown` on the backdrop, the press inside the panel doesn't trigger backdrop dismissal because the press target is the panel. But: press on backdrop → drag onto panel → release — the `mousedown` fired with `target = backdrop`, so dismissal triggers IMMEDIATELY on press, even though the user dragged into the panel before releasing. That's the bug. A user who pressed the backdrop intending to dismiss, then second-guessed mid-click and dragged into the panel, gets dismissed anyway.
+
+`onClick` waits for the full press-release pair on the same target. If the user presses on the backdrop and releases on the panel, no click event fires on the backdrop. If they press on the panel and release on the backdrop, no click fires on the backdrop either. Only press-and-release-both-on-backdrop dismisses.
+
+**The generalizable rule: for destructive or commit-style actions, use `onClick`. For UI state transitions where the user's intent is unambiguous from the press alone, `onMouseDown` is faster-feeling.** Examples of the latter: opening a dropdown menu (press is enough — the user is engaging the trigger), starting a drag operation. Examples of the former: dismissing a modal, submitting a form, firing a destructive action. The half-second of "feels faster" from `onMouseDown` is not worth the "I clicked and the modal dismissed before I could change my mind" experience.
+
+> The pattern `e.target === e.currentTarget` — what's actually being compared?
+
+`currentTarget` is the element the handler is bound to (the backdrop `<div>`). `target` is the deepest element the event originated on (could be the backdrop, or any descendant — the panel, the buttons, the title text). The equality check narrows "anywhere in the backdrop subtree" to "the backdrop itself." Without it, clicking the panel's title text would bubble up to the backdrop's handler and dismiss the dialog — because the click event propagated. The check is the standard "did this event originate on me, not on a descendant?" guard.
+
+You can also write this as `e.target !== panelRef.current` (if you have a ref to the panel) or use `stopPropagation()` on the panel's onClick. Both work; the `target === currentTarget` form is the most compact and doesn't require setting up refs.
+
+---
+
+### State Seeded From Props vs. Synced From Props — Edit Forms Want The Former (Stage 6 Slice 6.5)
+
+> The settings form takes `initialName`, `initialHeadline`, etc. as props and seeds `useState` with them. A reviewer suggested adding `useEffect([initialName], () => setName(initialName))` to sync state when the parent re-renders with new props (e.g. after `router.refresh()`). Why is that the wrong call for an edit form?
+
+Two competing failure modes. **Failure mode A (the synced-from-props pattern):** the user starts editing the name field, types halfway through "Jane Doe", and the parent server-component re-renders for some unrelated reason — maybe a sibling component fired a router.refresh(), maybe a sub-route invalidated its data. The new render passes the SAME `initialName="Jane"` prop (since nothing was saved yet). With a sync-from-props effect, `setName("Jane")` runs and clobbers "Jane D" — the user's typed-but-not-yet-saved input vanishes. **Failure mode B (the seed-once pattern):** the user saves successfully, the parent re-renders with the new `initialName="Jane Doe"`, but the local `name` state is also "Jane Doe" (the user just typed it). State and prop agree; `dirty` is false. The user starts a second edit, types "Jane Doe Updated", `dirty` is true again because the render-body comparison `name !== initialName` uses the latest prop value. No bug. Edit B continues working.
+
+The reviewer's concern was that "state holds the old value forever after the first save." That's incorrect because `dirty` is computed in the render body each render — it always sees the latest `initialName` prop. The state holds the user's current typing; the prop holds the server's last-saved value; the diff between them is `dirty`. Each render evaluates `dirty` fresh.
+
+**The general principle:** an edit form's state IS the user's draft. It should persist across parent re-renders even when the parent's props update. The user has typed something; the form's job is to remember that until the user explicitly discards (cancel) or commits (save). Treating the form as a one-way derived view of props is wrong for editing surfaces — that's the read-only view pattern, not the editor pattern. The correct rule: **read-only views sync from props every render; edit forms seed from props once and persist user input until save or unmount.**
+
+> When IS sync-from-props the right pattern?
+
+When the props ARE the canonical state — read-only displays, derived dashboards, status indicators that follow server state with no user input. Examples: a notification badge whose count is "whatever the server says." Examples of the wrong pattern: any form with user-typed input. The dividing line is whether the user can modify the displayed value. If yes, the value is shared between user and server; the form needs an explicit save action to commit user changes, and the state must persist across re-renders. If no, syncing from props is the simpler, correct pattern.
+
+> The hard navigation pattern (router.push instead of router.refresh) was suggested as an alternative — what's the tradeoff?
+
+`router.push` unmounts the current component and mounts a fresh instance, so `useState` initializers run again with the new props. The user's draft is gone — which is fine after a successful save (nothing to preserve) but bad mid-edit. `router.refresh()` re-fetches the RSC tree and patches the DOM, preserving client state. For "after a save, show the updated server values" the choice between them is mostly aesthetic — both work, push is slower (full mount), refresh is faster (state preserved). For "user is mid-edit and we need fresh server data" — neither is right; that's a sync conflict that needs a UI-level resolution (warn the user, give them a merge view). The current pattern (refresh after save) is the standard happy-path choice.
+
+---
