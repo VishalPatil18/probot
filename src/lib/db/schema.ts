@@ -175,11 +175,13 @@ export const knowledgeBase = pgTable(
 ).enableRLS();
 
 // conversations
-// One row per recruiter session on a bot. Created in Stage 4 (plan.md §4.5)
-// for the chat-logging story that lands in Stage 6 — no code writes to this
-// table yet. `session_id` is a client-supplied opaque ID (UUID generated in
-// the chat UI per visit). `recruiter_ip` is INTENTIONALLY omitted; raw IPs
-// are PII and the GDPR / consent surface lives in Stage 7.
+// One row per recruiter session on a bot. Created in Stage 4 (plan.md §4.5);
+// chat persistence writes land in Stage 6 (slice 6.1). `session_id` is a
+// client-supplied opaque UUID (generated per browser tab via sessionStorage
+// in the chat UI). `recruiter_ip` is INTENTIONALLY omitted; raw IPs are PII
+// and the GDPR / consent surface lives in Stage 7. `recruiter_email` is
+// populated by the lead-capture flow in slice 6.4 for quick dashboard
+// lookups; the canonical lead record lives in `leads`.
 export const conversations = pgTable(
   "conversations",
   {
@@ -188,6 +190,7 @@ export const conversations = pgTable(
       .notNull()
       .references(() => bots.id, { onDelete: "cascade" }),
     sessionId: varchar("session_id", { length: 255 }).notNull(),
+    recruiterEmail: varchar("recruiter_email", { length: 255 }),
     messageCount: integer("message_count").notNull().default(0),
     startedAt: timestamp("started_at", { mode: "date", withTimezone: false })
       .notNull()
@@ -201,6 +204,13 @@ export const conversations = pgTable(
   },
   (table) => ({
     botIdIdx: index("conversations_bot_id_idx").on(table.botId),
+    // Stage 6: dashboard lists conversations ordered by recency per bot.
+    // Composite (bot_id, started_at DESC) covers both the equality filter
+    // and the ORDER BY in a single index scan.
+    botStartedIdx: index("conversations_bot_started_idx").on(
+      table.botId,
+      table.startedAt.desc(),
+    ),
     // Unique on (bot_id, session_id) so concurrent tabs on the same bot for
     // the same recruiter cannot double-insert and skew the Stage 6 metrics.
     botSessionUnique: uniqueIndex("conversations_bot_session_unique").on(
@@ -233,11 +243,85 @@ export const messages = pgTable(
     conversationIdIdx: index("messages_conversation_id_idx").on(
       table.conversationId,
     ),
+    // Stage 6: conversation transcript view scans all messages for a
+    // conversation in chronological order. Composite (conversation_id,
+    // created_at) covers both predicates in one index.
+    convCreatedIdx: index("messages_conv_created_idx").on(
+      table.conversationId,
+      table.createdAt,
+    ),
     // Lock the role to the allowed values at the DB level so a typo
     // ('assitant') in some future writer can't silently corrupt analytics.
     roleCheck: check(
       "messages_role_check",
       sql`${table.role} IN ('user', 'assistant', 'system', 'tool')`,
+    ),
+  }),
+).enableRLS();
+
+// leads (Stage 6 §6.1)
+// Captured recruiter emails per bot. `conversation_id` is ON DELETE SET NULL
+// (not cascade) so a GDPR-driven conversation purge in Stage 7 still
+// preserves the lead — the email is business-valuable even if the chat log
+// is gone. `context_summary` is filled by the lead-capture client in slice
+// 6.4 with a truncated concatenation of the first 2-3 recruiter messages
+// (deterministic + free; LLM-generated summaries would violate CLAUDE.md §7).
+export const leads = pgTable(
+  "leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(() => conversations.id, {
+      onDelete: "set null",
+    }),
+    email: varchar("email", { length: 255 }).notNull(),
+    contextSummary: text("context_summary"),
+    capturedAt: timestamp("captured_at", {
+      mode: "date",
+      withTimezone: false,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    botCapturedIdx: index("leads_bot_captured_idx").on(
+      table.botId,
+      table.capturedAt.desc(),
+    ),
+  }),
+).enableRLS();
+
+// notifications (Stage 6 §6.6)
+// In-app notifications surfaced by the dashboard bell. No email transport in
+// Stage 6 — that lands post-Stage 7 once Resend is wired for auth emails.
+// `kind` is extensible; only 'lead_captured' is emitted in Stage 6. CHECK
+// constraint mirrors the messages.role pattern so a typo cannot silently
+// corrupt the unread badge query. Partial index on `read_at IS NULL` keeps
+// the unread-count query O(unread) instead of O(total notifications).
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").references(() => bots.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 40 }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    readAt: timestamp("read_at", { mode: "date", withTimezone: false }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userUnreadIdx: index("notifications_user_unread_idx")
+      .on(table.userId, table.createdAt.desc())
+      .where(sql`${table.readAt} IS NULL`),
+    kindCheck: check(
+      "notifications_kind_check",
+      sql`${table.kind} IN ('lead_captured')`,
     ),
   }),
 ).enableRLS();
@@ -256,3 +340,7 @@ export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;
 export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;
+export type Lead = typeof leads.$inferSelect;
+export type NewLead = typeof leads.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

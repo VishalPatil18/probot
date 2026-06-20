@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **Stage 2 complete** - PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **Stage 6 Slice 6.1 complete** — Stages 1–5 shipped end-to-end (BYO-key chat, PDF ingestion, RAG, multi-tenant public chat, embeddable widget). Slice 6.1 lays the Stage 6 foundation: `leads` + `notifications` tables, `recruiter_email` on `conversations`, dashboard-friendly composite indexes, and the previously-dormant `conversations` / `messages` tables now actually receive writes from the chat orchestrator (UPSERT + transactional 2-row insert per turn, keyed by a per-tab `sessionStorage` UUID generated client-side in `ChatWindow`). Persistence failures are warn-logged but never block the user-facing reply. 450/450 tests, build green. **Earlier status note (kept for context):** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -1067,3 +1067,84 @@ _Review fix:_
 - Bot detail page has no "Delete bot" action. Stage 6 will add it as part of the analytics surface.
 
 ---
+
+### 2026-06-19 21:19 - Stage 6 Slice 6.1: schema additions + chat persistence wiring
+
+**What was asked to do:** Ship Slice 6.1 of Stage 6 from `plan.md` §6 — the foundation work: add the `leads` and `notifications` tables, extend `conversations` with `recruiter_email` and the dashboard-friendly composite indexes, and wire the chat orchestrator to actually write `conversations` + `messages` rows so the analytics surface in slices 6.2–6.5 has data to render.
+
+**Locked decisions before any code (Q1-Q9):** Q1 chat persistence is in scope for Stage 6 (the hidden prerequisite — Stage 4 created the tables but no code writes to them, so analytics would render zeros otherwise). Q2 anonymous-recruiter sessionId is a per-tab UUID in `sessionStorage` (no cookie → no consent surface, defers to Stage 7). Q3 lead-capture card shows after the 3rd assistant reply, exactly once per conversation, dismissable (slice 6.4). Q4 notification bell is global on every dashboard page (slice 6.3). Q5 lead `context_summary` is the concatenated first 2–3 recruiter messages truncated to ~300 chars — deterministic + free; LLM-summarization is rejected per CLAUDE.md §7 zero-cost (slice 6.4). Q6 CSV columns: `captured_at, email, bot_name, context_summary, conversation_id` (slice 6.3). Q7 bot detail surface becomes sub-routed: `/dashboard/bots/[botId]/{conversations,leads,settings}` (slices 6.3 + 6.5). Q8 settings page knowledge management reuses the Bot Factory dropzone component (slice 6.5). Q9 slice plan: 6.1 schema + chat persistence (this slice), 6.2 API endpoints, 6.3 dashboard pages, 6.4 lead capture + bell + polling, 6.5 settings + knowledge UI.
+
+**What I did:**
+
+_Schema additions (`src/lib/db/schema.ts`):_
+
+- `conversations` extended with `recruiterEmail: varchar("recruiter_email", { length: 255 })` (nullable). Comment block updated to explain the slice-6.4 lead-capture role and reiterate that the `leads` table is the canonical record.
+- `conversations` gets a new composite index `conversations_bot_started_idx` on `(bot_id, started_at DESC)` — covers the dashboard list-by-recency query in one scan. The existing single-column `botIdIdx` stays (negligible cost; equality lookups can still pick the smaller index).
+- `messages` gets a new composite index `messages_conv_created_idx` on `(conversation_id, created_at)` — covers the transcript-viewer scan in one index, replacing what would otherwise be sort-on-heap after a single-column scan.
+- NEW `leads` table: `id`, `bot_id` (FK cascade), `conversation_id` (FK **SET NULL** — intentionally not cascade so a GDPR-driven conversation purge in Stage 7 still preserves the lead row; the email is business-valuable even if the chat log is gone), `email`, `context_summary` (nullable; filled by slice 6.4), `captured_at`. Composite index `leads_bot_captured_idx` on `(bot_id, captured_at DESC)`.
+- NEW `notifications` table: `id`, `user_id` (FK cascade), `bot_id` (FK cascade, nullable — supports system-level notifications that aren't bot-specific later), `kind` (varchar(40)), `payload` (jsonb), `read_at` (nullable; null = unread), `created_at`. CHECK constraint locks `kind` to the allowed set (`'lead_captured'` only for Stage 6, extensible). Partial index `notifications_user_unread_idx` on `(user_id, created_at DESC) WHERE read_at IS NULL` so the bell-badge unread count is O(unread), not O(total notifications).
+- Type exports added: `Lead`, `NewLead`, `Notification`, `NewNotification`.
+
+_Migration (`drizzle/0008_young_wolfpack.sql`):_
+
+- Generated via `npm run db:generate`. Verified contents: 2 CREATE TABLE statements, 1 ALTER TABLE ADD COLUMN (recruiter_email), 4 FK constraints in DO blocks (idempotent), 4 indexes (the 2 composites on existing tables + the partial-on-NULL on notifications + the bot+captured on leads), 1 CHECK constraint on `notifications.kind`. Fully additive — no schema migrations on existing data.
+
+_Chat persistence wiring (`src/app/api/chat/[botId]/route.ts`):_
+
+- Added `sql` to the `drizzle-orm` import (for the `messageCount + 2` increment expression) and `conversations`, `messages` to the `@/lib/db` import.
+- Zod input schema gained `sessionId: z.string().uuid()` — required. The reasoning is wired into the inline comment: the per-tab UUID lets the orchestrator UPSERT a single conversation row per recruiter visit so the dashboard analytics can coalesce turns.
+- After step 11 (sanitize output) and before the response, a new step 12 wraps the persistence work in a `db.transaction`. Inside: UPSERT into `conversations` keyed by the unique `(bot_id, session_id)` index — on conflict, bump `message_count` by 2 and refresh `last_message_at` to NOW. Returning `{ id: conversations.id }` so we can chain the messages insert. Then insert two `messages` rows (user + assistant) in the same transaction so partial writes are impossible at the Postgres level.
+- The whole persistence block is wrapped in `try/catch`. On error, `console.warn("[chat] conversation persistence failed", err)` — analytics persistence MUST NOT break the user-facing chat reply (the primary value), but a silent swallow would obstruct production incident debugging. The log channel matches the existing `[rag]` warn pattern used a few steps earlier for the analogous "fallback path on retrieval failure" case.
+
+_Browser sessionId helper (`src/lib/client/session-id-store.ts`):_
+
+- NEW module mirroring the `llm-key-store.ts` pattern. `isBrowser()` guard, try/catch around storage access, key `probot.chat.sessionId`. `getOrCreateSessionId()` is the single export — reads from `sessionStorage`, generates + persists a new UUID on miss, regenerates on empty string, falls back to a fresh UUID if `sessionStorage` throws (private mode / quota).
+- UUID generator: prefers `crypto.randomUUID()` when available (every modern browser + Node 14.17+). Fallback uses `crypto.getRandomValues` with explicit version+variant bit-setting per RFC 4122 — universally available wherever any `crypto` namespace exists. This replaces the original `Math.random` draft after a code-review flag: a guessable sessionId would let an adversary forge another recruiter's conversation key and pollute metrics.
+
+_Chat window wiring (`src/components/chat/ChatWindow.tsx`):_
+
+- Imports `getOrCreateSessionId`. Inside `sendMessage`, calls it once per turn (idempotent on the same tab so this is fine) and includes the result in the JSON body alongside `message`.
+
+_Tests:_
+
+- `src/app/api/chat/[botId]/route.test.ts` — extended the `@/lib/db` mock to expose `db.transaction(cb)` (invokes the callback with a stub `tx` that routes `tx.insert(table)` by call order: 1st → conversation chain, 2nd → messages chain), plus opaque `conversations` and `messages` identity objects. Added `resetPersistenceMocks()` called in `beforeEach`. `makeRequest()` and the Azure-flow `makeAzureRequest()` now inject the default `SESSION_ID` into the body so all pre-existing specs keep passing without churn. Two raw-Request specs got `sessionId` added to their body manually. 6 new specs in a `"conversation persistence (Stage 6)"` describe block: happy-path persists (asserts the convo UPSERT values + the messages array shape), missing-sessionId → 400, non-UUID sessionId → 400, persistence-transaction-throws still returns 200 with reply, rate-limit rejection means the transaction is never reached, sanitize-input rejection means the transaction is never reached. 24 → 30 specs in this file.
+- `src/components/chat/ChatWindow.test.tsx` — added `vi.mock("@/lib/client/session-id-store", ...)` with a stable `STABLE_SESSION_ID` constant. Updated the existing "no key in body" spec's equality assertion to include `sessionId`. Added a new spec asserting the sessionId is sent on every turn (two consecutive sends). 9 → 10 specs.
+- `src/lib/client/session-id-store.test.ts` — NEW. 5 specs covering happy path (UUID-v4 shape + sessionStorage persistence), idempotence across calls, reload-reuse (pre-seeded value is returned), empty-string regeneration, and the sessionStorage-throw fallback (monkey-patches `Storage.prototype.getItem`).
+
+_Code-review pass (1 HIGH + 1 MEDIUM fix applied):_
+
+- **HIGH: silent catch with no observability.** The original draft swallowed persistence errors with `catch {}` and no log. Even pre-Stage-7-logger, a `console.warn` is cheap and dramatically cuts incident-debugging time. Applied — log channel matches the project's existing `[rag]` swallow-and-warn pattern in the same file.
+- **MEDIUM: Math.random UUID fallback was guessable.** Replaced with `crypto.getRandomValues` + manual RFC 4122 version/variant bits. The fallback path is unreachable in any modern runtime, but a guessable session ID would let an adversary forge another recruiter's conversation key.
+- The reviewer also flagged "RLS-no-policies on the new tables" as MEDIUM. **Not applied** — this is the project's documented pattern (see schema comment on `users` lines 22-24): RLS is enabled with no policies so Supabase PostgREST `anon`/`authenticated` roles are denied by default; the app's `pg.Pool` connects as the table-owner role which is unaffected because we do NOT use `FORCE ROW LEVEL SECURITY`. All 7 existing tables follow this pattern; the 2 new ones match.
+- LOW findings (mock dispatches by call order, nullable-FK-with-cascade on notifications.botId) were acknowledged design choices in the review brief; not applied.
+
+**Files changed:**
+
+- `src/lib/db/schema.ts` — update — `recruiter_email`, 2 composite indexes, `leads` table, `notifications` table, 4 new type exports.
+- `drizzle/0008_young_wolfpack.sql` — create — generated migration (2 tables, 1 ALTER, 4 FKs, 4 indexes, 1 CHECK).
+- `src/app/api/chat/[botId]/route.ts` — update — `sessionId` Zod field, persistence transaction (step 12), `console.warn` on swallow, `sql` + `conversations`/`messages` imports.
+- `src/app/api/chat/[botId]/route.test.ts` — update — mock extension, `resetPersistenceMocks`, default `sessionId` injection, 6 new specs.
+- `src/lib/client/session-id-store.ts` — create — `getOrCreateSessionId` + crypto-grade UUID fallback.
+- `src/lib/client/session-id-store.test.ts` — create — 5 specs.
+- `src/components/chat/ChatWindow.tsx` — update — call `getOrCreateSessionId`, include in body.
+- `src/components/chat/ChatWindow.test.tsx` — update — mock the store, assert sessionId in body, 1 new spec.
+
+Total: 450/450 tests pass, build green.
+
+**Decisions made:**
+
+- **`leads.conversation_id ON DELETE SET NULL`, not CASCADE.** A GDPR-driven conversation purge in Stage 7 should not destroy the lead — the email is the business-valuable artifact, distinct from the chat log. Set-null preserves the lead while severing the reference.
+- **Per-tab `sessionStorage` over `localStorage` for sessionId.** Per-tab (vs. cross-tab) matches the analytics intent — different tabs from the same recruiter on the same bot are different conversations from the bot owner's perspective. Sessionstorage also has no cookie semantics, so the consent surface stays parked in Stage 7.
+- **Swallow + warn (not swallow-silent, not throw) on persistence failure.** Throwing would break the chat for an analytics-only failure. Silent would obstruct production debugging. `console.warn` is the cheap middle path until Stage 7 wires a structured logger.
+- **Composite indexes added; single-column kept.** The new `(bot_id, started_at DESC)` and `(conversation_id, created_at)` indexes cover the dashboard scans. Keeping the existing single-column indexes is ~7 KB per index and lets the Postgres planner pick whichever is best for equality lookups; not worth the migration noise to drop them.
+- **`notifications.kind` CHECK constraint at the DB level.** Mirrors the `messages.role` pattern. A typo (e.g., `'leads_captured'` instead of `'lead_captured'`) in some future writer would silently break the unread badge query; the CHECK turns that bug into a loud INSERT failure.
+- **Partial index `WHERE read_at IS NULL` on notifications.** The bell badge's hot query is "unread notifications for user X". Indexing only the unread rows keeps the structure tiny and the scan O(unread) — typically O(<10) — instead of O(all notifications ever).
+- **`Math.random` is unacceptable for security-adjacent identifiers, even in fallback paths.** A reviewer-flagged MEDIUM that I would have shipped otherwise: even though `crypto.randomUUID` is universally available, the fallback path is what gets exercised on dusty WebViews — and a guessable sessionId is a non-trivial pollution vector.
+
+**Open questions / follow-ups:**
+
+- The `messageCount += 2` increment assumes every chat turn produces exactly one user + one assistant message. True for the current non-streaming `complete()` path. When streaming lands (out of Stage 1 scope, deferred to Stage 7+), the message-count math will need to change to count assistant-side-events differently.
+- `tokens_used` on `messages` is left NULL. Provider response shapes diverge (`usage` field availability varies), and the dashboard doesn't render this yet. Wire it in slice 6.2 if cheaply available from `provider.complete()`.
+- No integration test that exercises the migration against a real Postgres. Drizzle's generator is deterministic but a `db:push` against a Supabase-style instance is a reasonable manual QA gate before merging.
+- The schema-wide deprecation hints on `pgTable(name, columns, extraConfig)` apply to every table in the file (pre-existing). Migration to the new `pgTable(name, columns, (table) => [...])` signature is a clean refactor opportunity but explicitly out of scope for this surgical slice.
+- Slice 6.2 (next) wires the `/analytics`, `/conversations`, `/leads`, `/notifications` API endpoints on top of this foundation.

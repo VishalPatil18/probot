@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -25,13 +25,18 @@ import { sanitizeInput } from "@/lib/ai/sanitize-input";
 import { sanitizeOutput } from "@/lib/ai/sanitize-output";
 import type { Personality } from "@/lib/bots/schemas";
 import { PERSONALITY_PRESETS } from "@/lib/bots/schemas";
-import { bots, db, users } from "@/lib/db";
+import { bots, conversations, db, messages, users } from "@/lib/db";
 import { retrieveRelevant } from "@/lib/rag/retrieve";
 
 const MAX_BODY_BYTES = 16_384;
 
 const chatInput = z.object({
   message: z.string().min(1).max(8000),
+  // Stage 6: client-generated per-tab UUID from sessionStorage. Required
+  // so the chat orchestrator can UPSERT a `conversations` row and persist
+  // the user/assistant turn into `messages` for the dashboard analytics
+  // surface. See claude/plan.md §6.
+  sessionId: z.string().uuid(),
 });
 
 function isPersonality(value: string): value is Personality {
@@ -245,6 +250,45 @@ export async function POST(
   // 11. Output sanitize
   const reply = sanitizeOutput(providerReply);
 
-  // 12. Done
+  // 12. Persist conversation + messages (Stage 6 analytics).
+  // UPSERT on (bot_id, session_id) — concurrent tabs on the same bot for
+  // the same recruiter coalesce into one conversation. Both message inserts
+  // happen in the same transaction so partial writes can't skew metrics.
+  // Wrapped in try/catch so analytics persistence MUST NOT break the
+  // user-facing chat reply (the primary value). Logged via Stage 7 once a
+  // structured logger lands.
+  try {
+    await db.transaction(async (tx) => {
+      const [convo] = await tx
+        .insert(conversations)
+        .values({ botId: params.botId, sessionId: parsed.data.sessionId })
+        .onConflictDoUpdate({
+          target: [conversations.botId, conversations.sessionId],
+          set: {
+            messageCount: sql`${conversations.messageCount} + 2`,
+            lastMessageAt: new Date(),
+          },
+        })
+        .returning({ id: conversations.id });
+      if (!convo) return;
+      await tx.insert(messages).values([
+        {
+          conversationId: convo.id,
+          role: "user",
+          content: sanitized.message,
+        },
+        { conversationId: convo.id, role: "assistant", content: reply },
+      ]);
+    });
+  } catch (err) {
+    // Swallow — analytics persistence never blocks chat. Log so operators
+    // can still spot pool exhaustion / missing migrations / etc. before
+    // Stage 7 wires a structured logger. Matches the [rag] warn pattern
+    // used above for the analogous "fallback path on retrieval failure"
+    // case.
+    console.warn("[chat] conversation persistence failed", err);
+  }
+
+  // 13. Done
   return NextResponse.json({ reply });
 }

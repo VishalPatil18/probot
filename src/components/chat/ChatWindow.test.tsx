@@ -4,11 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getApiKeyMock = vi.fn();
 const getAzureCredsMock = vi.fn();
+const getSessionIdMock = vi.fn();
 const fetchMock = vi.fn();
+
+const STABLE_SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 vi.mock("@/lib/client/llm-key-store", () => ({
   getApiKey: () => getApiKeyMock(),
   getAzureCreds: () => getAzureCredsMock(),
+}));
+
+vi.mock("@/lib/client/session-id-store", () => ({
+  getOrCreateSessionId: () => getSessionIdMock(),
 }));
 
 import { ChatWindow } from "./ChatWindow";
@@ -33,6 +40,7 @@ describe("ChatWindow", () => {
   beforeEach(() => {
     getApiKeyMock.mockReset();
     getAzureCredsMock.mockReset();
+    getSessionIdMock.mockReset().mockReturnValue(STABLE_SESSION_ID);
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -69,7 +77,31 @@ describe("ChatWindow", () => {
     expect(headers["x-llm-api-key"]).toBe("sk-ant-leak-canary-9876543210");
     expect(init.body).not.toContain("sk-ant-leak-canary");
     const parsedBody = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(parsedBody).toEqual({ message: "tell me about her" });
+    expect(parsedBody).toEqual({
+      message: "tell me about her",
+      sessionId: STABLE_SESSION_ID,
+    });
+  });
+
+  it("includes the per-tab sessionId from the session-id store on every chat request", async () => {
+    getApiKeyMock.mockReturnValue("sk-ant-test-1234567890");
+    fetchMock.mockResolvedValue(jsonResponse(200, { reply: "ok" }));
+    const user = userEvent.setup();
+    render(<ChatWindow {...defaultProps} />);
+
+    await user.type(screen.getByRole("textbox"), "first turn");
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+    await user.type(screen.getByRole("textbox"), "second turn");
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(getSessionIdMock).toHaveBeenCalledTimes(2);
+    const bodies = fetchMock.mock.calls.map((call) => {
+      const [, init] = call as [string, RequestInit];
+      return JSON.parse(init.body as string) as { sessionId: string };
+    });
+    expect(bodies[0]?.sessionId).toBe(STABLE_SESSION_ID);
+    expect(bodies[1]?.sessionId).toBe(STABLE_SESSION_ID);
   });
 
   it("renders the assistant reply on a 200 and removes the suggestion strip", async () => {

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ProviderName } from "@/lib/ai/providers";
 import { getEmbeddingApiKey } from "@/lib/client/embedding-key-store";
 import { getApiKey, getAzureCreds } from "@/lib/client/llm-key-store";
+import { getOrCreateSessionId } from "@/lib/client/session-id-store";
 
 import { LoadingAnimation } from "./LoadingAnimation";
 import { MessageBubble } from "./MessageBubble";
@@ -94,11 +95,16 @@ export function ChatWindow({
       headers["x-embedding-api-key"] = embeddingKey;
     }
 
+    // Stage 6 §6.1: per-tab session ID lets the server UPSERT a
+    // `conversations` row and coalesce multiple turns from the same tab
+    // into a single conversation for dashboard analytics.
+    const sessionId = getOrCreateSessionId();
+
     try {
       const res = await fetch(`/api/chat/${botId}`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, sessionId }),
       });
 
       if (res.status === 429) {
