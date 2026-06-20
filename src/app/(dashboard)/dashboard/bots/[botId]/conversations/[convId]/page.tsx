@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { TranscriptMessage } from "@/components/dashboard/TranscriptMessage";
@@ -50,14 +49,7 @@ export default async function ConversationDetailPage({ params }: Props) {
   if (!convo) notFound();
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
-      <Link
-        href={`/dashboard/bots/${bot.id}/conversations`}
-        className="mb-4 inline-flex text-xs font-semibold text-muted hover:text-text-base"
-      >
-        ← Back to conversations
-      </Link>
-
+    <div className="max-w-3xl px-6 py-8 lg:px-8">
       <header className="mb-6 rounded-2xl border border-border-base bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">

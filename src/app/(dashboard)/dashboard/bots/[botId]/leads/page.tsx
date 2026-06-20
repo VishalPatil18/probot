@@ -58,14 +58,7 @@ export default async function LeadsListPage({ params, searchParams }: Props) {
   const basePath = `/dashboard/bots/${bot.id}/leads`;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10">
-      <Link
-        href={`/dashboard/bots/${bot.id}`}
-        className="mb-4 inline-flex text-xs font-semibold text-muted hover:text-text-base"
-      >
-        ← Back to {bot.name}
-      </Link>
-
+    <div className="max-w-4xl px-6 py-8 lg:px-8">
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-semibold">Leads</h1>
@@ -84,18 +77,13 @@ export default async function LeadsListPage({ params, searchParams }: Props) {
         ) : null}
       </header>
 
+      {/* No CTA on the empty state — sidebar + dashboard home both
+          surface the public URL; a duplicate "Get your URL" button
+          here would point at the now-redirected bot detail route. */}
       {items.length === 0 ? (
         <EmptyState
           title="No leads captured yet."
           body={`When recruiters share their email during a chat, ${bot.name} captures it here.`}
-          action={
-            <Link
-              href={`/dashboard/bots/${bot.id}`}
-              className="inline-block rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90"
-            >
-              Get your URL
-            </Link>
-          }
         />
       ) : (
         <ul className="space-y-3">

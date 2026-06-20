@@ -61,13 +61,7 @@ export default async function ConversationsListPage({
   const basePath = `/dashboard/bots/${bot.id}/conversations`;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10">
-      <Link
-        href={`/dashboard/bots/${bot.id}`}
-        className="mb-4 inline-flex text-xs font-semibold text-muted hover:text-text-base"
-      >
-        ← Back to {bot.name}
-      </Link>
+    <div className="max-w-4xl px-6 py-8 lg:px-8">
       <header className="mb-6">
         <h1 className="font-display text-3xl font-semibold">Conversations</h1>
         <p className="mt-1 text-sm text-muted">
@@ -82,6 +76,9 @@ export default async function ConversationsListPage({
         />
       </div>
 
+      {/* No CTA on the empty state — sidebar workspace card + dashboard
+          home Share-your-bot panel both surface the public URL. A
+          "Get your URL" button here would duplicate that chrome. */}
       {items.length === 0 ? (
         <EmptyState
           title={
@@ -93,16 +90,6 @@ export default async function ConversationsListPage({
             q.length > 0
               ? "Try a different search term, or clear the search to see everything."
               : "Share your public URL to get your first conversation."
-          }
-          action={
-            q.length === 0 ? (
-              <Link
-                href={`/dashboard/bots/${bot.id}`}
-                className="inline-block rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90"
-              >
-                Get your URL
-              </Link>
-            ) : undefined
           }
         />
       ) : (

@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **STAGE 6 COMPLETE + Dashboard Redesign Slices A & B** — Stages 1–6 shipped end-to-end. Dashboard redesign Slice A (sidebar + topbar shell + dashboard home rewrite) and Slice B (5-tab settings page) are now live. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints — type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon — Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Obsolete `BotSettingsForm` + `KnowledgeManager` deleted (replaced by `BotConfigTab` + `KnowledgeTab`). 648/648 tests, build green. Slice C (sub-page re-theme + docs stub + Stage 7 task block) still to ship. **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **STAGE 6 COMPLETE + Dashboard Redesign DONE** — Stages 1–6 shipped end-to-end. Full dashboard visual redesign (Slices A + B + C) ported from `design/dashboard.html` + `design/settings.html`. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints — type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon — Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Slice C closes out: bot detail page → redirect to settings, sub-page back-links + duplicate empty-state CTAs trimmed, 41-spec test backfill (BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar), `LabeledInput` gets `useId()` for proper label association, Stage 7 task block (§7.11) appended to plan.md tracking 10 deferred items. 689/689 tests, build green. Next: Stage 7 (OAuth, GDPR, hardening, launch). **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -1738,3 +1738,86 @@ Total: 6 new components + 5 file updates + 4 file deletions. 648/648 tests pass 
 - Shared `src/lib/constants/limits.ts` module would consolidate `PER_MINUTE`/`PER_DAY` from rate-limit and the chat route's 8000-char input cap. Slice C follow-up.
 - Slice C wraps up the redesign with sub-page re-theming + docs stub + Stage 7 task block in plan.md.
 - The slice intentionally has no dedicated unit tests for individual tab components — the settings page test covers integration (tab routing, panel rendering, fallback). Slice C can backfill if it surfaces specific behavioral gaps.
+
+---
+
+### 2026-06-20 12:53 - Dashboard redesign Slice C: sub-page polish + test backfill + Stage 7 task block
+
+**What was asked to do:** Close out the dashboard redesign. Sub-pages (conversations, transcript, leads, bot detail) need to fit the new shell without duplicate back-links + heavy chrome. Backfill unit tests for Slice A/B components that were intentionally left untested in the earlier slices. Append a Stage 7 task block to plan.md capturing every deferred item from Slices A/B/C so nothing falls through the cracks.
+
+**What I did:**
+
+_Sub-page cleanup:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — full rewrite as a redirect. The bot detail page was a multi-section surface (Share/Embed/Theme + stat row + Conversations/Leads/Settings sub-nav) that's fully redundant after Slices A and B: dashboard home owns the share-your-bot card + aggregated stats, settings owns the Bot configuration tab + theme + knowledge management, sidebar owns the per-bot nav. The new page does the standard owner-gate then `redirect()`s to `/dashboard/bots/<id>/settings?tab=bot`, so existing bookmarks land somewhere useful.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/page.tsx` — trimmed the "← Back to {bot.name}" link (sidebar is the canonical nav now), updated wrapper from `mx-auto max-w-4xl px-4 py-10` to `max-w-4xl px-6 py-8 lg:px-8` to match dashboard home / settings page chrome. Empty-state CTA "Get your URL" removed (sidebar workspace card + dashboard home Share-your-bot panel both surface the public URL — duplicate would point at the now-redirected bot detail route).
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/[convId]/page.tsx` — trimmed "← Back to conversations" link, updated wrapper, dropped now-unused `Link` import.
+- `src/app/(dashboard)/dashboard/bots/[botId]/leads/page.tsx` — trimmed "← Back to {bot.name}" link, updated wrapper, removed "Get your URL" empty-state CTA (same reasoning as the conversations page).
+
+_plan.md update:_
+
+- Appended `#### 7.11 Dashboard Redesign — Stage 7 Follow-ups` with 10 task items (A through J): AI model & key live editor, custom instructions field + schema column, Account tab editing endpoints (PUT /api/users), live growth pills (week-over-week analytics), response time metric (latency_ms column + capture in chat route), top topics NLP categorization, BotSwitcher pending-state indicator, GDPR endpoints (Export / Retention / Delete account), shared limits constants module (`src/lib/constants/limits.ts`), docs site stub for the external `https://docs.probot.dev/guides/embed-widget` URL.
+
+_Test backfill (+41 specs):_
+
+- `src/components/dashboard/settings/BotConfigTab.test.tsx` — 10 specs covering initial value render, disabled-Save when unchanged, diff-based PATCH body, isActive status toggle wiring, Saved! transient + router.refresh, whitespace-name client-side block, 4xx server-error inline message, personality radio card switching, Coming Soon custom-instructions textarea is disabled, theme preset swatch click enables Save + posts new color. Replaces the 7 deleted slice-6.5 BotSettingsForm specs with broader coverage.
+- `src/components/dashboard/settings/KnowledgeTab.test.tsx` — 7 specs covering initial fetch + render with header summary, empty state, ConfirmDialog confirm fires DELETE, Cancel closes dialog without DELETE, drag-drop upload POSTs multipart, "Re-index all" POSTs to reprocess + shows token-count status, initial fetch error renders alert. Replaces the 7 deleted slice-6.5 KnowledgeManager specs at parity.
+- `src/components/dashboard/Topbar.test.tsx` — 11 specs covering path-to-title derivation (Dashboard / Conversations / Conversation singular / Leads / Settings / Bot Factory / unknown→fallback) + URL pill conditional + View live bot link conditional + `target=_blank rel=noopener noreferrer` on the live bot link.
+- `src/components/dashboard/SidebarNavLink.test.tsx` — 7 specs covering exact-match active state for `/dashboard`, prefix-match for nested routes (transcript path activates Conversations nav), brand vs. muted badge tones, external link `target=_blank rel=noopener noreferrer`, external links never marked active.
+- `src/components/dashboard/MobileSidebar.test.tsx` — 6 specs covering provider + toggle + panel: starts closed, opens on trigger click, closes via X button / ESC / backdrop click, body-scroll-lock applies while open + restores on close.
+
+_Test-driven component improvement:_
+
+- `BotConfigTab.tsx` `LabeledInput` helper now uses `useId()` to pair `<label htmlFor>` with `<input id>`. Without this, testing-library's `getByLabelText` couldn't associate sibling label+input, and screen readers wouldn't announce the relationship either. Real accessibility fix that surfaced because the test required it.
+
+_Code-review pass (1 MEDIUM + 2 LOW applied; 1 LOW skipped as not-a-bug):_
+
+- **MEDIUM applied: stale "Get your URL" empty-state CTAs.** Both the conversations and leads pages had `<Link href={\`/dashboard/bots/${bot.id}\`}>Get your URL</Link>` buttons that now point at the redirected bot detail route. The sidebar workspace card + dashboard home Share-your-bot panel already surface the public URL, so the CTAs were duplicate chrome. Removed both with explanatory JSX comments at the empty-state sites.
+- **LOW applied: CopyUrlButton test stub interface.** The Topbar test's inline stub accepted only `{ url }` while the real component takes `{ url, label?, className? }`. Extended the stub to match so future test additions on this file don't silently lose label/className assertions.
+- **LOW applied: Toggle wrapped in `<label>` was a redundant-click hazard.** The Bot status toggle's outer container was a `<label>` (which can synthetically re-fire clicks on the inner button on some assistive-tech configurations). Switched to `<div>`; the Toggle button is self-labelled via `aria-label="Bot status"` so no semantic loss.
+- **LOW skipped: plan.md date stamp.** Reviewer flagged `(2026-06-20)` as one-day-ahead, but the current date per the session is indeed 2026-06-20 — the reviewer was working off stale context.
+
+**Files changed:**
+
+_Sub-page cleanup:_
+
+- `src/app/(dashboard)/dashboard/bots/[botId]/page.tsx` — full rewrite — redirect to settings.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/page.tsx` — update — trim back-link + CTA, update wrapper.
+- `src/app/(dashboard)/dashboard/bots/[botId]/conversations/[convId]/page.tsx` — update — trim back-link, drop Link import, update wrapper.
+- `src/app/(dashboard)/dashboard/bots/[botId]/leads/page.tsx` — update — trim back-link + CTA, update wrapper.
+
+_plan.md:_
+
+- `claude/plan.md` — append — section 7.11 with 10 follow-up items.
+
+_Tests:_
+
+- `src/components/dashboard/settings/BotConfigTab.test.tsx` — create — 10 specs.
+- `src/components/dashboard/settings/KnowledgeTab.test.tsx` — create — 7 specs.
+- `src/components/dashboard/Topbar.test.tsx` — create — 11 specs.
+- `src/components/dashboard/SidebarNavLink.test.tsx` — create — 7 specs.
+- `src/components/dashboard/MobileSidebar.test.tsx` — create — 6 specs.
+
+_Component fixes (review pass):_
+
+- `src/components/dashboard/settings/BotConfigTab.tsx` — update — `useId()` for LabeledInput, `<label>` → `<div>` around the status toggle.
+
+Total: 4 sub-pages cleaned + 1 plan.md append + 5 new test files + 1 component improvement. 689/689 tests pass (648 → 689, net +41 — the backfill plus the bot detail page test was deleted with the page rewrite). Build green.
+
+**Decisions made:**
+
+- **Bot detail page → redirect, not deleted.** Bookmarks + old `/dashboard/bots/<id>` links still resolve via the redirect to settings. Pure delete would 404 those.
+- **All sub-page back-links removed, including transcript → conversation list.** Initial draft kept the transcript back-link as a "useful contextual breadcrumb," but the sidebar's "Conversations" link goes to the same destination and removing it keeps the chrome consistent across all sub-pages. One canonical nav.
+- **Empty-state CTAs removed, not redirected.** A "Get your URL" button that now points at a redirect would be visible UX cruft — better to remove and let the user discover the URL via the sidebar workspace card or dashboard home Share-your-bot panel.
+- **`useId()` over manual id strings in LabeledInput.** Stable, unique-per-instance ids that survive React Strict Mode's double-render. Without proper label/input pairing, `getByLabelText` queries fail and screen readers can't announce the field's purpose.
+- **Test backfill prioritized behavior-rich components.** AccountTab, SecurityTab, AIModelKeyTab are essentially static display components (Coming Soon for most controls) — smoke tests would have been low-value rote. BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar have real interactive behavior worth verifying.
+- **Stage 7 task block as a structured punch-list, not prose.** Each deferred item gets a sub-section (A through J) with the concrete what + how shape. Easier to pick up later — a Stage 7 contributor reads "B: add `bots.custom_instructions text` column" not "we should probably wire custom instructions someday."
+- **Stub the right interface in test mocks.** The Topbar test's CopyUrlButton mock initially accepted only `{ url }`. A future test that asserts on the rendered label text would silently get the stub's `Copy ${url}` instead of the real component's `label || "Copy link"`. Matching the full interface up-front prevents the silent drift.
+
+**Open questions / follow-ups (post-Slice-C):**
+
+- Dashboard redesign is COMPLETE. Three slices shipped end-to-end: A (shell + home), B (5-tab settings), C (polish + tests + task block). The visual port from `design/dashboard.html` + `design/settings.html` is done.
+- Stage 7 follow-ups are tracked in `plan.md` §7.11 (A through J). The most user-visible deferred items are the AI model & key live editor, custom instructions field, and Account tab editing endpoints — pick them up when the broader Stage 7 OAuth / GDPR / hardening workstream starts.
+- Test coverage gap: the 5 settings tabs include 2 (AccountTab, SecurityTab, AIModelKeyTab) without dedicated unit tests. They're essentially static display components — a smoke test asserting "renders without crashing" is low value. Will revisit if specific behavioral bugs surface.
+- Selected-bot cookie has no UI for "clear selection" — once set, it persists until the user picks a different bot or the cookie expires (1 year). Acceptable today; if Stage 7 adds explicit workspace switching the action might want a "reset to most recent" option.
+- The `/docs/guides/embed-widget` external URL still 404s today since probot.dev isn't live yet. Sidebar + dashboard "Full embed guide" links open in a new tab; users see the 404 page from the external host. Acceptable until the launch push; tracked as 7.11.J.

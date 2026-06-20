@@ -979,3 +979,101 @@ When the displayed values are so wrong that the user makes decisions on them. Se
 Because the disabled-input + Coming Soon pill pattern composes naturally — a single visible pill at the section header tells the user "this whole section is not yet active," and the rest is consistent. Disabling just Save while letting users type into Name would create a "why is the button broken?" moment when they hit submit. The principle holds at every granularity: the boundary of "what works" should match the boundary of "what's visibly interactive." Mixing those boundaries within a single section is the user-frustration zone.
 
 ---
+
+### Replace, Don't Delete — Redirecting Deprecated Routes For Bookmark Compatibility (Dashboard Slice C)
+
+> The bot detail page (`/dashboard/bots/[botId]`) used to host Share/Embed/Theme + stat row + sub-nav. After the dashboard home + settings page rewrites, every one of those surfaces moved elsewhere and the route had no reason to exist. The cleanest move is to delete the file. Why redirect instead?
+
+The route file may be redundant but the **URLs that point at it are not**. Bookmarks the user saved months ago, links inside emails the user sent recruiters with "manage your bot at probot.com/dashboard/bots/abc," links inside team Slacks, external blog posts, third-party documentation — all of those still hit the route. A hard 404 breaks every one of them. A `redirect()` preserves the user experience: they click the bookmark, they land where the content moved.
+
+The pattern: keep the route file, replace the content with a tenancy-gated redirect.
+
+```ts
+export default async function BotDetailRedirect({ params }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) notFound();
+
+  const bot = await db.query.bots.findFirst({
+    where: and(eq(bots.id, params.botId), eq(bots.userId, session.user.id)),
+    columns: { id: true },
+  });
+  if (!bot) notFound();
+
+  redirect(`/dashboard/bots/${bot.id}/settings?tab=bot`);
+}
+```
+
+Three things matter here. **The ownership gate fires before the redirect** — a non-owner gets a 404, not a redirect-to-someone-else's-settings (which would leak the existence of the bot ID). **The redirect target uses `bot.id` from the DB row, not the raw URL param** — so if the param shape ever changes (e.g. case sensitivity), the redirect target stays canonical. **The target includes the query param** that lands on the right tab inside the destination page — keeps the user oriented within the new IA.
+
+> When should you actually delete a route file vs. redirect?
+
+Delete when the URL was never user-facing — internal API routes nobody bookmarked, dev-only debug pages, surfaces gated behind feature flags that never shipped to users. Redirect when there's any realistic chance someone has the URL captured somewhere outside the codebase: shared chat links, public profile URLs, content surfaces, settings page deep links. **The cost of a 13-line redirect file is essentially zero; the cost of breaking a year of accumulated external links is real.** Default to redirect.
+
+The redirect's lifetime is the URL's lifetime — once you're confident no external traffic hits the old path (analytics shows zero hits for 6+ months), the redirect can be deleted. Not before.
+
+---
+
+### Tests Forcing Accessibility — `useId()` Came Out Of A Failing `getByLabelText` Call (Dashboard Slice C)
+
+> The slice C test backfill for BotConfigTab failed on the very first spec: `screen.getByLabelText(/bot name/i)` couldn't find the input. The component renders a `<label>` next to an `<input>` inside a wrapper `<div>`. Why didn't it work?
+
+Testing-library's `getByLabelText` mirrors what screen readers see — and **screen readers don't pair adjacent label+input siblings the way humans visually do**. Two ways to pair a label with an input get recognized as accessible: (1) the `<label>` wraps the `<input>` as a parent, or (2) the `<label>` has a `htmlFor` attribute matching the `<input>`'s `id`. A bare sibling pair inside a `<div>` doesn't satisfy either, so screen readers announce "edit text, blank" — they don't know which label the input is for. The test failure was a direct signal of the missing accessibility wiring.
+
+The fix is `useId()`, React 18's stable per-component-instance id generator:
+
+```tsx
+function LabeledInput({ label, value, onChange }) {
+  const inputId = useId();
+  return (
+    <div>
+      <label htmlFor={inputId}>{label}</label>
+      <input id={inputId} value={value} onChange={...} />
+    </div>
+  );
+}
+```
+
+`useId()` is the right tool here because the ids need to be **unique per LabeledInput instance**, **stable across renders** (so the test query matches the same element every time), and **safe under React Strict Mode + SSR** (where naive Math.random or counter approaches produce hydration mismatches). React generates ids that satisfy all three.
+
+> Why not just hardcode the id from the label text?
+
+Two reasons. **Collisions**: rendering two LabeledInputs with the same label text on the same page (rare but real — settings page has "Name" appearing in Account tab AND in Bot configuration tab) would produce duplicate ids, and the second input would steal the click events meant for the first. **SSR/hydration**: a hardcoded id is deterministic across server and client (good), but slugifying a user-supplied label string introduces a tight coupling between the visible text and the underlying DOM contract — change the label and you break the id. `useId()` decouples the two.
+
+> The broader lesson?
+
+**Accessibility tests aren't separate from functional tests** — they're often the same query. When `getByLabelText` fails, the bug is the same bug a blind user would hit. When `getByRole("dialog")` fails, the bug is the same bug a keyboard user would hit. The testing-library API is designed around screen-reader-equivalent queries on purpose. Following the same path makes accessibility passing-through-tests an automatic side effect, not a separate compliance pass.
+
+The flip side: when a test query you'd expect to work fails, **the bug is probably an accessibility gap, not a test bug**. Reach for the semantic fix first (`htmlFor`+`id`, proper `role`, `aria-label` where labels are visually absent), not the test workaround (`querySelector('input')`, `data-testid`, etc.). The latter hides the underlying accessibility problem; the former fixes it AND makes the test pass.
+
+---
+
+### Stage-N Task Block — Append-Only Deferred Work Beats Scattered TODOs (Dashboard Slice C)
+
+> Slices A, B, and C each shipped with deferred items: AI model & key editor, custom instructions field, growth pills wiring, response time tracking, top topics NLP, GDPR endpoints, shared constants module, docs site stub. By the end of slice C there were ten items spread across three session-history entries. How do you keep them from getting lost?
+
+The default failure mode is scattered TODO comments + GitHub issues + Slack messages + half-remembered conversations. Three slices in, the team can't tell which deferred items are real Stage 7 work vs. abandoned ideas vs. already-done. The work-back from "what's left?" becomes archaeology.
+
+The pattern that works: **a single append-only task block in plan.md, scoped to the destination stage**. The slice that defers an item is responsible for writing it down. The block lives at a stable anchor (`#### 7.11 Dashboard Redesign — Stage 7 Follow-ups`) so future contributors can grep for it. Each item is its own subsection with the concrete what + how shape, not just a name:
+
+```markdown
+**B. Custom instructions field (Slice B placeholder → live field)**
+
+- Schema migration: `ALTER TABLE bots ADD COLUMN custom_instructions text`.
+- `botInput` + `botPatchInput` Zod widening: `.max(2000)` cap, trimmed.
+- Prompt builder reads it; append to the system prompt as an
+  "Author instructions" block between the personality prose and the
+  immutable rules so user-supplied content can't override the safety
+  rules.
+```
+
+Three properties matter here. **Append-only**: the block grows; items aren't edited or moved until they ship. **Per-item what+how**: a future contributor reads "B" and knows what to build, not just what's missing. **Anchored at the destination stage**: when a Stage 7 contributor starts work, they read §7 from the top and the §7.11 block is right there, in context with the rest of Stage 7's scope.
+
+> Why not GitHub issues?
+
+GitHub issues are great for community contributions and bug tracking, but they're a separate surface from the planning doc the team uses for "what are we building?" Issues live in the issue tracker; plans live in `plan.md`. Splitting them means a contributor reads plan.md, sees no mention of "AI model & key editor," concludes it's not on the roadmap. Or sees a stale GitHub issue and isn't sure if it's still real. **One source of truth for "what's planned" beats two slightly-out-of-sync sources every time.** GitHub issues are right for bugs and community asks; plan.md is right for engineering scope.
+
+> When does the block format start failing?
+
+When the deferred items grow beyond what one developer can hold in their head — 30+ items, or items with intricate dependency graphs. At that scale, project-management tooling (Linear, Jira, GitHub Projects) starts paying off. But for a 10-item Stage 7 punch list, plan.md is the right granularity. **The cost of a tool is the cognitive overhead of operating it; reach for the tool only when the cost of NOT having it exceeds that overhead.** A Stage 7 contributor opening Linear, filtering by label, finding the deferred items, mapping them back to plan.md context — that's more friction than scrolling to §7.11.
+
+---

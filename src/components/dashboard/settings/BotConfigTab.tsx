@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
 import type { Personality } from "@/lib/bots/schemas";
 import { PERSONALITY_PRESETS } from "@/lib/bots/schemas";
@@ -144,7 +144,11 @@ export function BotConfigTab({
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="font-bold">Bot status</h3>
-          <label className="flex items-center gap-2 text-sm">
+          {/* Plain <div>, not <label> — the Toggle button is its own
+              labelled control via aria-label. Wrapping it in a <label>
+              creates a redundant-click hazard on some AT configurations
+              (the label fires a synthetic click on the inner button). */}
+          <div className="flex items-center gap-2 text-sm">
             <span className={isActive ? "text-success" : "text-muted"}>
               {isActive ? "Live" : "Off"}
             </span>
@@ -153,7 +157,7 @@ export function BotConfigTab({
               onChange={setIsActive}
               ariaLabel="Bot status"
             />
-          </label>
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <LabeledInput
@@ -309,10 +313,21 @@ function LabeledInput({
   maxLength: number;
   placeholder?: string;
 }) {
+  // `useId` gives us a stable, unique id per LabeledInput instance so the
+  // `<label htmlFor>` and `<input id>` pair correctly under React Strict
+  // Mode + SSR. Without this pairing, screen readers and testing-library
+  // queries (`getByLabelText`) can't associate the two.
+  const inputId = useId();
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-semibold">{label}</label>
+      <label
+        htmlFor={inputId}
+        className="mb-1.5 block text-xs font-semibold"
+      >
+        {label}
+      </label>
       <input
+        id={inputId}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
