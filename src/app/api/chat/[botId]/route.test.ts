@@ -4,7 +4,9 @@ const findBotMock = vi.fn();
 const findUserMock = vi.fn();
 const findEncryptedKeyMock = vi.fn();
 const auditInsertValuesMock = vi.fn();
-const auditInsertMock = vi.fn(() => ({ values: auditInsertValuesMock }));
+const auditInsertMock = vi.fn((..._args: unknown[]) => ({
+  values: auditInsertValuesMock,
+}));
 const completeMock = vi.fn();
 const checkRateLimitMock = vi.fn();
 

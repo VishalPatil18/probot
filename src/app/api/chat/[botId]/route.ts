@@ -19,6 +19,7 @@ export function OPTIONS(): Response {
   return corsPreflight();
 }
 import { buildSystemPrompt } from "@/lib/ai/prompt-builder";
+import { callWithBreaker } from "@/lib/ai/circuit-breaker";
 import { ProviderError, getProvider, isProviderName } from "@/lib/ai/providers";
 import { checkRateLimit, resolveMaxChars } from "@/lib/ai/rate-limit";
 import { sanitizeInput } from "@/lib/ai/sanitize-input";
@@ -330,15 +331,22 @@ export async function POST(
     }
   }
 
+  // Wrap the provider call in a per-provider circuit breaker (NFR-S03). The
+  // breaker key is the provider NAME, not the bot id, so a single broken
+  // upstream (e.g. Anthropic outage) trips one breaker that protects every
+  // bot on that provider. Per-bot or per-key breakers would let one bad key
+  // bury the queue with cascading 401s.
   let providerReply: string;
   try {
-    const result = await provider.complete({
-      system,
-      userMessage: sanitized.message,
-      apiKey,
-      model: ownerRow.llmModel ?? undefined,
-      extras,
-    });
+    const result = await callWithBreaker(ownerRow.llmProvider, () =>
+      provider.complete({
+        system,
+        userMessage: sanitized.message,
+        apiKey,
+        model: ownerRow.llmModel ?? undefined,
+        extras,
+      }),
+    );
     providerReply = result.reply;
   } catch (err) {
     if (err instanceof ProviderError) {
@@ -349,6 +357,23 @@ export async function POST(
         return NextResponse.json(
           { error: "provider_rate_limit" },
           { status: 429 },
+        );
+      }
+      // NFR-S04 graceful fallback: when the breaker is open OR the
+      // provider returns "unknown" (network blip, malformed response), we
+      // surface a friendly canned reply rather than a hard 502. The
+      // client renders this as an assistant message asking the recruiter
+      // to try again, with a `fallback: true` flag for analytics. The
+      // chat persistence block below still runs so the dashboard sees
+      // these requests in its conversation count.
+      if (err.message === "circuit_open") {
+        return NextResponse.json(
+          {
+            reply:
+              "I'm temporarily unavailable - the AI provider isn't responding right now. Please try again in a minute.",
+            fallback: "circuit_open",
+          },
+          { status: 200 },
         );
       }
       return NextResponse.json(

@@ -2131,27 +2131,28 @@ _Tests + types:_
 
 ### 2026-06-20 22:58 - Stage 7 Phase 3: envelope encryption + managed key path + live dashboard editor
 
-**What was asked to do:** Land the managed-key half of the hybrid storage architecture (Option 3 from the design conversation) — envelope encryption of user LLM keys with a KEK kept out of the DB, audit log of every server-side decrypt, a dashboard editor that lets creators switch provider/model and opt in/out of managed storage, and a chat-route fallback path so recruiters can chat with a bot when the creator's browser is offline.
+**What was asked to do:** Land the managed-key half of the hybrid storage architecture (Option 3 from the design conversation) - envelope encryption of user LLM keys with a KEK kept out of the DB, audit log of every server-side decrypt, a dashboard editor that lets creators switch provider/model and opt in/out of managed storage, and a chat-route fallback path so recruiters can chat with a bot when the creator's browser is offline.
 
 **What I did:**
+
 - New `src/lib/crypto/constants.ts` + `src/lib/crypto/envelope.ts` implementing AES-256-GCM envelope encryption (per-bot 256-bit DEK encrypts the LLM key; DEK is itself wrapped with the 256-bit KEK loaded from `PROBOT_KEY_ENCRYPTION_KEY` env). Public surface: `encryptKey(plaintext)`, `decryptKey(payload)`, `rotateKEK(payloads, oldB64, newB64)`. KEK is loaded fresh per call (no module-level cache so tests can manipulate env without reset; the cost is microseconds). `KekUnavailableError` distinct class so the API layer can downgrade "managed flow disabled" to a 503 vs a 500. Hard-fail at module import if `PROBOT_KEY_ENCRYPTION_KEY` is set but malformed (skipped under vitest so per-test env manipulation works).
 - 13 tests cover the crypto module: round-trip, ciphertext-differs-from-plaintext, fresh-IV per call, GCM tamper detection, KEK rotation rejection of stale KEK, missing-KEK error class, wrong-length KEK error, empty-plaintext rejection, 10KB plaintext, unicode plaintext, `rotateKEK` re-wraps + preserves ciphertext byte-for-byte + empty input.
-- New `src/lib/crypto/ip-hash.ts` — `hashIp(ip)` returns SHA-256(`NEXTAUTH_SECRET:ip`) hex (re-uses NEXTAUTH_SECRET as salt to avoid another env var). `extractRequesterIp(headers)` pulls `x-forwarded-for` first IP, falls back to `x-real-ip`. The dashboard audit log surfaces only the last 8 hex chars of the hash so creators get a per-row identifier without GDPR PII surface.
+- New `src/lib/crypto/ip-hash.ts` - `hashIp(ip)` returns SHA-256(`NEXTAUTH_SECRET:ip`) hex (re-uses NEXTAUTH_SECRET as salt to avoid another env var). `extractRequesterIp(headers)` pulls `x-forwarded-for` first IP, falls back to `x-real-ip`. The dashboard audit log surfaces only the last 8 hex chars of the hash so creators get a per-row identifier without GDPR PII surface.
 - Migration `0011_graceful_ironclad.sql` adds two tables: `encrypted_llm_keys` (11 cols: ciphertext + iv + auth_tag + wrapped_dek + dek_iv + dek_auth_tag + provider + timestamps; unique index on bot_id so one managed key per bot; ON DELETE CASCADE from `bots`) and `decrypt_audit_log` (id, bot_id, decrypted_at, requester_ip_hash; index on bot_id+decrypted_at DESC for the dashboard query; ON DELETE CASCADE).
-- `POST /api/bots/[botId]/llm-key` — UPSERT on bot_id, envelope-encrypts the supplied plaintext, stamps the owner's current provider on the row. Returns 503 with `managed_storage_unavailable` if KEK env var unset; 400 if owner provider isn't set.
-- `DELETE /api/bots/[botId]/llm-key` — deletes the encrypted row, revoking server-side access.
-- `GET /api/bots/[botId]/llm-key/audit` — returns `{ stored, provider, lastDecryptedAt, entries: [{decryptedAt, ipHashSuffix}] }`. 30-day retention window enforced in the query; pruning happens in the Phase 5 cron.
-- `PATCH /api/users/me/llm-prefs` — backing route for the dashboard's provider/model switcher. Zod-whitelisted to only `llmProvider` + `llmModel`; mass-assignment safe.
+- `POST /api/bots/[botId]/llm-key` - UPSERT on bot_id, envelope-encrypts the supplied plaintext, stamps the owner's current provider on the row. Returns 503 with `managed_storage_unavailable` if KEK env var unset; 400 if owner provider isn't set.
+- `DELETE /api/bots/[botId]/llm-key` - deletes the encrypted row, revoking server-side access.
+- `GET /api/bots/[botId]/llm-key/audit` - returns `{ stored, provider, lastDecryptedAt, entries: [{decryptedAt, ipHashSuffix}] }`. 30-day retention window enforced in the query; pruning happens in the Phase 5 cron.
+- `PATCH /api/users/me/llm-prefs` - backing route for the dashboard's provider/model switcher. Zod-whitelisted to only `llmProvider` + `llmModel`; mass-assignment safe.
 - Chat route (`/api/chat/[botId]`) gained the managed-key fallback:
   - Header `x-llm-api-key` is now OPTIONAL. Missing header (KeyTransportError reason `missing`) is fine; malformed header (empty/too short/too long) still 400s loudly.
   - After bot/owner lookup, key resolution: header wins if present; else look up `encrypted_llm_keys.findFirst({botId})`, refuse with `managed_key_provider_mismatch` if stored provider drifted from the owner's current provider, otherwise `decryptKey(...)` and use. Azure is explicitly excluded from managed mode in Phase 3 (its multi-secret endpoint+apiVersion doesn't fit in the encrypted payload yet); header path only.
   - When the managed path served the request, write a row to `decrypt_audit_log` (timestamp + hashed IP) AFTER provider.complete() succeeds. Wrapped in try/catch so a logging failure can't block chat.
-- New `src/lib/server/redact.ts` (`redactSensitive`) — recursive value redactor that strips known-sensitive header names (`x-llm-api-key`, `x-llm-azure-*`, `x-embedding-api-key`, `x-preview-token`, `authorization`, `cookie`) and property names (`apiKey`, `password`, `secret`, `token`, `kek`, `dek`, etc.) before payloads reach a logger. Handles plain objects, arrays, `Headers`, and circular references. 6 tests cover the redaction matrix.
-- `src/components/dashboard/settings/AIModelKeyTab.tsx` — full rewrite from the Coming-Soon stub. New client component with three sections:
+- New `src/lib/server/redact.ts` (`redactSensitive`) - recursive value redactor that strips known-sensitive header names (`x-llm-api-key`, `x-llm-azure-*`, `x-embedding-api-key`, `x-preview-token`, `authorization`, `cookie`) and property names (`apiKey`, `password`, `secret`, `token`, `kek`, `dek`, etc.) before payloads reach a logger. Handles plain objects, arrays, `Headers`, and circular references. 6 tests cover the redaction matrix.
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` - full rewrite from the Coming-Soon stub. New client component with three sections:
   1. Provider+model switcher (writes via PATCH /llm-prefs)
   2. Managed key storage form (textbox + Show/Hide + Encrypt&Store / Replace / Revoke buttons; Azure shows a "not supported in Phase 3" notice)
   3. Decrypt audit log (last 30 events with timestamp + IP hash suffix)
-  The "stored" pill is data-driven from the `/audit` GET. Storing a key also mirrors it into localStorage so the creator's own dashboard test chat keeps working without re-entry.
+     The "stored" pill is data-driven from the `/audit` GET. Storing a key also mirrors it into localStorage so the creator's own dashboard test chat keeps working without re-entry.
 - Settings page now passes `botId` to AIModelKeyTab.
 - `.env.example` adds documented `PROBOT_KEY_ENCRYPTION_KEY` + `PROBOT_KEY_ENCRYPTION_KEY_NEXT` (rotation slot) with generation instructions.
 - Chat route test (`route.test.ts`):
@@ -2162,6 +2163,7 @@ _Tests + types:_
 - Total tests: 744 pass (was 720; +24 net new from the crypto module, redact module, and chat-route managed-key block). Typecheck + Next build both green.
 
 **Files changed:**
+
 - `src/lib/crypto/constants.ts` - create - AES-256-GCM parameter constants + KEK env-var name.
 - `src/lib/crypto/envelope.ts` - create - `encryptKey`/`decryptKey`/`rotateKEK` + `KekUnavailableError`.
 - `src/lib/crypto/envelope.test.ts` - create - 13 unit tests.
@@ -2180,6 +2182,7 @@ _Tests + types:_
 - `.env.example` - update - documented `PROBOT_KEY_ENCRYPTION_KEY` + rotation slot.
 
 **Decisions made:**
+
 - **KEK loaded fresh per call, not module-cached.** A module-level cache would make test isolation harder (every test that flips the env var would have to reach into module internals to reset). The cost of `Buffer.from(env, "base64")` is microseconds; not the bottleneck.
 - **Hard-fail at module-load only if KEK is SET but malformed.** Operators who don't use the managed flow shouldn't be forced to set the var. If they do set it, a malformed value would silently corrupt every managed write - better to refuse to boot. The check is skipped under `NODE_ENV=test` / `VITEST=true` so per-test env manipulation works.
 - **Hash IPs with NEXTAUTH_SECRET as salt, not a separate env var.** One fewer env var to manage. Rotation as a side effect of NEXTAUTH_SECRET rotation is fine: old audit-log rows remain readable as timestamps, they just don't hash-equal to new rows.
@@ -2192,9 +2195,65 @@ _Tests + types:_
 - **`useEffect` fetches the audit on tab mount** rather than passing it through SSR. The audit list is bot-specific and updates as recruiters chat; making it part of the SSR fetch means stale data + worse cache behavior. Client-side fetch is the right primitive here.
 
 **Open questions / follow-ups:**
+
 - **No KEK rotation runbook in the docs yet.** Phase 7 task. The `rotateKEK` utility exists and is unit-tested; what's missing is the operator-facing "deploy with both env vars set, run `npm run kek:rotate`, swap" guide.
 - **No CI grep guard for accidental `x-llm-api-key` substrings in `console.*` calls.** Phase 7 task. The `redactSensitive` helper exists but isn't yet enforced at write time; today's discipline is purely convention.
 - **Audit log isn't pruned.** Rows accumulate forever in Phase 3; the Phase 5 cron job (next phase but one) will delete `decrypted_at < NOW() - 30 days`. Read queries already enforce the window so dashboard payload size is bounded; only DB growth is unbounded until Phase 5 lands.
 - **No "regenerate KEK from a passphrase" tooling.** If an operator loses their KEK, every stored encrypted key is unrecoverable. This is by design (the same thing the hybrid model's marketing copy will promise). Operators must back up their KEK out-of-band (1Password / Vault / etc).
 - **Provider mismatch UX is currently just a 400 error from the chat route.** The dashboard could detect the mismatch on load and prompt "your stored key was minted for OpenAI but you're now on Anthropic - re-store?" - defer to Phase 6 polish.
 - **Azure managed-mode support** can land in a future Phase by stuffing `{key, endpoint, apiVersion}` JSON into the ciphertext rather than the bare key string. ~30 lines of work; not load-bearing for Stage 7.
+
+### 2026-06-20 23:36 - Stage 7 Phase 4: Google Gemini live + DeepSeek removed + circuit breaker + AI fallback
+
+**What was asked to do:** Land the real Google Gemini adapter (replacing the Stage 1 throw-on-call stub), remove every DeepSeek reference from the forward-looking docs and code, add an in-process circuit breaker around provider calls per NFR-S03, and surface a graceful "AI temporarily unavailable" reply per NFR-S04 instead of a hard 502 when the breaker is open.
+
+**What I did:**
+
+- `src/lib/ai/providers/google.ts` rewritten from the Stage 1 stub. Uses `@google/generative-ai` SDK (installed as a fresh dep). Mirrors the Anthropic/OpenAI adapter shape: `complete({ system, userMessage, apiKey, model?, maxTokens?, temperature? })`. System prompt rides as `systemInstruction` (Gemini's correct slot, not the messages array). Default model is `gemini-2.5-flash` (free-tier).
+- Error mapping done by message-string matching since the Gemini SDK doesn't expose typed errors with status codes: "API key not valid" / "API_KEY_INVALID" / "PERMISSION_DENIED" / "401" / "403" → `invalid_key`; "429" / "RESOURCE_EXHAUSTED" / "quota" → `rate_limit`; everything else → `unknown`. Brittle by SDK convention, not by our choice. The redact discipline still applies - error messages never include the apiKey.
+- `google.test.ts` replaced (was 3 stub-asserting tests). 8 new tests cover: successful text reply, system+config plumbing through `getGenerativeModel`, invalid-key mapping, rate-limit mapping, unknown mapping, empty-text response → unknown error, error message never contains the apiKey.
+- `@google/generative-ai` added as a dependency.
+- `src/lib/ai/circuit-breaker.ts`: closed/open/half-open state machine, per-provider-name (Map<string, BreakerEntry>). Defaults: 5 consecutive failures → open; 30s reset timeout; 1 probe call allowed during half-open. `callWithBreaker(name, fn, options?)` is the only public entry; throws `ProviderError(name, "unknown", "circuit_open")` when blocked. Per-process state - no Redis dependency, no cold-start coordination, matches the rate-limiter's posture. Forced-reset `__resetCircuit(name?)` for tests + an emergency operator path.
+- `circuit-breaker.test.ts`: 10 tests covering happy path, failure pass-through, threshold-opens, fail-fast while open, cooldown → half-open transition, half-open success closes, half-open failure re-opens, per-provider isolation, success resets the failure count mid-streak, halfOpenMaxCalls=1 rejects concurrent probes.
+- Chat route wraps `provider.complete(...)` in `callWithBreaker(ownerRow.llmProvider, () => provider.complete(...))`. Breaker key is the provider NAME, not the bot id, so an Anthropic outage trips one breaker that protects every bot on Anthropic - not 100 per-bot breakers that each have to learn the outage independently.
+- New error branch in the chat route: when `err.category === "unknown" && err.message === "circuit_open"`, return a 200 with `{ reply: "I'm temporarily unavailable...", fallback: "circuit_open" }` (NFR-S04). Critically a 200, not a 502: the conversation-persistence block below still runs, the dashboard sees the request, the recruiter sees a non-broken UI. The `fallback` discriminator lets future analytics distinguish "real AI response" vs "fallback string" without scraping the body.
+- Bot factory wizard: `STAGE1_ENABLED` set widened to include `google`. The SOON badge on the Google provider card is gone; the test that asserted "Google is the only disabled provider" was rewritten to assert all four are enabled.
+- DeepSeek references purged from forward-looking docs:
+  - `claude/srs.md`: 13 references → 0 (all rewritten to the Anthropic/Google/OpenAI/Azure list, including FR-010.4, FR-002.11, the user-table column comment, the architecture diagram, the SI-001 row, and the env-example block).
+  - `claude/plan.md`: 10 references → 0 (header summary, FR-003.4, Stage 1 task checklist, the directory listing, the embeddings provider list).
+  - Note: `claude/context.md`, `claude/learnings.md`, and `CHANGELOG.md` are append-only history per CLAUDE.md §9/§10 and were intentionally NOT edited. The `isProviderName("deepseek")` negative test remains because it correctly asserts that "deepseek" is NOT a valid provider name today.
+- Total tests: 759 pass (was 744; +15 - 7 new Gemini tests, 10 new circuit-breaker tests, minus 2 reworked existing tests). Typecheck + Next build both green.
+
+**Files changed:**
+
+- `src/lib/ai/providers/google.ts` - update - full rewrite from stub to real Gemini adapter.
+- `src/lib/ai/providers/google.test.ts` - update - 8 new tests replacing the 3 stub-only ones.
+- `src/lib/ai/circuit-breaker.ts` - create - state machine + `callWithBreaker` + `__resetCircuit` + `getCircuitState`.
+- `src/lib/ai/circuit-breaker.test.ts` - create - 10 unit tests.
+- `src/app/api/chat/[botId]/route.ts` - update - wraps provider.complete with callWithBreaker, adds circuit_open → 200 fallback branch.
+- `src/app/api/chat/[botId]/route.test.ts` - update - typecheck fix on auditInsertMock varargs.
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - enable google in STAGE1_ENABLED set.
+- `src/components/bot-factory/BotFactoryForm.test.tsx` - update - flip "Google disabled" assertion to "all four enabled."
+- `package.json` + `package-lock.json` - update - `@google/generative-ai` ^0.24.1 dep added via `npm install`.
+- `claude/srs.md` - update - replaced all DeepSeek references with Anthropic/Google/OpenAI/Azure.
+- `claude/plan.md` - update - same scope, including the directory listing where `deepseek.ts` became `azure.ts`.
+
+**Decisions made:**
+
+- **Breaker key is provider NAME, not bot id.** An outage affects a provider, not a specific bot - keying on bot id would mean each bot has to learn the outage independently (5 failures per bot before opening), wasting hundreds of provider calls when the answer is "Anthropic is down for everyone." Keying on provider name means the first 5 failures trip a breaker that protects every other bot on the same provider for the cooldown window.
+- **Circuit breaker emits `ProviderError("...", "unknown", "circuit_open")` rather than a custom `CircuitOpenError`.** The chat route already has a `try/catch (err instanceof ProviderError)` branch; reusing the existing error type means the breaker integrates with the existing handler without a second exception class. The discriminator is `err.message === "circuit_open"` - slightly stringly-typed but matches the surrounding code's conventions.
+- **NFR-S04 fallback returns 200, not 502.** A 502 would cause the chat client to render a "something broke" toast and discard the recruiter's message. A 200 with a "temporarily unavailable" reply keeps the conversation flow intact - recruiter sees a polite message, can retry, persistence happens, dashboard analytics see the request. This is the difference between a broken UX and a degraded UX; degraded is the goal here.
+- **`fallback` field in the response body to discriminate canned vs real replies.** Future analytics (or a Phase 6 dashboard "fallback events" panel) can count fallbacks without scraping the reply text. Adding the field now costs nothing; bolting it on later means hunting through every fallback path the route grows.
+- **Half-open allows ONE probe, not many.** With many concurrent probes after cooldown, you'd hammer the recovering provider just as it comes back up - exactly the wrong moment. One probe at a time means recovery is gentle: probe succeeds → close → flood resumes; probe fails → re-open for another cooldown.
+- **No Redis-backed breaker state for Phase 4.** Same posture as the in-process rate limiter: per-process, cold-start resets. Acceptable because provider outages typically last minutes, cold starts are minutes apart, and the breaker is a courtesy to upstream - not a strict guarantee. Stage 8 might unify both onto Upstash if the per-instance variance turns out to matter.
+- **Gemini error mapping is regex-on-message.** The SDK doesn't expose status codes, error classes, or a `code` field on its errors. We match prose markers: "API key not valid", "API_KEY_INVALID", "PERMISSION_DENIED", "401", "403", "429", "RESOURCE_EXHAUSTED", "quota". Will break if Google changes the wording in a future SDK; documented as a known fragility and easy to update.
+- **`gemini-2.5-flash` as the default model.** Free-tier eligible at time of writing, fast, sufficient for short-form chat. The dropdown also exposes `gemini-2.5-pro` for users who want a deeper model and have the credits.
+- **DeepSeek removal scope.** SRS + plan only - the append-only logs (context.md, learnings.md, CHANGELOG.md) preserve the history of the original decision to add then remove it. The `isProviderName("deepseek") === false` test stays because asserting the negative is the _correct_ contract today.
+- **Bot-factory `STAGE1_ENABLED` set kept (rather than dropped) even though all 4 providers are now enabled.** Removing the set would require rewiring the JSX; keeping it as a one-line `Set` gives us a stable hook for a future "experimental" / "beta" badge.
+
+**Open questions / follow-ups:**
+
+- **Gemini SDK error parsing is brittle.** A wording change in the SDK breaks our category mapping. Worth wrapping in an integration test against a real (free-tier) Gemini endpoint as part of Stage 8 - until then, monitor on first prod incident.
+- **Managed key storage doesn't yet support Google.** It works for Anthropic/OpenAI; Azure is excluded (multi-secret), Google should work given the same single-key flow. Confirm in a smoke test after deploy; if Gemini's auth requires anything beyond an API key it would need its own adapter in the encrypted-key route too.
+- **Circuit breaker doesn't surface state to the dashboard.** A "your bot's provider is currently throttled" indicator would be useful when a circuit is open; Phase 6 polish.
+- **No alerting when a breaker opens.** The fallback reply is sent and persistence records the request, but the operator doesn't know an upstream is down. Phase 7's CI/observability work can wire a Sentry breadcrumb or log line here.

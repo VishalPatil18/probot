@@ -1386,7 +1386,7 @@ The promise is specifically about **database leakage**, not full infrastructure 
 - **Full infra access (Vercel project owner / IAM admin):** can read the KEK from env vars and decrypt anything. ✗ Promise does NOT hold. This is true of every operator-managed system short of confidential computing / TEE.
 - **RCE on the running Node process:** process has KEK in memory; attacker on the host could read it. ✗ Mitigated by hardening, not eliminated.
 
-The honest framing - which the marketing copy reflects - is "if our database is leaked, your keys remain encrypted and unreadable." That's a *bounded* promise. The operator caveat is explicit: "If even that level of trust is unacceptable to you, self-host ProBot - your key never leaves your own server."
+The honest framing - which the marketing copy reflects - is "if our database is leaked, your keys remain encrypted and unreadable." That's a _bounded_ promise. The operator caveat is explicit: "If even that level of trust is unacceptable to you, self-host ProBot - your key never leaves your own server."
 
 The general principle: **be precise about which threats your encryption defends against.** Vague claims like "we use encryption" or "your data is secure" don't mean anything. Stating the threats addressed (DB dump, code leak, log leak) and the threats not addressed (full infra compromise, RCE, TEE-free runtime) is the honest version. Users with stricter threat models can then make informed choices (self-host, BYO infra, encrypt client-side before sending).
 
@@ -1413,6 +1413,7 @@ The discipline that prevents all of these: **assume test-isolation breakage by d
 Two reasons, both empirical:
 
 **Reason 1: noise inflates the metric the creator cares about.** The creator wants to know "how often is my managed key being used to serve recruiters?" Recording the decrypt at the moment it happens means counting:
+
 - Successful chats (the thing they actually care about)
 - Failed provider calls (network blips, malformed bot config)
 - Rate-limited requests (the recruiter hit the limit; no real "use")
@@ -1433,6 +1434,7 @@ A common related antipattern: logging "the user tried to do X" before doing X, t
 Both have valid use cases; the question is "is this data more useful fresh or pre-rendered?"
 
 **Server-component fetch (the rest of the dashboard's pattern):**
+
 - Renders in the initial HTML - no loading flash, no extra round-trip.
 - Cacheable at the edge if the request is GET + the cache headers are right.
 - Data is as fresh as the page-render moment, then stale until the user re-navigates.
@@ -1440,6 +1442,7 @@ Both have valid use cases; the question is "is this data more useful fresh or pr
 - Good for: bot list (changes on user action), bot config (changes on user action), user profile (changes rarely).
 
 **Client useEffect fetch (the AIModelKeyTab pattern):**
+
 - Initial HTML has a loading state; data populates after hydration.
 - Re-runs when the component re-mounts (e.g. after a router.refresh()).
 - Easy to wire up "refresh after an action" without re-rendering the whole page.
@@ -1450,5 +1453,95 @@ The audit log fits the second pattern perfectly: it updates whenever a recruiter
 The general principle: **server components for "what's true right now at navigation time," client effects for "what's true since I last looked."** When in doubt, the SSR path is the default - it's faster to render and easier to test. Reach for client fetch when the freshness gap actively hurts the UX.
 
 A related pattern that's worth knowing about but didn't fit this case: SWR (`stale-while-revalidate`) libraries like `swr` or `react-query` give you the best of both - render the cached value immediately, fetch in the background, update when fresh. Worth considering when the dashboard grows beyond ~3 client-side fetched panels, but overkill for one tab.
+
+---
+
+### Circuit Breakers: Three States, Two Costs, One Goal (Stage 7 Phase 4)
+
+> The circuit breaker has three states - closed, open, half-open. Closed means "let calls through," open means "fail fast." What does half-open actually do that closed-after-cooldown wouldn't?
+
+The half-open state exists to answer one question: **is the upstream actually recovered, or are we just past the cooldown timer?**
+
+The naive design - "open for N seconds, then go back to closed and let traffic flood through" - has a failure mode. Imagine a provider that goes down at T=0, stays down for 5 minutes, then comes back up. With a 30-second cooldown, the breaker opens at T=0+5s (after the 5 failures), expires its cooldown at T=35s, closes, accepts traffic, hits 5 more failures (the provider is still down), and re-opens at T=70s. The traffic during T=35..70 was wasted - 5+ requests slammed an already-known-bad provider just to discover what we already knew.
+
+The half-open state replaces "let traffic flood" with "let ONE call through as a probe":
+
+- Probe succeeds → upstream is back → close → resume full traffic.
+- Probe fails → upstream is still broken → open for another full cooldown.
+
+The cost during half-open is **at most one wasted call per cooldown window**, not "potentially every call in flight." For a chat product where each call is a recruiter waiting on a response, that's the difference between "one recruiter sees a polite retry message" and "ten recruiters see broken UX in the first 100ms after the breaker tries to recover."
+
+The second cost the breaker controls: **load on the recovering upstream.** A provider recovering from an outage doesn't want a wall of pent-up traffic the instant it comes back. One probe says "I'm checking" without piling on. If the upstream is fragile (say, recovering from a database failover), the trickle of probes is what lets it stay up; a flood would knock it back down.
+
+The general principle: **breakers protect both YOU (fail fast, don't waste calls) AND THE UPSTREAM (don't pile on a recovering service).** A breaker that only does the first is a glorified timeout; a breaker that does both is operational hygiene.
+
+A related pattern worth knowing: **bulkheads** isolate failure modes by capping concurrent calls to one upstream (so a slow upstream can't exhaust your thread pool / connection pool). Breakers and bulkheads compose: bulkhead caps concurrent in-flight calls, breaker stops launching new ones when failure rate spikes. Stage 7 only needs the breaker; bulkheads become relevant if/when we have multiple slow upstreams competing for the same finite resource pool.
+
+### Why The Breaker Key Should Be The Upstream, Not The Caller (Stage 7 Phase 4)
+
+> The circuit breaker is keyed on `ownerRow.llmProvider` (the provider name), not on `bot.id`. Why? Per-bot breakers would isolate failures more granularly.
+
+The opposite of what it sounds like. Per-bot breakers make the system _worse_ because they don't share knowledge of the upstream's state.
+
+Imagine Anthropic goes down. 100 bots use Anthropic. With per-bot breakers, each of those 100 bots has to independently learn the outage:
+
+- Bot 1: 5 failures → opens.
+- Bot 2: 5 failures → opens.
+- ...
+- Bot 100: 5 failures → opens.
+
+That's 500 wasted calls to Anthropic, 500 recruiters seeing real errors, and 500 chat-route trips that could have been fail-fast 200s with the friendly fallback. All to learn what the first 5 failures already proved: Anthropic is down.
+
+Per-provider breakers fix this by sharing the discovery: the FIRST 5 failures (across any bot using Anthropic) trip the breaker, and every subsequent call to any Anthropic-using bot fail-fasts for the cooldown window. 5 wasted calls, not 500.
+
+The mental model: **the breaker key should match the granularity of the failure mode.** If the failure is "this specific user's account is locked out," key on user id. If the failure is "the database is down," key on database connection. If the failure is "Anthropic's API is unavailable," key on the upstream API.
+
+A test for this: **what's the smallest unit that, when it fails for one caller, will also fail for every other caller?** That's your breaker key. In our case, an Anthropic outage will make calls fail for every Anthropic-keyed call regardless of which bot is making them; the smallest "everyone fails together" unit is "the provider." Hence the key.
+
+A counterpoint worth noting: **per-credential breakers** (one breaker per stored API key) would catch the case where a single user's key is revoked / over-quota without breaking calls for users with valid keys. We don't do this in Phase 4 because the chat route already catches per-key failures (`invalid_key`, `rate_limit`) and surfaces specific errors for them; the breaker is reserved for "the upstream itself is broken," which is genuinely per-provider. If the user-facing distinction ever blurs, per-credential breakers would be the right next step.
+
+### Graceful Degradation: 200 With A Fallback Beats 502 Every Time (Stage 7 Phase 4)
+
+> The chat route returns a 200 with a "temporarily unavailable" reply when the circuit is open, rather than a 5xx. Doesn't that hide the failure from monitoring?
+
+It moves the failure from "broken UX visible to recruiters" to "tracked event visible to operators" - which is the right place for it.
+
+The two design choices map cleanly to two recipients:
+
+**5xx response** sends "something is wrong" to the **client**. The browser's fetch sees a non-2xx, the React component renders an error toast, the recruiter sees a broken page. The failure is visible to the person who least needs to know about it and can do least with the information.
+
+**200 + fallback reply** sends "something is wrong" to the **operator**. The recruiter sees a polite "I'm temporarily unavailable, please try again" message (their UX is degraded but not broken). The dashboard's conversation count still ticks up. The `fallback: "circuit_open"` discriminator in the response body becomes a Sentry breadcrumb / metric / log line that the operator can see and act on. The failure ends up where it's actionable.
+
+The trade is that you have to actively _measure_ fallbacks for the signal to surface. A 5xx shows up in error dashboards automatically; a 200-with-fallback only shows up if you explicitly count `fallback !== undefined` responses. The latter requires more discipline but produces a much better recruiter experience.
+
+For consumer-facing systems, the rule of thumb: **fail fast internally, fail soft externally.** Internal systems (e.g., an admin batch job hitting an API) get the raw error so the operator can fix it. External systems (e.g., the chat widget) get a polite degraded response so the user keeps using the product.
+
+A common antipattern this fixes: "we send 503 when we're rate-limited / capacity-overflowed, and clients are expected to retry with exponential backoff." That's a valid pattern for B2B APIs where clients are sophisticated. It's catastrophic UX for a consumer app where clients are humans - they don't retry, they leave. Degrading gracefully (with the fallback flag for observability) trades a tiny analytics cost for a meaningful UX win.
+
+The principle generalises: **every error path should ask "who needs to know?" and route the information accordingly.** A schema-validation failure is a developer's problem → 400 with details. A rate limit is a client's problem → 429 with retry-after. An upstream outage is the operator's problem → 200 with fallback (visible internally, invisible externally).
+
+### Regex-On-Error-Message Mapping When The SDK Doesn't Help (Stage 7 Phase 4)
+
+> The Google Gemini adapter maps SDK errors to our `ProviderError` categories by matching strings in `err.message`. The Anthropic adapter uses `instanceof APIError && err.status === 401`. Why the inconsistency?
+
+The inconsistency is forced by the SDK. The Anthropic SDK ships `APIError` with a typed `status` field; the OpenAI SDK does the same. The Google Gemini SDK throws plain `Error` instances with the HTTP status interpolated into the message string. That's not us being lazy - it's the upstream SDK's API surface.
+
+Two ways to handle a brittle upstream:
+
+**Option 1: regex/string-match on the message.** Fragile (SDK wording changes break the mapping) but cheap to implement and easy to read. ProBot uses this for Gemini; the regex covers "API key not valid", "API_KEY_INVALID", "PERMISSION_DENIED", "401", "403" → `invalid_key`, and "429", "RESOURCE_EXHAUSTED", "quota" → `rate_limit`.
+
+**Option 2: parse the underlying HTTP response yourself.** Wrap the SDK call in your own fetch, or intercept at the fetch layer. More robust (status codes are stable in a way error wording isn't) but means re-implementing parts of the SDK and giving up the benefits of typed request building.
+
+The right pick depends on how often the upstream changes wording vs. how often you'd otherwise touch the adapter. For Gemini specifically:
+
+- Wording changes about once every 6-12 months based on Anthropic/OpenAI's history.
+- Each change is a one-line regex update.
+- The cost of "wrong category for 24h after a wording change" is "users see `unknown` instead of `invalid_key` and have a slightly less specific error message."
+
+This is acceptable. Option 2 (rewriting the SDK) would cost weeks for the same outcome.
+
+The general principle: **match the brittleness of your error mapping to the volatility of the upstream's error format.** Stable typed errors (Anthropic / OpenAI) → typed instanceof checks. Unstable string errors (Gemini) → defensive regex + a documented assumption. Critically: **document the brittleness in code** so the next maintainer knows the regex needs review on SDK upgrades. We did this in a comment block above `mapGoogleError`.
+
+A related lesson: **never just `throw err`** when the upstream's error shape is unknown. Always wrap it in your domain's typed error (`ProviderError` here) so callers don't have to know about SDK internals. The category enum (`invalid_key | rate_limit | unknown`) is small enough to exhaust, which means callers can switch on it safely and the SDK volatility stays contained to the adapter.
 
 ---

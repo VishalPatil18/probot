@@ -41,12 +41,14 @@ const MODEL_OPTIONS: Record<ProviderName, string[]> = {
   azure: [],
 };
 
-// Stage 1: anthropic, openai, and azure ship real adapters.
-// google renders disabled with a "SOON" badge.
+// Stage 7 Phase 4: all four providers ship real adapters now. The Set is
+// kept (rather than dropped) so a future "experimental" / "beta" gate has
+// a single place to live without rewiring the JSX.
 const STAGE1_ENABLED: ReadonlySet<ProviderName> = new Set([
   "anthropic",
   "openai",
   "azure",
+  "google",
 ]);
 
 const PERSONALITY_LABELS: Record<

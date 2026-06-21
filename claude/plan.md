@@ -1,6 +1,6 @@
 # ProBot - v1.0 7-Stage Build Plan
 
-> ProBot is free, open-source software (MIT). There is no Stripe integration, no Free/Pro tiers, and no paid features. Users bring their own LLM API key (Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT, etc.); the key is stored locally (browser local storage or self-host config) and is **never** transmitted to or persisted on ProBot servers. Rate limits remain, but exist only to protect the user's own LLM credits and are configurable when self-hosting.
+> ProBot is free, open-source software (MIT). There is no Stripe integration, no Free/Pro tiers, and no paid features. Users bring their own LLM API key (Anthropic Claude, Google Gemini, OpenAI GPT, Azure OpenAI, etc.); the key is stored locally (browser local storage or self-host config) and is **never** transmitted to or persisted on ProBot servers. Rate limits remain, but exist only to protect the user's own LLM credits and are configurable when self-hosting.
 
 ## Overview
 
@@ -12,7 +12,7 @@ This document outlines a **7-stage incremental development plan** for pro-bot, d
 
 - **Open-source, no billing**: Stage 7 no longer adds Stripe, tier enforcement, or "Upgrade to Pro" prompts. It focuses on OAuth, compliance (GDPR / ToS / Privacy), landing page, security hardening, monitoring, and self-host packaging.
 - **BYO-key LLM from Stage 1**: The Bot Factory now includes an "AI Model" step (FR-002.11, FR-002.12). The chat API resolves the user's selected provider/model and uses the locally stored key passed in per request (`x-llm-api-key` header) - never persisted server-side.
-- **Multi-provider abstraction**: From Stage 1, the AI client is provider-agnostic (Anthropic / Google / DeepSeek / OpenAI). Stage 3 extends this to embeddings.
+- **Multi-provider abstraction**: From Stage 1, the AI client is provider-agnostic (Anthropic / Google / OpenAI / Azure). Stage 3 extends this to embeddings.
 - **Schema deltas**: `users` table gains `llm_provider` / `llm_model` (non-sensitive preferences only). Columns `tier`, `stripe_customer_id`, `stripe_subscription_id` from the v1.0 plan are removed.
 - **Rate limits as cost protection**: Limits are uniform (no Free vs Pro split), configurable via env / self-host config, and exist only to protect the user's own LLM credits.
 
@@ -95,12 +95,12 @@ probot/
         index.ts                   # DB connection
       ai/
         providers/
-          index.ts                 # Provider registry (anthropic, google, deepseek, openai)
+          index.ts                 # Provider registry (anthropic, google, openai, azure)
           types.ts                 # Shared LLMProvider interface
           anthropic.ts             # Claude completion adapter
           openai.ts                # GPT completion adapter
           google.ts                # Gemini completion adapter (stub ok in S1)
-          deepseek.ts              # DeepSeek completion adapter (stub ok in S1)
+          azure.ts                 # Azure OpenAI completion adapter
         prompt-builder.ts          # Adapted from VAi's buildSystemPrompt
         sanitize-input.ts          # Adapted from VAi's sanitizeMessage
         sanitize-output.ts         # Adapted from VAi's sanitizeOutput
@@ -236,7 +236,7 @@ NEXTAUTH_URL=http://localhost:3000
 - [x] NextAuth.js email/password authentication
 - [x] Bot Factory form (name, headline, text area, personality selector, **AI Model step with BYO API key field**)
 - [x] Browser-side LLM key store (`localStorage`) with "stored locally, never tracked" UI assurance
-- [x] Multi-provider LLM client abstraction (Anthropic + OpenAI minimum; Google/DeepSeek stubs)
+- [x] Multi-provider LLM client abstraction (Anthropic + OpenAI + Azure + Google Gemini)
 - [x] Chat API ported from VAi's `ask_vai.ts` (full-context injection) using BYO key via `x-llm-api-key` header
 - [x] Key-transport guarantees: header is never logged, never persisted, never forwarded except to the chosen provider
 - [x] Chat UI ported from VAi's `VAi.tsx` (markdown, loading, suggestions)
@@ -407,7 +407,7 @@ Replace full-context injection with Retrieval-Augmented Generation. When a recru
 
 ### SRS Requirements Covered
 
-- **FR-003.4**: Generate vector embeddings using the user's configured provider (OpenAI `text-embedding-3-small`, or a provider equivalent for Anthropic / Google / DeepSeek), authenticated with the user-supplied BYO key
+- **FR-003.4**: Generate vector embeddings using the user's configured provider (OpenAI `text-embedding-3-small`, or a provider equivalent for Anthropic / Google), authenticated with the user-supplied BYO key
 - **FR-003.5**: Store embeddings in vector DB namespaced by Bot ID
 - **FR-004.1-4.8**: Full RAG pipeline (embed query, retrieve top-3, construct prompt, generate via user's LLM provider)
 
@@ -473,7 +473,7 @@ Call embeddings.embed(chunk.content_text)  // dispatched by provider registry
   - openai: text-embedding-3-small (1536d)
   - anthropic: voyage-3 or equivalent (mapped to 1536d via projection if needed)
   - google: text-embedding-004
-  - deepseek: provider's embedding model
+  - azure: deployment-mapped text-embedding-3-small
   Uses the BYO API key passed in the ingestion request header.
     |
     v
@@ -1469,7 +1469,7 @@ latency_ms integer`. The chat route already times the provider call
 **Everything.** The full ProBot platform is production-ready and open source:
 
 - Users sign up (email or OAuth), pick an LLM provider/model, paste their own API key (stored locally only), and create bots from PDFs/URLs/text
-- Bots use RAG for intelligent, contextual answers via the user's chosen provider (Anthropic / Google / DeepSeek / OpenAI)
+- Bots use RAG for intelligent, contextual answers via the user's chosen provider (Anthropic / Google / OpenAI / Azure)
 - Public URLs and embeddable widgets for distribution
 - Dashboard with analytics, conversation logs, lead capture, and LLM key status
 - Uniform, configurable rate limits protecting users' own LLM credits
@@ -1540,8 +1540,8 @@ latency_ms integer`. The chat route already times the provider call
 | **ORM**                  | Drizzle ORM                                                                                                              | Stage 1       |
 | **Database**             | PostgreSQL (Supabase/Neon)                                                                                               | Stage 1       |
 | **Auth**                 | NextAuth.js (email/password in Stage 1; OAuth in Stage 7)                                                                | Stage 1       |
-| **AI (Chat)**            | Multi-provider BYO-key client: Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT (key stored locally, never tracked) | Stage 1       |
-| **AI (Embeddings)**      | Provider-matched embeddings (OpenAI `text-embedding-3-small`, Google `text-embedding-004`, Anthropic Voyage, DeepSeek)   | Stage 3       |
+| **AI (Chat)**            | Multi-provider BYO-key client: Anthropic Claude, Google Gemini, OpenAI GPT, Azure OpenAI (key stored locally, never tracked) | Stage 1       |
+| **AI (Embeddings)**      | Provider-matched embeddings (OpenAI `text-embedding-3-small`, Google `text-embedding-004`, Anthropic Voyage, Azure OpenAI)   | Stage 3       |
 | **Vector DB**            | Pinecone or Supabase pgvector                                                                                            | Stage 3       |
 | **File Storage**         | AWS S3 (Always Free: 5 GB + 20K GET + 2K PUT)                                                                            | Stage 2       |
 | **CDN**                  | AWS CloudFront (Always Free: 1 TB + 10M req) - fronts S3 for `widget.js`                                                 | Stage 5       |
