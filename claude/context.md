@@ -2257,3 +2257,62 @@ _Tests + types:_
 - **Managed key storage doesn't yet support Google.** It works for Anthropic/OpenAI; Azure is excluded (multi-secret), Google should work given the same single-key flow. Confirm in a smoke test after deploy; if Gemini's auth requires anything beyond an API key it would need its own adapter in the encrypted-key route too.
 - **Circuit breaker doesn't surface state to the dashboard.** A "your bot's provider is currently throttled" indicator would be useful when a circuit is open; Phase 6 polish.
 - **No alerting when a breaker opens.** The fallback reply is sent and persistence records the request, but the operator doesn't know an upstream is down. Phase 7's CI/observability work can wire a Sentry breadcrumb or log line here.
+
+### 2026-06-21 06:56 - Stage 7 Phase 5: GDPR export + 7-day delete grace + undo-link flow + nightly purge cron
+
+**What was asked to do:** Build the GDPR compliance half of Stage 7 - data export, account deletion with a 7-day undo grace, GitHub-style typed-confirmation modals for account and bot deletion, an undo page (login-like, no session needed) the user reaches via an emailed link, a Vercel-cron purge job that fires after the grace period, and updated legal copy describing the flow.
+
+**What I did:**
+- Migration `0012_melodic_raza.sql` adds `deletion_requests` (10 cols). Snapshots `email` + `username` so the post-purge completion email can still reach a CASCADE-deleted user; `undo_token_hash` (SHA-256); `confirmation_username` (forensic); `requested_at` + `scheduled_purge_at` + `purged_at`. Unique index on `user_id` enforces one pending deletion per user; unique on `undo_token_hash` for the undo lookup.
+- `src/lib/account/export.ts` - `buildExportBundle(userId)` walks users → bots → knowledge → conversations → messages → leads and returns a single JSON tree. Strips `hashedPassword`, `previewToken`, `knowledge_base.embedding`.
+- `GET /api/users/me/export` - session-gated, streams the bundle as a JSON attachment with `Cache-Control: no-store`.
+- `src/lib/account/delete.ts` - `initiateAccountDeletion`, `undoAccountDeletion`, `getPendingDeletion`, and `runPurgeJob({ sendCompletionEmail, pruneAuditLogs })`. The purge worker marks `purged_at = NOW()` BEFORE the user DELETE so the same-tick email pass sees the snapshot; the CASCADE then drops every dependent row including `deletion_requests` itself.
+- `POST /api/users/me/delete` - session-gated. Validates typed username server-side (defence in depth), maps results to 400/409/404/200, best-effort emails the undo link.
+- `POST /api/users/me/undo-deletion` - PUBLIC route (token IS auth). Refuses if `purged_at` is set (data is gone).
+- `/(auth)/undo-deletion/page.tsx` + `UndoDeletionForm.tsx` - login-styled public page. `robots: { index: false, follow: false }`.
+- `GET /api/cron/purge-deleted-accounts` + `vercel.json` - daily 03:00 UTC. Auth via `Authorization: Bearer $CRON_SECRET`; fail-closed 503 when unset.
+- `src/lib/auth/email-templates.ts` + `email.ts` - `deletionInitiatedEmail` (CTA → undo link) + `deletionCompleteEmail` (no CTA, confirmation only).
+- `DeleteAccountModal.tsx` + `DeleteBotModal.tsx` - GitHub-style two-input modals: typed identifier + typed phrase. Esc closes; backdrop click does NOT.
+- `SecurityActions.tsx` + rewritten `SecurityTab.tsx` - two states: Delete button OR yellow "scheduled for deletion in N days" banner pointing at the email link. Dashboard does NOT expose its own undo button (one canonical surface).
+- `BotConfigTab.tsx` - new Danger Zone + DeleteBotModal → `DELETE /api/bots/[botId]`. No grace period; user redirects to `/dashboard/bots/new`.
+- `DELETE /api/bots/[botId]` - new method; CASCADEs every dependent row.
+- `src/lib/marketing/legal.ts` - `DELETION_GRACE_DAYS = 7` (was 30), new `DELETION_FINAL_DAYS = 30`. Privacy + Terms copy rewritten to describe the in-app delete button + 7-day grace + undo link + 30-day outer bound.
+- Tests: 12 new for `delete.ts`, 4 for the cron route's auth gate. Settings-page test mock extended with `deletionRequests.findFirst`. Total: 775 (was 759; +16). Typecheck + build green.
+
+**Files changed:**
+- `src/lib/db/schema.ts` - update - `deletionRequests` + inferred types.
+- `drizzle/0012_melodic_raza.sql` + `meta/0012_snapshot.json` + `_journal.json` - create/update.
+- `src/lib/account/{export,delete,prune-audit-log}.ts` + `delete.test.ts` - create.
+- `src/app/api/users/me/{export,delete,undo-deletion}/route.ts` - create.
+- `src/app/api/cron/purge-deleted-accounts/route.ts` + `route.test.ts` - create.
+- `vercel.json` - create.
+- `src/lib/auth/{email-templates,email}.ts` - update.
+- `src/components/dashboard/{DeleteAccountModal,DeleteBotModal}.tsx` - create.
+- `src/components/dashboard/settings/{SecurityActions,SecurityTab,BotConfigTab}.tsx` - create/update.
+- `src/app/api/bots/[botId]/route.ts` - update - new DELETE.
+- `src/app/(auth)/undo-deletion/page.tsx` + `src/components/auth/UndoDeletionForm.tsx` - create.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` + `page.test.tsx` - update.
+- `src/lib/marketing/legal.ts` + `src/app/(marketing)/{privacy,terms}/page.tsx` - update.
+- `.env.example` - update - `CRON_SECRET` documented.
+
+**Decisions made:**
+- **Email snapshot in `deletion_requests`, not a tombstone table.** Cron loop variable holds the snapshot long enough to email after CASCADE drops the DB row.
+- **Undo hard-deletes the request row.** A `cancelled_at` flag would build a creepy "almost deleted" log. Honest undo = the request never happened.
+- **`purged_at` flipped BEFORE the user DELETE.** CASCADE drops the row with the user; pre-flipping lets the same-tick email pass observe the snapshot.
+- **PUBLIC undo route.** Requiring login would be a chicken-and-egg trap. Token IS the auth; typed-username re-check is the safeguard.
+- **One canonical undo surface (the public page).** Dashboard banner points at the email link rather than offering a duplicate button.
+- **DeleteBotModal is no-grace, immediate.** Per-bot risk is small; user can recreate via /dashboard/bots/new; the typed-name + typed-phrase friction is sufficient.
+- **No CSRF on the undo route despite being public + destructive.** Token IS auth; CSRF protection helps only against logged-in tricked third parties, and the user on the undo route isn't logged in.
+- **Sign-out after delete-init.** Keeps next request from rendering a stale dashboard against a doomed account.
+- **Export skips `previewToken`, `hashedPassword`, embeddings.** Credentials/data with zero user value and non-zero attacker value.
+- **Vercel Hobby's one-cron limit forces consolidation.** Single cron handles purge + audit-log pruning.
+- **Cron auth uses constant-string compare, not `timingSafeEqual`.** Daily fire rate makes a timing oracle impractical.
+
+**Open questions / follow-ups:**
+- **No "resend deletion email" UI** for users who lose the undo link.
+- **Dashboard banner has no Cancel button** by design (one canonical surface) - revisit on user research.
+- **Account deletion doesn't revoke OTHER browser sessions.** Phase 7 hardening could revoke all session tokens at init.
+- **Cron schedule hard-coded to 03:00 UTC.**
+- **No structured audit log of deletion lifecycle events.** Request-row timestamps cover the basics; dedicated event log lands with Phase 7.
+- **`buildExportBundle` does per-table queries (N+1).** Fine at v1; Stage 8 can swap to a single CTE if it becomes hot.
+- **No retention on `deletion_requests` for purged rows.** CASCADE drops them at purge time; the cleanup pass is defence-in-depth.

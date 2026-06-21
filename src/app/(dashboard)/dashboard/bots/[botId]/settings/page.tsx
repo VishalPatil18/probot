@@ -11,6 +11,7 @@ import {
   SettingsTabPanel,
   SettingsTabs,
 } from "@/components/dashboard/settings/SettingsTabs";
+import { getPendingDeletion } from "@/lib/account/delete";
 import { authOptions } from "@/lib/auth/auth";
 import { bots, db, users } from "@/lib/db";
 import type { Personality } from "@/lib/bots/schemas";
@@ -53,7 +54,7 @@ export default async function BotSettingsPage({
 
   const userId = session.user.id;
 
-  const [bot, userRow] = await Promise.all([
+  const [bot, userRow, pendingDeletion] = await Promise.all([
     db.query.bots.findFirst({
       where: and(eq(bots.id, params.botId), eq(bots.userId, userId)),
       columns: {
@@ -75,6 +76,7 @@ export default async function BotSettingsPage({
       where: eq(users.id, userId),
       columns: { llmProvider: true, llmModel: true },
     }),
+    getPendingDeletion(userId),
   ]);
   if (!bot) notFound();
 
@@ -121,7 +123,17 @@ export default async function BotSettingsPage({
         </SettingsTabPanel>
 
         <SettingsTabPanel tab="security">
-          <SecurityTab />
+          <SecurityTab
+            username={session.user.username}
+            pendingDeletion={
+              pendingDeletion
+                ? {
+                    scheduledPurgeAt:
+                      pendingDeletion.scheduledPurgeAt.toISOString(),
+                  }
+                : null
+            }
+          />
         </SettingsTabPanel>
 
         <SettingsTabPanel tab="model">

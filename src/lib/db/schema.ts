@@ -264,6 +264,69 @@ export const passwordResetTokens = pgTable(
   }),
 ).enableRLS();
 
+// deletion_requests (Stage 7 Phase 5 §NFR-C01/C04/C05)
+// One row per outstanding account-deletion request. The grace period is
+// `scheduled_purge_at - requested_at` (7 days in code). Snapshots
+// `email_snapshot` + `username_snapshot` so the post-purge completion
+// email can still reach the (now-deleted) user.
+//
+// `undo_token_hash` is the SHA-256 of the raw token we email the user.
+// They click the link, type their username to confirm, and the row gets
+// deleted - cancelling the purge. The raw token never touches the DB; same
+// pattern as password_reset_tokens.
+//
+// `confirmation_username` is what the user typed in the GitHub-style
+// confirmation modal at delete-init time. Stored so the post-incident
+// audit can answer "did they type their own username, not someone else's
+// by mistake or via a CSRF?" - we already validate at request time but
+// the historic value is useful forensics.
+//
+// `purged_at` flips from null to a timestamp the moment the cron job
+// finishes purging this user's data. The row itself sticks around briefly
+// for one more cron run (so the completion email can be sent from the
+// snapshot), then gets cleaned up.
+export const deletionRequests = pgTable(
+  "deletion_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    emailSnapshot: varchar("email_snapshot", { length: 255 }).notNull(),
+    usernameSnapshot: varchar("username_snapshot", { length: 30 }).notNull(),
+    confirmationUsername: varchar("confirmation_username", {
+      length: 30,
+    }).notNull(),
+    undoTokenHash: varchar("undo_token_hash", { length: 64 }).notNull(),
+    requestedAt: timestamp("requested_at", {
+      mode: "date",
+      withTimezone: false,
+    })
+      .notNull()
+      .defaultNow(),
+    scheduledPurgeAt: timestamp("scheduled_purge_at", {
+      mode: "date",
+      withTimezone: false,
+    }).notNull(),
+    purgedAt: timestamp("purged_at", { mode: "date", withTimezone: false }),
+    completionEmailSentAt: timestamp("completion_email_sent_at", {
+      mode: "date",
+      withTimezone: false,
+    }),
+  },
+  (table) => ({
+    userIdUnique: uniqueIndex("deletion_requests_user_id_unique").on(
+      table.userId,
+    ),
+    undoTokenHashUnique: uniqueIndex(
+      "deletion_requests_undo_token_hash_unique",
+    ).on(table.undoTokenHash),
+    scheduledPurgeAtIdx: index(
+      "deletion_requests_scheduled_purge_at_idx",
+    ).on(table.scheduledPurgeAt),
+  }),
+).enableRLS();
+
 // email_verification_tokens (Stage 7 §FR-001.5)
 // Sent to credentials-registered users at signup time. Magic-link signups
 // don't use this table - NextAuth's `verification_tokens` covers them and
@@ -500,6 +563,8 @@ export type EncryptedLlmKey = typeof encryptedLlmKeys.$inferSelect;
 export type NewEncryptedLlmKey = typeof encryptedLlmKeys.$inferInsert;
 export type DecryptAuditLogEntry = typeof decryptAuditLog.$inferSelect;
 export type NewDecryptAuditLogEntry = typeof decryptAuditLog.$inferInsert;
+export type DeletionRequest = typeof deletionRequests.$inferSelect;
+export type NewDeletionRequest = typeof deletionRequests.$inferInsert;
 export type KnowledgeChunk = typeof knowledgeBase.$inferSelect;
 export type NewKnowledgeChunk = typeof knowledgeBase.$inferInsert;
 export type Conversation = typeof conversations.$inferSelect;

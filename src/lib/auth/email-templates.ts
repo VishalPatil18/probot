@@ -53,6 +53,73 @@ If you didn't sign up for ProBot, you can safely ignore this email.`,
   };
 }
 
+interface DeletionInitiatedArgs extends TemplateLink {
+  scheduledPurgeAt: Date;
+}
+
+export function deletionInitiatedEmail({
+  url,
+  scheduledPurgeAt,
+}: DeletionInitiatedArgs): Template {
+  const dateLine = scheduledPurgeAt.toUTCString();
+  return {
+    subject: "Your ProBot account is scheduled for deletion",
+    html: shell({
+      title: "Account deletion scheduled",
+      body: `We received a request to delete your ProBot account. Your data will be permanently deleted on ${dateLine}. You have 7 days to undo this if you change your mind - just click the button below.`,
+      ctaLabel: "Undo deletion",
+      ctaUrl: url,
+      footer:
+        "If you didn't request this deletion, click the Undo button above immediately and rotate your password from the login page.",
+    }),
+    text: `Account deletion scheduled
+
+We received a request to delete your ProBot account. Your data will be permanently deleted on ${dateLine}. You have 7 days to undo this if you change your mind - open the link below to cancel.
+
+${url}
+
+If you didn't request this deletion, open the link above to cancel and rotate your password from the login page.`,
+  };
+}
+
+interface DeletionCompleteArgs {
+  username: string;
+}
+
+export function deletionCompleteEmail({
+  username,
+}: DeletionCompleteArgs): Template {
+  return {
+    subject: "Your ProBot account has been deleted",
+    html: `<!DOCTYPE html>
+<html>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 40px auto; padding: 24px; color: #18181b;">
+    <h1 style="font-size: 22px; margin: 0 0 16px;">Your ProBot account is gone</h1>
+    <p style="font-size: 14px; line-height: 1.6; color: #52525b; margin: 0 0 24px;">
+      We've permanently deleted the account associated with <strong>${escapeHtmlInline(username)}</strong>. Your bots, conversations, leads, and uploaded knowledge are gone from our systems.
+    </p>
+    <p style="font-size: 12px; color: #71717a; margin: 0;">
+      If you didn't request this deletion and you're seeing this message in error, please contact us immediately - we cannot recover the data, but we can investigate how the deletion was triggered.
+    </p>
+  </body>
+</html>`,
+    text: `Your ProBot account is gone
+
+We've permanently deleted the account associated with ${username}. Your bots, conversations, leads, and uploaded knowledge are gone from our systems.
+
+If you didn't request this deletion and you're seeing this message in error, please contact us immediately - we cannot recover the data, but we can investigate how the deletion was triggered.`,
+  };
+}
+
+function escapeHtmlInline(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function passwordResetEmail({ url }: TemplateLink): Template {
   return {
     subject: "Reset your ProBot password",

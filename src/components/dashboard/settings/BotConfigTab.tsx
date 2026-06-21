@@ -17,6 +17,7 @@ import {
   PER_MINUTE_DEFAULT,
 } from "@/lib/ai/rate-limit";
 
+import { DeleteBotModal } from "../DeleteBotModal";
 import { SuggestedQuestionsEditor } from "../SuggestedQuestionsEditor";
 
 type Props = {
@@ -111,6 +112,9 @@ export function BotConfigTab({
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status !== "saved") return;
@@ -243,6 +247,26 @@ export function BotConfigTab({
     } catch {
       setStatus("error");
       setErrorMsg("Network error. Please try again.");
+    }
+  }
+
+  async function handleDeleteBot() {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/bots/${botId}`, { method: "DELETE" });
+      if (!res.ok) {
+        setDeleteError("Couldn't delete this bot. Please try again.");
+        return;
+      }
+      setDeleteOpen(false);
+      router.push("/dashboard/bots/new");
+      router.refresh();
+    } catch {
+      setDeleteError("Network error. Please try again.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -516,6 +540,34 @@ export function BotConfigTab({
           {status === "saving" ? "Saving…" : "Save bot settings"}
         </button>
       </div>
+
+      <section className="rounded-2xl border border-rose-200 bg-white p-6 shadow-soft">
+        <h3 className="mb-1 font-bold text-rose-600">Danger zone</h3>
+        <p className="mb-4 text-xs text-muted">
+          Permanently deletes this bot, its knowledge base, conversations,
+          leads, and any stored encrypted key. You can create a new bot
+          afterwards. This cannot be undone.
+        </p>
+        <button
+          type="button"
+          onClick={() => setDeleteOpen(true)}
+          className="btn border border-rose-200 !bg-rose-50 !text-rose-600 hover:!bg-rose-100"
+        >
+          Delete this bot
+        </button>
+      </section>
+
+      <DeleteBotModal
+        botName={initialName}
+        open={deleteOpen}
+        busy={deleting}
+        error={deleteError}
+        onClose={() => {
+          setDeleteOpen(false);
+          setDeleteError(null);
+        }}
+        onConfirm={handleDeleteBot}
+      />
     </div>
   );
 }

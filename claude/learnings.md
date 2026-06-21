@@ -1545,3 +1545,120 @@ The general principle: **match the brittleness of your error mapping to the vola
 A related lesson: **never just `throw err`** when the upstream's error shape is unknown. Always wrap it in your domain's typed error (`ProviderError` here) so callers don't have to know about SDK internals. The category enum (`invalid_key | rate_limit | unknown`) is small enough to exhaust, which means callers can switch on it safely and the SDK volatility stays contained to the adapter.
 
 ---
+
+### Snapshotting Email Into A Tombstone Row Beats A Separate "Post-Delete Email" Table (Stage 7 Phase 5)
+
+> The deletion_requests table has `email_snapshot` and `username_snapshot` columns. The user's `email` and `username` live in the `users` table anyway. Why duplicate them - and why is this the right pattern?
+
+The duplication exists for one specific reason: by the time the cron job needs the email to send the completion notice, the user's row has been CASCADE-deleted and the original `users.email` is gone. Without a snapshot somewhere, the operator has two unappealing choices: (a) leave the user wondering "did the deletion actually happen?" with no confirmation, or (b) DON'T CASCADE delete the user, instead null out their personal fields and keep a tombstone row in `users` forever - which violates GDPR's "right to erasure" because the tombstone IS personal data even if scrubbed.
+
+Snapshotting into the deletion_requests row sidesteps both. The data flow during the cron run is:
+
+```
+1. read deletion_requests row → in-memory `snapshot = { email, username, ... }`
+2. UPDATE deletion_requests SET purged_at = NOW()
+3. DELETE FROM users WHERE id = userId  ← CASCADE drops bots, knowledge, ...
+                                            AND the deletion_requests row itself
+4. send completion email using `snapshot.email`  ← still in scope, JS holds it
+```
+
+The trick: the in-memory variable from step 1 survives the CASCADE in step 3 because JavaScript's garbage collector has no idea the DB row is gone. The snapshot lives long enough for step 4 to fire the email, then JS GCs it like any other local. No tombstone row, no PII lingering in the DB, no orphaned `users` rows.
+
+The alternative pattern - a separate `deletion_completion_email_queue` table - would add a write, an asynchronous email worker, and a partial-state failure mode where the user is deleted but the queue row got dropped. The snapshot-in-the-request-row pattern collapses all of that into a single transaction-free flow that's atomic at the granularity that matters (a single user's deletion). The `purged_at` flag in step 2 is what makes the operation idempotent - a re-run of the cron sees `purged_at IS NOT NULL` and skips the row.
+
+The general principle: **when you need to know something about a record after the record is gone, snapshot the values you need into a row that outlives the deletion.** The snapshot row is your own bounded liability - it's pruned by your own cleanup pass, not held forever like a tombstone. CASCADE-with-snapshot is much cleaner than soft-delete-with-tombstone for GDPR-flavored use cases.
+
+### Token IS Auth: When Public Destructive Routes Are Actually Fine (Stage 7 Phase 5)
+
+> The `/api/users/me/undo-deletion` route is publicly reachable (no session required), accepts a token + username, and reverses a destructive operation. That sounds dangerous. Why is it OK?
+
+It would be dangerous if the threat model were "anyone on the internet can fire the route." It isn't - the route requires a 256-bit token only sent to the email address that initiated the deletion. The token IS the authentication; possessing it proves you're the account owner (or you've compromised their email, in which case they have bigger problems than a recovered ProBot account).
+
+This pattern is everywhere in modern auth flows:
+- Password-reset links work without a session (the token authenticates).
+- Email-verification links work without a session (the token authenticates).
+- Magic-link sign-in works without a session (the token authenticates).
+- Stripe payment confirmations send a webhook with a signature header (the signature authenticates).
+
+The key safety properties that make these patterns OK:
+
+1. **High-entropy tokens.** 256 bits of randomness means an attacker can't guess the token. A 4-digit OTP would be guessable in hours; a 32-byte URL-safe random string is not.
+2. **Short TTL.** Our undo token expires at `scheduled_purge_at`, so 7 days. Password-reset tokens are typically 1 hour. The shorter the window, the less time for the token to be exposed before it expires.
+3. **Single-use OR delete-on-success.** Our undo deletes the deletion_requests row on success, which invalidates the token. Password-reset tokens get `used_at` set. Either way, you can't replay.
+4. **Defence-in-depth confirmation.** Our undo page requires the user to type their username before submitting. That re-check protects against the case where someone scrapes the URL out of a leaked email but doesn't know the username (e.g., from a forwarded support thread that elided the account details).
+
+What CSRF protection adds in the typical "logged-in user tricked into firing a destructive action" scenario is irrelevant here because the user firing the undo isn't logged in - they're an anonymous visitor presenting a token. There's no cookie an attacker could ride on; the only way to fire the route is to know the token. CSRF tokens defend against cookie-borne sessions, not bearer-token APIs.
+
+The mental model: **bearer-token APIs are authenticated by presenting the token, not by a session cookie. CSRF protection is a session-cookie countermeasure that doesn't apply.** If you find yourself reaching for CSRF tokens on a public bearer-authenticated endpoint, you're solving the wrong problem - the right defences are token entropy, TTL, single-use, and (sometimes) typed-confirmation.
+
+### `purged_at` BEFORE `DELETE`, Not After: Ordering Around A CASCADE (Stage 7 Phase 5)
+
+> The cron job marks `purged_at = NOW()` on the deletion_requests row, THEN deletes the user. The naive order would be reversed. Why this way?
+
+The deletion_requests table has `ON DELETE CASCADE` from the users table. That means deleting the user deletes the deletion_requests row too. So if the order were:
+
+```
+1. DELETE FROM users WHERE id = userId
+2. UPDATE deletion_requests SET purged_at = NOW() WHERE user_id = userId
+```
+
+Step 2 would silently affect zero rows because the deletion_requests row no longer exists (the CASCADE dropped it in step 1). The cron job would think "I completed the work" but the audit trail would be lost.
+
+Reversing the order:
+
+```
+1. UPDATE deletion_requests SET purged_at = NOW() WHERE id = ...
+2. DELETE FROM users WHERE id = userId  ← CASCADE drops the request row
+```
+
+Step 1 successfully writes; step 2's CASCADE drops the row. The `purged_at` write doesn't survive in the DB - but it doesn't need to. What we needed was the IN-MEMORY snapshot of the request row (from step 0, `read deletion_requests row`) plus the knowledge that we already attempted the purge for this row in this cron tick. Idempotency is provided by the read-time filter `WHERE purged_at IS NULL`, which won't match this row again in a subsequent tick because... well, the row is gone.
+
+The general principle: **when CASCADE is in play, ordering matters because the second write might no-op silently.** Pre-flag whatever you need flagged BEFORE the cascade-triggering operation. The pattern also generalizes to non-cascade scenarios: any "mark completed" update should happen before the destructive operation if the destructive op could affect the marker row. Backwards: "delete the file, then mark the row as deleted-from-disk" - if the row was a child of the file in a foreign-key chain, the mark wouldn't survive.
+
+A subtler version: **PostgreSQL's default isolation level reads inside a transaction can see uncommitted writes from the same transaction**, but that's not what's happening here - we're outside a transaction (or in a small one per-row). The discipline isn't transactional; it's about understanding that DB operations can have effects beyond the row you targeted.
+
+### GitHub-Style Two-Input Confirmation Modals: Why Two, And Why These Two (Stage 7 Phase 5)
+
+> The DeleteAccountModal requires the user to type both their username AND the literal phrase "delete my account". Why two inputs? Wouldn't either alone be sufficient friction?
+
+Each input guards against a different failure mode:
+
+**Username input** guards against "wrong account." If the user has multiple accounts (work + personal) and is signed into the wrong one when they click Delete, the username field reveals it: they type the username they meant to delete, the modal's `usernameOk` check fails because the typed value doesn't match `session.user.username`. The friction is small for the genuinely-meant deletion (autocomplete kicks in) and decisive for the accidental wrong-account deletion.
+
+**Phrase input** guards against "wrong intent." The literal phrase "delete my account" is unambiguous - you can't type those exact words while thinking "I just want to clear some data" or "I want to deactivate temporarily." A single click on a labeled button can happen reflexively; typing a sentence cannot. The friction is small for the genuinely-meant deletion (a couple seconds of typing) and decisive for the misclick.
+
+Together: misclick is blocked by phrase; wrong-account is blocked by username. Each alone leaves one hole; together they close both.
+
+A common single-input alternative - "type DELETE in all caps to confirm" - has the misclick property but not the wrong-account property. A user signed into the wrong account would still type DELETE and confirm. That's why GitHub's repo-delete dialog also asks for the repo name (the wrong-repo guard) AND a phrase. We're cargo-culting good behavior here, which is exactly the right kind of cargo-culting.
+
+A few less-obvious design choices in our implementation:
+
+- **Esc closes; backdrop click does NOT.** Backdrop misclicks are too easy - users frequently click outside a modal to dismiss informational dialogs, and a deletion modal should require an explicit cancel.
+- **Inputs reset on every open.** Lingering text from a previous-but-closed session would let a user open the modal and immediately have it satisfied with stale input.
+- **The destructive button is enabled only when BOTH checks pass.** No "Confirm" prompt that pops up after the button is clicked; the gating happens on the inputs themselves.
+- **Username input is `autoComplete="off"` + `spellCheck={false}`.** Browser autofill for "delete" would defeat the friction.
+
+The general principle: **destructive UI should require enough friction that a tired or distracted user can't fire it by accident, but not so much friction that a determined user can't get through it.** Two short inputs is the sweet spot; CAPTCHAs and "wait 30 seconds" buttons are over the top.
+
+### Cron Auth That's Allowed To Be Simple (Stage 7 Phase 5)
+
+> The cron route compares `Authorization: Bearer X` to the env var with a plain `===` string compare. The crypto module uses `timingSafeEqual` for signature comparison. Why the inconsistency?
+
+The inconsistency reflects a real difference in attack surface, not laziness.
+
+**`timingSafeEqual`** prevents timing-oracle attacks where an attacker measures how long the comparison takes to deduce the secret byte-by-byte. To exploit a timing oracle you need:
+- Many requests per second (to average out network noise)
+- A consistent measurement environment
+- The ability to keep trying until you crack the full secret
+
+**The cron route fires exactly once a day.** An attacker who wanted to mount a timing attack would get one measurement per day. Cracking a 256-bit secret one byte at a time would take... about 70 billion years.
+
+Even if Vercel allowed a malicious actor to fire the route faster (they don't - the rate limit on unauthenticated requests is tight), they'd be probing a static env var the operator already controls. There's no escalation; the secret doesn't unlock anything beyond "trigger the purge that's scheduled to fire today anyway."
+
+**`crypto.envelope`** is different. The signature comparison runs on EVERY chat request from every recruiter. A high-traffic deployment could see thousands of requests per second. The attack surface is real, even if the exploit window is narrow. Using `timingSafeEqual` costs nothing extra (Node's standard library implements it) and protects against an attack class that's at least theoretically possible.
+
+The general principle: **match the cost of the defence to the cost of the attack.** Constant-string compare is fine when the attacker can't generate enough samples to discriminate timing. Constant-time compare is the safer default when in doubt; reach for plain `===` only when the operational characteristics make the timing channel infeasible.
+
+A related lesson: **`timingSafeEqual` requires equal-length buffers** (it throws otherwise). The buffer-length check itself is a timing oracle on the secret length, so the canonical pattern is: hash both inputs to a fixed length first, then compare. We don't do that here because length-leak on the env var is irrelevant; for higher-stakes comparisons (e.g., comparing user-supplied passwords), always hash first.
+
+---

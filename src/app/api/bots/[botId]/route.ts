@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-import { botPatchInput } from "@/lib/bots/schemas";
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
+import { botPatchInput } from "@/lib/bots/schemas";
 import { bots, db } from "@/lib/db";
 
 // PATCH /api/bots/[botId]
@@ -108,4 +108,27 @@ export async function PATCH(
     });
 
   return NextResponse.json({ bot: updated });
+}
+
+// DELETE /api/bots/[botId]
+//
+// Stage 7 Phase 5: permanently delete a single bot. The Drizzle CASCADE
+// on the `bots` FK takes everything dependent with it - knowledge_base,
+// conversations, messages, leads, encrypted_llm_keys, decrypt_audit_log.
+// No grace period; the user must already have re-typed the bot name and
+// confirm phrase in the DeleteBotModal client-side. We don't gate on a
+// typed-name re-check here because (a) the request comes from a same-
+// origin session-authed client, (b) the destructive intent is bot-scoped
+// (not account-scoped, where the typed-username server check is the
+// matching pattern - see /api/users/me/delete).
+export async function DELETE(
+  _request: Request,
+  { params }: { params: { botId: string } },
+): Promise<Response> {
+  const owner = await requireBotOwner(params.botId);
+  if (!owner.ok) return owner.response;
+  const { bot } = owner;
+
+  await db.delete(bots).where(eq(bots.id, bot.id));
+  return NextResponse.json({ ok: true });
 }

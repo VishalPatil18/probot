@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 
 import {
+  deletionCompleteEmail,
+  deletionInitiatedEmail,
   emailVerificationEmail,
   magicLinkEmail,
   passwordResetEmail,
@@ -57,4 +59,49 @@ export async function sendPasswordResetEmail(
     ...args,
     template: passwordResetEmail({ url: args.url }),
   });
+}
+
+interface SendDeletionInitiatedArgs extends SendLinkArgs {
+  scheduledPurgeAt: Date;
+}
+
+export async function sendDeletionInitiatedEmail(
+  args: SendDeletionInitiatedArgs,
+): Promise<void> {
+  await sendTemplated({
+    to: args.to,
+    url: args.url,
+    template: deletionInitiatedEmail({
+      url: args.url,
+      scheduledPurgeAt: args.scheduledPurgeAt,
+    }),
+  });
+}
+
+interface SendDeletionCompleteArgs {
+  to: string;
+  username: string;
+}
+
+export async function sendDeletionCompleteEmail(
+  args: SendDeletionCompleteArgs,
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM;
+  if (!apiKey || !from) {
+    // Best-effort: if Resend isn't configured we don't crash the purge.
+    return;
+  }
+  const template = deletionCompleteEmail({ username: args.username });
+  const resend = new Resend(apiKey);
+  const { error } = await resend.emails.send({
+    from,
+    to: args.to,
+    subject: template.subject,
+    html: template.html,
+    text: template.text,
+  });
+  if (error) {
+    throw new Error(`Resend send failed: ${error.message}`);
+  }
 }

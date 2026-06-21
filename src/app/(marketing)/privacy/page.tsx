@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import {
   CONTACT_EMAIL,
+  DELETION_FINAL_DAYS,
   DELETION_GRACE_DAYS,
   GOOGLE_USER_DATA_POLICY_URL,
   JURISDICTION,
@@ -99,6 +100,17 @@ export default function PrivacyPage() {
                   purpose other than security or your explicit support request.
                 </li>
                 <li>
+                  Use the in-app{" "}
+                  <strong>Settings → Security &amp; privacy → Delete account</strong>{" "}
+                  button. We schedule the deletion immediately and give you a{" "}
+                  {DELETION_GRACE_DAYS}-day grace period during which you can
+                  cancel via the link we email you (or by visiting the
+                  &ldquo;Undo deletion&rdquo; page directly). After the grace
+                  period elapses your account, bots, knowledge bases,
+                  conversations, leads, encrypted keys, and audit logs are
+                  permanently removed by our nightly purge job.
+                </li>
+                <li>
                   Email us at{" "}
                   <a
                     href={`mailto:${CONTACT_EMAIL}`}
@@ -106,8 +118,8 @@ export default function PrivacyPage() {
                   >
                     {CONTACT_EMAIL}
                   </a>{" "}
-                  and we will delete your account and all associated data within{" "}
-                  {DELETION_GRACE_DAYS} days.
+                  if you cannot access the dashboard. We will trigger the same
+                  scheduled-deletion flow on your behalf and confirm via email.
                 </li>
               </ul>
             </section>
@@ -372,10 +384,17 @@ export default function PrivacyPage() {
                   for as long as the associated bot exists.
                 </p>
                 <p>
-                  If you delete a bot, its conversations, leads, and knowledge
-                  chunks are removed within 30 days. If you delete your account
-                  (or email us to do so), all of the above plus your account
-                  record are removed within {DELETION_GRACE_DAYS} days.
+                  If you delete a bot, its conversations, leads, knowledge
+                  chunks, and any stored encrypted LLM key are removed
+                  immediately. If you delete your account, all of the above
+                  plus your account record are scheduled for permanent
+                  deletion after a <strong>{DELETION_GRACE_DAYS}-day grace
+                  period</strong> during which you can undo the request via
+                  the email link we send. After the grace period our nightly
+                  purge job removes the data permanently and sends a
+                  completion email to confirm. The full elapsed window from
+                  request to total erasure is at most {DELETION_FINAL_DAYS}{" "}
+                  days.
                 </p>
                 <p>
                   We may keep minimal records longer where required by law - for
@@ -397,16 +416,23 @@ export default function PrivacyPage() {
                 about you, and to withdraw consent.
               </p>
               <p className="text-muted mb-4">
-                To exercise any of these rights, or simply to delete your
-                account and all associated data, email{" "}
+                The fastest way to delete your account or download your data
+                is from the dashboard: <strong>Settings → Security &amp;
+                privacy</strong> exposes both an &ldquo;Export my
+                data&rdquo; button (JSON of every row associated with your
+                account) and a &ldquo;Delete account&rdquo; button that
+                kicks off the {DELETION_GRACE_DAYS}-day grace period
+                described above. To exercise any of these rights via email
+                instead, write to{" "}
                 <a
                   href={`mailto:${CONTACT_EMAIL}`}
                   className="text-brand font-semibold hover:underline"
                 >
                   {CONTACT_EMAIL}
                 </a>{" "}
-                from the address associated with your account. We will respond
-                and complete deletion within {DELETION_GRACE_DAYS} days.
+                from the address associated with your account; we will
+                trigger the same flow on your behalf and confirm completion
+                within {DELETION_FINAL_DAYS} days.
               </p>
               <p className="text-muted">
                 You can also disconnect Google or GitHub sign-in from the

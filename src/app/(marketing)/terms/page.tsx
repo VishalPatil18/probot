@@ -250,15 +250,21 @@ export default function TermsPage() {
               </h2>
               <div className="space-y-3 text-muted">
                 <p>
-                  You can stop using ProBot at any time. To delete your account
-                  and all associated data, email{" "}
+                  You can stop using ProBot at any time. To delete your
+                  account and all associated data, go to{" "}
+                  <strong>Settings → Security &amp; privacy → Delete
+                  account</strong> in the dashboard. Deletion is scheduled
+                  with a {DELETION_GRACE_DAYS}-day grace period during
+                  which you can cancel via the link we email; after that
+                  window your data is permanently purged. If you prefer to
+                  use email, write to{" "}
                   <a
                     href={`mailto:${CONTACT_EMAIL}`}
                     className="text-brand font-semibold hover:underline"
                   >
                     {CONTACT_EMAIL}
                   </a>
-                  . We will complete deletion within {DELETION_GRACE_DAYS} days.
+                  .
                 </p>
                 <p>
                   We may suspend or terminate your access to ProBot, with or

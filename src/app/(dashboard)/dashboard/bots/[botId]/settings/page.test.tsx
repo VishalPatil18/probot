@@ -22,15 +22,21 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/auth/auth", () => ({ authOptions: {} }));
 
+const findDeletionMock = vi.fn().mockResolvedValue(undefined);
+
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
       bots: { findFirst: (...args: unknown[]) => findBotMock(...args) },
       users: { findFirst: (...args: unknown[]) => findUserMock(...args) },
+      deletionRequests: {
+        findFirst: (...args: unknown[]) => findDeletionMock(...args),
+      },
     },
   },
   bots: { id: "b.id", userId: "b.user_id" },
   users: { id: "u.id" },
+  deletionRequests: { userId: "d.user_id" },
 }));
 
 const fetchMock = vi.fn();
