@@ -1773,3 +1773,101 @@ A useful pattern: **expose a `__resetForTests` (or similar) that owns the cleanu
 The specific symptom to watch for: a test hangs until the test runner's hook timeout fires (often 10 seconds default), error message says "Hook timed out." That's almost always a resource-leak or fire-and-forget-async issue, not a slow operation. The instinct should be "what's not getting closed" before "what's slow."
 
 ---
+
+### KEK Rotation Without Re-Encrypting User Data (Stage 7 Phase 7)
+
+> The KEK rotation script touches every row in encrypted_llm_keys but the user's actual LLM API keys never get re-encrypted - only the DEK wrapping changes. Why does this work, and why is it the only sane way to rotate?
+
+The envelope encryption pattern (locked in during Phase 3) is built around two layers:
+
+- **DEK (Data Encryption Key)** - per-bot, random 256-bit AES key, encrypts the user's LLM key.
+- **KEK (Key Encryption Key)** - process-wide, 256-bit AES key, encrypts the DEK.
+
+The clever bit is that the user's LLM key ciphertext only ever sees the DEK. The KEK is one layer removed - it wraps the DEK, not the data. So when you rotate the KEK:
+
+```
+old state:  DEK encrypts ApiKey → ciphertext
+            OLD_KEK wraps DEK → wrappedDek
+
+rotation:   decrypt wrappedDek with OLD_KEK → raw DEK
+            encrypt raw DEK with NEW_KEK → new wrappedDek
+            (ciphertext stays byte-identical)
+
+new state:  DEK encrypts ApiKey → SAME ciphertext as before
+            NEW_KEK wraps DEK → new wrappedDek
+```
+
+The data ciphertext bytes don't change. The IV and auth tag don't change. The only column we UPDATE per row is `wrapped_dek` (and its IV + auth tag). If you have 10,000 rows, you do 10,000 small re-wrap operations + 10,000 single-column UPDATEs - not 10,000 full decrypt/re-encrypt cycles with potentially-megabyte payloads.
+
+Compare to the naive "rotate by re-encrypting everything":
+
+```
+naive rotation:  decrypt full ciphertext with OLD_KEK → plaintext
+                 encrypt plaintext with NEW_KEK → NEW ciphertext
+                 UPDATE: ciphertext, iv, auth_tag, ...
+```
+
+For a 50-byte API key that's not much more work, but it requires the operator to hold every API key in plaintext at rotation time. With envelope encryption, the operator only ever holds DEKs (also short, but cryptographically random and unrelated to user data). The rotation logs (if any) can't accidentally leak an API key because the script never decrypts the user data.
+
+This is exactly why AWS KMS, GCP Cloud KMS, and Vault all push you toward envelope encryption from day one. The rotation flow they document looks identical to ours: re-wrap DEKs, leave data ciphertext alone. The pattern is so universal that "I'm using envelope encryption" is shorthand for "rotation costs are constant per row regardless of payload size."
+
+The general lesson: **the cheapest rotation is the one that touches the smallest cryptographic surface.** Building the encryption scheme with rotation in mind from the start (rather than retrofitting it later) means rotation becomes an UPDATE, not a re-encrypt. If you're designing key storage and rotation isn't already in the use cases you're testing against, you're probably going to build something that's painful to rotate.
+
+### CI Grep Guards For Specific Misuse Are Cheaper Than Pre-Commit Hooks (Stage 7 Phase 7)
+
+> The key-leak guard is a Node script that runs as `npm run check:key-leaks`, not a pre-commit hook. Wouldn't a pre-commit hook catch issues earlier and avoid even committing them?
+
+It would, but the cost/benefit doesn't favor it for this specific class of guard. Three reasons:
+
+**1. Pre-commit friction tax is paid by every contributor for every commit.** A hook that runs even a fast script (~200ms) adds 5+ seconds to a workflow that already includes `git diff`, `git add`, `git commit -m`. If a contributor doesn't write a logger call in their patch (the typical case), they're paying for a guard that has nothing to check. CI runs the guard exactly once per PR.
+
+**2. Pre-commit hooks are local-machine-specific.** A contributor who clones the repo and didn't run `husky install` (or who edited via the GitHub web UI) bypasses the hook entirely. CI runs unconditionally in the same environment for every contribution.
+
+**3. The guard is a regex-on-source-text check that can have false positives.** The fix for a false positive on pre-commit is to amend or revert; on CI it's to comment out the guard or update the allow-list. The CI path is more visible (PR comment, GitHub Actions UI) than a pre-commit failure (cryptic terminal output during commit).
+
+What pre-commit hooks ARE useful for: formatting (`prettier --write`), trailing-newline normalisation, linting that catches whole categories of style issues. Things where the script touches the file content and saves you a "fix formatting" follow-up commit. The key-leak guard doesn't fit - it's a binary pass/fail with no auto-fix.
+
+The pattern: **pre-commit for code-shape enforcement that has an auto-fix; CI for assertion-style checks that can only be made-or-failed.** Our pre-commit could plausibly run prettier; it should NOT run the key-leak grep, the typecheck (which is 5+ seconds), or the test suite (~10 seconds).
+
+A related pattern worth knowing: **post-commit / pre-push hooks** split the difference - they run after the commit lands locally but before pushing, so you don't pay the cost on every commit but you still catch issues before they leave your machine. For an open-source project where contributors are unfamiliar with the discipline, even pre-push is too clever; CI is the right default.
+
+### Per-File Allow-Lists Beat Directory-Wide Allow-Lists For Security Guards (Stage 7 Phase 7)
+
+> The key-leak guard's allow-list names 13 specific files. Allow-listing `src/lib/ai/` (the whole directory) would be much shorter. Why per-file?
+
+Because the security property the guard enforces is "this specific file is allowed to look at the key; no new file in this directory inherits that allowance." If a future contributor adds `src/lib/ai/telemetry.ts` that mentions `apiKey` in a `console.log`, you want the guard to fire - even though the file lives in the AI directory that already has key-handling code.
+
+Directory-wide allow-lists let the unwanted use case slip through silently. Per-file allow-lists force the contributor adding a new key-handler to:
+
+1. Hit the CI failure.
+2. Read the guard source to see what it's checking.
+3. Make a deliberate decision: am I going to redact this log, or am I really going to allow-list this new file?
+4. Add the new path to the allow-list as part of the PR.
+
+Step 4 is what makes the security review legible. The PR diff now contains a one-line change to the allow-list, which is exactly the kind of change a reviewer should scrutinise ("why does this file need to log the key?"). Without it, the new file is just one more place to grep for the pattern.
+
+The general principle: **security guards should produce friction proportional to the risk of the change.** Adding a new key-handler is high-risk; the friction is "you must explicitly opt in via the allow-list." Refactoring an existing key-handler is low-risk; the existing allow-list entry covers the new file path if you preserve the name. Adding a non-key-handler is zero-risk; the guard doesn't fire because the file doesn't match any pattern.
+
+A related pattern: **the allow-list IS the security review surface.** Every entry should answer "why does this file need to be here?" - either implicit (a routing file like `/api/bots/[botId]/llm-key/route.ts` obviously needs key access) or explicit (a comment in the allow-list itself for less-obvious cases). Future maintainers can audit the security model by reading the allow-list alone, without grepping every source file.
+
+The directory-wide variant is fine for cases where the risk surface is the directory, not the individual file - e.g., "tests can use canary strings to assert key suppression" is a per-test-file decision but every test file is equally OK to have it, so `*.test.ts` is the right shape. The discriminator is: does each new file in the directory need an explicit security decision, or does the directory itself impose the discipline?
+
+### When To Duplicate Code Between A Script And A Module (Stage 7 Phase 7)
+
+> The KEK rotation script duplicates ~30 lines of AES-GCM encryption logic from `src/lib/crypto/envelope.ts`. The DRY principle says "import once, use everywhere." Why is this duplication the right call?
+
+DRY is a heuristic, not a law. Three reasons the duplication wins here:
+
+**1. The transitive dependency cost is real.** Importing from `src/lib/crypto/envelope.ts` would mean the `.mjs` script needs a TypeScript loader (`tsx`, `ts-node`, or bundling via esbuild). Each of those is a new dependency that the script's only consumer (the operator running rotation quarterly) has to install. Avoiding the dep saves the operator a `npm install` step + reduces the supply-chain attack surface of the rotation tool.
+
+**2. The two surfaces have different stability requirements.** The TS module is called from the request hot path - if its API changes, every caller breaks at compile time and gets a deterministic error. The script is called manually by an operator who can read a runbook. If the envelope shape ever changes (new field, different IV size), the script needs to update; tying them via import means a "shape change in envelope.ts breaks the rotation script silently because the operator hasn't redeployed yet" failure mode. Duplication makes the dependency a documentation problem ("update both") not a runtime problem.
+
+**3. The shared code is small AND stable.** 30 lines of "AES-GCM with a 12-byte IV" is a well-specified cryptographic primitive that won't change for the lifetime of the project. If we were duplicating 300 lines of business logic that gets touched every sprint, the duplication tax would be real. For a never-changes primitive, the tax is essentially zero.
+
+The general principle: **DRY is correct in proportion to how often the duplicated code changes.** For business logic that changes often, duplicating is a tax that compounds with every change. For primitives that never change, duplicating is a one-time cost that buys you smaller blast radius + simpler dependencies.
+
+When NOT to duplicate: when the duplication encodes a CHOICE (which algorithm, which key length, which IV strategy) that you might want to change in one place but not another - that's the recipe for a security bug. Use a shared constant instead. Our script does this: the `KEY_ALGO = "aes-256-gcm"`, `KEY_LEN = 32`, `IV_LEN = 12` constants are duplicated literals matching the module's constants. If we ever change AES-256 to ChaCha20, we'd update both. The DUPLICATION is the encryption *function*; the *decision* is in matching constants.
+
+A useful smell-test: **does updating one copy require updating the other?** If yes (the two copies are coupled by domain semantics), duplication is fine and the coupling lives in your head + the runbook. If no (the two copies were independently arrived at via separate decisions), congratulations - you have two unrelated pieces of code that happen to look similar, and forcing them through a shared abstraction would couple things that shouldn't be coupled.
+
+---

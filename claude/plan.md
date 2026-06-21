@@ -1479,6 +1479,52 @@ latency_ms integer`. The chat route already times the provider call
 
 ---
 
+## Stage 8: Performance, Scale & Operational Polish (Post-Launch)
+
+> Added in Stage 7 Phase 7. Stage 7 explicitly deferred the performance NFRs (NFR-P01 through NFR-P07) and a handful of "make it scale" follow-ups. Stage 8 is where they land - post-launch, with real traffic to tune against.
+
+### Goal
+
+Take the launch-ready platform from Stage 7 and harden it for sustained traffic. Two themes: (1) hit the SRS §6.1 performance budgets with measurement and tuning, and (2) replace per-process state (rate limiter, circuit breaker) with shared Upstash Redis so a multi-instance deployment behaves correctly.
+
+### What lands in Stage 8
+
+#### Performance NFRs (SRS §6.1, deferred from Stage 7)
+
+| ID      | Requirement                     | Metric            | Approach                                                          |
+| ------- | ------------------------------- | ----------------- | ----------------------------------------------------------------- |
+| NFR-P01 | Chat response latency           | < 3 seconds (P95) | Vercel Speed Insights + Sentry traces; tune RAG chunk count.      |
+| NFR-P02 | Page load time (chat interface) | < 2 seconds (LCP) | `next/font` swap mode, prefetched OG image, smaller initial JS.   |
+| NFR-P03 | Widget load time                | < 1 second        | Already 8KB minified - measure on real CDN, may need preconnect.  |
+| NFR-P04 | Data ingestion (1-3 page PDF)   | < 60 seconds      | Defer embedding to a background job if pdf-parse + embed > 30s.   |
+| NFR-P05 | Vector similarity search        | < 200ms (P99)     | HNSW index audit; cap top-K at 3; warm queries with a pre-prompt. |
+| NFR-P06 | Concurrent users per bot        | 50+ simultaneous  | Load test (k6) + ensure rate-limit windows don't deadlock.        |
+| NFR-P07 | Dashboard page load             | < 3 seconds       | Move N+1 queries (`buildExportBundle`, dashboard listings) to CTEs. |
+
+#### Shared-state infrastructure
+
+- **Upstash Redis backing for `src/lib/ai/rate-limit.ts`** so per-bot limits are accurate across cold-started serverless instances (today they reset every cold start).
+- **Upstash Redis backing for `src/lib/ai/circuit-breaker.ts`** so an outage tripping one instance immediately protects every other instance.
+- **Vercel Pro upgrade** if cron-job count grows beyond one (Hobby limit). Today the daily purge job is the only cron; Stage 8 may add an audit-log-prune-only cron, a metrics-scrape cron, or a "resend deletion link after 3 days" reminder cron.
+
+#### Smaller hardening items deferred from Stage 7
+
+- "Resend deletion email" UI for users who lose the undo link before the 7-day grace expires.
+- "Account deletion revokes OTHER browser sessions at init time" - today only the current session is signed out.
+- Dashboard breaker-state indicator ("your provider is currently throttled - retrying soon").
+- Real malware scan via a ClamAV sidecar (current heuristic catches accidental misuploads; a real AV scan needs persistent infrastructure).
+- Provider-mismatch dashboard prompt: "your stored managed key was minted for OpenAI but you've switched to Anthropic - re-store?"
+- Sentry / structured-logger wiring for the chat route's circuit-breaker `circuit_open` events so operators get an alert when a provider outage starts.
+- Gemini SDK error-mapping integration test against a real free-tier endpoint (current mapping is regex-on-message and could drift on SDK upgrades).
+- Per-tab CSRF on bearer-authenticated routes if user research shows real attack patterns.
+- One-command `docker compose up` self-host for operators who don't want to manage a separate Postgres + Resend account.
+
+#### Out of scope (kept on the V2 list)
+
+- Voice mode, interview simulation, company-IP enrichment - these stay in SRS §11 Future Enhancements.
+
+---
+
 ## Summary: Stage Comparison Matrix
 
 | Feature                              | S1  | S2  | S3  | S4  | S5  | S6  | S7  |

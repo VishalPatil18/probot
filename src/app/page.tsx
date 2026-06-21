@@ -43,7 +43,14 @@ export default function HomePage() {
                 ProBot turns your resume, LinkedIn, and portfolio into a
                 personal AI chatbot that answers recruiters&apos; questions -
                 powered by <strong className="text-ink">your own LLM</strong>{" "}
-                (Claude, Gemini, OpenAI &amp; more), with keys stored locally.
+                (Claude, Gemini, OpenAI &amp; more).{" "}
+                <Link
+                  href="/about#hybrid"
+                  className="text-brand font-semibold hover:underline"
+                >
+                  Self-host or use managed
+                </Link>{" "}
+                - your key, your call.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
@@ -74,7 +81,7 @@ export default function HomePage() {
                     name="check_circle"
                     className="!text-base text-success"
                   />
-                  Your keys stay local
+                  Envelope-encrypted keys (or self-host)
                 </span>
               </div>
             </div>
@@ -142,7 +149,7 @@ export default function HomePage() {
                   <p className="text-[10px] text-muted text-center mt-2">
                     Powered by your own LLM key ·{" "}
                     <span className="text-brand font-semibold">
-                      stored locally
+                      encrypted or self-hosted
                     </span>
                   </p>
                 </div>
@@ -776,9 +783,12 @@ export default function HomePage() {
                   Bring your own model
                 </h3>
                 <p className="text-sm text-muted leading-relaxed mb-4">
-                  Pick Claude Opus, Haiku, Gemini, OpenAI - whatever you prefer.
-                  Your API key is stored locally and{" "}
-                  <strong className="text-ink">never tracked by ProBot</strong>.
+                  Pick Claude, Gemini, OpenAI, or Azure - whatever you prefer.
+                  Your key is{" "}
+                  <strong className="text-ink">
+                    envelope-encrypted on our infra or never sent at all
+                  </strong>{" "}
+                  if you self-host. Your call, your trust level.
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {["Claude", "Gemini", "OpenAI"].map((m) => (

@@ -14,7 +14,9 @@
     "test:watch": "vitest --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "kek:rotate": "node scripts/rotate-kek.mjs",
+    "check:key-leaks": "node scripts/check-key-leaks.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",
