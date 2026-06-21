@@ -1991,14 +1991,15 @@ _Tests + types:_
 
 ### 2026-06-20 19:40 - Stage 7 Phase 1: OAuth lock-down + email verification gate + password reset
 
-**What was asked to do:** Close out the deferred auth tasks from Stage 1 (FR-001.2/5/6) — turn off dangerous OAuth account-linking, force credentials-registered users to verify email before sign-in, and ship a full password-reset flow (forgot/reset pages, token table, transactional emails).
+**What was asked to do:** Close out the deferred auth tasks from Stage 1 (FR-001.2/5/6) - turn off dangerous OAuth account-linking, force credentials-registered users to verify email before sign-in, and ship a full password-reset flow (forgot/reset pages, token table, transactional emails).
 
 **What I did:**
+
 - Added two narrow-purpose token tables: `password_reset_tokens` (1h TTL, single-use, used_at marks consumption) and `email_verification_tokens` (24h TTL, presence implies pending). Both store only SHA-256 hashes of the raw token; the raw token only exists in the URL we email.
 - Generated drizzle migration `0009_workable_paibok.sql` via `npm run db:generate` from schema-first edits.
 - Refactored `src/lib/auth/email.ts` into a thin Resend transport that delegates body construction to a new `email-templates.ts` (magic-link, email-verification, password-reset). One template shell with safe HTML escape; future copy tweaks touch one file.
 - New `src/lib/auth/tokens.ts` shared helpers: `generateRawToken` (32 random bytes hex), `hashToken` (SHA-256), `buildTokenUrl` (NEXTAUTH_URL → APP_URL → localhost fallback chain, strips trailing slash, encodes token).
-- New `src/lib/auth/password-reset.ts` and `email-verification.ts` modules — `createResetToken` / `validateAndConsumeToken` and `createVerificationToken` / `verifyAndConsumeToken`. The consume step writes `used_at` for reset tokens (single-use) and deletes the row for verification tokens (presence-implies-pending model).
+- New `src/lib/auth/password-reset.ts` and `email-verification.ts` modules - `createResetToken` / `validateAndConsumeToken` and `createVerificationToken` / `verifyAndConsumeToken`. The consume step writes `used_at` for reset tokens (single-use) and deletes the row for verification tokens (presence-implies-pending model).
 - `src/lib/auth/auth.ts`: removed `allowDangerousEmailAccountLinking: true` from both GitHub and Google providers (NextAuth now rejects cross-provider claims on a shared email and surfaces `OAuthAccountNotLinked` which the existing `/auth/error` page already handles). Added `emailVerified` guard in the credentials `authorize()` that throws `"email_not_verified"` so NextAuth surfaces it as `?error=email_not_verified` on `/login`.
 - `POST /api/auth/register`: stops auto-signing-in the user. Creates the user with `emailVerified=null`, mints a verification token, sends the email via Resend. Returns 201 with `{user, verificationEmailSent}` so the form can show the "check your email" panel even when Resend is degraded.
 - New `GET /api/auth/verify-email?token=...` redirects to `/login?verify=ok|expired|invalid` so the verification link works without client JS.
@@ -2011,6 +2012,7 @@ _Tests + types:_
 - New `src/lib/auth/tokens.test.ts` covers raw-token entropy, hash determinism + non-identity, and `buildTokenUrl` env-fallback chain + URL encoding (11 tests).
 
 **Files changed:**
+
 - `src/lib/db/schema.ts` - update - declared `passwordResetTokens` and `emailVerificationTokens` tables with unique index on `token_hash` and a non-unique index on `user_id`; exported inferred Select/Insert types.
 - `drizzle/0009_workable_paibok.sql` - create - migration emitted by drizzle-kit from the schema edits.
 - `drizzle/meta/_journal.json` + `drizzle/meta/0009_snapshot.json` - update/create - drizzle-kit bookkeeping for migration 0009.
@@ -2039,18 +2041,90 @@ _Tests + types:_
 - `src/lib/auth/tokens.test.ts` - create - 11 unit tests for the shared token helpers.
 
 **Decisions made:**
-- **Two token tables, not one with a `kind` column.** TTLs differ (1h vs 24h), consume semantics differ (mark `used_at` vs delete), and the indexes/queries are unrelated. Sharing a table would push the divergence into application code where it would be invisible to future readers — separate tables make the intent obvious from the schema alone.
+
+- **Two token tables, not one with a `kind` column.** TTLs differ (1h vs 24h), consume semantics differ (mark `used_at` vs delete), and the indexes/queries are unrelated. Sharing a table would push the divergence into application code where it would be invisible to future readers - separate tables make the intent obvious from the schema alone.
 - **Store SHA-256 hashes, not raw tokens.** A leaked DB dump cannot be replayed against the API because hashing is one-way. The raw token only exists transiently in the email link. Same pattern as session cookies in modern auth libraries.
-- **forgot-password always returns 200.** Returning 404 for unknown emails leaks which addresses are registered (account enumeration). The cost is a slightly worse UX for typos — acceptable tradeoff.
-- **OAuth-only accounts get a silent no-op on forgot-password.** Returning a different response for "no password to reset" would re-introduce enumeration via response shape. The user is left to figure out they need to sign in with their original provider — a small UX gap accepted for the security win.
+- **forgot-password always returns 200.** Returning 404 for unknown emails leaks which addresses are registered (account enumeration). The cost is a slightly worse UX for typos - acceptable tradeoff.
+- **OAuth-only accounts get a silent no-op on forgot-password.** Returning a different response for "no password to reset" would re-introduce enumeration via response shape. The user is left to figure out they need to sign in with their original provider - a small UX gap accepted for the security win.
 - **GET handler for verify-email, not POST.** The verification link in the email must work even with JavaScript disabled (some corporate email clients sanitize JS-required URLs). A server-side GET that redirects is the only reliable pattern.
-- **Verification token deletes-on-consume (no `used_at` column).** A verification token is single-purpose: you verified, the token has no further role. Reset tokens keep `used_at` for one specific reason — auditing replay attempts in the rare case where a leaked token is consumed by an attacker after the user already used it (we can detect "this token was used twice" forensically). Verification tokens have no equivalent forensic value.
-- **emailVerified gate throws inside authorize() instead of returning null.** Returning null surfaces as the generic `CredentialsSignin` error which the user has already seen mean "wrong password." Throwing `"email_not_verified"` produces a distinct error code that the login form can map to a specific banner — better UX, no security tradeoff (an attacker probing for verified accounts could already discriminate via timing).
+- **Verification token deletes-on-consume (no `used_at` column).** A verification token is single-purpose: you verified, the token has no further role. Reset tokens keep `used_at` for one specific reason - auditing replay attempts in the rare case where a leaked token is consumed by an attacker after the user already used it (we can detect "this token was used twice" forensically). Verification tokens have no equivalent forensic value.
+- **emailVerified gate throws inside authorize() instead of returning null.** Returning null surfaces as the generic `CredentialsSignin` error which the user has already seen mean "wrong password." Throwing `"email_not_verified"` produces a distinct error code that the login form can map to a specific banner - better UX, no security tradeoff (an attacker probing for verified accounts could already discriminate via timing).
 - **Removed `allowDangerousEmailAccountLinking: true`.** That setting let anyone who controlled a Google account at email X claim an existing GitHub account at email X (or vice versa) without proving control of the original sign-in method. The fix is one line; NextAuth now surfaces `OAuthAccountNotLinked` which the existing `/auth/error` page already maps to a clear "this email is already linked to another sign-in method" message.
-- **Skipped a "resend verification" route in Phase 1.** It's a spam vector (anyone can keep triggering verification emails to an inbox they don't own). Proper implementation needs IP + email rate limiting which lands more naturally with the Phase 5 rate-limit work. Acceptable gap for v1 — users with stuck verification can re-register with a fresh email; CLAUDE.md text was kept honest about this (no false "try registering again" promise).
+- **Skipped a "resend verification" route in Phase 1.** It's a spam vector (anyone can keep triggering verification emails to an inbox they don't own). Proper implementation needs IP + email rate limiting which lands more naturally with the Phase 5 rate-limit work. Acceptable gap for v1 - users with stuck verification can re-register with a fresh email; CLAUDE.md text was kept honest about this (no false "try registering again" promise).
 
 **Open questions / follow-ups:**
+
 - **Resend verification flow** is the only Phase 1 gap. Will land with Phase 5 rate-limit work since the rate-limit infrastructure is the same shape we'd need.
-- **`/auth/error` page** already handles `OAuthAccountNotLinked` (Stage 6 work) so no edit was needed in Phase 1 — verified at the start of the phase, not assumed.
+- **`/auth/error` page** already handles `OAuthAccountNotLinked` (Stage 6 work) so no edit was needed in Phase 1 - verified at the start of the phase, not assumed.
 - **NEXTAUTH_URL must be set in production** for the verification + reset email links to work. The `buildTokenUrl` fallback chain ends at `http://localhost:3000` which obviously can't be clicked from a recruiter's inbox. Confirm this is wired in Vercel env before the next prod deploy.
-- **Production smoke test** — manually verify OAuth sign-in still works (Google + GitHub) since prior session had a sign-in incident in prod. Specifically watch for any user whose Google email matches an existing GitHub-linked email now hitting `OAuthAccountNotLinked` for the first time; they will need to sign in via their original provider.
+- **Production smoke test** - manually verify OAuth sign-in still works (Google + GitHub) since prior session had a sign-in incident in prod. Specifically watch for any user whose Google email matches an existing GitHub-linked email now hitting `OAuthAccountNotLinked` for the first time; they will need to sign in via their original provider.
+
+### 2026-06-20 22:36 - Stage 7 Phase 2: custom instructions + draft/publish flow + per-bot rate limits
+
+**What was asked to do:** Land the Stage 7 bot-config additions (FR-002.7 custom instructions, FR-002.10 preview-before-publish, FR-010.9 configurable per-bot rate limits) - schema columns, wizard wiring, dashboard editor, chat-route enforcement, signed preview URLs, and a Publish endpoint.
+
+**What I did:**
+
+- Added five columns to `bots` in migration `0010_gray_madrox.sql`: `custom_instructions text`, `preview_token text`, `rate_limit_per_minute int`, `rate_limit_per_day int`, `rate_limit_max_chars int`. Also flipped the column default of `is_active` from `true` to `false` so net-new INSERTs land as drafts. Existing rows keep their current value (the ALTER DEFAULT statement only affects future INSERTs without an explicit value).
+- New `src/lib/bots/preview-token.ts` - `mintPreviewToken(botId, userId)` and `verifyPreviewToken(token)`. Roll-your-own HMAC-signed token (format `base64url(JSON payload).base64url(HMAC-SHA256)`) using NEXTAUTH_SECRET as the signing key. Skipped `jose`/`jsonwebtoken` to avoid a dependency for what's essentially `crypto.createHmac` + JSON. 7-day TTL. Constant-time signature comparison.
+- New `src/lib/bots/preview-token.test.ts` - round-trip, wrong-secret rejection, tampered-payload rejection, TTL boundary at exactly 7 days, malformed-input rejection, missing-secret throw (7 tests).
+- `src/lib/ai/rate-limit.ts` - accepts per-bot overrides via `checkRateLimit(botId, { perMinute?, perDay? }, now?)` while keeping the legacy `(botId, now)` 2-arg shape working. Added `resolveMaxChars(maxChars)` for the per-bot message-length cap. New ceilings (`PER_MINUTE_MAX=100`, `PER_DAY_MAX=5000`, `MAX_CHARS_MAX=32000`) clamp absurd creator inputs at the limiter layer (defence in depth alongside the Zod cap).
+- `src/lib/ai/prompt-builder.ts` - accepts optional `customInstructions` on the `bot` arg. Injected as a `## CUSTOM INSTRUCTIONS` block between personality and `## RESPONSE STYLE`. Whitespace-only input collapses to no block at all (byte-identical prompt vs pre-Stage-7 for non-customising bots).
+- `src/lib/bots/schemas.ts` - added `customInstructions` (max 2000 chars) to both `botInput` and `botPatchInput`. Added three optional/nullable rate-limit overrides to `botPatchInput`. Exported `CUSTOM_INSTRUCTIONS_MAX`, `RATE_LIMIT_PER_MINUTE_MAX`, `RATE_LIMIT_PER_DAY_MAX`, `RATE_LIMIT_MAX_CHARS_MAX` constants for the UI to bind against.
+- `POST /api/bots` - new bots are now created with `isActive=false` then a follow-up UPDATE writes the minted preview token (we need the bot id before we can sign it). The response shape grew an `isActive` + `previewToken` for the wizard's Step 5 to render the preview URL and Publish button.
+- New `POST /api/bots/[botId]/publish` - flips `isActive=true` and clears `previewToken` in a single UPDATE. Idempotent on already-published bots (no 409).
+- `PATCH /api/bots/[botId]` - extended the mass-assignment whitelist to include `customInstructions` + the three rate-limit overrides. Empty-string `customInstructions` is normalized to NULL at the route layer so the column doesn't accumulate empty strings indistinguishable from "no addendum."
+- `POST /api/chat/[botId]` - three behavior changes:
+  1. Bot lookup no longer hard-filters on `isActive=true`. We pull the row regardless, then if it's inactive we require either `x-preview-token` header or `?preview=` query param to match the bot's `previewToken` AND verify the HMAC signature for `botId`. Bad/missing token → 404 (same shape recruiters see for a wrong-bot URL).
+  2. Rate-limit call passes per-bot overrides from the bot row.
+  3. Per-bot maxChars override clamps the message length after the outer Zod cap; the new error is `message_too_long` with `maxChars` in the body.
+  4. Custom-instructions field flows into `buildSystemPrompt`.
+- `src/app/u/[username]/chat/page.tsx` - draft bots are now reachable with a valid `?preview=` token. The SSR layer mirrors the chat-route's preview check (token must match `previewToken` AND validate the HMAC). When in preview mode the page renders a yellow banner and passes the token into `<ChatWindow previewToken=…>`. Drafts get `robots: { index: false }` so a leaked preview URL can't get crawled.
+- `src/components/chat/ChatWindow.tsx` - accepts optional `previewToken` prop and forwards it as `x-preview-token` on each chat POST. Public visitors never see this prop.
+- `src/components/dashboard/settings/BotConfigTab.tsx` - replaced the disabled "Coming Soon" custom-instructions textarea with a live editor (max 2000 chars, character counter). Added a "Rate limits" section with three numeric fields (per-minute / per-day / max-chars) where blank = use server default. Added a top "Draft – not yet live" banner with the private preview link + a Publish button when `initialIsActive=false`. The save handler diff-patches the new fields alongside the existing ones; the publish handler hits `POST /publish` directly without bundling into the save.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` - fetches the new bot columns and threads them through to `<BotConfigTab>`.
+- `src/components/bot-factory/BotFactoryForm.tsx` - Step 3 (Personality) now has an optional custom-instructions textarea below the tone picker; the placeholder "Stage 7" panel that used to live there is gone. Step 4 Save button relabeled "Save as draft." Step 5 was rewritten to render the draft/publish UX: copy-able private preview URL + "Publish bot" button + an empty state when published that shows the public URL. The `submit()` handler now reads `previewToken` + `isActive` from the POST /bots response and seeds local state from them.
+- Tests updated: rate-limit suite adds four new cases for per-bot overrides + clamp + null/undefined-as-default; the new looser-perDay/clamp tests had to pass perMinute too so the test isolates the property under test (the original write tripped per-minute first because the default is much smaller). prompt-builder suite adds 5 new cases for the custom-instructions block (omitted/whitespace/inject/order/trim). BotConfigTab test rewrites the props baseline + replaces the "textarea disabled" assertion with two new tests: textarea sends customInstructions on PATCH, and the Publish flow POSTs `/api/bots/[botId]/publish`. Added a "draft state with previewToken" test that asserts the banner + preview link href. BotFactoryForm test renamed all `save & deploy` to `save as draft`, renamed the Step 5 next-button from `preview bot` to `open chat`, renamed the Step 5 heading match from `ready to deploy` to `preview before you publish`. api/bots/route.test.ts: set NEXTAUTH_SECRET in beforeEach, defaulted `txUpdateBotsReturningMock` so the new POST→UPDATE chain's destructure doesn't blow up, asserted the new inserts ship `isActive=false` AND the UPDATE writes a `previewToken` string.
+- Total: 720 tests pass (was 701; +19). Typecheck + Next build both green.
+
+**Files changed:**
+
+- `drizzle/0010_gray_madrox.sql` + `drizzle/meta/0010_snapshot.json` + `drizzle/meta/_journal.json` - create/update - generated by `npm run db:generate` from the schema edit.
+- `src/lib/db/schema.ts` - update - five new bot columns + flipped is_active default.
+- `src/lib/bots/preview-token.ts` - create - HMAC-signed token mint + verify.
+- `src/lib/bots/preview-token.test.ts` - create - 7 unit tests.
+- `src/lib/bots/schemas.ts` - update - custom-instructions + rate-limit fields on input/patch, new constants exported.
+- `src/lib/ai/rate-limit.ts` - update - per-bot overrides, ceilings, backward-compat 2-arg shape, `resolveMaxChars`.
+- `src/lib/ai/rate-limit.test.ts` - update - 4 new cases for the override path.
+- `src/lib/ai/prompt-builder.ts` - update - inject `## CUSTOM INSTRUCTIONS` block between personality and response style.
+- `src/lib/ai/prompt-builder.test.ts` - update - 5 new cases covering the block's presence/absence/placement/trim.
+- `src/app/api/bots/route.ts` - update - INSERT bot as draft + mint preview token + return both.
+- `src/app/api/bots/route.test.ts` - update - NEXTAUTH_SECRET fixture, updated reflect the create flow's two updates.
+- `src/app/api/bots/[botId]/route.ts` - update - whitelist the new fields in PATCH.
+- `src/app/api/bots/[botId]/publish/route.ts` - create - flip isActive + clear previewToken.
+- `src/app/api/chat/[botId]/route.ts` - update - preview-token gating, per-bot rate limits + maxChars enforcement, customInstructions passthrough.
+- `src/app/u/[username]/chat/page.tsx` - update - drop the hard isActive filter, gate drafts on preview-token, render preview banner, set `robots: { index: false }` for drafts.
+- `src/components/chat/ChatWindow.tsx` - update - accept previewToken prop, forward as `x-preview-token` header.
+- `src/components/dashboard/settings/BotConfigTab.tsx` - update - enable custom-instructions editor, new rate-limit section, draft banner + publish button.
+- `src/components/dashboard/settings/BotConfigTab.test.tsx` - update - new props baseline, two new tests for custom-instructions PATCH + rate-limit override field, one new test for the publish banner.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` - update - fetch the new columns + thread them through.
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - Step 3 custom-instructions input, Step 5 draft/publish UX, new state for previewToken + published + publishing + the publish() handler.
+- `src/components/bot-factory/BotFactoryForm.test.tsx` - update - rename button labels + heading match.
+
+**Decisions made:**
+
+- **Roll-your-own HMAC token over `jose`/`jsonwebtoken`.** Adding a 50KB dependency for a 30-line `crypto.createHmac` + `JSON.stringify` is the wrong cost/benefit. We don't need the JWT header (no algorithm negotiation), we don't need key rotation envelopes (NEXTAUTH_SECRET already rotates as a unit), we don't need claims like aud/iss/jti. The token is a server-controlled bearer credential with a 7-day TTL; HMAC + payload + timing-safe compare is exactly the right primitive.
+- **Two-update create flow (INSERT bot then UPDATE previewToken) rather than mint-before-insert.** Minting the token before the INSERT would require pre-generating a UUID client-side or in app code, which adds a moving part. The two-statement approach lives inside the same DB transaction so partial state is impossible; the round-trip cost is tiny vs. the simplicity of letting `gen_random_uuid()` mint the bot id.
+- **Preview token is stored in the bot row, not derived purely from signature.** A signature-only design (token verifies → grant access) would mean we can never _revoke_ a leaked token before its TTL - there's no server-side state to flip. Storing the token in the row gives us the equivalent of a session: publish nukes it (revoke), bot delete cascades it (revoke). Belt-and-braces: the route checks both `bot.previewToken === supplied AND HMAC verifies` so a leaked token without a matching row also fails.
+- **Drafts get `robots: { index: false }` in `generateMetadata`.** A leaked preview URL pasted into a public document (issue tracker, Slack with link unfurl, etc.) shouldn't end up in search results. Crawlers that respect the meta tag honour this; those that don't would also bypass auth tokens so this is the most we can do at the page layer.
+- **Per-bot rate-limit clamp at TWO layers (Zod schema + limiter `clampPositive`).** Either layer alone is sufficient on the happy path, but the doubled defence means a future caller that bypasses Zod (e.g. an internal admin script) can't accidentally store a runaway value, AND a future route that forgets to clamp at write time can't trip a runaway value at read time. Cheap defence in depth.
+- **`is_active` column default flipped to `false`, existing rows untouched.** Backfilling existing rows to `false` would re-draft already-published bots and break their public URLs - a user-visible regression for zero gain. The migration only changes the DEFAULT clause; pre-Stage-7 rows keep their `true` value via the column-still-NOT-NULL contract.
+- **Per-tab `?preview=` query-param AND `x-preview-token` header both accepted by the chat route.** Header is cleanest for the SPA path (ChatWindow attaches it on every fetch) but query-param means a hand-pasted preview URL works in an incognito tab without dashboard context. Both go through the same validation; UX-only cost is a slight extra branch in the route.
+- **Custom-instructions block lives BETWEEN personality and response-style.** Personality sets voice; the user's custom block refines bot intent; the structural rules (max 6 sentences, no filler, bullets only for 3+) come AFTER so a malformed custom block can't override "no filler phrases." The IMMUTABLE RULES block above it all (identity / context-only / prompt protection) still governs regardless of what the custom block tries.
+
+**Open questions / follow-ups:**
+
+- **No "regenerate preview token" UI exists.** A creator whose preview link leaks today can publish-then-unpublish to clear the token, but there's no surgical "rotate this token" button. Could be added in Phase 6 polish if needed; not load-bearing.
+- **Per-bot rate-limit columns are still in-memory enforced.** Phase 8 (per architecture blueprint) replaces the in-process limiter with Upstash Redis; until then the limits reset on each Vercel cold start. Acceptable for v1; document if needed.
+- **No `/api/bots/[botId]/preview-token/regenerate` endpoint.** If a creator confirms a leaked preview link they have to either publish or delete + recreate. Cheap to add in Phase 6 if it comes up.
+- **The chat route now does an extra DB query for inactive bots** to read `previewToken`. We're already fetching the whole bot row so this is free - just calling it out so a future query-tightening pass doesn't accidentally drop the column from the SELECT.

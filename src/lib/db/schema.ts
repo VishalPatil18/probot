@@ -81,7 +81,31 @@ export const bots = pgTable(
     themeColor: varchar("theme_color", { length: 7 })
       .notNull()
       .default("#7c5cff"),
-    isActive: boolean("is_active").notNull().default(true),
+    // Stage 7 §FR-002.7: free-form additions to the system prompt. Max length
+    // is enforced at the Zod layer (botInput / botPatchInput) so a future
+    // tightening of the cap doesn't require a migration. Injected into the
+    // assembled system prompt between the personality block and the response-
+    // style block - see prompt-builder.ts.
+    customInstructions: text("custom_instructions"),
+    // Stage 7 §FR-002.10: per-bot draft/publish flow. New bots are created
+    // with `is_active=false` + a signed `preview_token` so the creator can
+    // chat against the bot privately at `/u/<username>/chat?preview=<token>`
+    // before clicking Publish (which flips is_active=true and clears the
+    // token). The token is a JWT signed with NEXTAUTH_SECRET so its mere
+    // existence in the URL cannot grant anyone else access without verifying
+    // against the bot row.
+    previewToken: text("preview_token"),
+    // Stage 7 §FR-010.9: per-bot configurable rate limits. NULL means the
+    // env-var default (PROBOT_RATE_PER_MINUTE / PROBOT_RATE_PER_DAY /
+    // PROBOT_RATE_MAX_CHARS) takes over - lets a self-host operator tune the
+    // baseline without touching every bot row.
+    rateLimitPerMinute: integer("rate_limit_per_minute"),
+    rateLimitPerDay: integer("rate_limit_per_day"),
+    rateLimitMaxChars: integer("rate_limit_max_chars"),
+    // Stage 7 §FR-002.10: new bots default to inactive. Bots created before
+    // this migration backfill to `true` via the migration so existing
+    // published bots are unaffected.
+    isActive: boolean("is_active").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
       .notNull()
       .defaultNow(),

@@ -45,6 +45,11 @@ export async function PATCH(
   // never appear here even if a hostile client puts them in the body.
   // (Slice B widened the whitelist to include `isActive` for the status
   // toggle, so it IS legitimately accepted now - see the schema.)
+  //
+  // Stage 7 widens the whitelist to include `customInstructions` and the
+  // three per-bot rate-limit overrides. Each rate-limit field accepts
+  // `null` to mean "clear the override and use env defaults"; the Zod
+  // schema is `nullable().optional()` so undefined leaves it untouched.
   const {
     themeColor,
     name,
@@ -52,6 +57,10 @@ export async function PATCH(
     personality,
     suggestedQuestions,
     isActive,
+    customInstructions,
+    rateLimitPerMinute,
+    rateLimitPerDay,
+    rateLimitMaxChars,
   } = parsed.data;
   const set: Record<string, unknown> = {};
   if (themeColor !== undefined) set.themeColor = themeColor;
@@ -62,6 +71,21 @@ export async function PATCH(
     set.suggestedQuestions = suggestedQuestions;
   }
   if (isActive !== undefined) set.isActive = isActive;
+  if (customInstructions !== undefined) {
+    // Empty string from the form means "clear the addendum"; coerce to NULL
+    // so the schema column is unambiguously empty rather than storing "".
+    set.customInstructions =
+      customInstructions.trim().length > 0 ? customInstructions : null;
+  }
+  if (rateLimitPerMinute !== undefined) {
+    set.rateLimitPerMinute = rateLimitPerMinute;
+  }
+  if (rateLimitPerDay !== undefined) {
+    set.rateLimitPerDay = rateLimitPerDay;
+  }
+  if (rateLimitMaxChars !== undefined) {
+    set.rateLimitMaxChars = rateLimitMaxChars;
+  }
 
   // The Zod schema's `.refine()` already guarantees at least one field is
   // present, so the SET object is never empty by the time we get here.
@@ -77,6 +101,10 @@ export async function PATCH(
       suggestedQuestions: bots.suggestedQuestions,
       themeColor: bots.themeColor,
       isActive: bots.isActive,
+      customInstructions: bots.customInstructions,
+      rateLimitPerMinute: bots.rateLimitPerMinute,
+      rateLimitPerDay: bots.rateLimitPerDay,
+      rateLimitMaxChars: bots.rateLimitMaxChars,
     });
 
   return NextResponse.json({ bot: updated });

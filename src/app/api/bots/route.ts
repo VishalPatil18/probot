@@ -3,9 +3,16 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth/auth";
+import { mintPreviewToken } from "@/lib/bots/preview-token";
 import { botInput } from "@/lib/bots/schemas";
 import { bots, db, users } from "@/lib/db";
 
+// Stage 7 §FR-002.10: new bots default to draft (is_active=false). The
+// creator gets a `previewUrl` that includes a signed preview token so they
+// can chat against the bot at `/u/<username>/chat?preview=<token>` before
+// flipping the live switch. Existing bots (one-bot-per-user model) keep
+// whatever isActive value they already have - this route only changes the
+// behaviour for net-new INSERTs.
 export async function POST(request: Request): Promise<Response> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -57,6 +64,14 @@ export async function POST(request: Request): Promise<Response> {
           ...(input.themeColor !== undefined
             ? { themeColor: input.themeColor }
             : {}),
+          ...(input.customInstructions !== undefined
+            ? {
+                customInstructions:
+                  input.customInstructions.trim().length > 0
+                    ? input.customInstructions
+                    : null,
+              }
+            : {}),
         })
         .where(eq(bots.id, existing.id))
         .returning();
@@ -72,15 +87,35 @@ export async function POST(request: Request): Promise<Response> {
         personality: input.personality,
         contextText: input.contextText,
         suggestedQuestions: input.suggestedQuestions,
+        // Stage 7: explicit isActive=false so a future column default flip
+        // can't accidentally publish drafts. previewToken is minted from the
+        // brand-new bot id, then UPDATEd onto the same row in the next
+        // statement (we need the id before we can mint the token).
+        isActive: false,
         ...(input.contextTokenCap !== undefined
           ? { contextTokenCap: input.contextTokenCap }
           : {}),
         ...(input.themeColor !== undefined
           ? { themeColor: input.themeColor }
           : {}),
+        ...(input.customInstructions !== undefined &&
+        input.customInstructions.trim().length > 0
+          ? { customInstructions: input.customInstructions }
+          : {}),
       })
       .returning();
-    return { bot: created, created: true };
+    if (!created) {
+      throw new Error("Bot insert returned no row");
+    }
+
+    const previewToken = mintPreviewToken(created.id, userId);
+    const [withToken] = await tx
+      .update(bots)
+      .set({ previewToken })
+      .where(eq(bots.id, created.id))
+      .returning();
+
+    return { bot: withToken ?? created, created: true };
   });
 
   return NextResponse.json(

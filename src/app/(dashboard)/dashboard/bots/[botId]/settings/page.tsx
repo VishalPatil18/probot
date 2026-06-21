@@ -64,6 +64,11 @@ export default async function BotSettingsPage({
         suggestedQuestions: true,
         isActive: true,
         themeColor: true,
+        customInstructions: true,
+        rateLimitPerMinute: true,
+        rateLimitPerDay: true,
+        rateLimitMaxChars: true,
+        previewToken: true,
       },
     }),
     db.query.users.findFirst({
@@ -96,12 +101,18 @@ export default async function BotSettingsPage({
         <SettingsTabPanel tab="bot">
           <BotConfigTab
             botId={bot.id}
+            ownerUsername={session.user.username}
             initialName={bot.name}
             initialHeadline={bot.headline ?? ""}
             initialPersonality={personality}
             initialSuggestedQuestions={bot.suggestedQuestions ?? []}
             initialIsActive={bot.isActive}
             initialThemeColor={bot.themeColor}
+            initialCustomInstructions={bot.customInstructions ?? ""}
+            initialRateLimitPerMinute={bot.rateLimitPerMinute}
+            initialRateLimitPerDay={bot.rateLimitPerDay}
+            initialRateLimitMaxChars={bot.rateLimitMaxChars}
+            previewToken={bot.previewToken}
           />
         </SettingsTabPanel>
 

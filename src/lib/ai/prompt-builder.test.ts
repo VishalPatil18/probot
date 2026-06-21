@@ -88,6 +88,59 @@ describe("buildSystemPrompt", () => {
   });
 });
 
+describe("buildSystemPrompt - customInstructions (Stage 7 §FR-002.7)", () => {
+  it("omits the custom-instructions block when the field is null/missing", () => {
+    const prompt = buildSystemPrompt({ bot: baseBot, ownerUsername: "jane" });
+    expect(prompt).not.toContain("## CUSTOM INSTRUCTIONS");
+  });
+
+  it("omits the custom-instructions block for whitespace-only input", () => {
+    const prompt = buildSystemPrompt({
+      bot: { ...baseBot, customInstructions: "   \n  \t  " },
+      ownerUsername: "jane",
+    });
+    expect(prompt).not.toContain("## CUSTOM INSTRUCTIONS");
+  });
+
+  it("injects the custom-instructions block when non-empty", () => {
+    const prompt = buildSystemPrompt({
+      bot: {
+        ...baseBot,
+        customInstructions: "Always mention that she prefers async work.",
+      },
+      ownerUsername: "jane",
+    });
+    expect(prompt).toContain("## CUSTOM INSTRUCTIONS");
+    expect(prompt).toContain("Always mention that she prefers async work.");
+  });
+
+  it("places custom instructions between personality and response style", () => {
+    const prompt = buildSystemPrompt({
+      bot: {
+        ...baseBot,
+        customInstructions: "BANANA-FLAVOURED-MARKER-TEXT",
+      },
+      ownerUsername: "jane",
+    });
+    const personalityIdx = prompt.indexOf(PERSONALITY_PROMPTS.professional);
+    const customIdx = prompt.indexOf("BANANA-FLAVOURED-MARKER-TEXT");
+    const responseStyleIdx = prompt.indexOf("## RESPONSE STYLE");
+    expect(personalityIdx).toBeLessThan(customIdx);
+    expect(customIdx).toBeLessThan(responseStyleIdx);
+  });
+
+  it("trims surrounding whitespace from custom instructions", () => {
+    const prompt = buildSystemPrompt({
+      bot: {
+        ...baseBot,
+        customInstructions: "\n\n  Be polite.  \n\n",
+      },
+      ownerUsername: "jane",
+    });
+    expect(prompt).toMatch(/## CUSTOM INSTRUCTIONS\nBe polite\.\n/);
+  });
+});
+
 describe("PERSONALITY_PROMPTS", () => {
   it("has a non-empty prose block for each preset", () => {
     for (const personality of [

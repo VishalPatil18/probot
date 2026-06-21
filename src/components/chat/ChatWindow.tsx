@@ -69,6 +69,11 @@ type Props = {
   suggestedQuestions: string[];
   loadingMessages: string[];
   llmProvider: ProviderName;
+  // Stage 7 §FR-002.10: when present, the chat is talking to a draft bot;
+  // we forward the token to the API so it can bypass the is_active gate
+  // server-side. Public visitors never see this prop - only the wizard's
+  // Step 5 / dashboard "open private preview" path supplies it.
+  previewToken?: string | null;
 };
 
 export function ChatWindow({
@@ -78,6 +83,7 @@ export function ChatWindow({
   suggestedQuestions,
   loadingMessages,
   llmProvider,
+  previewToken,
 }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -146,6 +152,12 @@ export function ChatWindow({
     const embeddingKey = getEmbeddingApiKey();
     if (embeddingKey) {
       headers["x-embedding-api-key"] = embeddingKey;
+    }
+    // Stage 7 §FR-002.10: forward the draft preview token when present so
+    // the chat API allows the inactive bot. The route also accepts a
+    // `?preview=` query param as a fallback for hand-pasted URLs.
+    if (previewToken) {
+      headers["x-preview-token"] = previewToken;
     }
 
     // Stage 6 §6.1: per-tab session ID lets the server UPSERT a

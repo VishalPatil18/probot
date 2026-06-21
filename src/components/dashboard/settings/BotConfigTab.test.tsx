@@ -12,12 +12,18 @@ const BOT_ID = "11111111-1111-1111-1111-111111111111";
 
 const baseProps = {
   botId: BOT_ID,
+  ownerUsername: "jane-doe",
   initialName: "Jane Doe",
   initialHeadline: "ML Engineer",
   initialPersonality: "professional" as const,
   initialSuggestedQuestions: ["What are her skills?"],
   initialIsActive: true,
   initialThemeColor: "#7c5cff",
+  initialCustomInstructions: "",
+  initialRateLimitPerMinute: null,
+  initialRateLimitPerDay: null,
+  initialRateLimitMaxChars: null,
+  previewToken: null,
 };
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -141,10 +147,79 @@ describe("BotConfigTab", () => {
     ).not.toBeDisabled();
   });
 
-  it("custom instructions textarea is disabled (Coming Soon)", () => {
+  it("custom instructions textarea is enabled and sends customInstructions on PATCH (Stage 7)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { bot: {} }));
     render(<BotConfigTab {...baseProps} />);
-    const textarea = screen.getByPlaceholderText(/always be honest/i);
-    expect(textarea).toBeDisabled();
+    const textarea = screen.getByLabelText(/custom instructions/i);
+    expect(textarea).not.toBeDisabled();
+    fireEvent.change(textarea, {
+      target: { value: "Always reply in lowercase." },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /save bot settings/i }),
+    );
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toEqual({ customInstructions: "Always reply in lowercase." });
+  });
+
+  it("rate-limit field sends a numeric override; blank means revert to default (null)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { bot: {} }));
+    render(
+      <BotConfigTab {...baseProps} initialRateLimitPerMinute={20} />,
+    );
+    const perMinute = screen.getByLabelText(/per minute/i);
+    fireEvent.change(perMinute, { target: { value: "" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: /save bot settings/i }),
+    );
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0]?.[1] as RequestInit).body as string,
+    ) as Record<string, unknown>;
+    expect(body).toEqual({ rateLimitPerMinute: null });
+  });
+
+  it("draft bot with previewToken shows the Publish banner", () => {
+    render(
+      <BotConfigTab
+        {...baseProps}
+        initialIsActive={false}
+        previewToken="abcdef.sig"
+      />,
+    );
+    expect(screen.getByText(/draft - not yet live/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /publish bot/i }),
+    ).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /open private preview/i });
+    expect(link).toHaveAttribute(
+      "href",
+      "/u/jane-doe/chat?preview=abcdef.sig",
+    );
+  });
+
+  it("publish button POSTs to /api/bots/[botId]/publish", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { bot: {} }));
+    render(
+      <BotConfigTab
+        {...baseProps}
+        initialIsActive={false}
+        previewToken="abcdef.sig"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /publish bot/i }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/bots/${BOT_ID}/publish`);
+    expect(init.method).toBe("POST");
   });
 
   it("clicking a theme preset swatch enables Save and sends the new color on PATCH", async () => {

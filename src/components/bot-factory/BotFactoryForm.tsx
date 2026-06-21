@@ -8,6 +8,7 @@ import {
   CONTEXT_TOKEN_CAP_DEFAULT,
   CONTEXT_TOKEN_CAP_MAX,
   CONTEXT_TOKEN_CAP_MIN,
+  CUSTOM_INSTRUCTIONS_MAX,
   PERSONALITY_PRESETS,
   type Personality,
 } from "@/lib/bots/schemas";
@@ -65,6 +66,7 @@ type InitialBot = {
   contextText: string;
   contextTokenCap?: number;
   suggestedQuestions: string[] | null;
+  customInstructions?: string | null;
 };
 
 type Props = {
@@ -84,6 +86,8 @@ type FormState = {
   pdfFiles: File[];
   contextTokenCap: number;
   suggestedQuestions: string[];
+  // Stage 7 §FR-002.7: optional free-form prompt addendum captured on Step 3.
+  customInstructions: string;
   llmProvider: ProviderName;
   llmModel: string;
   apiKey: string;
@@ -125,6 +129,7 @@ export function BotFactoryForm({
     pdfFiles: [],
     contextTokenCap: initialBot?.contextTokenCap ?? CONTEXT_TOKEN_CAP_DEFAULT,
     suggestedQuestions: initialBot?.suggestedQuestions ?? [],
+    customInstructions: initialBot?.customInstructions ?? "",
     llmProvider: initialProvider,
     llmModel: initialModel,
     apiKey: "",
@@ -136,6 +141,12 @@ export function BotFactoryForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdBotId, setCreatedBotId] = useState<string | null>(null);
+  // Stage 7 §FR-002.10: bots are created in draft state; the preview token
+  // returned from POST /api/bots powers the private preview URL on Step 5,
+  // and the Publish button flips the live switch via POST /publish.
+  const [previewToken, setPreviewToken] = useState<string | null>(null);
+  const [published, setPublished] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -216,6 +227,9 @@ export function BotFactoryForm({
           suggestedQuestions: form.suggestedQuestions,
           llmProvider: form.llmProvider,
           llmModel: form.llmModel,
+          ...(form.customInstructions.trim().length > 0
+            ? { customInstructions: form.customInstructions.trim() }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -225,7 +239,15 @@ export function BotFactoryForm({
         setError(body.error ?? "Could not save your bot. Try again.");
         return;
       }
-      const body = (await res.json()) as { bot: { id: string } };
+      const body = (await res.json()) as {
+        bot: {
+          id: string;
+          isActive?: boolean;
+          previewToken?: string | null;
+        };
+      };
+      setPreviewToken(body.bot.previewToken ?? null);
+      setPublished(body.bot.isActive ?? false);
 
       // If PDFs were queued, upload them now that the bot row exists. The
       // server reassembles `context_text` from all sources, so the manual
@@ -284,6 +306,29 @@ export function BotFactoryForm({
     if (step > 1) setStep(step - 1);
   }
 
+  async function publish() {
+    if (!createdBotId || publishing) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/bots/${createdBotId}/publish`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setError(body.error ?? "Could not publish your bot. Try again.");
+        return;
+      }
+      setPublished(true);
+    } catch {
+      setError("Network error. Check your connection and try again.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   return (
     // Desktop: fill the layout's main column (which is itself
     // `calc(100vh - 4rem)`) and hide overflow so the page itself never
@@ -323,7 +368,14 @@ export function BotFactoryForm({
               />
             )}
             {step === 5 && (
-              <StepDeploy username={username} createdBotId={createdBotId} />
+              <StepDeploy
+                username={username}
+                createdBotId={createdBotId}
+                previewToken={previewToken}
+                published={published}
+                publishing={publishing}
+                onPublish={publish}
+              />
             )}
 
             {error && (
@@ -363,8 +415,8 @@ export function BotFactoryForm({
 
 function nextLabel(step: number, submitting: boolean): string {
   if (submitting) return "Saving…";
-  if (step === 4) return "Save & deploy";
-  if (step === 5) return "Preview bot →";
+  if (step === 4) return "Save as draft";
+  if (step === 5) return "Open chat →";
   return "Continue →";
 }
 
@@ -782,12 +834,28 @@ function StepPersonality({
           </div>
         </div>
 
-        <div className="rounded-xl p-4 border border-border-base bg-neutral-50 opacity-60">
-          <p className="text-sm font-semibold">
-            Theme color & custom instructions - Stage 7
-          </p>
-          <p className="text-xs text-muted mt-1">
-            Lands with the settings page.
+        <div>
+          <label
+            htmlFor="bf-custom-instructions"
+            className="block text-xs font-semibold mb-1.5"
+          >
+            Custom instructions{" "}
+            <span className="text-muted font-normal">
+              · optional, max {CUSTOM_INSTRUCTIONS_MAX.toLocaleString()} chars
+            </span>
+          </label>
+          <textarea
+            id="bf-custom-instructions"
+            rows={3}
+            value={form.customInstructions}
+            onChange={(e) => patch("customInstructions", e.target.value)}
+            maxLength={CUSTOM_INSTRUCTIONS_MAX}
+            placeholder="Always be honest about what's in my data; if unsure, point recruiters to email me directly."
+            className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand resize-none"
+          />
+          <p className="text-[11px] text-muted mt-1.5">
+            Added to the system prompt below personality. Safety rules still
+            win. You can edit this later in settings.
           </p>
         </div>
 
@@ -1022,9 +1090,17 @@ function StepAIModel({
 function StepDeploy({
   username,
   createdBotId,
+  previewToken,
+  published,
+  publishing,
+  onPublish,
 }: {
   username: string;
   createdBotId: string | null;
+  previewToken: string | null;
+  published: boolean;
+  publishing: boolean;
+  onPublish: () => void;
 }) {
   // Stage 4: build the real public URL from the current origin so localhost
   // dev, preview deploys, and prod all show the right share link.
@@ -1032,33 +1108,84 @@ function StepDeploy({
     typeof window !== "undefined" && window.location.origin
       ? window.location.origin
       : "https://probot.dev";
-  const url = `${origin}/u/${username}/chat`;
+  const publicUrl = `${origin}/u/${username}/chat`;
+  const previewUrl = previewToken
+    ? `${publicUrl}?preview=${encodeURIComponent(previewToken)}`
+    : null;
   return (
     <section>
       <StepHeading
         step={5}
-        title="Ready to deploy 🚀"
-        subtitle="Your bot is saved. Share the link below."
+        title={published ? "Bot is live 🚀" : "Preview before you publish"}
+        subtitle={
+          published
+            ? "Your bot is published and the public link is live."
+            : "Try your bot privately. Recruiters can't reach the public URL until you publish."
+        }
       />
       <div className="space-y-5">
         {createdBotId && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-success/10 border border-success/20">
-            <span aria-hidden>✓</span>
+          <div
+            className={`flex items-center gap-3 p-4 rounded-xl border ${
+              published
+                ? "bg-success/10 border-success/20"
+                : "bg-amber-50 border-amber-200"
+            }`}
+          >
+            <span aria-hidden>{published ? "✓" : "✎"}</span>
             <div>
-              <p className="text-sm font-bold">Bot saved</p>
-              <p className="text-xs text-muted">Bot id: {createdBotId}</p>
+              <p className="text-sm font-bold">
+                {published ? "Bot published" : "Bot saved as draft"}
+              </p>
+              <p className="text-xs text-muted">
+                {published
+                  ? "Anyone with the link below can chat with your bot."
+                  : "Publishing flips the public link on. You can republish or unpublish anytime from settings."}
+              </p>
             </div>
           </div>
         )}
-        <div>
-          <label className="text-[11px] font-bold text-muted uppercase tracking-wider">
-            Your bot link
-          </label>
-          <div className="flex items-center gap-2 mt-1.5 border border-border-base rounded-xl px-3 py-2.5 bg-white">
-            <span className="text-sm font-mono flex-1 truncate">{url}</span>
-            <CopyUrlButton url={url} />
+
+        {!published && previewUrl ? (
+          <div>
+            <label className="text-[11px] font-bold text-muted uppercase tracking-wider">
+              Private preview link
+            </label>
+            <div className="flex items-center gap-2 mt-1.5 border border-amber-200 rounded-xl px-3 py-2.5 bg-amber-50">
+              <span className="text-sm font-mono flex-1 truncate">
+                {previewUrl}
+              </span>
+              <CopyUrlButton url={previewUrl} />
+            </div>
+            <p className="text-[11px] text-muted mt-1.5">
+              Token-signed; only people you share this link with can chat with
+              the draft.
+            </p>
+            <button
+              type="button"
+              onClick={onPublish}
+              disabled={publishing}
+              className="btn btn-primary mt-4 disabled:opacity-60"
+            >
+              {publishing ? "Publishing…" : "Publish bot"}
+            </button>
           </div>
-        </div>
+        ) : null}
+
+        {published ? (
+          <div>
+            <label className="text-[11px] font-bold text-muted uppercase tracking-wider">
+              Your bot link
+            </label>
+            <div className="flex items-center gap-2 mt-1.5 border border-border-base rounded-xl px-3 py-2.5 bg-white">
+              <span className="text-sm font-mono flex-1 truncate">
+                {publicUrl}
+              </span>
+              <CopyUrlButton url={publicUrl} />
+            </div>
+          </div>
+        ) : null}
+
         <div className="rounded-xl p-4 border border-border-base bg-neutral-50 opacity-60">
           <p className="text-sm font-semibold">Embed code - Stage 5</p>
           <p className="text-xs text-muted mt-1">Lands with the widget.</p>

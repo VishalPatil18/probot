@@ -1146,11 +1146,11 @@ The landing page (`src/app/page.tsx`) is intentionally OUTSIDE the (marketing) g
 
 ### Hashing One-Shot Auth Tokens Even Though They're Already Random (Stage 7 Phase 1)
 
-> Why store SHA-256 of a password-reset token in the database instead of the raw token? The token is already 32 random bytes — what attack does hashing prevent?
+> Why store SHA-256 of a password-reset token in the database instead of the raw token? The token is already 32 random bytes - what attack does hashing prevent?
 
-The token is high-entropy, yes, but the threat model isn't "guess the token." The threat is **database leak / SQL injection / backup theft**. If you store raw tokens and an attacker reads the `password_reset_tokens` table, they can immediately replay every unexpired token against your API — effectively a password-reset bypass for every active reset request. Storing only `sha256(token)` makes the dump useless: the API computes `sha256(suppliedToken)` and looks it up; an attacker with hashes alone has no way to invert the hash back to a token the API will accept.
+The token is high-entropy, yes, but the threat model isn't "guess the token." The threat is **database leak / SQL injection / backup theft**. If you store raw tokens and an attacker reads the `password_reset_tokens` table, they can immediately replay every unexpired token against your API - effectively a password-reset bypass for every active reset request. Storing only `sha256(token)` makes the dump useless: the API computes `sha256(suppliedToken)` and looks it up; an attacker with hashes alone has no way to invert the hash back to a token the API will accept.
 
-The same logic applies to email-verification tokens, magic-link tokens, session cookies, API keys, OAuth refresh tokens — basically any "bearer" credential. The pattern is: **the system that issues the credential keeps the secret in memory just long enough to hand it to the user; the system that validates the credential stores only the hash.** Concretely:
+The same logic applies to email-verification tokens, magic-link tokens, session cookies, API keys, OAuth refresh tokens - basically any "bearer" credential. The pattern is: **the system that issues the credential keeps the secret in memory just long enough to hand it to the user; the system that validates the credential stores only the hash.** Concretely:
 
 - `createResetToken()`: `raw = randomBytes(32).toString("hex")` → `tokenHash = sha256(raw)` → INSERT `{ tokenHash }` → return `raw` to the caller. The caller embeds `raw` in the email link.
 - `validateAndConsumeToken(raw)`: SELECT WHERE `tokenHash = sha256(raw)` → check expiry + `usedAt` → UPDATE `usedAt = now`.
@@ -1159,34 +1159,34 @@ The raw token only exists in memory and in the email body. The DB only ever sees
 
 Why specifically SHA-256 and not bcrypt? Bcrypt's slow-by-design is what you want for passwords because attackers brute-force them. Random 32-byte tokens are infeasible to brute-force in the first place (2^256 keyspace), so the slowdown buys nothing. SHA-256 is fast enough to validate on every request without budget impact, while still being one-way. Use bcrypt for passwords (cracking matters), SHA-256 for random tokens (replay matters).
 
-The cost of this pattern is tiny — one extra `crypto.createHash("sha256")` per token operation, well under 1ms. The benefit is that a stolen DB dump is operationally useless against the auth flow, which is a load-bearing security guarantee.
+The cost of this pattern is tiny - one extra `crypto.createHash("sha256")` per token operation, well under 1ms. The benefit is that a stolen DB dump is operationally useless against the auth flow, which is a load-bearing security guarantee.
 
 ### `used_at` vs Delete-On-Consume: When To Audit-Trail A Consumed Token (Stage 7 Phase 1)
 
-> The verification-token table doesn't have a `used_at` column — it just deletes the row on consume. The reset-token table sets `used_at` instead. Why the inconsistency?
+> The verification-token table doesn't have a `used_at` column - it just deletes the row on consume. The reset-token table sets `used_at` instead. Why the inconsistency?
 
 It's not inconsistency, it's intent. Both designs make the token single-use; they differ in what they preserve for after-the-fact analysis.
 
-- **Verification tokens**: a successful verify means "yes, you control this inbox." The token has no further role. Keeping a `used_at` row buys nothing — you already know the user is verified because `users.email_verified` is now set. The clean delete keeps the table small and the indexes lean.
+- **Verification tokens**: a successful verify means "yes, you control this inbox." The token has no further role. Keeping a `used_at` row buys nothing - you already know the user is verified because `users.email_verified` is now set. The clean delete keeps the table small and the indexes lean.
 - **Reset tokens**: keeping the row with `used_at` set lets you forensically detect "this token was consumed twice" if a leaked token is ever attempted by an attacker after the user already used it. The first consume sets `used_at`; the second consume queries the same row, sees `used_at IS NOT NULL`, returns "already used." You can then audit those "already used" failures in the logs to detect attempted replay attacks. The signal is small but real.
 
 The general principle: **a consumed credential should be deleted unless its post-consume state has forensic value.** Auth tokens that are part of a single user-state transition (verification, signup confirmation) lose their value the moment they're consumed. Auth tokens that protect a more-sensitive action (password reset, key rotation, account deletion) deserve the audit trail.
 
-A related pattern: rate-limit tables typically retain consumed entries until expiry for exactly this reason — being able to see "this IP made 50 attempts in the last hour" is the entire point. Token tables where the act of consuming completes the transaction (verification) gain nothing from retention. Token tables where consuming might be the start of a sensitive transaction (reset) gain forensic insight from retention.
+A related pattern: rate-limit tables typically retain consumed entries until expiry for exactly this reason - being able to see "this IP made 50 attempts in the last hour" is the entire point. Token tables where the act of consuming completes the transaction (verification) gain nothing from retention. Token tables where consuming might be the start of a sensitive transaction (reset) gain forensic insight from retention.
 
 ### Enumeration-Safe Forgot-Password (Stage 7 Phase 1)
 
-> The forgot-password endpoint returns 200 even when the email doesn't exist. Why not return 404 for unknown emails — wouldn't that be more honest?
+> The forgot-password endpoint returns 200 even when the email doesn't exist. Why not return 404 for unknown emails - wouldn't that be more honest?
 
 It would be more honest in a vacuum, but it would also create an **account-enumeration oracle**. An attacker who wants to know "is this person registered on ProBot?" sends `POST /api/auth/forgot-password { email }` and reads the response code. A 404 means "no, this email isn't registered"; a 200 means "yes, it is." Now the attacker has a confirmed list of registered emails to target with phishing, credential-stuffing, or social engineering ("hey, since you have a ProBot account...").
 
-The mitigation is "always answer 200, regardless of state." The reset email only goes out if the email exists; the response is indistinguishable either way. The UX cost is small — a user who typos their email won't get a "this isn't registered" error, they'll just never receive the email. That's worth it for the security gain.
+The mitigation is "always answer 200, regardless of state." The reset email only goes out if the email exists; the response is indistinguishable either way. The UX cost is small - a user who typos their email won't get a "this isn't registered" error, they'll just never receive the email. That's worth it for the security gain.
 
 A subtler version of the same trap: returning a different response for "no password to reset" (OAuth-only accounts) vs "no such email" leaks _which authentication method_ a given email uses. Same fix: silently no-op for OAuth-only accounts, return 200, send no email. The attacker can't distinguish the two cases from outside.
 
-A third version of this trap is timing-based. If the "send email" path takes 200ms and the "do nothing" path takes 2ms, the attacker can time the response to infer state. Mitigation depends on the threat model: for low-traffic apps, accept the timing leak; for high-stakes apps, add a `setTimeout` floor or run the work in a `setImmediate` so the response is detached from the work. ProBot is in the "low-traffic, accept the leak" tier — the timing difference is dominated by network jitter at our scale.
+A third version of this trap is timing-based. If the "send email" path takes 200ms and the "do nothing" path takes 2ms, the attacker can time the response to infer state. Mitigation depends on the threat model: for low-traffic apps, accept the timing leak; for high-stakes apps, add a `setTimeout` floor or run the work in a `setImmediate` so the response is detached from the work. ProBot is in the "low-traffic, accept the leak" tier - the timing difference is dominated by network jitter at our scale.
 
-The pattern generalizes: **anywhere your API's response shape differentiates between "this resource exists" and "this resource doesn't," you have an enumeration oracle.** Login forms have the same problem ("wrong password" vs "no such email" — both should map to one error). Password-reset is the highest-leverage place to apply this discipline because the cost of fixing it is one early-return rewrite and the cost of NOT fixing it is a confirmed-user-list that lives forever in attacker hands.
+The pattern generalizes: **anywhere your API's response shape differentiates between "this resource exists" and "this resource doesn't," you have an enumeration oracle.** Login forms have the same problem ("wrong password" vs "no such email" - both should map to one error). Password-reset is the highest-leverage place to apply this discipline because the cost of fixing it is one early-return rewrite and the cost of NOT fixing it is a confirmed-user-list that lives forever in attacker hands.
 
 ### `useSearchParams` Forces `<Suspense>` In Next.js 14 (Stage 7 Phase 1)
 
@@ -1211,9 +1211,9 @@ export default function LoginPage() {
 }
 ```
 
-The fallback should be a static, no-params version of the form's chrome — ideally rendering the same headings and skeleton so the visual layout doesn't shift on hydration. This is also a useful exercise in separating "the chrome that doesn't depend on URL state" from "the interactive form that does," which is good componentization regardless of Next's rules.
+The fallback should be a static, no-params version of the form's chrome - ideally rendering the same headings and skeleton so the visual layout doesn't shift on hydration. This is also a useful exercise in separating "the chrome that doesn't depend on URL state" from "the interactive form that does," which is good componentization regardless of Next's rules.
 
-The dev-mode-vs-build-mode discrepancy is the trap. In `next dev`, every render is server-rendered on demand, so the search-params read works fine. The error only surfaces during static generation, which doesn't happen until `next build`. Always run a real build before assuming a feature is shippable — `tsc --noEmit` and unit tests both pass for this kind of issue.
+The dev-mode-vs-build-mode discrepancy is the trap. In `next dev`, every render is server-rendered on demand, so the search-params read works fine. The error only surfaces during static generation, which doesn't happen until `next build`. Always run a real build before assuming a feature is shippable - `tsc --noEmit` and unit tests both pass for this kind of issue.
 
 The same pattern bites with `cookies()`, `headers()`, `useParams()` in certain configurations, and any other hook that reads request-time state. The fix is always the same: a `<Suspense>` boundary that establishes a contract about the dependency.
 
@@ -1223,16 +1223,137 @@ The same pattern bites with `cookies()`, `headers()`, `useParams()` in certain c
 
 NextAuth's default behavior is: if someone signs in with Google and the email matches an existing account that was created via GitHub, NextAuth **refuses to link them automatically** and surfaces an `OAuthAccountNotLinked` error. The reason is account-takeover prevention.
 
-Imagine I register on ProBot via GitHub with the email `jane@example.com`. Six months later, Jane (who controls the actual `jane@example.com` Google account) discovers the app, clicks "Sign in with Google," and Google sends a successful auth back to ProBot for `jane@example.com`. If `allowDangerousEmailAccountLinking: true`, NextAuth says "an account with this email already exists, let me link the Google account to it" — and Jane is now signed in as me. She has full access to my bots, my conversations, my leads. She didn't need my GitHub password, my session cookie, or anything else. She just needed to own the email.
+Imagine I register on ProBot via GitHub with the email `jane@example.com`. Six months later, Jane (who controls the actual `jane@example.com` Google account) discovers the app, clicks "Sign in with Google," and Google sends a successful auth back to ProBot for `jane@example.com`. If `allowDangerousEmailAccountLinking: true`, NextAuth says "an account with this email already exists, let me link the Google account to it" - and Jane is now signed in as me. She has full access to my bots, my conversations, my leads. She didn't need my GitHub password, my session cookie, or anything else. She just needed to own the email.
 
 The default behavior (the safe one) prevents this: Jane gets the `OAuthAccountNotLinked` error and is told to sign in with the original method first. She can then add Google as a second auth method from her settings, having proven control of the original method first.
 
 The "dangerous" prefix is doing real work. The flag is sometimes useful for apps where:
+
 - All accounts trace back to a verified-email source (e.g., the only sign-up path is email-verification, so by definition only one person controls each email), AND
 - The convenience of "any provider with the matching email signs you in" outweighs the takeover risk.
 
 ProBot doesn't qualify on either count. The fix is one line: remove the flag. NextAuth's existing `/auth/error` page already handles the `OAuthAccountNotLinked` error code; the message reads "this email is already linked to another sign-in method, sign in with that method first." Clear, no UX gap, no security gap.
 
-The general lesson: **flags named "dangerous_X" or "force_X" or "unsafe_X" in mainstream auth libraries are not pejorative — they're warnings that the library author already considered and rejected the default they're letting you re-enable.** Read the linked docs before flipping any such flag; the docs usually describe the exact attack the default prevents.
+The general lesson: **flags named "dangerous_X" or "force_X" or "unsafe_X" in mainstream auth libraries are not pejorative - they're warnings that the library author already considered and rejected the default they're letting you re-enable.** Read the linked docs before flipping any such flag; the docs usually describe the exact attack the default prevents.
+
+---
+
+### Roll Your Own HMAC Token Or Reach For A JWT Library? (Stage 7 Phase 2)
+
+> The preview-token module skipped `jose` and `jsonwebtoken` and signed a small payload with raw `crypto.createHmac`. When is that the right call vs. just adding the library?
+
+Reach for a full JWT library when you need any of these:
+
+- **Algorithm negotiation.** RS256 vs ES256 vs HS256 chosen per-token, with a JWS header that says which to use. Useful for federated systems where you don't control both ends.
+- **Key rotation envelopes.** A `kid` header that names the signing key so you can rotate secrets without invalidating outstanding tokens.
+- **Standard claims.** `aud` (audience), `iss` (issuer), `sub` (subject), `jti` (token id), `exp` / `nbf` (not-before) - and you need other systems to recognise them.
+- **JOSE encryption (JWE).** Encrypted-not-just-signed tokens.
+
+Skip the library when, like ProBot's preview tokens, all of the following are true:
+
+- You sign and verify on the same server with the same secret.
+- The payload is tiny (botId + userId + iat - three primitives).
+- TTL is enforced in code at verify time, not via a standard `exp` claim other systems would read.
+- No second party ever inspects the token; it's a server-controlled bearer credential, not an interop envelope.
+
+The "skip" path is ~30 lines:
+
+```typescript
+const encoded = base64url(JSON.stringify(payload));
+const sig = createHmac("sha256", secret).update(encoded).digest("base64url");
+const token = `${encoded}.${sig}`;
+```
+
+…and verify is the reverse with `timingSafeEqual` on the signature. That's `crypto.createHmac` + JSON.stringify + base64url, all from the Node standard library. Bundle cost: zero.
+
+The cost of adding `jose` for this case is non-trivial: ~40-60KB minified to the serverless bundle, a dependency-graph node to audit forever, and a much wider API surface where you have to read the docs every time you touch it. The cost is justified the moment you need any of the bullets above; it is not justified for "I want a signed cookie."
+
+The trap to avoid is using JSON Web Tokens as a noun ("we need a JWT") when you mean "we need a signed credential." Signed credentials are a primitive, JWTs are one specific format. Picking the format before the requirement is backwards.
+
+### Two-Layer Token Validation: Signature + Server-Side State (Stage 7 Phase 2)
+
+> The chat route verifies the preview token's HMAC AND checks that the token matches `bots.previewToken` in the row. Why both? Either alone seems sufficient.
+
+Each layer fixes a different failure mode of the other.
+
+**Signature alone (stateless tokens):** an attacker who steals a signed token has access until the TTL expires. There is no server-side state to revoke. If you publish the bot, the token still works. If the user discovers a leak, there is nothing they can do but wait it out. This is the JWT model - and it's why "JWT revocation" is a famous pain point in the JWT ecosystem (the usual answers are short TTLs + denylists, both of which add complexity).
+
+**Server-side state alone (random opaque tokens):** an attacker who guesses or steals the token also has access. The token's value is the entire authentication; the server can't tell whether the token is the one it issued or a different-but-also-valid value. Random 32-byte tokens are practically unguessable, so this isn't a real attack - but it does mean the token _can_ be replayed from a DB dump because there's no cryptographic binding to the system that issued it.
+
+**Both layers:** the signature proves the token was issued by this system (cryptographic provenance). The DB lookup proves the token is _currently_ valid (operational revocation). Publishing a bot clears the DB row → token instantly stops working even if it's signed correctly. The DB row matches a signature an attacker can't forge → a leaked DB dump alone can't generate working tokens.
+
+For ProBot's preview tokens both layers were cheap (we already have the bot row in scope; the HMAC verify is microseconds), so we use both. Pure-stateless JWTs are appropriate when the DB lookup cost is the bottleneck (think: edge-function auth where every request hits a CDN, never the DB). Pure-stateful opaque tokens are appropriate when you don't need cryptographic provenance - e.g., session cookies inside one trust boundary.
+
+The mental model: **signature = "did we issue this?"; DB row = "do we still want it to work?"** Use the layer that answers the question your threat model cares about. When both questions matter, use both - it's free.
+
+### Why Drafts Need `robots: { index: false }` Even Behind A Signed URL (Stage 7 Phase 2)
+
+> The preview URL is signed and tokenised. Crawlers don't have the token. Why bother setting `robots: { index: false }`?
+
+Crawlers don't have the token - but they sometimes get the URL.
+
+Common ways a preview URL leaks to a crawler:
+
+- A creator pastes the link into a public GitHub issue, then forgets and never deletes the comment. GitHub fetches the URL to render a preview card. Bingo, it's in the bot's index.
+- A creator shares the link in Slack. Slack's link-unfurl bot fetches the URL server-side. If the workspace allows external sharing, that link unfurl can end up in archive systems that get crawled.
+- The creator sends the link via email. Their email client (Outlook/Gmail) fetches the URL to generate a preview. Those preview-fetcher User-Agents have shown up in indexes before.
+
+The robots meta tag tells well-behaved crawlers "don't put this in your index even if you fetch it." Most major crawlers (Googlebot, Bingbot) respect it. Malicious or sloppy crawlers don't - but those crawlers also wouldn't respect the auth token; they'd just request the URL and get the page back with full chat UI rendered.
+
+So `robots: { index: false }` is the **most you can do at the page layer** for an URL that, by design, can be opened by anyone who has it. It's a defence against accidental indexing of links that leaked through normal-human channels (paste in a doc, share with the wrong person). It's not a defence against scrapers, which is fine - drafts aren't sensitive enough that scrapers are part of the threat model.
+
+The general rule: **anything reachable without a session cookie should explicitly set `robots: { index: false }` unless you actually want it indexed.** This includes preview pages, password-reset success pages, email-verification confirmation pages, and short-lived sharing links. The cost is one line in `generateMetadata`; the benefit is the page not showing up in Google when something inevitably leaks.
+
+### Per-Bot Rate Limit Overrides: Two Layers Of Clamping, On Purpose (Stage 7 Phase 2)
+
+> The `RATE_LIMIT_PER_MINUTE_MAX = 100` ceiling appears in both the Zod schema (`.max(100)`) and the rate-limiter (`clampPositive(..., 100)`). Why duplicate it?
+
+Each layer covers a hole the other can't see.
+
+**Zod-only (write-time clamp):** safe as long as every write to `bots.rate_limit_per_minute` goes through the PATCH endpoint. The moment someone writes to that column another way - an admin script, a data backfill, a future "import bot from JSON" feature, the Drizzle Studio UI you opened on Tuesday - the schema is bypassed. The DB happily stores `999999` because the column is just `integer`. The runtime then dutifully tries to allow 999,999 requests per minute and burns through someone's API credits.
+
+**Limiter-only (read-time clamp):** safe as long as you never look at the stored value for any other purpose. The moment a UI element renders "rate limit: 999,999 requests per minute" from the DB value, you've lied to the user about what's actually enforced. The Zod write-clamp catches the bad value at write time so users never see misleading state.
+
+**Both layers:** the Zod schema gives accurate user-facing values (settings page shows "max 100" because you can't write higher); the limiter gives runtime safety regardless of how the value got there. Cost is one constant referenced in two places - well worth it.
+
+The pattern generalises: **any value that has both a "what the system enforces" interpretation and a "what the user sees" interpretation should be clamped at both layers.** Examples: max file size (validated by the upload form AND enforced by the multipart parser); max message length (truncated client-side AND server-side); password complexity rules (checked at the form AND on the server). The two halves can't drift if you reference a single constant from both - but if they could drift, you have a UI/backend lie waiting to happen.
+
+The cheap version of this discipline: **export a single constant, import it in both places, and add a unit test that imports both and asserts equality.** The thorough version is a property-based test that fuzzes the input and asserts the eventual stored value never exceeds the ceiling - but for a single integer constant, the cheap version is sufficient.
+
+### Append-Or-Insert: When To Mutate The Just-Created Row (Stage 7 Phase 2)
+
+> The bot-create handler INSERTs the row, then immediately UPDATEs it with the preview token (which needed the bot id to sign). Two statements per create feels wrong. Why not mint the token from a pre-generated UUID?
+
+This is a real choice with a clear trade.
+
+**Option A: Mint token before insert, supply your own UUID.**
+
+```typescript
+const botId = randomUUID();
+const previewToken = mintPreviewToken(botId, userId);
+await tx.insert(bots).values({ id: botId, previewToken, ... });
+```
+
+One statement. Tight. But: you're now mixing two responsibilities. The bot id is no longer "what Postgres gave us"; it's "what we minted client-side." If anyone refactors the schema to use a sequence, a CUID, ULID, or to require a database-generated value (e.g., `gen_random_uuid()` with a deferred constraint), this code silently drifts. Tests now have to fix the bot id at insert time, which is fine but quietly couples test fixtures to a generator that lives in app code.
+
+**Option B: Insert then update.**
+
+```typescript
+const [created] = await tx.insert(bots).values({ ... }).returning();
+const previewToken = mintPreviewToken(created.id, userId);
+await tx.update(bots).set({ previewToken }).where(eq(bots.id, created.id));
+```
+
+Two statements. Slightly less tight. But: the bot id stays a database-generated value (single source of truth). Each statement does one thing. Future schema changes (the sequence/CUID/ULID example) don't require app-code changes. Both statements run inside the same transaction so partial state is impossible.
+
+Both options are correct. ProBot picked B because:
+
+1. The trade is _one extra round-trip inside a transaction_, which is microseconds on the same DB connection.
+2. The code reads "insert, then update with derived value" which matches how a human would describe it.
+3. The schema can change without coordinated app changes.
+
+When to pick A instead: high-throughput insert paths (millions per minute), where the extra round-trip dominates. ProBot's bot-create path is at most a few times per session - the perf consideration doesn't apply.
+
+The general principle: **don't pre-compute database-generated values just to save a statement, unless the perf actually matters.** The statement count is rarely the right cost to optimise for. Architectural simplicity - keeping each statement's responsibility narrow - usually wins.
 
 ---

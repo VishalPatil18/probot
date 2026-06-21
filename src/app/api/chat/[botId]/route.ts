@@ -20,18 +20,24 @@ export function OPTIONS(): Response {
 }
 import { buildSystemPrompt } from "@/lib/ai/prompt-builder";
 import { ProviderError, getProvider, isProviderName } from "@/lib/ai/providers";
-import { checkRateLimit } from "@/lib/ai/rate-limit";
+import { checkRateLimit, resolveMaxChars } from "@/lib/ai/rate-limit";
 import { sanitizeInput } from "@/lib/ai/sanitize-input";
 import { sanitizeOutput } from "@/lib/ai/sanitize-output";
+import { verifyPreviewToken } from "@/lib/bots/preview-token";
 import type { Personality } from "@/lib/bots/schemas";
-import { PERSONALITY_PRESETS } from "@/lib/bots/schemas";
+import {
+  PERSONALITY_PRESETS,
+  RATE_LIMIT_MAX_CHARS_MAX,
+} from "@/lib/bots/schemas";
 import { bots, conversations, db, messages, users } from "@/lib/db";
 import { retrieveRelevant } from "@/lib/rag/retrieve";
 
 const MAX_BODY_BYTES = 16_384;
 
+// Outer Zod cap kept at the absolute ceiling; the per-bot `maxChars`
+// override clamps further down at request time (see step 5b).
 const chatInput = z.object({
-  message: z.string().min(1).max(8000),
+  message: z.string().min(1).max(RATE_LIMIT_MAX_CHARS_MAX),
   // Stage 6: client-generated per-tab UUID from sessionStorage. Required
   // so the chat orchestrator can UPSERT a `conversations` row and persist
   // the user/assistant turn into `messages` for the dashboard analytics
@@ -93,12 +99,33 @@ export async function POST(
     );
   }
 
-  // 6. Bot lookup
+  // 6. Bot lookup. We pull the bot regardless of `is_active` so we can
+  // separately authorize draft bots via a preview token (Stage 7 §FR-002.10).
   const botRow = await db.query.bots.findFirst({
-    where: and(eq(bots.id, params.botId), eq(bots.isActive, true)),
+    where: eq(bots.id, params.botId),
   });
   if (!botRow) {
     return NextResponse.json({ error: "bot_not_found" }, { status: 404 });
+  }
+
+  // 6b. Draft-mode access. An inactive bot can still be chatted with by the
+  // owner via a signed preview token (sent as `x-preview-token` header or as
+  // a `?preview=` query param, whichever the client uses). The header path
+  // is preferred for the wizard's preview chat; the query-param path is
+  // accepted so a creator can manually paste the preview URL into a tab and
+  // it still works.
+  if (!botRow.isActive) {
+    const headerToken = request.headers.get("x-preview-token") ?? "";
+    const urlToken = new URL(request.url).searchParams.get("preview") ?? "";
+    const candidate = headerToken || urlToken;
+    const valid =
+      candidate.length > 0 &&
+      botRow.previewToken !== null &&
+      candidate === botRow.previewToken &&
+      verifyPreviewToken(candidate)?.botId === botRow.id;
+    if (!valid) {
+      return NextResponse.json({ error: "bot_not_found" }, { status: 404 });
+    }
   }
 
   // 7. Owner lookup (for llm provider + model preferences)
@@ -110,12 +137,31 @@ export async function POST(
     return NextResponse.json({ error: "bot_not_found" }, { status: 404 });
   }
 
-  // 8. Rate limit (per-bot)
-  const rl = checkRateLimit(botRow.id);
+  // 8. Rate limit (per-bot, with per-bot overrides from the Stage-7 columns).
+  // The limiter clamps unreasonable values internally; the Zod schema on the
+  // PATCH endpoint also bounds what can be stored.
+  const rl = checkRateLimit(botRow.id, {
+    perMinute: botRow.rateLimitPerMinute,
+    perDay: botRow.rateLimitPerDay,
+  });
   if (!rl.ok) {
     return NextResponse.json(
       { error: "rate_limit", scope: rl.scope, resetAt: rl.resetAt },
       { status: 429 },
+    );
+  }
+
+  // 8b. Per-bot maxChars override. The outer Zod schema accepts up to
+  // RATE_LIMIT_MAX_CHARS_MAX; here we enforce the per-bot ceiling (or the
+  // env default of 8000) before sending to the LLM.
+  const effectiveMaxChars = resolveMaxChars(botRow.rateLimitMaxChars);
+  if (parsed.data.message.length > effectiveMaxChars) {
+    return NextResponse.json(
+      {
+        error: "message_too_long",
+        maxChars: effectiveMaxChars,
+      },
+      { status: 400 },
     );
   }
 
@@ -188,6 +234,7 @@ export async function POST(
       name: botRow.name,
       personality,
       contextText: botRow.contextText,
+      customInstructions: botRow.customInstructions,
     },
     ownerUsername: ownerRow.username,
     ...(relevantChunks ? { relevantChunks } : {}),
