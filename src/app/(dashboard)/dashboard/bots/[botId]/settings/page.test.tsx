@@ -161,7 +161,7 @@ describe("BotSettingsPage (5-tab)", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens the AI model & key tab when ?tab=model (entire tab is Coming Soon)", async () => {
+  it("opens the AI model & key tab when ?tab=model and renders the live editor (Stage 7 Phase 3)", async () => {
     searchParamsState = new URLSearchParams("tab=model");
     getServerSessionMock.mockResolvedValueOnce(SESSION);
     findBotMock.mockResolvedValueOnce(botFixture());
@@ -170,8 +170,13 @@ describe("BotSettingsPage (5-tab)", () => {
     expect(
       screen.getByRole("heading", { name: /provider & model/i }),
     ).toBeInTheDocument();
-    // At least one Coming Soon pill on the tab
-    expect(screen.getAllByText(/coming soon/i).length).toBeGreaterThan(0);
+    // The live editor has the Managed key + Decrypt audit log sections.
+    expect(
+      screen.getByRole("heading", { name: /managed key storage/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /decrypt audit log/i }),
+    ).toBeInTheDocument();
   });
 
   it("falls back to default tab on an unknown ?tab= value", async () => {

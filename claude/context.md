@@ -2128,3 +2128,73 @@ _Tests + types:_
 - **Per-bot rate-limit columns are still in-memory enforced.** Phase 8 (per architecture blueprint) replaces the in-process limiter with Upstash Redis; until then the limits reset on each Vercel cold start. Acceptable for v1; document if needed.
 - **No `/api/bots/[botId]/preview-token/regenerate` endpoint.** If a creator confirms a leaked preview link they have to either publish or delete + recreate. Cheap to add in Phase 6 if it comes up.
 - **The chat route now does an extra DB query for inactive bots** to read `previewToken`. We're already fetching the whole bot row so this is free - just calling it out so a future query-tightening pass doesn't accidentally drop the column from the SELECT.
+
+### 2026-06-20 22:58 - Stage 7 Phase 3: envelope encryption + managed key path + live dashboard editor
+
+**What was asked to do:** Land the managed-key half of the hybrid storage architecture (Option 3 from the design conversation) — envelope encryption of user LLM keys with a KEK kept out of the DB, audit log of every server-side decrypt, a dashboard editor that lets creators switch provider/model and opt in/out of managed storage, and a chat-route fallback path so recruiters can chat with a bot when the creator's browser is offline.
+
+**What I did:**
+- New `src/lib/crypto/constants.ts` + `src/lib/crypto/envelope.ts` implementing AES-256-GCM envelope encryption (per-bot 256-bit DEK encrypts the LLM key; DEK is itself wrapped with the 256-bit KEK loaded from `PROBOT_KEY_ENCRYPTION_KEY` env). Public surface: `encryptKey(plaintext)`, `decryptKey(payload)`, `rotateKEK(payloads, oldB64, newB64)`. KEK is loaded fresh per call (no module-level cache so tests can manipulate env without reset; the cost is microseconds). `KekUnavailableError` distinct class so the API layer can downgrade "managed flow disabled" to a 503 vs a 500. Hard-fail at module import if `PROBOT_KEY_ENCRYPTION_KEY` is set but malformed (skipped under vitest so per-test env manipulation works).
+- 13 tests cover the crypto module: round-trip, ciphertext-differs-from-plaintext, fresh-IV per call, GCM tamper detection, KEK rotation rejection of stale KEK, missing-KEK error class, wrong-length KEK error, empty-plaintext rejection, 10KB plaintext, unicode plaintext, `rotateKEK` re-wraps + preserves ciphertext byte-for-byte + empty input.
+- New `src/lib/crypto/ip-hash.ts` — `hashIp(ip)` returns SHA-256(`NEXTAUTH_SECRET:ip`) hex (re-uses NEXTAUTH_SECRET as salt to avoid another env var). `extractRequesterIp(headers)` pulls `x-forwarded-for` first IP, falls back to `x-real-ip`. The dashboard audit log surfaces only the last 8 hex chars of the hash so creators get a per-row identifier without GDPR PII surface.
+- Migration `0011_graceful_ironclad.sql` adds two tables: `encrypted_llm_keys` (11 cols: ciphertext + iv + auth_tag + wrapped_dek + dek_iv + dek_auth_tag + provider + timestamps; unique index on bot_id so one managed key per bot; ON DELETE CASCADE from `bots`) and `decrypt_audit_log` (id, bot_id, decrypted_at, requester_ip_hash; index on bot_id+decrypted_at DESC for the dashboard query; ON DELETE CASCADE).
+- `POST /api/bots/[botId]/llm-key` — UPSERT on bot_id, envelope-encrypts the supplied plaintext, stamps the owner's current provider on the row. Returns 503 with `managed_storage_unavailable` if KEK env var unset; 400 if owner provider isn't set.
+- `DELETE /api/bots/[botId]/llm-key` — deletes the encrypted row, revoking server-side access.
+- `GET /api/bots/[botId]/llm-key/audit` — returns `{ stored, provider, lastDecryptedAt, entries: [{decryptedAt, ipHashSuffix}] }`. 30-day retention window enforced in the query; pruning happens in the Phase 5 cron.
+- `PATCH /api/users/me/llm-prefs` — backing route for the dashboard's provider/model switcher. Zod-whitelisted to only `llmProvider` + `llmModel`; mass-assignment safe.
+- Chat route (`/api/chat/[botId]`) gained the managed-key fallback:
+  - Header `x-llm-api-key` is now OPTIONAL. Missing header (KeyTransportError reason `missing`) is fine; malformed header (empty/too short/too long) still 400s loudly.
+  - After bot/owner lookup, key resolution: header wins if present; else look up `encrypted_llm_keys.findFirst({botId})`, refuse with `managed_key_provider_mismatch` if stored provider drifted from the owner's current provider, otherwise `decryptKey(...)` and use. Azure is explicitly excluded from managed mode in Phase 3 (its multi-secret endpoint+apiVersion doesn't fit in the encrypted payload yet); header path only.
+  - When the managed path served the request, write a row to `decrypt_audit_log` (timestamp + hashed IP) AFTER provider.complete() succeeds. Wrapped in try/catch so a logging failure can't block chat.
+- New `src/lib/server/redact.ts` (`redactSensitive`) — recursive value redactor that strips known-sensitive header names (`x-llm-api-key`, `x-llm-azure-*`, `x-embedding-api-key`, `x-preview-token`, `authorization`, `cookie`) and property names (`apiKey`, `password`, `secret`, `token`, `kek`, `dek`, etc.) before payloads reach a logger. Handles plain objects, arrays, `Headers`, and circular references. 6 tests cover the redaction matrix.
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` — full rewrite from the Coming-Soon stub. New client component with three sections:
+  1. Provider+model switcher (writes via PATCH /llm-prefs)
+  2. Managed key storage form (textbox + Show/Hide + Encrypt&Store / Replace / Revoke buttons; Azure shows a "not supported in Phase 3" notice)
+  3. Decrypt audit log (last 30 events with timestamp + IP hash suffix)
+  The "stored" pill is data-driven from the `/audit` GET. Storing a key also mirrors it into localStorage so the creator's own dashboard test chat keeps working without re-entry.
+- Settings page now passes `botId` to AIModelKeyTab.
+- `.env.example` adds documented `PROBOT_KEY_ENCRYPTION_KEY` + `PROBOT_KEY_ENCRYPTION_KEY_NEXT` (rotation slot) with generation instructions.
+- Chat route test (`route.test.ts`):
+  - Added mocks for `encryptedLlmKeys.findFirst`, `decryptAuditLog`, and a generic `db.insert(...).values(...)` chain for the audit-log write.
+  - Replaced the "missing-header → 400" test with one that asserts the new "no header AND no managed key → 400" path, plus a new test for malformed-header 400.
+  - New "Stage 7 Phase 3 managed-key path" describe block: 4 tests covering decrypt-on-fallback (provider sees plaintext, audit row written), no-audit-write on header path, provider drift mismatch returns `managed_key_provider_mismatch`, Azure rejection.
+- Settings-page test updated: the model tab assertion now checks for the live Managed key storage + Decrypt audit log headings instead of looking for a Coming Soon pill.
+- Total tests: 744 pass (was 720; +24 net new from the crypto module, redact module, and chat-route managed-key block). Typecheck + Next build both green.
+
+**Files changed:**
+- `src/lib/crypto/constants.ts` - create - AES-256-GCM parameter constants + KEK env-var name.
+- `src/lib/crypto/envelope.ts` - create - `encryptKey`/`decryptKey`/`rotateKEK` + `KekUnavailableError`.
+- `src/lib/crypto/envelope.test.ts` - create - 13 unit tests.
+- `src/lib/crypto/ip-hash.ts` - create - `hashIp` + `extractRequesterIp`.
+- `drizzle/0011_graceful_ironclad.sql` + `drizzle/meta/0011_snapshot.json` + `drizzle/meta/_journal.json` - create/update - generated by db:generate from the schema edit.
+- `src/lib/db/schema.ts` - update - declared `encryptedLlmKeys` + `decryptAuditLog` tables and exported inferred types.
+- `src/app/api/bots/[botId]/llm-key/route.ts` - create - POST (store-encrypted) + DELETE (revoke).
+- `src/app/api/bots/[botId]/llm-key/audit/route.ts` - create - GET (last 30 days of decrypt events + stored status).
+- `src/app/api/users/me/llm-prefs/route.ts` - create - PATCH for the dashboard switcher.
+- `src/app/api/chat/[botId]/route.ts` - update - header is optional, managed-key fallback, audit-log write.
+- `src/app/api/chat/[botId]/route.test.ts` - update - new mocks + 4 new managed-key tests + reworked missing-header tests.
+- `src/lib/server/redact.ts` + `redact.test.ts` - create - log-redaction helper + 6 tests.
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` - update - full rewrite from Coming-Soon stub into live editor.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` - update - pass botId to AIModelKeyTab.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.test.tsx` - update - assert live editor headings instead of Coming Soon pill.
+- `.env.example` - update - documented `PROBOT_KEY_ENCRYPTION_KEY` + rotation slot.
+
+**Decisions made:**
+- **KEK loaded fresh per call, not module-cached.** A module-level cache would make test isolation harder (every test that flips the env var would have to reach into module internals to reset). The cost of `Buffer.from(env, "base64")` is microseconds; not the bottleneck.
+- **Hard-fail at module-load only if KEK is SET but malformed.** Operators who don't use the managed flow shouldn't be forced to set the var. If they do set it, a malformed value would silently corrupt every managed write - better to refuse to boot. The check is skipped under `NODE_ENV=test` / `VITEST=true` so per-test env manipulation works.
+- **Hash IPs with NEXTAUTH_SECRET as salt, not a separate env var.** One fewer env var to manage. Rotation as a side effect of NEXTAUTH_SECRET rotation is fine: old audit-log rows remain readable as timestamps, they just don't hash-equal to new rows.
+- **Audit-log rows truncate the IP hash to 8 hex chars in the API response.** The full 64-hex hash is unnecessary for a creator's dashboard ("did the same IP decrypt 3 times?") and the truncation removes any incidental over-sharing of session-correlatable data back to the creator's own UI.
+- **Provider drift on the stored key returns 400, not a silent re-encrypt.** A creator who switches from Anthropic to OpenAI in the settings page has a key in the DB minted under the old provider. Re-encrypting silently would mean we're sending an Anthropic key to OpenAI's endpoint - guaranteed 401 + creator confusion. Refusing the chat with `managed_key_provider_mismatch` surfaces the misconfiguration immediately; the dashboard's next iteration can prompt "re-store your key for OpenAI."
+- **Azure explicitly excluded from managed mode in Phase 3.** Azure's credential is (key + endpoint + apiVersion); stuffing all three into the envelope payload would either require a JSON sub-schema in `encrypted_llm_keys` or three separate ciphertext columns. Punted to a later phase; the dashboard surfaces a clear "not supported, use self-hosted" note when Azure is the active provider.
+- **Audit-log write happens AFTER provider.complete() succeeds, not before.** Logging a "decrypt happened" event for a failed provider call (network blip, bad key, rate limit) would inflate the creator's view of "managed key usage." Writing post-success means the audit log is a usefulness metric, not a noise metric.
+- **No CSRF on the new key-management routes.** Same posture as the existing PATCH /api/bots/[botId] - the dashboard is a same-origin client and the session cookie is `SameSite=Lax` (NextAuth default). For Phase 7 hardening we can add a double-submit token if needed.
+- **localStorage mirror on key submit** so the creator's own test chat keeps working after they opt into managed storage. Without this, the moment they hit "Encrypt & store" their next dashboard test chat would 400 with "no key" because the localStorage path lost its source. Mirror keeps both surfaces working.
+- **`useEffect` fetches the audit on tab mount** rather than passing it through SSR. The audit list is bot-specific and updates as recruiters chat; making it part of the SSR fetch means stale data + worse cache behavior. Client-side fetch is the right primitive here.
+
+**Open questions / follow-ups:**
+- **No KEK rotation runbook in the docs yet.** Phase 7 task. The `rotateKEK` utility exists and is unit-tested; what's missing is the operator-facing "deploy with both env vars set, run `npm run kek:rotate`, swap" guide.
+- **No CI grep guard for accidental `x-llm-api-key` substrings in `console.*` calls.** Phase 7 task. The `redactSensitive` helper exists but isn't yet enforced at write time; today's discipline is purely convention.
+- **Audit log isn't pruned.** Rows accumulate forever in Phase 3; the Phase 5 cron job (next phase but one) will delete `decrypted_at < NOW() - 30 days`. Read queries already enforce the window so dashboard payload size is bounded; only DB growth is unbounded until Phase 5 lands.
+- **No "regenerate KEK from a passphrase" tooling.** If an operator loses their KEK, every stored encrypted key is unrecoverable. This is by design (the same thing the hybrid model's marketing copy will promise). Operators must back up their KEK out-of-band (1Password / Vault / etc).
+- **Provider mismatch UX is currently just a 400 error from the chat route.** The dashboard could detect the mismatch on load and prompt "your stored key was minted for OpenAI but you're now on Anthropic - re-store?" - defer to Phase 6 polish.
+- **Azure managed-mode support** can land in a future Phase by stuffing `{key, endpoint, apiVersion}` JSON into the ciphertext rather than the bare key string. ~30 lines of work; not load-bearing for Stage 7.

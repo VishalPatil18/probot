@@ -1357,3 +1357,98 @@ When to pick A instead: high-throughput insert paths (millions per minute), wher
 The general principle: **don't pre-compute database-generated values just to save a statement, unless the perf actually matters.** The statement count is rarely the right cost to optimise for. Architectural simplicity - keeping each statement's responsibility narrow - usually wins.
 
 ---
+
+### Envelope Encryption: Why The Two-Key Pattern Beats Encrypting Everything Under One Key (Stage 7 Phase 3)
+
+> The code generates a fresh random DEK (Data Encryption Key) per bot, uses that to encrypt the LLM key, then encrypts the DEK itself with a KEK (Key Encryption Key) loaded from an env var. Why not just AES-encrypt the LLM key directly under the KEK and skip the DEK?
+
+Three independent reasons, each enough on its own:
+
+1. **Per-bot key isolation.** Every bot has its own DEK. If a single DEK is somehow extracted (memory dump during a chat call, hypothetical AES side-channel), the blast radius is one bot - not every encrypted key in the database. Encrypting everything directly under the KEK means one extraction compromises every key.
+
+2. **KEK rotation without re-encrypting payloads.** Rotating the KEK quarterly (per the spec) requires re-keying every stored payload. With envelope encryption, rotation is "decrypt each wrapped DEK with the old KEK, re-encrypt with the new KEK." The actual data ciphertext (the much larger blob) stays byte-identical. Without the DEK layer, rotation means decrypting and re-encrypting the actual ciphertext for every row - same amount of work but bigger I/O and more chance of partial-write disasters.
+
+3. **Pluggable KEK source.** Envelope encryption is the standard pattern that lets you swap the KEK out for a KMS-managed key later (AWS KMS, GCP Cloud KMS, HashiCorp Vault Transit) without changing the data shape. The KMS only ever sees the wrapped DEKs (small, fast to encrypt/decrypt remotely); your application keeps doing local AES with the unwrapped DEKs at full speed. Without the envelope, every data decrypt becomes a KMS round-trip.
+
+The cost of envelope encryption is one extra 32-byte AES-GCM operation per encrypt/decrypt - measurable in microseconds. The benefit is rotational agility + isolation + extensibility. The pattern is so universally beneficial that AWS, GCP, Azure, and every serious password manager all use it. Skipping it is almost always wrong unless you genuinely have one tiny thing to encrypt and no rotation requirements.
+
+The mnemonic: **DEK protects the data, KEK protects the DEK.** Lose the data → minor (one item compromised). Lose the DEK → bounded (one bot). Lose the KEK → catastrophic (everything). Operational practice flows from this: KEK in env var (rotation = redeploy), DEKs in DB alongside ciphertext, data in DB ciphertext. Each layer has different access patterns and different rotation cadences.
+
+### "DB Dump Alone Cannot Decrypt": The Threat Model That Justifies This Design (Stage 7 Phase 3)
+
+> The marketing copy promises "if our database is leaked, your keys remain unreadable - even to us." How is that actually true given we hold the KEK?
+
+The promise is specifically about **database leakage**, not full infrastructure compromise. Those are very different threat models:
+
+- **DB dump leaked / SQL injection / backup theft / read-only DB query access:** attacker has ciphertext + wrappedDek. Both useless without the KEK. KEK is in `PROBOT_KEY_ENCRYPTION_KEY` env var, which lives in the deployment environment (Vercel/server filesystem), not in the database. ✓ Promise holds.
+- **App code access (read-only repo):** KEK isn't in code, just the env-var name. ✓ Promise holds.
+- **Sentry/logger access:** middleware strips `x-llm-api-key` and the `redactSensitive` helper redacts decrypted-key-shaped values from logged objects. ✓ Promise holds.
+- **Full infra access (Vercel project owner / IAM admin):** can read the KEK from env vars and decrypt anything. ✗ Promise does NOT hold. This is true of every operator-managed system short of confidential computing / TEE.
+- **RCE on the running Node process:** process has KEK in memory; attacker on the host could read it. ✗ Mitigated by hardening, not eliminated.
+
+The honest framing - which the marketing copy reflects - is "if our database is leaked, your keys remain encrypted and unreadable." That's a *bounded* promise. The operator caveat is explicit: "If even that level of trust is unacceptable to you, self-host ProBot - your key never leaves your own server."
+
+The general principle: **be precise about which threats your encryption defends against.** Vague claims like "we use encryption" or "your data is secure" don't mean anything. Stating the threats addressed (DB dump, code leak, log leak) and the threats not addressed (full infra compromise, RCE, TEE-free runtime) is the honest version. Users with stricter threat models can then make informed choices (self-host, BYO infra, encrypt client-side before sending).
+
+A related anti-pattern: marketing teams ask engineering for "zero-knowledge encryption" to put on the landing page. Zero-knowledge has a specific meaning (the server cannot decrypt under any conditions, typically because the user's password is the encryption key and the server never sees it). It almost never applies to features where the server needs to use the decrypted data (like calling an LLM with the user's key). Sticking with "envelope-encrypted at rest, decrypted only in-memory per request, never logged" is accurate; using "zero-knowledge" would be a lie that an informed attacker (or security blogger) would call out.
+
+### Don't Cache Env Vars In Module Scope; And Other Env-Var Test Hygiene (Stage 7 Phase 3)
+
+> The envelope encryption tests manipulate `process.env.PROBOT_KEY_ENCRYPTION_KEY` aggressively across tests. The chat route test imports the encryption module that also reads that env var. Both work - how?
+
+Three independent disciplines made this work; each is worth internalizing.
+
+**Discipline 1: don't cache env vars in module scope.** The envelope module's `getKek()` does `Buffer.from(process.env[KEK_ENV_VAR], "base64")` on every call. If we cached the result in `let cachedKek: Buffer | null = null`, the chat-route test would import the module with one env value, then a later test that sets a fresh value would still see the cached buffer. Module-level caches are a common test-isolation footgun. The fix is either "don't cache" (chose this - microsecond cost) or "expose a `__resetCache()` test helper" (more boilerplate, easier to forget).
+
+**Discipline 2: per-test env restoration via `afterEach` (or `afterAll`).** Each test that mutates `process.env` records the original value at suite start (`const ORIGINAL = process.env.X`) and restores it in cleanup. Without this, a test that sets `KEK = "abc"` leaks that value into every subsequent test in the same worker, including tests in completely unrelated files (vitest reuses worker processes across files for performance).
+
+**Discipline 3: skip module-load-time validation under test runners.** The envelope module hard-fails at import if the KEK env var is set but malformed. In production this catches deploy-time configuration errors. In tests it would mean "every test file that imports this module crashes during test discovery if the env happens to be set with a value tests don't like." The fix is a runtime check inside the validation that skips when `process.env.NODE_ENV === "test"` or `process.env.VITEST === "true"`. The `VITEST` env var is set automatically by vitest; `NODE_ENV=test` is the universal convention. Together they cover any test environment.
+
+The discipline that prevents all of these: **assume test-isolation breakage by default; explicitly restore any global state mutated.** Tests are programs that share an interpreter; anything that survives between tests will eventually bite you.
+
+### Audit Logs Should Record Outcomes, Not Attempts (Stage 7 Phase 3)
+
+> The decrypt audit log only writes a row AFTER `provider.complete()` succeeds, not at the moment of decrypt. Why not record the decrypt itself as the audit-worthy event?
+
+Two reasons, both empirical:
+
+**Reason 1: noise inflates the metric the creator cares about.** The creator wants to know "how often is my managed key being used to serve recruiters?" Recording the decrypt at the moment it happens means counting:
+- Successful chats (the thing they actually care about)
+- Failed provider calls (network blips, malformed bot config)
+- Rate-limited requests (the recruiter hit the limit; no real "use")
+- Sanitization failures (the message was blocked before reaching the provider)
+
+A dashboard saying "your key was decrypted 47 times in the last 24 hours" sounds alarming if 30 of those were rate-limited or sanitized-blocked. Recording post-success means the count is "successful chats served," which is the operationally useful number.
+
+**Reason 2: the audit log is more usefully scoped to "key actually used at the provider edge."** The creator's threat model is "did someone abuse my key against the provider?" Pre-success decrypts are just internal-system events - they don't constitute "use" from the LLM provider's billing perspective. Post-success decrypts correspond 1:1 with provider API calls (which is what's actually costing the creator money).
+
+The general principle: **audit logs answer questions, not record activity.** Decide what question the audit log is supposed to answer ("how often was my managed key used to serve a real chat?") and write rows when that question gets a yes. Recording every internal step would be useful for debugging but isn't what an audit-log surface is for; debugging telemetry is a different surface (and arguably shouldn't include user-identifying data at all).
+
+A common related antipattern: logging "the user tried to do X" before doing X, then NOT logging "X succeeded/failed." The audit log becomes a list of attempts with no resolution, which is worse than useless because it implies action where there was none. Always pair attempt-logs with outcome-logs, or skip the attempt-log entirely and only log outcomes.
+
+### `useEffect` Fetch In Client Component vs Server-Component Data Loading (Stage 7 Phase 3)
+
+> The new AIModelKeyTab fetches the audit log via `useEffect` + `fetch` on mount, but the rest of the dashboard fetches data in the server component and passes it down. When is each the right pick?
+
+Both have valid use cases; the question is "is this data more useful fresh or pre-rendered?"
+
+**Server-component fetch (the rest of the dashboard's pattern):**
+- Renders in the initial HTML - no loading flash, no extra round-trip.
+- Cacheable at the edge if the request is GET + the cache headers are right.
+- Data is as fresh as the page-render moment, then stale until the user re-navigates.
+- Trades off freshness for first-paint speed.
+- Good for: bot list (changes on user action), bot config (changes on user action), user profile (changes rarely).
+
+**Client useEffect fetch (the AIModelKeyTab pattern):**
+- Initial HTML has a loading state; data populates after hydration.
+- Re-runs when the component re-mounts (e.g. after a router.refresh()).
+- Easy to wire up "refresh after an action" without re-rendering the whole page.
+- Good for: data that changes from external events (recruiters chatting → audit log grows), data that the user just modified in the same component (store key → re-fetch to update the "stored" pill), data that's bot-specific and updates often.
+
+The audit log fits the second pattern perfectly: it updates whenever a recruiter chats with the bot (which happens independently of any dashboard action), and the user wants to see fresh data when they explicitly look at the tab. Putting it through SSR would mean every "go to settings → click model tab" navigation triggers a DB query, and the data is still stale the moment the user lands on it.
+
+The general principle: **server components for "what's true right now at navigation time," client effects for "what's true since I last looked."** When in doubt, the SSR path is the default - it's faster to render and easier to test. Reach for client fetch when the freshness gap actively hurts the UX.
+
+A related pattern that's worth knowing about but didn't fit this case: SWR (`stale-while-revalidate`) libraries like `swr` or `react-query` give you the best of both - render the cached value immediately, fetch in the background, update when fresh. Worth considering when the dashboard grows beyond ~3 client-side fetched panels, but overkill for one tab.
+
+---

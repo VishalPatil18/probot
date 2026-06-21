@@ -126,6 +126,7 @@ export default async function BotSettingsPage({
 
         <SettingsTabPanel tab="model">
           <AIModelKeyTab
+            botId={bot.id}
             provider={userRow?.llmProvider ?? null}
             model={userRow?.llmModel ?? null}
           />

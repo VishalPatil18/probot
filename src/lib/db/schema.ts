@@ -163,6 +163,77 @@ export const verificationTokens = pgTable(
   }),
 ).enableRLS();
 
+// encrypted_llm_keys (Stage 7 Phase 3 §FR-010.5 / §SEC-D06 managed path)
+// One row per bot whose owner opted in to managed key storage. The user's
+// LLM API key is NEVER stored in plaintext - the columns hold an envelope-
+// encryption payload (see src/lib/crypto/envelope.ts):
+//   - {ciphertext, iv, auth_tag}: the user's key encrypted with a per-bot
+//     DEK (Data Encryption Key) under AES-256-GCM.
+//   - {wrapped_dek, dek_iv, dek_auth_tag}: the DEK encrypted with the KEK
+//     stored in PROBOT_KEY_ENCRYPTION_KEY (env). The KEK never touches the
+//     DB so a leaked DB dump alone cannot decrypt anything.
+// `provider` is a non-sensitive denormalisation of the bot owner's chosen
+// provider at key-store time so the chat route can confirm the key matches
+// the active provider without an extra users-table read.
+export const encryptedLlmKeys = pgTable(
+  "encrypted_llm_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    ciphertext: text("ciphertext").notNull(),
+    iv: text("iv").notNull(),
+    authTag: text("auth_tag").notNull(),
+    wrappedDek: text("wrapped_dek").notNull(),
+    dekIv: text("dek_iv").notNull(),
+    dekAuthTag: text("dek_auth_tag").notNull(),
+    provider: varchar("provider", { length: 20 }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    botIdUnique: uniqueIndex("encrypted_llm_keys_bot_id_unique").on(
+      table.botId,
+    ),
+  }),
+).enableRLS();
+
+// decrypt_audit_log (Stage 7 Phase 3)
+// One row per server-side decrypt of a managed LLM key. Surfaced in the
+// dashboard so creators can see when their key was used. We deliberately
+// store ONLY the timestamp and a SHA-256 hash of the recruiter IP - never
+// the raw IP, never any portion of the decrypted key. 30-day retention is
+// enforced by the Phase 5 cron job (no rows are pruned in Phase 3 since
+// the cron infrastructure lands later).
+export const decryptAuditLog = pgTable(
+  "decrypt_audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    decryptedAt: timestamp("decrypted_at", {
+      mode: "date",
+      withTimezone: false,
+    })
+      .notNull()
+      .defaultNow(),
+    requesterIpHash: varchar("requester_ip_hash", { length: 64 }),
+  },
+  (table) => ({
+    botDecryptedIdx: index("decrypt_audit_log_bot_decrypted_idx").on(
+      table.botId,
+      table.decryptedAt.desc(),
+    ),
+  }),
+).enableRLS();
+
 // password_reset_tokens (Stage 7 §FR-001.6)
 // One row per outstanding reset request. `token_hash` stores SHA-256 of the
 // raw token we email; the raw token never touches the DB so a leaked dump
@@ -425,6 +496,10 @@ export type EmailVerificationToken =
   typeof emailVerificationTokens.$inferSelect;
 export type NewEmailVerificationToken =
   typeof emailVerificationTokens.$inferInsert;
+export type EncryptedLlmKey = typeof encryptedLlmKeys.$inferSelect;
+export type NewEncryptedLlmKey = typeof encryptedLlmKeys.$inferInsert;
+export type DecryptAuditLogEntry = typeof decryptAuditLog.$inferSelect;
+export type NewDecryptAuditLogEntry = typeof decryptAuditLog.$inferInsert;
 export type KnowledgeChunk = typeof knowledgeBase.$inferSelect;
 export type NewKnowledgeChunk = typeof knowledgeBase.$inferInsert;
 export type Conversation = typeof conversations.$inferSelect;

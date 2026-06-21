@@ -1,7 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const findBotMock = vi.fn();
 const findUserMock = vi.fn();
+const findEncryptedKeyMock = vi.fn();
+const auditInsertValuesMock = vi.fn();
+const auditInsertMock = vi.fn(() => ({ values: auditInsertValuesMock }));
 const completeMock = vi.fn();
 const checkRateLimitMock = vi.fn();
 
@@ -55,8 +58,12 @@ vi.mock("@/lib/db", () => ({
     query: {
       bots: { findFirst: (...args: unknown[]) => findBotMock(...args) },
       users: { findFirst: (...args: unknown[]) => findUserMock(...args) },
+      encryptedLlmKeys: {
+        findFirst: (...args: unknown[]) => findEncryptedKeyMock(...args),
+      },
     },
     transaction: (cb: (tx: unknown) => Promise<unknown>) => transactionMock(cb),
+    insert: (...args: unknown[]) => auditInsertMock(...args),
   },
   bots: { id: "id-col", isActive: "is_active-col" } as Record<string, unknown>,
   users: { id: "id-col" } as Record<string, unknown>,
@@ -67,6 +74,8 @@ vi.mock("@/lib/db", () => ({
     id: "conv-id",
   } as Record<string, unknown>,
   messages: {} as Record<string, unknown>,
+  encryptedLlmKeys: { botId: "ek-bot-id-col" } as Record<string, unknown>,
+  decryptAuditLog: {} as Record<string, unknown>,
 }));
 
 vi.mock("@/lib/ai/providers", async () => {
@@ -99,6 +108,8 @@ vi.mock("@/lib/rag/retrieve", () => ({
 }));
 
 import { ProviderError } from "@/lib/ai/providers";
+import { encryptKey } from "@/lib/crypto/envelope";
+import { KEK_ENV_VAR } from "@/lib/crypto/constants";
 
 import { OPTIONS, POST } from "./route";
 
@@ -154,6 +165,8 @@ describe("POST /api/chat/[botId]", () => {
   beforeEach(() => {
     findBotMock.mockReset().mockResolvedValue(bot);
     findUserMock.mockReset().mockResolvedValue(owner);
+    findEncryptedKeyMock.mockReset().mockResolvedValue(undefined);
+    auditInsertValuesMock.mockReset().mockResolvedValue(undefined);
     completeMock
       .mockReset()
       .mockResolvedValue({ reply: "Sure - Jane is great." });
@@ -202,7 +215,8 @@ describe("POST /api/chat/[botId]", () => {
     expect(res.status).toBe(415);
   });
 
-  it("returns 400 when the x-llm-api-key header is missing", async () => {
+  it("returns 400 missing_llm_key when neither header nor managed key exists", async () => {
+    // No header, and findEncryptedKeyMock returns undefined by default.
     const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -212,6 +226,22 @@ describe("POST /api/chat/[botId]", () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("missing_llm_key");
+    expect(completeMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 missing_llm_key when the x-llm-api-key header is malformed", async () => {
+    // Empty header value goes through the "empty" KeyTransportError branch
+    // (not "missing"), which we still surface as 400 missing_llm_key.
+    const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-llm-api-key": "",
+      },
+      body: JSON.stringify({ message: "hi", sessionId: SESSION_ID }),
+    });
+    const res = await POST(req, PARAMS);
+    expect(res.status).toBe(400);
     expect(completeMock).not.toHaveBeenCalled();
   });
 
@@ -398,6 +428,99 @@ describe("POST /api/chat/[botId]", () => {
       expect(res.status).toBe(200);
       const [args] = completeMock.mock.calls[0] as [Record<string, unknown>];
       expect(args.extras).toBeUndefined();
+    });
+  });
+
+  describe("Stage 7 Phase 3 managed-key path", () => {
+    const ORIGINAL_KEK = process.env[KEK_ENV_VAR];
+
+    beforeEach(() => {
+      // Real KEK for the envelope module so encryptKey/decryptKey work end to
+      // end in this test (we feed the result through the chat route).
+      process.env[KEK_ENV_VAR] = Buffer.from(
+        "0".repeat(32),
+        "utf8",
+      ).toString("base64");
+    });
+
+    afterAll(() => {
+      if (ORIGINAL_KEK === undefined) {
+        delete process.env[KEK_ENV_VAR];
+      } else {
+        process.env[KEK_ENV_VAR] = ORIGINAL_KEK;
+      }
+    });
+
+    it("decrypts the managed key when no x-llm-api-key header is supplied", async () => {
+      const plaintextKey = "sk-ant-managed-XYZ-1234567890";
+      const payload = encryptKey(plaintextKey);
+      findEncryptedKeyMock.mockResolvedValueOnce({
+        ...payload,
+        provider: "anthropic",
+      });
+
+      const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "hi", sessionId: SESSION_ID }),
+      });
+      const res = await POST(req, PARAMS);
+      expect(res.status).toBe(200);
+      const [args] = completeMock.mock.calls[0] as [
+        { apiKey: string; system: string },
+      ];
+      // The provider sees the decrypted plaintext key.
+      expect(args.apiKey).toBe(plaintextKey);
+      // Audit-log insert ran exactly once with a bot-id-carrying payload.
+      expect(auditInsertValuesMock).toHaveBeenCalledTimes(1);
+      const auditRow = auditInsertValuesMock.mock.calls[0]?.[0] as {
+        botId: string;
+        requesterIpHash?: string;
+      };
+      expect(auditRow.botId).toBe(BOT_ID);
+    });
+
+    it("does NOT write the audit log when the header path serves the request", async () => {
+      const res = await POST(makeRequest({ message: "hi" }), PARAMS);
+      expect(res.status).toBe(200);
+      expect(auditInsertValuesMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 managed_key_provider_mismatch when stored key's provider has drifted", async () => {
+      // Owner is on Anthropic; stored key was minted for OpenAI.
+      const payload = encryptKey("sk-test-mismatch");
+      findEncryptedKeyMock.mockResolvedValueOnce({
+        ...payload,
+        provider: "openai",
+      });
+      const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "hi", sessionId: SESSION_ID }),
+      });
+      const res = await POST(req, PARAMS);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("managed_key_provider_mismatch");
+      expect(completeMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects Azure managed-key fallback (only header path is supported in Phase 3)", async () => {
+      findUserMock.mockResolvedValueOnce({
+        ...owner,
+        llmProvider: "azure",
+      });
+      // No header, no Azure stored payload.
+      const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "hi", sessionId: SESSION_ID }),
+      });
+      const res = await POST(req, PARAMS);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("missing_llm_key");
+      expect(findEncryptedKeyMock).not.toHaveBeenCalled();
     });
   });
 

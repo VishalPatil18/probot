@@ -29,7 +29,17 @@ import {
   PERSONALITY_PRESETS,
   RATE_LIMIT_MAX_CHARS_MAX,
 } from "@/lib/bots/schemas";
-import { bots, conversations, db, messages, users } from "@/lib/db";
+import { KekUnavailableError, decryptKey } from "@/lib/crypto/envelope";
+import { extractRequesterIp, hashIp } from "@/lib/crypto/ip-hash";
+import {
+  bots,
+  conversations,
+  db,
+  decryptAuditLog,
+  encryptedLlmKeys,
+  messages,
+  users,
+} from "@/lib/db";
 import { retrieveRelevant } from "@/lib/rag/retrieve";
 
 const MAX_BODY_BYTES = 16_384;
@@ -64,15 +74,22 @@ export async function POST(
     );
   }
 
-  // 2. BYO key header (cheap fast-fail before reading the body)
-  let apiKey: string;
+  // 2. BYO key header is OPTIONAL now (Stage 7 Phase 3). The chat route
+  // tries the header first, then falls back to the managed-key decrypt
+  // path against `encrypted_llm_keys`. Whichever source resolves wins.
+  // Header-supplied key always wins so a creator testing locally can
+  // override a stored managed key without revoking it. A missing header
+  // is fine; a *malformed* header (empty / too short / too long) still
+  // 400s loudly because that's almost always a client bug.
+  let headerApiKey: string | null = null;
   try {
-    apiKey = readApiKey(request.headers);
+    headerApiKey = readApiKey(request.headers);
   } catch (err) {
-    if (err instanceof KeyTransportError) {
+    if (!(err instanceof KeyTransportError)) throw err;
+    if (err.reason !== "missing") {
       return NextResponse.json({ error: "missing_llm_key" }, { status: 400 });
     }
-    throw err;
+    headerApiKey = null;
   }
 
   // 3. Body read with enforced size cap. Content-Length is a client-supplied
@@ -226,6 +243,54 @@ export async function POST(
     );
   }
   const provider = getProvider(ownerRow.llmProvider);
+
+  // 10b. Resolve the LLM API key. Priority: header (self-host / creator
+  // local test) > managed encrypted key (DB) > fail. Azure is the one
+  // exception: its multi-secret credential (key + endpoint + apiVersion)
+  // isn't stored managed-side in Phase 3, so Azure bots must use the
+  // header path. Managed support for Azure can be added later by stuffing
+  // the extras into the encrypted payload.
+  let apiKey: string;
+  let managedKeyUsed = false;
+  if (headerApiKey) {
+    apiKey = headerApiKey;
+  } else if (ownerRow.llmProvider === "azure") {
+    return NextResponse.json({ error: "missing_llm_key" }, { status: 400 });
+  } else {
+    const stored = await db.query.encryptedLlmKeys.findFirst({
+      where: eq(encryptedLlmKeys.botId, botRow.id),
+    });
+    if (!stored) {
+      return NextResponse.json({ error: "missing_llm_key" }, { status: 400 });
+    }
+    if (stored.provider !== ownerRow.llmProvider) {
+      // Provider switched after the key was stored - safer to refuse than
+      // to send an Anthropic key to an OpenAI endpoint (or vice versa).
+      return NextResponse.json(
+        { error: "managed_key_provider_mismatch" },
+        { status: 400 },
+      );
+    }
+    try {
+      apiKey = decryptKey({
+        ciphertext: stored.ciphertext,
+        iv: stored.iv,
+        authTag: stored.authTag,
+        wrappedDek: stored.wrappedDek,
+        dekIv: stored.dekIv,
+        dekAuthTag: stored.dekAuthTag,
+      });
+    } catch (err) {
+      if (err instanceof KekUnavailableError) {
+        return NextResponse.json(
+          { error: "managed_storage_unavailable" },
+          { status: 503 },
+        );
+      }
+      throw err;
+    }
+    managedKeyUsed = true;
+  }
   const personality: Personality = isPersonality(botRow.personality)
     ? botRow.personality
     : "professional";
@@ -299,6 +364,23 @@ export async function POST(
 
   // 11. Output sanitize
   const reply = sanitizeOutput(providerReply);
+
+  // 11b. Stage 7 Phase 3 - record a decrypt-audit-log row when the managed
+  // key was actually used. Skipped when the header path served the request
+  // (the creator's own browser doesn't need to audit itself). Wrapped in
+  // try/catch so a logging failure cannot block the user-facing chat reply
+  // - same posture as the conversation-persistence block below.
+  if (managedKeyUsed) {
+    try {
+      const ipHash = hashIp(extractRequesterIp(request.headers));
+      await db.insert(decryptAuditLog).values({
+        botId: botRow.id,
+        ...(ipHash !== null ? { requesterIpHash: ipHash } : {}),
+      });
+    } catch (err) {
+      console.warn("[chat] decrypt audit-log write failed", err);
+    }
+  }
 
   // 12. Persist conversation + messages (Stage 6 analytics).
   // UPSERT on (bot_id, session_id) - concurrent tabs on the same bot for
