@@ -17,7 +17,7 @@ type Props = {
 // URL pill with copy button (when a bot is selected), and the
 // notification bell + "View live bot" CTA on the right.
 //
-// NotificationBell relocated from the old single-row header in slice 6.4.
+// NotificationBell relocated from the old single-row header.
 // Topbar is a client component so it can derive the page title from
 // `usePathname()` without the server layout having to know which page
 // is rendering.

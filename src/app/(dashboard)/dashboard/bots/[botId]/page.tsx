@@ -5,9 +5,9 @@ import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth/auth";
 import { bots, db } from "@/lib/db";
 
-// Slice C: the bot detail page is no longer a useful surface. The
-// dashboard home (Slice A) shows aggregated stats + share-your-bot; the
-// settings page (Slice B) hosts Bot configuration / Knowledge base /
+// The bot detail page is no longer a useful surface. The
+// dashboard home shows aggregated stats + share-your-bot; the
+// settings page hosts Bot configuration / Knowledge base /
 // theme color. There's nothing left for the standalone detail page to
 // own. Redirect to the settings page's Bot configuration tab so any
 // existing bookmarks still land somewhere useful.

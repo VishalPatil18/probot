@@ -10,7 +10,7 @@ interface Props {
   pendingDeletion: { scheduledPurgeAt: string } | null;
 }
 
-// Stage 7 Phase 5: client island that holds the destructive actions on the
+// Client island that holds the destructive actions on the
 // Security tab. Renders one of three states:
 //   1. No pending deletion → "Delete account" button → opens the modal.
 //   2. Pending deletion → banner with countdown + "Undo deletion" link to

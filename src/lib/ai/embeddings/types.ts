@@ -1,7 +1,7 @@
 // Embedding provider abstraction. Kept separate from `LLMProvider` because
 // embedding and completion are independent capabilities - not every chat
 // provider exposes a native embeddings endpoint (e.g. Anthropic redirects to
-// Voyage AI, a paid third-party service). Stage 3 ships OpenAI-only; the
+// Voyage AI, a paid third-party service). The current flow ships OpenAI-only; the
 // interface leaves room for `google` (text-embedding-004 @ 768d) later.
 
 export type EmbeddingProviderName = "openai";

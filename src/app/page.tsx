@@ -6,7 +6,7 @@ import { SiteHeader } from "@/components/marketing/SiteHeader";
 const DOCS_URL = "https://pro-bot-ai.vercel.app/docs";
 
 const EMBED_SNIPPET =
-  '<script src="probot.com/widget.js" data-bot-id="…"></script>';
+  '<script src="pro-bot.dev/widget.js" data-bot-id="…"></script>';
 
 function MaterialIcon({
   name,
@@ -96,7 +96,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold leading-tight">
-                      Vishal&apos;s AI Recruiter
+                      Vishal&apos;s AI Assistant
                     </p>
                     <p className="text-[11px] text-success font-semibold flex items-center gap-1">
                       <span className="size-1.5 rounded-full bg-success" />
@@ -104,7 +104,7 @@ export default function HomePage() {
                     </p>
                   </div>
                   <span className="text-[10px] font-mono text-muted">
-                    probot.com/u/vishal
+                    pro-bot.dev/u/vishal
                   </span>
                 </div>
                 <div className="px-5 py-5 space-y-3 bg-bg-app/40">
@@ -239,7 +239,7 @@ export default function HomePage() {
                 <use href="#il-pC" className="il-wire" />
                 <use href="#il-pD" className="il-wire" />
 
-                {/* A: Résumé */}
+                {/* A: Resume */}
                 <g className="il-float">
                   <rect
                     x="30"
@@ -303,7 +303,7 @@ export default function HomePage() {
                     fontWeight="700"
                     fill="oklch(0.19 0.02 261)"
                   >
-                    Résumé.pdf
+                    Resume.pdf
                   </text>
                   <text
                     x="96"
@@ -359,7 +359,7 @@ export default function HomePage() {
                     fontSize="11.5"
                     fill="oklch(0.46 0.02 262)"
                   >
-                    profile + activity
+                    profile pdf
                   </text>
                 </g>
                 {/* C: Portfolio */}
@@ -519,7 +519,7 @@ export default function HomePage() {
                   fontWeight="700"
                   fill="oklch(0.19 0.02 261)"
                 >
-                  AI Recruiter
+                  AI Assistant
                 </text>
                 <circle cx="836" cy="118" r="3.5" fill="oklch(0.62 0.16 150)" />
                 <text

@@ -2,7 +2,7 @@ import { desc, eq, sql } from "drizzle-orm";
 
 import { bots, db, leads } from "@/lib/db";
 
-// Stage 6 shared lead queries. Called by both the slice-6.2 API routes
+// Shared lead queries. Called by both the API routes
 // (paginated list + CSV export) and the slice-6.3 RSC dashboard pages.
 //
 // **Caller contract - tenancy is the caller's responsibility.** These
@@ -59,7 +59,7 @@ export async function listLeads(args: ListLeadsArgs): Promise<LeadListResult> {
 
 // Hard ceiling on the CSV export - 50K rows is well above any realistic
 // per-bot lead count and bounds the response size at ~10 MB worst case.
-// A future Stage 7 streaming endpoint can lift this; for now we trade
+// A future streaming endpoint can lift this; for now we trade
 // completeness against DoS risk.
 export const MAX_EXPORT_ROWS = 50_000;
 
@@ -86,7 +86,7 @@ export async function listAllLeadsForExport(args: {
     .limit(MAX_EXPORT_ROWS);
 }
 
-// Cross-bot lead feed for the dashboard home (Slice A redesign).
+// Cross-bot lead feed for the dashboard home.
 // Joins through `bots` so the user_id filter is the trust boundary -
 // every lead returned is owned by the requesting user.
 export type UserLeadRow = {

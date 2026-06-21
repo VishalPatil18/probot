@@ -10,7 +10,7 @@
 
 | Stage | Title                                       | Priority | Deployable? | Estimated effort |
 | ----- | ------------------------------------------- | -------- | ----------- | ---------------- |
-| **1** | Branding & Copy Cleanup                     | P0       | yes         | 1–2 days         |
+| **1** | ✅ Branding & Copy Cleanup                  | P0       | yes         | 1–2 days         |
 | **2** | Auth UX & Bug-fix Sprint                    | P0       | yes         | 3–4 days         |
 | **3** | Account & Settings Hardening                | P0       | yes         | 4–5 days         |
 | **4** | Bot Factory & Dashboard Polish              | P1       | yes         | 3–4 days         |
@@ -27,6 +27,8 @@
 ---
 
 ## Stage 1 - Branding & Copy Cleanup
+
+**Status:** ✅ Shipped 2026-06-21. "AI Recruiter"→"AI Assistant", `probot.com`→`pro-bot.dev`, post-Beta auth hero copy, Beta-vocab comment sweep across ~95 source files. typecheck + key-leak guard green; `design/*.html` mockups and the self-referential `docs/changelog.mdx` line intentionally left. Full `npm test`/`npm run build` to be re-run natively (sandbox platform mismatch). See `context.md` 2026-06-21 entry.
 
 **Priority:** P0 (no engineering risk, immediate user-visible improvement)
 **Deployable artifact:** Every page / component reads "AI Assistant" instead of "AI Recruiter"; every reference to `probot.com` becomes `pro-bot.dev`; code comments stop mentioning internal Beta stage names.
@@ -180,7 +182,7 @@ Stage 3 (settings refactor for the no-bot path).
     7. (0:54–0:58) "Two minutes to live. No credit card."
     8. (0:58–1:00) "ProBot - pro-bot.dev. Create yours today."
 - **"Why ProBot" comparison page** at `/why-pro-bot`: honest side-by-side vs "generic chatbot platforms." Green checks for ProBot strengths (BYO key, free tier, open source, GDPR built in), red X for what others lack. Keep it factually defensible.
-- **Hire Me page** at `/hire-me`: about the creator Vishal Patil, his Spec-Driven Development skills, open to work across US + Europe, link to portfolio, mention CNBC feature on the VAi chatbot that motivated ProBot.
+- **Hire Me page** at `/hire-me`: about the creator Vishal Patil, his Spec-Driven Development skills, open to work across US + Europe, link to portfolio, mention he got featured in CNBC for developing the VAi chatbot that motivated ProBot (Ask him details for more information).
 - **Roadmap page** at `/roadmap`: auto-generated render of `plan-v1.md` stages + completion status, with a "Suggest a feature" CTA pointing at GitHub Discussions.
 - **Changelog page** linked in the footer (Stage 7-Phase-7 already wired to `https://docs.pro-bot.dev/changelog`; verify the route lives at the right domain).
 

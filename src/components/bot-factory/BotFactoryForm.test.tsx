@@ -68,7 +68,7 @@ describe("BotFactoryForm", () => {
     expect(
       screen.getByRole("heading", { name: /who is your bot/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText("probot.com/u/")).toBeInTheDocument();
+    expect(screen.getByText("pro-bot.dev/u/")).toBeInTheDocument();
     expect(screen.getByText("jane")).toBeInTheDocument();
   });
 

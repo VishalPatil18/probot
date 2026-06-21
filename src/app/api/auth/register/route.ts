@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     throw err;
   }
 
-  // Stage 7 §FR-001.5: send the verification email immediately. The user
+  // Send the verification email immediately. The user
   // cannot log in via credentials until they click the link (gated in
   // auth.ts authorize()). We don't roll back the user row if Resend fails -
   // the user can resend from the verify-request page.

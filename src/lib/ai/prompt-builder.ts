@@ -36,7 +36,7 @@ type Bot = {
   name: string;
   personality: Personality;
   contextText: string;
-  // Stage 7 §FR-002.7: optional free-form additions to the system prompt.
+  // Optional free-form additions to the system prompt.
   // Length is capped at the Zod layer (max 2000). When null/empty/whitespace,
   // the block is omitted entirely so a non-customising bot's prompt is byte-
   // identical to its pre-Stage-7 shape.
@@ -46,7 +46,7 @@ type Bot = {
 export function buildSystemPrompt(args: {
   bot: Bot;
   ownerUsername: string;
-  // Stage 3 RAG: when present + non-empty, replaces `bot.contextText` as the
+  // RAG: when present + non-empty, replaces `bot.contextText` as the
   // ## CONTEXT body. Chunks are joined with a `---` separator so the LLM
   // sees clear boundaries between independently retrieved passages.
   relevantChunks?: string[];
@@ -61,7 +61,7 @@ export function buildSystemPrompt(args: {
       : bot.contextText;
   const context = `## CONTEXT\n${contextBody}`;
 
-  // Stage 7: custom-instructions block lives BETWEEN personality and the
+  // Custom-instructions block lives BETWEEN personality and the
   // response-style block. Personality establishes voice, custom instructions
   // refine bot-specific intent, then RESPONSE_STYLE locks the structural
   // rules - this order keeps the immutable structural rules as the last

@@ -44,7 +44,7 @@ const adapter: Adapter = {
   ...baseAdapter,
   async createUser(data: AdapterUser) {
     const username = await generateUniqueUsername();
-    // Stage 4: OAuth/magic-link users without a provider-supplied image get
+    // OAuth/magic-link users without a provider-supplied image get
     // a deterministic animal icon. Seeded by the new username so the same
     // account always gets the same default if the field is ever cleared.
     const image = data.image ?? pickDefaultAvatar(username);
@@ -102,7 +102,7 @@ export const authOptions: NextAuthOptions = {
         const ok = await verifyPassword(password, user.hashedPassword);
         if (!ok) return null;
 
-        // Stage 7 §FR-001.5: block credentials login until the user has
+        // Block credentials login until the user has
         // clicked the verification link. Throwing a sentinel string here is
         // the documented NextAuth way to surface a custom error code to the
         // sign-in page (`?error=email_not_verified`).

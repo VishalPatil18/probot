@@ -9,7 +9,7 @@ type Props = {
   currentImage: string | null;
 };
 
-// Stage 4: dual-field onboarding - username + avatar. The avatar grid shows
+// Dual-field onboarding - username + avatar. The avatar grid shows
 // the 13 curated animal icons plus, when the user already has a non-animal
 // `users.image` (e.g. Google/GitHub photo from OAuth), that image as a first
 // "Keep current" card. Selecting an animal replaces the current image on

@@ -13,22 +13,22 @@ import { parsePagination } from "@/lib/pagination";
 // GET  (owner-gated, same-origin) - paginated lead list for the dashboard.
 // POST (public, CORS allow-list)   - chat-UI lead capture call.
 //
-// The POST handler is the only Stage 6 write surface that is anonymous +
+// The POST handler is the only write surface that is anonymous +
 // cross-origin (the embeddable widget on a third-party site). It is
 // idempotent on (conversationId, lowercased email) so a double-submit
 // from the UI produces a single lead row + a single notification row.
 //
-// **No rate limiting in slice 6.2** - explicit deferral to Stage 7's
-// Redis layer (per the slice-6.2 design Q2 lock). The 4 KB body cap, Zod
+// **No rate limiting yet** - explicit deferral to a later
+// Redis layer (per the original design Q2 lock). The 4 KB body cap, Zod
 // schema, idempotent dedupe, and 24h email-only window combine to make
 // raw brute-force noise expensive without rate-limit middleware. A spam
 // attack that cycles emails to defeat the dedupe still bounds at one DB
-// transaction per unique email per 24h window per bot - acceptable for
-// slice 6.2 scope; revisit if observed in practice.
+// transaction per unique email per 24h window per bot - acceptable
+// for now; revisit if observed in practice.
 
 const MAX_BODY_BYTES = 4096;
 
-// Stage 5 widget: CORS preflight. Returns 204 with the public allow-list.
+// Widget: CORS preflight. Returns 204 with the public allow-list.
 export function OPTIONS(): Response {
   return corsPreflight();
 }

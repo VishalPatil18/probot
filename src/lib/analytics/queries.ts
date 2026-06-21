@@ -2,8 +2,8 @@ import { eq, sql } from "drizzle-orm";
 
 import { bots, conversations, db, leads, messages } from "@/lib/db";
 
-// Stage 6 shared analytics queries. Slice 6.2's `/api/bots/[botId]/analytics`
-// route and slice 6.3's `/dashboard` + `/dashboard/bots/[botId]` pages all
+// Shared analytics queries. The `/api/bots/[botId]/analytics`
+// route and the `/dashboard` + `/dashboard/bots/[botId]` pages all
 // call into this module so the SQL lives in one place.
 //
 // Both functions use parallel small COUNTs scoped by `bot_id` / `user_id`

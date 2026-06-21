@@ -7,9 +7,9 @@ type Props = {
   initials: string;
 };
 
-// Slice B - Account tab. Slice 6.5 only edits bot-scoped fields; user-
+// Account tab. The current flow only edits bot-scoped fields; user-
 // scoped account editing (name / email / username / password / photo
-// upload) lands in Stage 7 when we wire the corresponding endpoints.
+// upload) lands later when we wire the corresponding endpoints.
 // Inputs render as read-only displays of the current values with
 // Coming Soon pills on each section header so users see what's coming
 // without being misled into thinking the form already works.
@@ -44,7 +44,7 @@ export function AccountTab({ name, email, username, initials }: Props) {
             </label>
             <div className="flex items-center overflow-hidden rounded-xl border border-border-base bg-neutral-50">
               <span className="pl-3 pr-1 text-sm text-muted">
-                probot.com/u/
+                pro-bot.dev/u/
               </span>
               <span className="flex-1 py-2.5 pr-3 text-sm text-ink">
                 {username}

@@ -1,11 +1,11 @@
 // Browser-only per-tab session ID for the public chat surface.
 //
-// Stage 6 §6.1: the chat orchestrator UPSERTs a `conversations` row keyed by
+// The chat orchestrator UPSERTs a `conversations` row keyed by
 // (bot_id, session_id). A recruiter is anonymous, so the session ID is a
 // client-generated UUID persisted in `sessionStorage` - fresh per browser
 // tab (not per visit, so reloading a tab continues the same conversation),
 // dropped on tab close. No cookie is set, so the consent surface stays in
-// Stage 7 territory.
+// a later change's territory.
 
 const STORAGE_KEY = "probot.chat.sessionId";
 

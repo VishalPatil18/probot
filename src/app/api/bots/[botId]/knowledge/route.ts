@@ -68,7 +68,7 @@ export async function POST(
     );
   }
 
-  // Stage 3 RAG: optional OpenAI key for embedding generation. Absent header
+  // RAG: optional OpenAI key for embedding generation. Absent header
   // means "skip embeddings" - the bot falls back to full-context at chat
   // time. Malformed header (wrong length) is rejected early.
   let embeddingApiKey: string | null;
@@ -116,7 +116,7 @@ export async function POST(
     );
   }
 
-  // One-time migration: if a Stage 1 bot has prose in `context_text` but no
+  // One-time migration: if an older bot has prose in `context_text` but no
   // knowledge_base rows yet, seed a `manual_text` source from the existing
   // text so re-assembly preserves it. This runs before per-source replace so
   // the seed sticks when the request itself provides no text.
@@ -159,7 +159,7 @@ export async function POST(
         );
       }
       const buffer = Buffer.from(await file.arrayBuffer());
-      // Stage 7 Phase 6 §NFR-S02: heuristic safety scan BEFORE handing
+      // Heuristic safety scan BEFORE handing
       // the buffer to pdf-parse. Rejects renamed executables, Office
       // macro containers, EICAR, and magic-byte / MIME / extension
       // mismatches. See src/lib/uploads/malware-scan.ts for the trade
@@ -186,7 +186,7 @@ export async function POST(
     throw e;
   }
 
-  // Stage 3 RAG: embed each newly persisted source. Embedding failures are
+  // RAG: embed each newly persisted source. Embedding failures are
   // logged but do NOT fail the request - the chunks remain queryable via the
   // legacy full-context path (assembled below). The user gets a degraded but
   // working bot rather than a 5xx on an OpenAI hiccup.

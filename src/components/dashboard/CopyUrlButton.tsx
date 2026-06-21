@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-// Stage 4: shared copy-to-clipboard button used by:
+// Shared copy-to-clipboard button used by:
 //   - Bot Factory Step 5 (post-creation success screen)
 //   - Dashboard home (per-bot list item)
 //   - Topbar URL pill (icon-only variant)

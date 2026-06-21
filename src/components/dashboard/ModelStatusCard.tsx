@@ -11,7 +11,7 @@ type Props = {
 // indicates the key is configured locally (the actual key never leaves
 // the browser, so the server cannot truly verify "active" beyond
 // "they set a provider preference"). Links to the AI model & key tab
-// (Coming Soon in Slice A - wires up in a later slice).
+// (Coming Soon - wires up later).
 export function ModelStatusCard({ provider, model }: Props) {
   const { name, model: modelLabel } = describeProvider(provider, model);
   return (

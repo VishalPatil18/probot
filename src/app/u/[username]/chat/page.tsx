@@ -36,7 +36,7 @@ type ResolvedBot = {
 // share a single set of DB queries per request - avoids the 2x lookup
 // (users + bots) running 4 times total per page load.
 //
-// Stage 7 §FR-002.10: lookup no longer hard-filters on isActive. We pull
+// Lookup no longer hard-filters on isActive. We pull
 // the user's bot regardless; the caller decides whether the request is
 // authorised to see a draft (i.e. presented a valid preview token).
 const resolve = cache(async function resolve(
@@ -124,8 +124,8 @@ export default async function PublicChatPage({
   params,
   searchParams,
 }: PageProps) {
-  // Stage 4: PUBLIC - no auth required for published bots.
-  // Stage 7: draft bots require a valid signed preview token in `?preview=`.
+  // PUBLIC - no auth required for published bots.
+  // Draft bots require a valid signed preview token in `?preview=`.
   const resolved = await resolve(params.username);
   if (!resolved) notFound();
   const { owner, bot } = resolved;

@@ -75,19 +75,19 @@ export const bots = pgTable(
       .default(
         sql`'["Thinking…","Searching memory…","Drafting a response…","Almost ready…"]'::jsonb`,
       ),
-    // Stage 5: per-bot theme color (hex #RRGGBB) used by the embeddable
+    // Per-bot theme color (hex #RRGGBB) used by the embeddable
     // widget and signature badge. Default matches the brand purple so bots
-    // created before Stage 5 render coherently when the column backfills.
+    // older bots render coherently when the column backfills.
     themeColor: varchar("theme_color", { length: 7 })
       .notNull()
       .default("#7c5cff"),
-    // Stage 7 §FR-002.7: free-form additions to the system prompt. Max length
+    // Free-form additions to the system prompt. Max length
     // is enforced at the Zod layer (botInput / botPatchInput) so a future
     // tightening of the cap doesn't require a migration. Injected into the
     // assembled system prompt between the personality block and the response-
     // style block - see prompt-builder.ts.
     customInstructions: text("custom_instructions"),
-    // Stage 7 §FR-002.10: per-bot draft/publish flow. New bots are created
+    // Per-bot draft/publish flow. New bots are created
     // with `is_active=false` + a signed `preview_token` so the creator can
     // chat against the bot privately at `/u/<username>/chat?preview=<token>`
     // before clicking Publish (which flips is_active=true and clears the
@@ -95,14 +95,14 @@ export const bots = pgTable(
     // existence in the URL cannot grant anyone else access without verifying
     // against the bot row.
     previewToken: text("preview_token"),
-    // Stage 7 §FR-010.9: per-bot configurable rate limits. NULL means the
+    // Per-bot configurable rate limits. NULL means the
     // env-var default (PROBOT_RATE_PER_MINUTE / PROBOT_RATE_PER_DAY /
     // PROBOT_RATE_MAX_CHARS) takes over - lets a self-host operator tune the
     // baseline without touching every bot row.
     rateLimitPerMinute: integer("rate_limit_per_minute"),
     rateLimitPerDay: integer("rate_limit_per_day"),
     rateLimitMaxChars: integer("rate_limit_max_chars"),
-    // Stage 7 §FR-002.10: new bots default to inactive. Bots created before
+    // New bots default to inactive. Bots created before
     // this migration backfill to `true` via the migration so existing
     // published bots are unaffected.
     isActive: boolean("is_active").notNull().default(false),
@@ -163,7 +163,7 @@ export const verificationTokens = pgTable(
   }),
 ).enableRLS();
 
-// encrypted_llm_keys (Stage 7 Phase 3 §FR-010.5 / §SEC-D06 managed path)
+// encrypted_llm_keys (managed-key path, §FR-010.5 / §SEC-D06)
 // One row per bot whose owner opted in to managed key storage. The user's
 // LLM API key is NEVER stored in plaintext - the columns hold an envelope-
 // encryption payload (see src/lib/crypto/envelope.ts):
@@ -204,12 +204,12 @@ export const encryptedLlmKeys = pgTable(
   }),
 ).enableRLS();
 
-// decrypt_audit_log (Stage 7 Phase 3)
+// decrypt_audit_log
 // One row per server-side decrypt of a managed LLM key. Surfaced in the
 // dashboard so creators can see when their key was used. We deliberately
 // store ONLY the timestamp and a SHA-256 hash of the recruiter IP - never
 // the raw IP, never any portion of the decrypted key. 30-day retention is
-// enforced by the Phase 5 cron job (no rows are pruned in Phase 3 since
+// enforced by the cleanup cron job (no rows are pruned yet since
 // the cron infrastructure lands later).
 export const decryptAuditLog = pgTable(
   "decrypt_audit_log",
@@ -234,7 +234,7 @@ export const decryptAuditLog = pgTable(
   }),
 ).enableRLS();
 
-// password_reset_tokens (Stage 7 §FR-001.6)
+// password_reset_tokens (§FR-001.6)
 // One row per outstanding reset request. `token_hash` stores SHA-256 of the
 // raw token we email; the raw token never touches the DB so a leaked dump
 // cannot be used to take over accounts. TTL = 1 hour. `used_at` makes tokens
@@ -264,7 +264,7 @@ export const passwordResetTokens = pgTable(
   }),
 ).enableRLS();
 
-// deletion_requests (Stage 7 Phase 5 §NFR-C01/C04/C05)
+// deletion_requests (§NFR-C01/C04/C05)
 // One row per outstanding account-deletion request. The grace period is
 // `scheduled_purge_at - requested_at` (7 days in code). Snapshots
 // `email_snapshot` + `username_snapshot` so the post-purge completion
@@ -327,7 +327,7 @@ export const deletionRequests = pgTable(
   }),
 ).enableRLS();
 
-// email_verification_tokens (Stage 7 §FR-001.5)
+// email_verification_tokens (§FR-001.5)
 // Sent to credentials-registered users at signup time. Magic-link signups
 // don't use this table - NextAuth's `verification_tokens` covers them and
 // sets `email_verified` on click. TTL = 24 hours. Verifying the email
@@ -373,9 +373,9 @@ export const knowledgeBase = pgTable(
     contentText: text("content_text").notNull(),
     chunkIndex: integer("chunk_index").notNull(),
     tokenCount: integer("token_count").notNull(),
-    // Stage 3 RAG: OpenAI text-embedding-3-large truncated to 1536 dims via
+    // RAG: OpenAI text-embedding-3-large truncated to 1536 dims via
     // the API's `dimensions` parameter (Matryoshka representation). Nullable
-    // because (a) Stage 1/2 bots have no embeddings, and (b) ingestion-time
+    // because (a) older bots have no embeddings, and (b) ingestion-time
     // embedding may be skipped when the user does not supply an OpenAI key.
     // Bots without embeddings fall back to the assembled `bots.context_text`.
     embedding: vector("embedding", { dimensions: 1536 }),
@@ -394,12 +394,12 @@ export const knowledgeBase = pgTable(
 ).enableRLS();
 
 // conversations
-// One row per recruiter session on a bot. Created in Stage 4 (plan.md §4.5);
-// chat persistence writes land in Stage 6 (slice 6.1). `session_id` is a
+// One row per recruiter session on a bot. Created earlier;
+// chat persistence writes land in the current flow. `session_id` is a
 // client-supplied opaque UUID (generated per browser tab via sessionStorage
 // in the chat UI). `recruiter_ip` is INTENTIONALLY omitted; raw IPs are PII
-// and the GDPR / consent surface lives in Stage 7. `recruiter_email` is
-// populated by the lead-capture flow in slice 6.4 for quick dashboard
+// and the GDPR / consent surface lives in a later addition. `recruiter_email` is
+// populated by the lead-capture flow for quick dashboard
 // lookups; the canonical lead record lives in `leads`.
 export const conversations = pgTable(
   "conversations",
@@ -423,7 +423,7 @@ export const conversations = pgTable(
   },
   (table) => ({
     botIdIdx: index("conversations_bot_id_idx").on(table.botId),
-    // Stage 6: dashboard lists conversations ordered by recency per bot.
+    // Dashboard lists conversations ordered by recency per bot.
     // Composite (bot_id, started_at DESC) covers both the equality filter
     // and the ORDER BY in a single index scan.
     botStartedIdx: index("conversations_bot_started_idx").on(
@@ -431,7 +431,7 @@ export const conversations = pgTable(
       table.startedAt.desc(),
     ),
     // Unique on (bot_id, session_id) so concurrent tabs on the same bot for
-    // the same recruiter cannot double-insert and skew the Stage 6 metrics.
+    // the same recruiter cannot double-insert and skew the analytics metrics.
     botSessionUnique: uniqueIndex("conversations_bot_session_unique").on(
       table.botId,
       table.sessionId,
@@ -441,7 +441,7 @@ export const conversations = pgTable(
 
 // messages
 // One row per chat turn (user + assistant), child of conversations. Created
-// in Stage 4 for the Stage 6 analytics surface - no code writes yet.
+// for the analytics surface - no code writes yet.
 // `tokens_used` is nullable because the provider response may not include a
 // usage breakdown for every model.
 export const messages = pgTable(
@@ -462,7 +462,7 @@ export const messages = pgTable(
     conversationIdIdx: index("messages_conversation_id_idx").on(
       table.conversationId,
     ),
-    // Stage 6: conversation transcript view scans all messages for a
+    // Conversation transcript view scans all messages for a
     // conversation in chronological order. Composite (conversation_id,
     // created_at) covers both predicates in one index.
     convCreatedIdx: index("messages_conv_created_idx").on(
@@ -478,9 +478,9 @@ export const messages = pgTable(
   }),
 ).enableRLS();
 
-// leads (Stage 6 §6.1)
+// leads
 // Captured recruiter emails per bot. `conversation_id` is ON DELETE SET NULL
-// (not cascade) so a GDPR-driven conversation purge in Stage 7 still
+// (not cascade) so a GDPR-driven conversation purge still
 // preserves the lead - the email is business-valuable even if the chat log
 // is gone. `context_summary` is filled by the lead-capture client in slice
 // 6.4 with a truncated concatenation of the first 2-3 recruiter messages
@@ -512,10 +512,10 @@ export const leads = pgTable(
   }),
 ).enableRLS();
 
-// notifications (Stage 6 §6.6)
+// notifications
 // In-app notifications surfaced by the dashboard bell. No email transport in
-// Stage 6 - that lands post-Stage 7 once Resend is wired for auth emails.
-// `kind` is extensible; only 'lead_captured' is emitted in Stage 6. CHECK
+// the current flow - that lands once Resend is wired for auth emails.
+// `kind` is extensible; only 'lead_captured' is emitted currently. CHECK
 // constraint mirrors the messages.role pattern so a typo cannot silently
 // corrupt the unread badge query. Partial index on `read_at IS NULL` keeps
 // the unread-count query O(unread) instead of O(total notifications).

@@ -7,7 +7,7 @@ import { mintPreviewToken } from "@/lib/bots/preview-token";
 import { botInput } from "@/lib/bots/schemas";
 import { bots, db, users } from "@/lib/db";
 
-// Stage 7 §FR-002.10: new bots default to draft (is_active=false). The
+// New bots default to draft (is_active=false). The
 // creator gets a `previewUrl` that includes a signed preview token so they
 // can chat against the bot at `/u/<username>/chat?preview=<token>` before
 // flipping the live switch. Existing bots (one-bot-per-user model) keep
@@ -87,7 +87,7 @@ export async function POST(request: Request): Promise<Response> {
         personality: input.personality,
         contextText: input.contextText,
         suggestedQuestions: input.suggestedQuestions,
-        // Stage 7: explicit isActive=false so a future column default flip
+        // Explicit isActive=false so a future column default flip
         // can't accidentally publish drafts. previewToken is minted from the
         // brand-new bot id, then UPDATEd onto the same row in the next
         // statement (we need the id before we can mint the token).

@@ -1,4 +1,4 @@
-// Stage 7 Phase 6: hardened browser-side credential store.
+// Hardened browser-side credential store.
 //
 // Replaces plain localStorage for any secret that should not be visible
 // in DevTools as plaintext. Backed by IndexedDB + a non-extractable

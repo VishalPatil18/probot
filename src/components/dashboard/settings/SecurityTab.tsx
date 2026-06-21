@@ -6,7 +6,7 @@ import {
 
 import { SecurityActions } from "./SecurityActions";
 
-// Stage 7 Phase 5: Security & privacy tab. Rate-limit values come straight
+// Security & privacy tab. Rate-limit values come straight
 // from the live rate limiter so the display reflects whatever env
 // overrides the deployment uses. Export and Delete-account are now live;
 // the conversation-retention row is still a display-only value (operator

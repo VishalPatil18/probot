@@ -1,10 +1,10 @@
 // Browser-only store for the user's LLM API key.
 //
-// Stage 7 Phase 6: switched from plaintext localStorage to IndexedDB +
+// Switched from plaintext localStorage to IndexedDB +
 // Web Crypto AES-256-GCM (see ./secure-key-store.ts). The public API
 // here is async; callers await the get/set/clear functions. localStorage
 // is still consulted on first read as a one-time migration so creators
-// who set their key before Phase 6 don't have to re-enter it.
+// who set their key earlier don't have to re-enter it.
 //
 // The key is attached to chat requests via the `x-llm-api-key` header
 // and is never sent in JSON bodies or round-tripped through any ProBot

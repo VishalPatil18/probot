@@ -9,7 +9,7 @@ import { db, encryptedLlmKeys } from "@/lib/db";
 
 // POST /api/bots/[botId]/llm-key
 //
-// Stage 7 Phase 3 §FR-010.5 / §SEC-D06.
+// Managed-key storage endpoint (§FR-010.5 / §SEC-D06).
 //
 // Stores the user-supplied LLM API key on pro-bot.dev encrypted with
 // envelope encryption. This is the "managed-key" opt-in: lets the bot

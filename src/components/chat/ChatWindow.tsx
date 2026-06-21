@@ -20,7 +20,7 @@ import type { ChatMessage } from "./types";
 const LEAD_CAPTURE_THRESHOLD = 3;
 const CONTEXT_SUMMARY_MAX = 300;
 
-// Stage 6 §6.2: lead-capture card eligibility. Returns true when the user
+// Lead-capture card eligibility. Returns true when the user
 // has seen at least N assistant replies and the sessionStorage status is
 // still "pending" (i.e. the card hasn't been shown/dismissed/captured).
 function shouldShowLeadCard(
@@ -69,7 +69,7 @@ type Props = {
   suggestedQuestions: string[];
   loadingMessages: string[];
   llmProvider: ProviderName;
-  // Stage 7 §FR-002.10: when present, the chat is talking to a draft bot;
+  // When present, the chat is talking to a draft bot;
   // we forward the token to the API so it can bypass the is_active gate
   // server-side. Public visitors never see this prop - only the wizard's
   // Step 5 / dashboard "open private preview" path supplies it.
@@ -89,7 +89,7 @@ export function ChatWindow({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [missingKey, setMissingKey] = useState(false);
-  // Stage 6 §6.2: conversationId comes back in the chat response after the
+  // ConversationId comes back in the chat response after the
   // first successful turn. The lead-capture card sends it on POST /leads
   // for idempotent (botId, conversationId, email) dedupe.
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -146,21 +146,21 @@ export function ChatWindow({
       headers["x-llm-azure-endpoint"] = azureCreds.endpoint;
       headers["x-llm-azure-api-version"] = azureCreds.apiVersion;
     }
-    // Stage 3 RAG: include the optional OpenAI embedding key. Absent →
+    // RAG: include the optional OpenAI embedding key. Absent →
     // server skips retrieval and falls back to full-context. Same security
     // model as the chat key (localStorage only, never persisted server-side).
     const embeddingKey = await getEmbeddingApiKey();
     if (embeddingKey) {
       headers["x-embedding-api-key"] = embeddingKey;
     }
-    // Stage 7 §FR-002.10: forward the draft preview token when present so
+    // Forward the draft preview token when present so
     // the chat API allows the inactive bot. The route also accepts a
     // `?preview=` query param as a fallback for hand-pasted URLs.
     if (previewToken) {
       headers["x-preview-token"] = previewToken;
     }
 
-    // Stage 6 §6.1: per-tab session ID lets the server UPSERT a
+    // Per-tab session ID lets the server UPSERT a
     // `conversations` row and coalesce multiple turns from the same tab
     // into a single conversation for dashboard analytics. The mount-
     // stable state value (lazy-init in useState) keeps the send path
@@ -397,7 +397,7 @@ function ChatHeader({
           <h1 className="font-display text-lg font-bold leading-tight truncate">
             {botName}{" "}
             <span className="text-muted font-sans font-normal text-sm">
-              · AI Recruiter
+              · AI Assistant
             </span>
           </h1>
           {botHeadline && (

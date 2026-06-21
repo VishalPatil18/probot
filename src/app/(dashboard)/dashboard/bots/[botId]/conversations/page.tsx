@@ -11,7 +11,7 @@ import { listConversations } from "@/lib/conversations/queries";
 import { bots, db } from "@/lib/db";
 import { DEFAULT_LIMIT } from "@/lib/pagination";
 
-// Stage 6 §6.4: dashboard conversations list page. Server-rendered with
+// Dashboard conversations list page. Server-rendered with
 // direct Drizzle queries (matching the existing dashboard pattern) + a
 // client SearchBar that updates the URL's ?q= param. Pagination is also
 // URL-driven (?page=N) so prev/next is bookmarkable.

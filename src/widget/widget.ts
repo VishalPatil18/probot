@@ -1,5 +1,5 @@
 /*
- * ProBot embeddable widget - Stage 5
+ * ProBot embeddable widget
  *
  * Usage:
  *   <script src="https://pro-bot.dev/widget.js" data-bot-id="<uuid>"></script>
@@ -10,7 +10,7 @@
  * The script reads its config from its own <script> tag, fetches the bot's
  * public config from /api/bots/[botId]/config, attaches a Shadow DOM to the
  * host page (so host CSS cannot leak in), and renders a floating bubble
- * with a "preview" dialog. Real chat functionality is gated behind Stage 7
+ * with a "preview" dialog. Real chat functionality is gated behind a later change
  * (encrypted-at-rest keys); for now the dialog directs visitors to the
  * full /u/[username]/chat page via a CTA link.
  */

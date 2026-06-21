@@ -17,7 +17,7 @@ type Props = {
 
 type Status = "idle" | "loading" | "uploading" | "reprocessing" | "error";
 
-// Slice B - Knowledge base tab. Same wiring as slice 6.5 KnowledgeManager
+// Knowledge base tab. Same wiring as the earlier KnowledgeManager
 // (the underlying /knowledge endpoints don't change) but visual layout
 // matches design/settings.html: source rows with type-icon + filename +
 // "N chunks · indexed" caption + small icon-only delete, "Re-index all"

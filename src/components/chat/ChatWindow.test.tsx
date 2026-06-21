@@ -112,7 +112,7 @@ describe("ChatWindow", () => {
     await user.click(screen.getByRole("button", { name: /send message/i }));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    // Slice 6.4: sessionId is memoized in a ref at mount, so the store
+    // SessionId is memoized in a ref at mount, so the store
     // helper is called exactly once per ChatWindow instance. The same
     // sessionId then rides every request.
     expect(getSessionIdMock).toHaveBeenCalledTimes(1);
@@ -231,7 +231,7 @@ describe("ChatWindow", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  // Stage 6 §6.2: lead-capture card appears after the 3rd assistant reply.
+  // Lead-capture card appears after the 3rd assistant reply.
   describe("lead capture card (Stage 6)", () => {
     async function sendN(turns: number) {
       const user = userEvent.setup();

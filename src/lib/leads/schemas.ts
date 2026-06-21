@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Body for POST /api/bots/[botId]/leads. Called by the chat UI (slice 6.4)
+// Body for POST /api/bots/[botId]/leads. Called by the chat UI
 // from any origin (CORS-public) so the contract is small and defensive.
 //
 // - `email` is the lead's email; trimmed + lowercased on parse so duplicate

@@ -94,7 +94,7 @@ export function RegisterForm() {
         Create your account
       </h1>
       <p className="text-muted text-sm mb-8">
-        Build your AI recruiter in 2 minutes.
+        Build your AI assistant in 2 minutes.
       </p>
 
       <OAuthRow email={email} />
@@ -115,7 +115,7 @@ export function RegisterForm() {
             <span className="text-muted font-normal">· your bot URL</span>
           </label>
           <div className="flex items-center border border-border-base rounded-xl overflow-hidden focus-within:border-brand transition-colors">
-            <span className="pl-3 pr-1 text-sm text-muted">probot.com/u/</span>
+            <span className="pl-3 pr-1 text-sm text-muted">pro-bot.dev/u/</span>
             <input
               id="username"
               type="text"

@@ -27,7 +27,7 @@ function useMobileSidebar(): MobileSidebarCtx {
   return ctx;
 }
 
-// Slice A redesign: mobile sidebar = hamburger button (placed inline in
+// Mobile sidebar = hamburger button (placed inline in
 // the Topbar) + slide-in panel (mounted at the layout root). State is
 // shared via context so the trigger and panel coordinate without prop
 // drilling through every server component in between.

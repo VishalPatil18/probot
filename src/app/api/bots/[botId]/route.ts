@@ -7,7 +7,7 @@ import { bots, db } from "@/lib/db";
 
 // PATCH /api/bots/[botId]
 //
-// Stage 5: partial-update endpoint behind the bot detail page. Currently
+// Partial-update endpoint behind the bot detail page. Currently
 // only handles `themeColor` - additional editable fields (headline, etc.)
 // can be added to `botPatchInput` without touching this handler since the
 // SET object is built from the parsed Zod object.
@@ -43,10 +43,10 @@ export async function PATCH(
   // mass-assignment whitelist - fields like `userId`, `contextText`,
   // `createdAt`, and `updatedAt` are not in `botPatchInput` so they can
   // never appear here even if a hostile client puts them in the body.
-  // (Slice B widened the whitelist to include `isActive` for the status
+  // (The whitelist was widened to include `isActive` for the status
   // toggle, so it IS legitimately accepted now - see the schema.)
   //
-  // Stage 7 widens the whitelist to include `customInstructions` and the
+  // A future change widens the whitelist to include `customInstructions` and the
   // three per-bot rate-limit overrides. Each rate-limit field accepts
   // `null` to mean "clear the override and use env defaults"; the Zod
   // schema is `nullable().optional()` so undefined leaves it untouched.
@@ -112,7 +112,7 @@ export async function PATCH(
 
 // DELETE /api/bots/[botId]
 //
-// Stage 7 Phase 5: permanently delete a single bot. The Drizzle CASCADE
+// Permanently delete a single bot. The Drizzle CASCADE
 // on the `bots` FK takes everything dependent with it - knowledge_base,
 // conversations, messages, leads, encrypted_llm_keys, decrypt_audit_log.
 // No grace period; the user must already have re-typed the bot name and

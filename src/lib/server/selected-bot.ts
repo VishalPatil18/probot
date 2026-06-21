@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-// Slice A: bot switcher state. The dashboard shell shows one bot at a
+// Bot switcher state. The dashboard shell shows one bot at a
 // time (URL pill, embed snippet, View live bot button, etc.) - the
 // selected bot ID is persisted in a per-user-browser cookie so the
 // selection survives page navigations AND server-rendered passes.

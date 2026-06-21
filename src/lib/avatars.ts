@@ -1,10 +1,10 @@
-// Stage 4 plan.md §4: default animal-icon avatars for users without a
+// Default animal-icon avatars for users without a
 // profile photo (OAuth providers that don't return one, credentials users,
 // magic-link users). Hosted on Cloudinary; the operator pays nothing.
 //
 // Auto-assigned at signup (NextAuth adapter override + credentials register
 // route). Users can change their selection in the onboarding flow when their
-// username is still a placeholder; Stage 7 ships a general profile editor.
+// username is still a placeholder; a general profile editor ships later.
 
 export const ANIMAL_AVATARS = [
   "https://res.cloudinary.com/dbjdu0hvl/image/upload/v1777587321/Portfolio4.0/1_kf7bud.webp",

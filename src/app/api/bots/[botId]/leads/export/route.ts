@@ -4,7 +4,7 @@ import { listAllLeadsForExport } from "@/lib/leads/queries";
 
 // GET /api/bots/[botId]/leads/export
 //
-// Stage 6 §6.4: CSV download of every captured lead for this bot. Streams
+// CSV download of every captured lead for this bot. Streams
 // a Content-Disposition: attachment response so the browser triggers a
 // file download with a date-stamped filename.
 //

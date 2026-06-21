@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth/auth";
 
 // GET /api/users/me/export
 //
-// Stage 7 Phase 5 §NFR-C04: portable JSON dump of every row about the
+// Portable JSON dump of every row about the
 // signed-in user. Streamed with a `Content-Disposition: attachment`
 // header so browsers offer a save dialog rather than rendering JSON in a
 // new tab. The filename is `probot-export-<timestamp>.json` so a user

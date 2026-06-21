@@ -9,7 +9,7 @@ import {
 
 // Envelope encryption for the BYO-key managed path.
 //
-// Design (locked in - see claude/context.md Stage 7 Phase 3 entry):
+// Design (locked in - see claude/context.md):
 //   1. KEK (Key Encryption Key) is a 32-byte symmetric key stored in the
 //      `PROBOT_KEY_ENCRYPTION_KEY` env var (base64-encoded). Never lives in
 //      the database, never in git, never in a backup of the database.

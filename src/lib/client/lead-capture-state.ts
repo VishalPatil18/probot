@@ -1,6 +1,6 @@
 // Browser-only persistence for the in-chat lead-capture card state.
 //
-// Stage 6 §6.2: the card appears after the 3rd assistant reply, exactly
+// The card appears after the 3rd assistant reply, exactly
 // once per conversation. To survive a page reload mid-conversation
 // without re-prompting the recruiter (annoying) or hiding the card on
 // resume (worse), we persist the lifecycle status in `sessionStorage`

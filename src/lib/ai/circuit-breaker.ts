@@ -24,7 +24,7 @@
 // Per-process state. Vercel/serverless cold starts naturally bound the
 // memory and a fresh process resets the breaker; that's acceptable for
 // a system whose primary upstream (LLM provider) recovers in minutes,
-// not hours. Stage 8 may swap in Redis-backed state alongside the rate
+// not hours. A future change may swap in Redis-backed state alongside the rate
 // limiter if cross-instance behavior turns out to matter.
 
 import { ProviderError } from "@/lib/ai/providers";

@@ -10,7 +10,7 @@ const auditInsertMock = vi.fn((..._args: unknown[]) => ({
 const completeMock = vi.fn();
 const checkRateLimitMock = vi.fn();
 
-// Stage 6 persistence mocks. The route inserts a conversation row (UPSERT
+// Persistence mocks. The route inserts a conversation row (UPSERT
 // on bot_id/session_id) then 2 message rows in a single transaction. We
 // stub `db.transaction(cb)` to invoke `cb(tx)` and route `tx.insert(table)`
 // by call order - first call returns the conversation chain, subsequent
@@ -119,7 +119,7 @@ const VALID_KEY = "sk-ant-test-XYZ-1234567890";
 const BOT_ID = "11111111-1111-1111-1111-111111111111";
 const SESSION_ID = "22222222-2222-2222-2222-222222222222";
 
-// Default sessionId injection. Stage 6 made `sessionId` a required Zod
+// Default sessionId injection. The current flow made `sessionId` a required Zod
 // field; existing specs that pass a bare `{ message }` get the default UUID
 // merged in. Specs that want to test missing/invalid sessionId pass a
 // string body or override explicitly.
@@ -188,7 +188,7 @@ describe("POST /api/chat/[botId]", () => {
       conversationId?: string;
     };
     expect(body.reply).toBe("Sure - Jane is great.");
-    // Slice 6.4: conversationId comes from the persistence transaction's
+    // ConversationId comes from the persistence transaction's
     // returning() call. The shared mock resolves it to "conv-1".
     expect(body.conversationId).toBe("conv-1");
   });
@@ -636,7 +636,7 @@ describe("POST /api/chat/[botId]", () => {
     });
   });
 
-  // Stage 6 §6.1: chat persistence into conversations + messages.
+  // Chat persistence into conversations + messages.
   describe("conversation persistence (Stage 6)", () => {
     it("UPSERTs a conversation + inserts user + assistant messages on the happy path", async () => {
       const res = await POST(

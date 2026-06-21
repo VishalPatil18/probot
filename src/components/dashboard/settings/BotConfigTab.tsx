@@ -65,8 +65,8 @@ const PERSONALITY_CARDS: Record<
 
 const THEME_PRESETS = ["#7c5cff", "#10a37f", "#9b5cff", "#404040"];
 
-// Slice B - Bot Configuration tab. Single PATCH per save, diffed against
-// initial values so only changed fields are sent. Stage 7 enables the
+// Bot Configuration tab. Single PATCH per save, diffed against
+// initial values so only changed fields are sent. A future change enables the
 // previously-disabled custom-instructions textarea, adds a per-bot rate-
 // limit panel, and (for draft bots) surfaces a Publish button alongside
 // the preview link.

@@ -10,7 +10,7 @@ import { bots, db } from "@/lib/db";
 import { listLeads } from "@/lib/leads/queries";
 import { DEFAULT_LIMIT } from "@/lib/pagination";
 
-// Stage 6 §6.4: dashboard leads list page. Includes a "Export CSV" anchor
+// Dashboard leads list page. Includes a "Export CSV" anchor
 // that points at the slice-6.2 export endpoint - same-origin, session
 // cookie carries auth, no JS needed.
 

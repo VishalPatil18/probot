@@ -2,7 +2,7 @@
 
 import { CopyUrlButton } from "./CopyUrlButton";
 
-// Stage 5: Embed surface shown on the bot detail page. Three copyable
+// Embed surface shown on the bot detail page. Three copyable
 // snippets - public chat URL, <script> tag for embedding the widget, and
 // a hand-rolled HTML signature badge for email clients.
 //

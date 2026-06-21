@@ -44,7 +44,7 @@ function relTime(iso: string): string {
   return `${day}d ago`;
 }
 
-// Stage 6 §6.6: dropdown panel that mounts inside <NotificationBell>. Fetches
+// Dropdown panel that mounts inside <NotificationBell>. Fetches
 // the most recent 10 notifications on open, supports per-item mark-read +
 // navigate, and a "Mark all read" footer. Items are rendered with a
 // pre-denormalized payload (botName, email, contextSummary, etc.) so no

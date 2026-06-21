@@ -7,9 +7,9 @@
 // independent maps.
 //
 // This is in-memory and per-process. Vercel/serverless cold-starts naturally
-// bound memory; Stage 8 replaces this with Upstash Redis per plan.md §7.4.
+// bound memory; a future change replaces this with Upstash Redis.
 //
-// Stage 7 §FR-010.9: per-bot overrides are accepted at call time. Each bot
+// Per-bot overrides are accepted at call time. Each bot
 // row can store its own perMinute / perDay / maxChars in the `bots` table.
 // The route reads those columns and passes them in; NULL on the row means
 // the env-var default still wins. Keeping the env vars as the floor means
@@ -104,7 +104,7 @@ export function checkRateLimit(
   maybeNow?: number,
 ): RateLimitResult {
   // Backwards-compatible call shape: checkRateLimit(botId) and
-  // checkRateLimit(botId, now) both still work. The Stage 7 signature is
+  // checkRateLimit(botId, now) both still work. The current signature is
   // checkRateLimit(botId, overrides, now?).
   let overrides: RateLimitOverrides | undefined;
   let now: number;

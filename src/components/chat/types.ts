@@ -9,7 +9,7 @@
 // renders as a special "slow down" card instead of a markdown bubble. It
 // carries no user-visible text - the renderer supplies the copy.
 //
-// Stage 6 §6.2: `lead_capture` is the in-chat lead-capture card injected by
+// `lead_capture` is the in-chat lead-capture card injected by
 // ChatWindow after the 3rd assistant reply. It is rendered inline in the
 // message list so the visual flow stays coherent (card sits between
 // bubbles, reuses the scroll-to-bottom behavior). The variant carries no

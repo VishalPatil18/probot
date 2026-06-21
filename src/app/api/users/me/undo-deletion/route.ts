@@ -5,7 +5,7 @@ import { undoAccountDeletion } from "@/lib/account/delete";
 
 // POST /api/users/me/undo-deletion
 //
-// Stage 7 Phase 5: cancel a pending account deletion. The user clicks the
+// Cancel a pending account deletion. The user clicks the
 // link in the initiation email, lands on /undo-deletion, types their
 // username to confirm, and the form POSTs here. No session required - the
 // undo token is the authentication (it's emailed only to the account

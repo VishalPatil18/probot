@@ -20,13 +20,13 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-// Stage 4 plan.md §4: every dashboard surface is gated behind a "real
+// Every dashboard surface is gated behind a "real
 // username" check. OAuth and magic-link sign-ups land with a
 // `user-<8hex>` placeholder; we shunt them through /onboarding before any
 // dashboard page renders so public chat URLs (/u/<username>/chat) never
 // expose the throwaway slug.
 //
-// Slice A redesign: the layout now wraps every dashboard page in the
+// The redesigned layout now wraps every dashboard page in the
 // sidebar + topbar shell that mirrors design/dashboard.html. The
 // selected bot id rides a per-browser cookie so the URL pill, embed
 // snippet, and "View live bot" surfaces stay consistent as the user

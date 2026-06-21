@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { PUBLIC_CORS_HEADERS, corsPreflight } from "@/lib/bots/cors-headers";
 import { bots, db, users } from "@/lib/db";
 
-// Stage 5: CORS preflight for the embeddable widget. next.config.js sets
+// CORS preflight for the embeddable widget. next.config.js sets
 // the CORS headers on GET responses; this OPTIONS export answers the
 // browser preflight before the GET fires.
 export function OPTIONS(): Response {
@@ -13,8 +13,8 @@ export function OPTIONS(): Response {
 
 // GET /api/bots/[botId]/config - PUBLIC (no auth).
 //
-// Stage 4 plan.md §4.4: returns the non-sensitive bot config used by the
-// public chat page and the Stage 5 embeddable widget. Intentionally
+// Returns the non-sensitive bot config used by the
+// public chat page and the embeddable widget. Intentionally
 // scoped to fields safe to expose to anonymous visitors:
 //   - bot identity (name, headline)
 //   - chat UI affordances (suggestedQuestions, loadingMessages)
@@ -74,8 +74,8 @@ export async function GET(
       // Public data - let the CDN absorb repeated fetches so an enumeration
       // attacker hits cache, not the origin. 60s s-maxage matches the rate
       // at which bot edits should reasonably propagate. A proper per-IP
-      // rate limit lands with the broader Redis work in Stage 7.
-      // Stage 5: also include CORS headers for the embeddable widget.
+      // rate limit lands with the broader Redis work later.
+      // Also include CORS headers for the embeddable widget.
       headers: {
         "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
         ...PUBLIC_CORS_HEADERS,

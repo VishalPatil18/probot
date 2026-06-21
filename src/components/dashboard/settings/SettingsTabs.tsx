@@ -41,7 +41,7 @@ type Props = {
   children: ReactNode;
 };
 
-// Slice B settings page tab strip. Tab state lives in the URL via
+// Settings page tab strip. Tab state lives in the URL via
 // `?tab=` so deep links + browser back work without extra JS plumbing.
 // Click flips the param via `router.replace` (not `push`) so back
 // doesn't fill with tab-changes the user didn't really commit to.

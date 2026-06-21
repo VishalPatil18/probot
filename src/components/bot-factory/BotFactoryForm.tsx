@@ -41,7 +41,7 @@ const MODEL_OPTIONS: Record<ProviderName, string[]> = {
   azure: [],
 };
 
-// Stage 7 Phase 4: all four providers ship real adapters now. The Set is
+// All four providers ship real adapters now. The Set is
 // kept (rather than dropped) so a future "experimental" / "beta" gate has
 // a single place to live without rewiring the JSX.
 const STAGE1_ENABLED: ReadonlySet<ProviderName> = new Set([
@@ -88,7 +88,7 @@ type FormState = {
   pdfFiles: File[];
   contextTokenCap: number;
   suggestedQuestions: string[];
-  // Stage 7 §FR-002.7: optional free-form prompt addendum captured on Step 3.
+  // Optional free-form prompt addendum captured on Step 3.
   customInstructions: string;
   llmProvider: ProviderName;
   llmModel: string;
@@ -96,7 +96,7 @@ type FormState = {
   // Azure-only extras (ignored when llmProvider !== "azure").
   azureEndpoint: string;
   azureApiVersion: string;
-  // Stage 3 RAG: optional OpenAI key for embedding generation. When present,
+  // RAG: optional OpenAI key for embedding generation. When present,
   // the bot uses semantic search over its knowledge at chat time; when empty,
   // it falls back to the full assembled context (legacy path).
   embeddingApiKey: string;
@@ -143,7 +143,7 @@ export function BotFactoryForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdBotId, setCreatedBotId] = useState<string | null>(null);
-  // Stage 7 §FR-002.10: bots are created in draft state; the preview token
+  // Bots are created in draft state; the preview token
   // returned from POST /api/bots powers the private preview URL on Step 5,
   // and the Publish button flips the live switch via POST /publish.
   const [previewToken, setPreviewToken] = useState<string | null>(null);
@@ -201,7 +201,7 @@ export function BotFactoryForm({
     setSubmitting(true);
     setError(null);
     try {
-      // Stash the BYO key in the (Phase 6) encrypted IndexedDB store BEFORE
+      // Stash the BYO key in the encrypted IndexedDB store BEFORE
       // the network call - so even if the server request hangs, the key is
       // captured locally for the chat UI.
       await setApiKey(form.apiKey);
@@ -213,7 +213,7 @@ export function BotFactoryForm({
           apiVersion: form.azureApiVersion || DEFAULT_AZURE_API_VERSION,
         });
       }
-      // Stage 3 RAG: persist the OpenAI embedding key (when supplied) so the
+      // RAG: persist the OpenAI embedding key (when supplied) so the
       // chat UI can attach it as `x-embedding-api-key` on every chat request.
       // Empty value clears any previously stored key.
       await setEmbeddingApiKey(form.embeddingApiKey);
@@ -542,13 +542,13 @@ function StepIdentity({
         <div>
           <label className="block text-xs font-semibold mb-1.5">Bot URL</label>
           <div className="flex items-center border border-border-base rounded-xl overflow-hidden bg-neutral-50">
-            <span className="pl-3 pr-1 text-sm text-muted">probot.com/u/</span>
+            <span className="pl-3 pr-1 text-sm text-muted">pro-bot.dev/u/</span>
             <span className="flex-1 py-2.5 pr-3 text-sm font-mono">
               {username}
             </span>
           </div>
           <p className="text-[11px] text-muted mt-1.5">
-            Slug comes from your username (Stage 1).
+            Slug comes from your username.
           </p>
         </div>
       </div>
@@ -1105,7 +1105,7 @@ function StepDeploy({
   publishing: boolean;
   onPublish: () => void;
 }) {
-  // Stage 4: build the real public URL from the current origin so localhost
+  // Build the real public URL from the current origin so localhost
   // dev, preview deploys, and prod all show the right share link.
   const origin =
     typeof window !== "undefined" && window.location.origin
@@ -1190,7 +1190,7 @@ function StepDeploy({
         ) : null}
 
         <div className="rounded-xl p-4 border border-border-base bg-neutral-50 opacity-60">
-          <p className="text-sm font-semibold">Embed code - Stage 5</p>
+          <p className="text-sm font-semibold">Embed code</p>
           <p className="text-xs text-muted mt-1">Lands with the widget.</p>
         </div>
       </div>

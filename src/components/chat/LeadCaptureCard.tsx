@@ -15,7 +15,7 @@ type Props = {
 
 const SAFE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Stage 6 §6.2: in-chat lead-capture card. Shown after the 3rd assistant
+// In-chat lead-capture card. Shown after the 3rd assistant
 // reply. Email validation mirrors the server-side Zod check; on Submit
 // POSTs to /api/bots/[botId]/leads with the conversationId (when
 // available) so the server can mark the conversation's recruiter_email

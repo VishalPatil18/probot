@@ -173,7 +173,7 @@ export default function SelfHostingPage() {
             Rate limiting is per-process. A scaled-out deployment with many
             concurrent serverless invocations will see per-instance counts. If
             that&apos;s a problem, swap <code>src/lib/ai/rate-limit.ts</code>{" "}
-            for an Upstash-Redis backed version (Stage 8).
+            for an Upstash-Redis backed version.
           </li>
           <li>
             The provider circuit breaker is also per-process. Same reasoning,

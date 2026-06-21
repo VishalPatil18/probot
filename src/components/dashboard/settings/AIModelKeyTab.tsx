@@ -14,7 +14,7 @@ type Props = {
   model: string | null;
 };
 
-// Stage 7 Phase 3 - the AI model & key tab is live.
+// The AI model & key tab is live.
 //
 // Three controls:
 //   1. Provider + model switcher (writes to users.llm_provider /
@@ -157,7 +157,7 @@ export function AIModelKeyTab({
         );
         return;
       }
-      // Mirror the key into the (Phase 6) encrypted IndexedDB store too so
+      // Mirror the key into the encrypted IndexedDB store too so
       // the creator's own dashboard test chat keeps working without
       // re-entry.
       await setApiKey(trimmed);

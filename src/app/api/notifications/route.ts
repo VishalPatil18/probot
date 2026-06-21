@@ -7,7 +7,7 @@ import { parsePagination } from "@/lib/pagination";
 
 // GET /api/notifications?unread=true&page=1&limit=20
 //
-// Stage 6 §6.6: paginated notification feed for the dashboard bell. The
+// Paginated notification feed for the dashboard bell. The
 // optional `?unread=true` filter narrows to unread rows so the bell-list
 // dropdown can cheaply show "what's new since I last looked." The slice-
 // 6.1 partial index `notifications_user_unread_idx` covers that query.

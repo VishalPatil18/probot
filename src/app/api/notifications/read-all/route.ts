@@ -6,7 +6,7 @@ import { db, notifications } from "@/lib/db";
 
 // POST /api/notifications/read-all
 //
-// Stage 6 §6.6: bulk-clear the bell badge. UPDATE every still-unread
+// Bulk-clear the bell badge. UPDATE every still-unread
 // notification for the user in one statement. Returns the count of rows
 // affected so the dashboard can pre-flip its local unread state without
 // a follow-up GET /unread-count round-trip.

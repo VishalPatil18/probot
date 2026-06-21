@@ -13,7 +13,7 @@ type Props = {
   onCancel: () => void;
 };
 
-// Stage 6 §6.7: design-system styled confirmation modal - replaces the
+// Design-system styled confirmation modal - replaces the
 // browser-native `window.confirm` so destructive actions (delete a
 // knowledge source, etc.) match the rest of the dashboard. ESC + outside-
 // click both fire `onCancel`. The confirm button auto-focuses for keyboard

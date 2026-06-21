@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { CompleteParams, CompleteResult, LLMProvider } from "./types";
 import { ProviderError } from "./types";
 
-// Stage 7 Phase 4: real Google Gemini adapter (replaces the Stage 1 stub).
+// Real Google Gemini adapter (replaces the earlier stub).
 //
 // The `@google/generative-ai` SDK doesn't ship a typed error class we can
 // instanceof-check (everything is `Error` with a `message` describing the
