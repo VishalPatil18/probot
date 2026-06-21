@@ -22,9 +22,7 @@ export type BotAnalytics = {
   leadsThisMonth: number;
 };
 
-export async function getAnalyticsForBot(
-  botId: string,
-): Promise<BotAnalytics> {
+export async function getAnalyticsForBot(botId: string): Promise<BotAnalytics> {
   const since = new Date(Date.now() - THIRTY_DAYS_MS);
 
   const [convoTotals, msgTotals, leadTotals] = await Promise.all([
@@ -38,10 +36,7 @@ export async function getAnalyticsForBot(
     db
       .select({ total: sql<number>`count(*)::int` })
       .from(messages)
-      .innerJoin(
-        conversations,
-        eq(messages.conversationId, conversations.id),
-      )
+      .innerJoin(conversations, eq(messages.conversationId, conversations.id))
       .where(eq(conversations.botId, botId)),
     db
       .select({
@@ -89,10 +84,7 @@ export async function getAnalyticsForUser(
     db
       .select({ total: sql<number>`count(*)::int` })
       .from(messages)
-      .innerJoin(
-        conversations,
-        eq(messages.conversationId, conversations.id),
-      )
+      .innerJoin(conversations, eq(messages.conversationId, conversations.id))
       .innerJoin(bots, eq(conversations.botId, bots.id))
       .where(eq(bots.userId, userId)),
     db
@@ -128,13 +120,10 @@ export async function getDailyConversationCounts(args: {
   days: number;
 }): Promise<DailyCount[]> {
   const { userId } = args;
-  // Clamp `days` defensively — a million-day request would generate a
+  // Clamp `days` defensively - a million-day request would generate a
   // million-row series in Postgres. The dashboard caller passes 7
   // today; the cap is generous (a year) while still bounded.
-  const days = Math.min(
-    MAX_DAILY_RANGE,
-    Math.max(1, Math.floor(args.days)),
-  );
+  const days = Math.min(MAX_DAILY_RANGE, Math.max(1, Math.floor(args.days)));
   // generate_series produces one row per day from N-days-ago to today,
   // and the left join attaches the conversation count for that day.
   // `COALESCE(count, 0)` ensures gap-free output.

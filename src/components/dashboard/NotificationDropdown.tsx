@@ -49,7 +49,11 @@ function relTime(iso: string): string {
 // navigate, and a "Mark all read" footer. Items are rendered with a
 // pre-denormalized payload (botName, email, contextSummary, etc.) so no
 // follow-up join queries are needed.
-export function NotificationDropdown({ onClose, onAllRead, onItemRead }: Props) {
+export function NotificationDropdown({
+  onClose,
+  onAllRead,
+  onItemRead,
+}: Props) {
   const router = useRouter();
   const [items, setItems] = useState<NotificationItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +95,7 @@ export function NotificationDropdown({ onClose, onAllRead, onItemRead }: Props) 
         method: "POST",
       });
       if (!res.ok) {
-        // Don't flip the local unread state on server failure — the next
+        // Don't flip the local unread state on server failure - the next
         // poll will reconcile. A flicker is worse than no-op here.
         setError("Couldn't clear notifications.");
         return;

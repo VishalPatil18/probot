@@ -4,7 +4,7 @@
 // screen before they reach the dashboard (otherwise public chat URLs would
 // look like `/u/user-abc12345/chat`).
 //
-// Single source of truth for "is this a placeholder?" — the dashboard
+// Single source of truth for "is this a placeholder?" - the dashboard
 // layout, the /onboarding page, and the onboarding PATCH route all call
 // this same predicate.
 

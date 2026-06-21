@@ -11,7 +11,7 @@ import { listLeads } from "@/lib/leads/queries";
 import { DEFAULT_LIMIT } from "@/lib/pagination";
 
 // Stage 6 §6.4: dashboard leads list page. Includes a "Export CSV" anchor
-// that points at the slice-6.2 export endpoint — same-origin, session
+// that points at the slice-6.2 export endpoint - same-origin, session
 // cookie carries auth, no JS needed.
 
 type Props = {
@@ -29,7 +29,7 @@ function fmtFull(d: Date): string {
   });
 }
 
-// Defense-in-depth — same as the conversation detail page. Emails are
+// Defense-in-depth - same as the conversation detail page. Emails are
 // already Zod-validated at lead capture, but a malformed value must not
 // flow into an href if the schema ever drifts.
 const SAFE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -77,7 +77,7 @@ export default async function LeadsListPage({ params, searchParams }: Props) {
         ) : null}
       </header>
 
-      {/* No CTA on the empty state — sidebar + dashboard home both
+      {/* No CTA on the empty state - sidebar + dashboard home both
           surface the public URL; a duplicate "Get your URL" button
           here would point at the now-redirected bot detail route. */}
       {items.length === 0 ? (
@@ -110,7 +110,9 @@ export default async function LeadsListPage({ params, searchParams }: Props) {
                     );
                   })()}
                   {l.contextSummary ? (
-                    <p className="mt-2 text-sm text-muted">{l.contextSummary}</p>
+                    <p className="mt-2 text-sm text-muted">
+                      {l.contextSummary}
+                    </p>
                   ) : null}
                   {l.conversationId ? (
                     <Link

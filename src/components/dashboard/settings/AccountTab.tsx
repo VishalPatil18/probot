@@ -7,7 +7,7 @@ type Props = {
   initials: string;
 };
 
-// Slice B — Account tab. Slice 6.5 only edits bot-scoped fields; user-
+// Slice B - Account tab. Slice 6.5 only edits bot-scoped fields; user-
 // scoped account editing (name / email / username / password / photo
 // upload) lands in Stage 7 when we wire the corresponding endpoints.
 // Inputs render as read-only displays of the current values with
@@ -36,8 +36,8 @@ export function AccountTab({ name, email, username, initials }: Props) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <ReadOnlyField label="Full name" value={name || "—"} />
-          <ReadOnlyField label="Email" value={email || "—"} />
+          <ReadOnlyField label="Full name" value={name || "-"} />
+          <ReadOnlyField label="Email" value={email || "-"} />
           <div className="sm:col-span-2">
             <label className="mb-1.5 block text-xs font-semibold">
               Username

@@ -12,7 +12,7 @@ import { bots, db } from "@/lib/db";
 // own. Redirect to the settings page's Bot configuration tab so any
 // existing bookmarks still land somewhere useful.
 //
-// Ownership is enforced first — non-owners get 404 (not 403) to avoid
+// Ownership is enforced first - non-owners get 404 (not 403) to avoid
 // leaking the existence of arbitrary bot IDs.
 export default async function BotDetailRedirect({
   params,

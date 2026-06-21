@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  ANIMAL_AVATARS,
-  isAllowedAvatar,
-  pickDefaultAvatar,
-} from "./avatars";
+import { ANIMAL_AVATARS, isAllowedAvatar, pickDefaultAvatar } from "./avatars";
 
 describe("ANIMAL_AVATARS", () => {
   it("has 13 curated entries (Cloudinary URLs)", () => {
@@ -25,7 +21,7 @@ describe("pickDefaultAvatar", () => {
     expect(ANIMAL_AVATARS).toContain(url);
   });
 
-  it("is deterministic — same seed always returns the same URL", () => {
+  it("is deterministic - same seed always returns the same URL", () => {
     expect(pickDefaultAvatar("jane-doe")).toBe(pickDefaultAvatar("jane-doe"));
     expect(pickDefaultAvatar("user-abcdef12")).toBe(
       pickDefaultAvatar("user-abcdef12"),

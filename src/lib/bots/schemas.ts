@@ -23,6 +23,18 @@ export const CONTEXT_TOKEN_CAP_MIN = 1_000;
 export const CONTEXT_TOKEN_CAP_MAX = 100_000;
 export const CONTEXT_TOKEN_CAP_DEFAULT = 12_000;
 
+// Stage 7 §FR-002.7: custom instructions cap. Aligned with the architecture
+// blueprint; tighter caps can land later without a migration since the column
+// is `text` (no DB-level length constraint).
+export const CUSTOM_INSTRUCTIONS_MAX = 2000;
+
+// Stage 7 §FR-010.9: per-bot rate-limit ceilings. Hard caps prevent a creator
+// from setting absurd values that would effectively disable abuse protection.
+// The rate-limit module enforces these too (defence in depth).
+export const RATE_LIMIT_PER_MINUTE_MAX = 100;
+export const RATE_LIMIT_PER_DAY_MAX = 5_000;
+export const RATE_LIMIT_MAX_CHARS_MAX = 32_000;
+
 export const botInput = z.object({
   name: nonEmptyTrimmed.pipe(z.string().max(100, "Name must be ≤ 100 chars")),
   headline: z.string().max(120, "Headline must be ≤ 120 chars").optional(),
@@ -48,6 +60,14 @@ export const botInput = z.object({
   // Stage 5: per-bot widget/badge color. Optional on create so existing
   // forms don't break; the DB default '#7c5cff' takes over when absent.
   themeColor: themeColorSchema.optional(),
+  // Stage 7 §FR-002.7: optional free-form additions to the system prompt.
+  customInstructions: z
+    .string()
+    .max(
+      CUSTOM_INSTRUCTIONS_MAX,
+      `Custom instructions must be ≤ ${CUSTOM_INSTRUCTIONS_MAX} chars`,
+    )
+    .optional(),
 });
 
 export type BotInput = z.infer<typeof botInput>;
@@ -75,7 +95,7 @@ export const botPatchInput = z
       .max(120, "Headline must be ≤ 120 chars")
       // Trim at parse time so a hostile / sloppy client can't store
       // whitespace-only padding that renders as a blank-looking headline
-      // in the chat UI. After trim, the empty string is still valid —
+      // in the chat UI. After trim, the empty string is still valid -
       // it's the way the UI signals "clear the headline".
       .transform((v) => v.trim())
       .optional(),
@@ -91,6 +111,40 @@ export const botPatchInput = z
     // can flip the bit.
     isActive: z.boolean().optional(),
     themeColor: themeColorSchema.optional(),
+    // Stage 7 §FR-002.7: dashboard editor for the prompt addendum. The
+    // empty string is a legitimate "clear it" signal; we transform to
+    // `null` at the route layer so the DB column flips back to NULL
+    // rather than storing an empty string.
+    customInstructions: z
+      .string()
+      .max(
+        CUSTOM_INSTRUCTIONS_MAX,
+        `Custom instructions must be ≤ ${CUSTOM_INSTRUCTIONS_MAX} chars`,
+      )
+      .optional(),
+    // Stage 7 §FR-010.9: per-bot rate-limit overrides. `null` clears the
+    // column (revert to env default); a positive integer takes precedence.
+    rateLimitPerMinute: z
+      .number()
+      .int()
+      .min(1)
+      .max(RATE_LIMIT_PER_MINUTE_MAX)
+      .nullable()
+      .optional(),
+    rateLimitPerDay: z
+      .number()
+      .int()
+      .min(1)
+      .max(RATE_LIMIT_PER_DAY_MAX)
+      .nullable()
+      .optional(),
+    rateLimitMaxChars: z
+      .number()
+      .int()
+      .min(100)
+      .max(RATE_LIMIT_MAX_CHARS_MAX)
+      .nullable()
+      .optional(),
   })
   .refine(
     (value) => Object.values(value).some((v) => v !== undefined),

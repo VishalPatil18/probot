@@ -105,7 +105,7 @@ describe("PATCH /api/bots/[botId]", () => {
     expect(res.status).toBe(200);
     // Only themeColor was passed to the UPDATE SET. `isActive` is now a
     // legitimately whitelisted field (Slice B status toggle) so it's
-    // omitted from this regression — see the dedicated isActive spec.
+    // omitted from this regression - see the dedicated isActive spec.
     const setArg = updateSetMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(setArg).toEqual({ themeColor: "#ff00aa" });
     expect(setArg).not.toHaveProperty("userId");
@@ -152,10 +152,7 @@ describe("PATCH /api/bots/[botId]", () => {
   });
 
   it("rejects an invalid personality value", async () => {
-    const res = await PATCH(
-      makeRequest({ personality: "snarky" }),
-      PARAMS,
-    );
+    const res = await PATCH(makeRequest({ personality: "snarky" }), PARAMS);
     expect(res.status).toBe(400);
   });
 

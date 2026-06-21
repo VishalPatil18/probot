@@ -33,9 +33,9 @@ type Props = {
   llmModel: string | null;
 };
 
-const EMBED_GUIDE_URL = "https://docs.probot.dev/guides/embed-widget";
+const EMBED_GUIDE_URL = "https://docs.pro-bot.dev/guides/embed-widget";
 
-// Sidebar — server component used by every (dashboard) page. Active
+// Sidebar - server component used by every (dashboard) page. Active
 // nav highlight is computed inside SidebarNavLink via usePathname(),
 // so the server layout doesn't need to thread the current path here.
 //
@@ -57,10 +57,7 @@ export function Sidebar({
           row and the topbar's title row align horizontally across the
           two columns. */}
       <div className="flex h-16 shrink-0 items-center border-b border-border-base px-4">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-2.5 px-2 py-1"
-        >
+        <Link href="/dashboard" className="flex items-center gap-2.5 px-2 py-1">
           <svg
             aria-hidden
             width="28"
@@ -91,11 +88,7 @@ export function Sidebar({
 
       <nav className="thin-scroll flex-1 space-y-1 overflow-y-auto px-3">
         <SidebarSection title="Workspace" />
-        <SidebarNavLink
-          href="/dashboard"
-          icon="dashboard"
-          label="Dashboard"
-        />
+        <SidebarNavLink href="/dashboard" icon="dashboard" label="Dashboard" />
         <SidebarNavLink
           href={
             selectedBotId
@@ -104,7 +97,9 @@ export function Sidebar({
           }
           icon="forum"
           label="Conversations"
-          rightBadge={counts.conversations > 0 ? formatCount(counts.conversations) : null}
+          rightBadge={
+            counts.conversations > 0 ? formatCount(counts.conversations) : null
+          }
         />
         <SidebarNavLink
           href={

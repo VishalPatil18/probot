@@ -8,6 +8,7 @@ import {
   CONTEXT_TOKEN_CAP_DEFAULT,
   CONTEXT_TOKEN_CAP_MAX,
   CONTEXT_TOKEN_CAP_MIN,
+  CUSTOM_INSTRUCTIONS_MAX,
   PERSONALITY_PRESETS,
   type Personality,
 } from "@/lib/bots/schemas";
@@ -40,12 +41,14 @@ const MODEL_OPTIONS: Record<ProviderName, string[]> = {
   azure: [],
 };
 
-// Stage 1: anthropic, openai, and azure ship real adapters.
-// google renders disabled with a "SOON" badge.
+// Stage 7 Phase 4: all four providers ship real adapters now. The Set is
+// kept (rather than dropped) so a future "experimental" / "beta" gate has
+// a single place to live without rewiring the JSX.
 const STAGE1_ENABLED: ReadonlySet<ProviderName> = new Set([
   "anthropic",
   "openai",
   "azure",
+  "google",
 ]);
 
 const PERSONALITY_LABELS: Record<
@@ -65,6 +68,7 @@ type InitialBot = {
   contextText: string;
   contextTokenCap?: number;
   suggestedQuestions: string[] | null;
+  customInstructions?: string | null;
 };
 
 type Props = {
@@ -84,6 +88,8 @@ type FormState = {
   pdfFiles: File[];
   contextTokenCap: number;
   suggestedQuestions: string[];
+  // Stage 7 §FR-002.7: optional free-form prompt addendum captured on Step 3.
+  customInstructions: string;
   llmProvider: ProviderName;
   llmModel: string;
   apiKey: string;
@@ -125,6 +131,7 @@ export function BotFactoryForm({
     pdfFiles: [],
     contextTokenCap: initialBot?.contextTokenCap ?? CONTEXT_TOKEN_CAP_DEFAULT,
     suggestedQuestions: initialBot?.suggestedQuestions ?? [],
+    customInstructions: initialBot?.customInstructions ?? "",
     llmProvider: initialProvider,
     llmModel: initialModel,
     apiKey: "",
@@ -136,6 +143,12 @@ export function BotFactoryForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdBotId, setCreatedBotId] = useState<string | null>(null);
+  // Stage 7 §FR-002.10: bots are created in draft state; the preview token
+  // returned from POST /api/bots powers the private preview URL on Step 5,
+  // and the Publish button flips the live switch via POST /publish.
+  const [previewToken, setPreviewToken] = useState<string | null>(null);
+  const [published, setPublished] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -188,13 +201,14 @@ export function BotFactoryForm({
     setSubmitting(true);
     setError(null);
     try {
-      // Stash the BYO key in localStorage BEFORE the network call - so even if
-      // the server request hangs, the key is captured locally for the chat UI.
-      setApiKey(form.apiKey);
+      // Stash the BYO key in the (Phase 6) encrypted IndexedDB store BEFORE
+      // the network call - so even if the server request hangs, the key is
+      // captured locally for the chat UI.
+      await setApiKey(form.apiKey);
       // Azure needs endpoint + apiVersion alongside the key. Store separately
       // so switching providers doesn't wipe the other provider's key.
       if (form.llmProvider === "azure") {
-        setAzureCreds({
+        await setAzureCreds({
           endpoint: form.azureEndpoint,
           apiVersion: form.azureApiVersion || DEFAULT_AZURE_API_VERSION,
         });
@@ -202,7 +216,7 @@ export function BotFactoryForm({
       // Stage 3 RAG: persist the OpenAI embedding key (when supplied) so the
       // chat UI can attach it as `x-embedding-api-key` on every chat request.
       // Empty value clears any previously stored key.
-      setEmbeddingApiKey(form.embeddingApiKey);
+      await setEmbeddingApiKey(form.embeddingApiKey);
 
       const res = await fetch("/api/bots", {
         method: "POST",
@@ -216,6 +230,9 @@ export function BotFactoryForm({
           suggestedQuestions: form.suggestedQuestions,
           llmProvider: form.llmProvider,
           llmModel: form.llmModel,
+          ...(form.customInstructions.trim().length > 0
+            ? { customInstructions: form.customInstructions.trim() }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -225,7 +242,15 @@ export function BotFactoryForm({
         setError(body.error ?? "Could not save your bot. Try again.");
         return;
       }
-      const body = (await res.json()) as { bot: { id: string } };
+      const body = (await res.json()) as {
+        bot: {
+          id: string;
+          isActive?: boolean;
+          previewToken?: string | null;
+        };
+      };
+      setPreviewToken(body.bot.previewToken ?? null);
+      setPublished(body.bot.isActive ?? false);
 
       // If PDFs were queued, upload them now that the bot row exists. The
       // server reassembles `context_text` from all sources, so the manual
@@ -284,6 +309,29 @@ export function BotFactoryForm({
     if (step > 1) setStep(step - 1);
   }
 
+  async function publish() {
+    if (!createdBotId || publishing) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/bots/${createdBotId}/publish`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setError(body.error ?? "Could not publish your bot. Try again.");
+        return;
+      }
+      setPublished(true);
+    } catch {
+      setError("Network error. Check your connection and try again.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   return (
     // Desktop: fill the layout's main column (which is itself
     // `calc(100vh - 4rem)`) and hide overflow so the page itself never
@@ -293,7 +341,7 @@ export function BotFactoryForm({
     <div className="flex flex-col lg:h-full lg:overflow-hidden">
       <StepperHeader step={step} />
 
-      {/* `lg:min-h-0` is critical — flex children default to
+      {/* `lg:min-h-0` is critical - flex children default to
           `min-height: auto`, which prevents them from shrinking below
           their content. Setting `min-h-0` lets the grid actually
           consume `flex-1` so the inner columns' `overflow-y-auto`
@@ -323,7 +371,14 @@ export function BotFactoryForm({
               />
             )}
             {step === 5 && (
-              <StepDeploy username={username} createdBotId={createdBotId} />
+              <StepDeploy
+                username={username}
+                createdBotId={createdBotId}
+                previewToken={previewToken}
+                published={published}
+                publishing={publishing}
+                onPublish={publish}
+              />
             )}
 
             {error && (
@@ -363,8 +418,8 @@ export function BotFactoryForm({
 
 function nextLabel(step: number, submitting: boolean): string {
   if (submitting) return "Saving…";
-  if (step === 4) return "Save & deploy";
-  if (step === 5) return "Preview bot →";
+  if (step === 4) return "Save as draft";
+  if (step === 5) return "Open chat →";
   return "Continue →";
 }
 
@@ -374,10 +429,10 @@ function StepperHeader({ step }: { step: number }) {
   const labels = ["Identity", "Knowledge", "Personality", "AI Model", "Deploy"];
   // Mobile: `sticky top-16` so the strip stays visible just under the
   // dashboard topbar while the document scrolls.
-  // Desktop: `lg:static` — the parent BotFactory wrapper is fixed-height
+  // Desktop: `lg:static` - the parent BotFactory wrapper is fixed-height
   // and doesn't scroll, so sticky has nothing to do; the strip simply
   // sits as the first flex child above the scrolling grid columns.
-  // ProBot branding lives in the sidebar — no need to duplicate it here.
+  // ProBot branding lives in the sidebar - no need to duplicate it here.
   return (
     <header className="bg-white border-b border-border-base sticky top-16 z-20 lg:static lg:z-auto shrink-0">
       <div className="px-6 h-14 flex items-center max-w-[1280px] mx-auto w-full">
@@ -714,9 +769,9 @@ function StepKnowledge({
               />
               <p className="text-[11px] text-muted">
                 When provided, your knowledge is embedded with OpenAI and the
-                bot uses semantic search at chat time for more accurate
-                answers. Stored in your browser only, never on our servers.
-                Leave blank to use full-context (default).
+                bot uses semantic search at chat time for more accurate answers.
+                Stored in your browser only, never on our servers. Leave blank
+                to use full-context (default).
               </p>
             </div>
           )}
@@ -782,12 +837,28 @@ function StepPersonality({
           </div>
         </div>
 
-        <div className="rounded-xl p-4 border border-border-base bg-neutral-50 opacity-60">
-          <p className="text-sm font-semibold">
-            Theme color & custom instructions - Stage 7
-          </p>
-          <p className="text-xs text-muted mt-1">
-            Lands with the settings page.
+        <div>
+          <label
+            htmlFor="bf-custom-instructions"
+            className="block text-xs font-semibold mb-1.5"
+          >
+            Custom instructions{" "}
+            <span className="text-muted font-normal">
+              · optional, max {CUSTOM_INSTRUCTIONS_MAX.toLocaleString()} chars
+            </span>
+          </label>
+          <textarea
+            id="bf-custom-instructions"
+            rows={3}
+            value={form.customInstructions}
+            onChange={(e) => patch("customInstructions", e.target.value)}
+            maxLength={CUSTOM_INSTRUCTIONS_MAX}
+            placeholder="Always be honest about what's in my data; if unsure, point recruiters to email me directly."
+            className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand resize-none"
+          />
+          <p className="text-[11px] text-muted mt-1.5">
+            Added to the system prompt below personality. Safety rules still
+            win. You can edit this later in settings.
           </p>
         </div>
 
@@ -1022,43 +1093,102 @@ function StepAIModel({
 function StepDeploy({
   username,
   createdBotId,
+  previewToken,
+  published,
+  publishing,
+  onPublish,
 }: {
   username: string;
   createdBotId: string | null;
+  previewToken: string | null;
+  published: boolean;
+  publishing: boolean;
+  onPublish: () => void;
 }) {
   // Stage 4: build the real public URL from the current origin so localhost
   // dev, preview deploys, and prod all show the right share link.
   const origin =
     typeof window !== "undefined" && window.location.origin
       ? window.location.origin
-      : "https://probot.dev";
-  const url = `${origin}/u/${username}/chat`;
+      : "https://pro-bot.dev";
+  const publicUrl = `${origin}/u/${username}/chat`;
+  const previewUrl = previewToken
+    ? `${publicUrl}?preview=${encodeURIComponent(previewToken)}`
+    : null;
   return (
     <section>
       <StepHeading
         step={5}
-        title="Ready to deploy 🚀"
-        subtitle="Your bot is saved. Share the link below."
+        title={published ? "Bot is live 🚀" : "Preview before you publish"}
+        subtitle={
+          published
+            ? "Your bot is published and the public link is live."
+            : "Try your bot privately. Recruiters can't reach the public URL until you publish."
+        }
       />
       <div className="space-y-5">
         {createdBotId && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-success/10 border border-success/20">
-            <span aria-hidden>✓</span>
+          <div
+            className={`flex items-center gap-3 p-4 rounded-xl border ${
+              published
+                ? "bg-success/10 border-success/20"
+                : "bg-amber-50 border-amber-200"
+            }`}
+          >
+            <span aria-hidden>{published ? "✓" : "✎"}</span>
             <div>
-              <p className="text-sm font-bold">Bot saved</p>
-              <p className="text-xs text-muted">Bot id: {createdBotId}</p>
+              <p className="text-sm font-bold">
+                {published ? "Bot published" : "Bot saved as draft"}
+              </p>
+              <p className="text-xs text-muted">
+                {published
+                  ? "Anyone with the link below can chat with your bot."
+                  : "Publishing flips the public link on. You can republish or unpublish anytime from settings."}
+              </p>
             </div>
           </div>
         )}
-        <div>
-          <label className="text-[11px] font-bold text-muted uppercase tracking-wider">
-            Your bot link
-          </label>
-          <div className="flex items-center gap-2 mt-1.5 border border-border-base rounded-xl px-3 py-2.5 bg-white">
-            <span className="text-sm font-mono flex-1 truncate">{url}</span>
-            <CopyUrlButton url={url} />
+
+        {!published && previewUrl ? (
+          <div>
+            <label className="text-[11px] font-bold text-muted uppercase tracking-wider">
+              Private preview link
+            </label>
+            <div className="flex items-center gap-2 mt-1.5 border border-amber-200 rounded-xl px-3 py-2.5 bg-amber-50">
+              <span className="text-sm font-mono flex-1 truncate">
+                {previewUrl}
+              </span>
+              <CopyUrlButton url={previewUrl} />
+            </div>
+            <p className="text-[11px] text-muted mt-1.5">
+              Token-signed; only people you share this link with can chat with
+              the draft.
+            </p>
+            <button
+              type="button"
+              onClick={onPublish}
+              disabled={publishing}
+              className="btn btn-primary mt-4 disabled:opacity-60"
+            >
+              {publishing ? "Publishing…" : "Publish bot"}
+            </button>
           </div>
-        </div>
+        ) : null}
+
+        {published ? (
+          <div>
+            <label className="text-[11px] font-bold text-muted uppercase tracking-wider">
+              Your bot link
+            </label>
+            <div className="flex items-center gap-2 mt-1.5 border border-border-base rounded-xl px-3 py-2.5 bg-white">
+              <span className="text-sm font-mono flex-1 truncate">
+                {publicUrl}
+              </span>
+              <CopyUrlButton url={publicUrl} />
+            </div>
+          </div>
+        ) : null}
+
         <div className="rounded-xl p-4 border border-border-base bg-neutral-50 opacity-60">
           <p className="text-sm font-semibold">Embed code - Stage 5</p>
           <p className="text-xs text-muted mt-1">Lands with the widget.</p>
@@ -1077,7 +1207,7 @@ function LivePreview({ form }: { form: FormState }) {
   }, [form.name]);
 
   return (
-    // `lg:overflow-y-auto` — internal scroll if the preview card ever
+    // `lg:overflow-y-auto` - internal scroll if the preview card ever
     // grows past the column's available height (Bot Factory wrapper is
     // fixed at `lg:h-full`, so each grid column gets its own scroll).
     <div className="hidden lg:flex border-l border-border-base bg-white flex-col items-center justify-center p-8 lg:overflow-y-auto">

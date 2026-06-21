@@ -50,7 +50,9 @@ describe("LeadCaptureCard", () => {
     if (!form) throw new Error("form not found");
     fireEvent.submit(form);
     expect(await screen.findByRole("alert")).toHaveTextContent(/valid email/i);
-    expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls,
+    ).toHaveLength(0);
   });
 
   it("POSTs to /api/bots/:botId/leads with email + conversationId + contextSummary on valid submit", async () => {
@@ -63,10 +65,8 @@ describe("LeadCaptureCard", () => {
     await user.click(screen.getByRole("button", { name: /submit/i }));
 
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
-      string,
-      RequestInit,
-    ];
+    const [url, init] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0] as [string, RequestInit];
     expect(url).toBe(`/api/bots/${BOT_ID}/leads`);
     const body = JSON.parse(init.body as string) as Record<string, string>;
     expect(body.email).toBe("rec@example.com");
@@ -104,8 +104,10 @@ describe("LeadCaptureCard", () => {
     render(<LeadCaptureCard {...baseProps} />);
     await user.type(screen.getByLabelText(/email/i), "rec@example.com");
     await user.click(screen.getByRole("button", { name: /submit/i }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/something went wrong/i);
-    // Form stays in 'prompt' state — Submit is enabled again
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /something went wrong/i,
+    );
+    // Form stays in 'prompt' state - Submit is enabled again
     expect(screen.getByRole("button", { name: /submit/i })).not.toBeDisabled();
   });
 
@@ -117,7 +119,8 @@ describe("LeadCaptureCard", () => {
     render(<LeadCaptureCard {...baseProps} conversationId={null} />);
     await user.type(screen.getByLabelText(/email/i), "rec@example.com");
     await user.click(screen.getByRole("button", { name: /submit/i }));
-    const init = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as RequestInit;
+    const init = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as RequestInit;
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.conversationId).toBeUndefined();
   });

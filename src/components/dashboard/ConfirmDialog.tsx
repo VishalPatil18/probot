@@ -13,7 +13,7 @@ type Props = {
   onCancel: () => void;
 };
 
-// Stage 6 §6.7: design-system styled confirmation modal — replaces the
+// Stage 6 §6.7: design-system styled confirmation modal - replaces the
 // browser-native `window.confirm` so destructive actions (delete a
 // knowledge source, etc.) match the rest of the dashboard. ESC + outside-
 // click both fire `onCancel`. The confirm button auto-focuses for keyboard
@@ -56,7 +56,7 @@ export function ConfirmDialog({
         // backdrop (the click event requires this by spec). Using
         // `mousedown` instead would close the dialog if a user
         // accidentally drag-released from inside the panel onto the
-        // backdrop — a real usability hazard.
+        // backdrop - a real usability hazard.
         if (e.target === e.currentTarget) onCancel();
       }}
     >
@@ -67,9 +67,7 @@ export function ConfirmDialog({
         >
           {title}
         </h2>
-        {body ? (
-          <p className="mt-2 text-sm text-muted">{body}</p>
-        ) : null}
+        {body ? <p className="mt-2 text-sm text-muted">{body}</p> : null}
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"

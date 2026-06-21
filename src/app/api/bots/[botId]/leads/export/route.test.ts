@@ -128,7 +128,7 @@ describe("GET /api/bots/[botId]/leads/export", () => {
     const res = await GET(new Request("http://localhost/"), PARAMS);
     const disposition = res.headers.get("Content-Disposition") ?? "";
     // ASCII fallback `filename="..."` must not contain `\` or unescaped `"`
-    // — the only `"` chars allowed are the wrapping ones around each value.
+    // - the only `"` chars allowed are the wrapping ones around each value.
     expect(disposition).not.toContain("\\");
     expect(disposition).toMatch(
       /filename="leads-[A-Za-z0-9._-]+-\d{4}-\d{2}-\d{2}\.csv"/,

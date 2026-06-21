@@ -19,7 +19,7 @@ const PAD_BOTTOM = 32; // room for day labels
 function dayLabel(date: string, idx: number, total: number): string {
   // Highlight today (last point) as "Today"; everything else shows the
   // short weekday name. `date` is a YYYY-MM-DD string from the server
-  // query — parse it explicitly so timezones don't drift the weekday.
+  // query - parse it explicitly so timezones don't drift the weekday.
   if (idx === total - 1) return "Today";
   const [y, m, d] = date.split("-").map(Number);
   if (!y || !m || !d) return "";
@@ -89,8 +89,16 @@ export function ConversationsLineChart({ data }: Props) {
       >
         <defs>
           <linearGradient id="convo-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="oklch(0.55 0.193 251.78)" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="oklch(0.55 0.193 251.78)" stopOpacity="0" />
+            <stop
+              offset="0%"
+              stopColor="oklch(0.55 0.193 251.78)"
+              stopOpacity="0.25"
+            />
+            <stop
+              offset="100%"
+              stopColor="oklch(0.55 0.193 251.78)"
+              stopOpacity="0"
+            />
           </linearGradient>
         </defs>
 

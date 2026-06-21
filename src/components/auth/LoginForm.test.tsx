@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
     push: pushMock,
     refresh: refreshMock,
   }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("next-auth/react", () => ({

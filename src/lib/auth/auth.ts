@@ -102,6 +102,14 @@ export const authOptions: NextAuthOptions = {
         const ok = await verifyPassword(password, user.hashedPassword);
         if (!ok) return null;
 
+        // Stage 7 §FR-001.5: block credentials login until the user has
+        // clicked the verification link. Throwing a sentinel string here is
+        // the documented NextAuth way to surface a custom error code to the
+        // sign-in page (`?error=email_not_verified`).
+        if (!user.emailVerified) {
+          throw new Error("email_not_verified");
+        }
+
         return {
           id: user.id,
           username: user.username,
@@ -118,12 +126,10 @@ export const authOptions: NextAuthOptions = {
     GitHubProvider({
       clientId: process.env.GITHUB_CLIENT_ID ?? "",
       clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
-      allowDangerousEmailAccountLinking: true,
     }),
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-      allowDangerousEmailAccountLinking: true,
     }),
   ],
   callbacks: {
@@ -137,7 +143,7 @@ export const authOptions: NextAuthOptions = {
       // this, OAuth/magic-link users land in a redirect loop: dashboard
       // layout sees the stale "user-<8hex>" placeholder and bounces them
       // back to /onboarding. The cost is one DB query per authenticated
-      // request — acceptable here and easy to cache later.
+      // request - acceptable here and easy to cache later.
       if (token.id) {
         const row = await db.query.users.findFirst({
           where: eq(users.id, token.id),

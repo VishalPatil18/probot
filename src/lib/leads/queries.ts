@@ -5,7 +5,7 @@ import { bots, db, leads } from "@/lib/db";
 // Stage 6 shared lead queries. Called by both the slice-6.2 API routes
 // (paginated list + CSV export) and the slice-6.3 RSC dashboard pages.
 //
-// **Caller contract — tenancy is the caller's responsibility.** These
+// **Caller contract - tenancy is the caller's responsibility.** These
 // functions take a `botId` and trust the caller has already verified the
 // session user owns it (via `requireBotOwner` in API routes, or
 // `findFirst({ where: and(eq(bots.id), eq(bots.userId, ...)) })` in
@@ -31,9 +31,7 @@ export type ListLeadsArgs = {
   offset: number;
 };
 
-export async function listLeads(
-  args: ListLeadsArgs,
-): Promise<LeadListResult> {
+export async function listLeads(args: ListLeadsArgs): Promise<LeadListResult> {
   const { botId, limit, offset } = args;
 
   const [rows, totalRows] = await Promise.all([
@@ -59,7 +57,7 @@ export async function listLeads(
   return { items: rows, total: totalRows[0]?.total ?? 0 };
 }
 
-// Hard ceiling on the CSV export — 50K rows is well above any realistic
+// Hard ceiling on the CSV export - 50K rows is well above any realistic
 // per-bot lead count and bounds the response size at ~10 MB worst case.
 // A future Stage 7 streaming endpoint can lift this; for now we trade
 // completeness against DoS risk.
@@ -89,7 +87,7 @@ export async function listAllLeadsForExport(args: {
 }
 
 // Cross-bot lead feed for the dashboard home (Slice A redesign).
-// Joins through `bots` so the user_id filter is the trust boundary —
+// Joins through `bots` so the user_id filter is the trust boundary -
 // every lead returned is owned by the requesting user.
 export type UserLeadRow = {
   id: string;

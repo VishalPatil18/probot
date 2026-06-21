@@ -22,6 +22,20 @@ vi.mock("@/lib/db", () => ({
     username: "username-col",
     email: "email-col",
   } as Record<string, unknown>,
+  emailVerificationTokens: {} as Record<string, unknown>,
+}));
+
+const createVerificationTokenMock = vi.fn();
+const sendEmailVerificationEmailMock = vi.fn();
+
+vi.mock("@/lib/auth/email-verification", () => ({
+  createVerificationToken: (...args: unknown[]) =>
+    createVerificationTokenMock(...args),
+}));
+
+vi.mock("@/lib/auth/email", () => ({
+  sendEmailVerificationEmail: (...args: unknown[]) =>
+    sendEmailVerificationEmailMock(...args),
 }));
 
 import { POST } from "./route";
@@ -40,12 +54,19 @@ describe("POST /api/auth/register", () => {
     insertMock.mockClear();
     valuesMock.mockClear();
     returningMock.mockReset();
+    createVerificationTokenMock.mockReset();
+    sendEmailVerificationEmailMock.mockReset();
 
     insertMock.mockReturnValue({ values: valuesMock });
     valuesMock.mockReturnValue({ returning: returningMock });
+    createVerificationTokenMock.mockResolvedValue({
+      rawToken: "fake-raw-token-fake-raw-token-fake",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+    sendEmailVerificationEmailMock.mockResolvedValue(undefined);
   });
 
-  it("creates a user on valid input and returns 201", async () => {
+  it("creates a user, mints a verification token, and returns 201", async () => {
     findFirstMock.mockResolvedValueOnce(undefined);
     returningMock.mockResolvedValueOnce([
       { id: "new-id", username: "jane-doe", email: "jane@example.com" },
@@ -62,13 +83,19 @@ describe("POST /api/auth/register", () => {
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
       user: { id: string; username: string; email: string };
+      verificationEmailSent: boolean;
     };
     expect(body.user).toEqual({
       id: "new-id",
       username: "jane-doe",
       email: "jane@example.com",
     });
-    expect(valuesMock).toHaveBeenCalledTimes(1);
+    expect(body.verificationEmailSent).toBe(true);
+    expect(createVerificationTokenMock).toHaveBeenCalledWith("new-id");
+    expect(sendEmailVerificationEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "jane@example.com" }),
+    );
+
     const insertedRow = valuesMock.mock.calls[0]?.[0] as {
       username: string;
       email: string;
@@ -79,6 +106,26 @@ describe("POST /api/auth/register", () => {
     // hashedPassword should be a bcrypt hash, never the plaintext
     expect(insertedRow.hashedPassword).toMatch(/^\$2[aby]\$10\$/);
     expect(insertedRow.hashedPassword).not.toBe("hunter2hunter");
+  });
+
+  it("returns 201 with verificationEmailSent=false when the email send fails", async () => {
+    findFirstMock.mockResolvedValueOnce(undefined);
+    returningMock.mockResolvedValueOnce([
+      { id: "new-id", username: "jane-doe", email: "jane@example.com" },
+    ]);
+    sendEmailVerificationEmailMock.mockRejectedValueOnce(new Error("smtp dead"));
+
+    const res = await POST(
+      makeRequest({
+        username: "jane-doe",
+        email: "jane@example.com",
+        password: "hunter2hunter",
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { verificationEmailSent: boolean };
+    expect(body.verificationEmailSent).toBe(false);
   });
 
   it("returns 409 when the email is already taken", async () => {
@@ -99,6 +146,7 @@ describe("POST /api/auth/register", () => {
     const body = (await res.json()) as { error: string };
     expect(body.error).toMatch(/email/i);
     expect(insertMock).not.toHaveBeenCalled();
+    expect(createVerificationTokenMock).not.toHaveBeenCalled();
   });
 
   it("returns 409 when the username is already taken", async () => {

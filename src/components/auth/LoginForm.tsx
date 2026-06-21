@@ -1,18 +1,57 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
 import { OAuthRow } from "./OAuthRow";
 
+// Banner copy keyed by ?verify= and ?reset= query params set by the
+// verify-email API redirect and the reset-password success redirect. Kept
+// next to the form so a future copy change touches one place.
+const VERIFY_MESSAGES: Record<string, { tone: "ok" | "warn"; text: string }> = {
+  ok: {
+    tone: "ok",
+    text: "Email verified. You can sign in now.",
+  },
+  expired: {
+    tone: "warn",
+    text: "That verification link expired. Register again or request a new email.",
+  },
+  invalid: {
+    tone: "warn",
+    text: "That verification link is invalid or already used.",
+  },
+};
+
+const NEXTAUTH_ERROR_MESSAGES: Record<string, string> = {
+  email_not_verified:
+    "Please verify your email before signing in. Check your inbox for the verification link.",
+  CredentialsSignin: "Invalid email or password.",
+};
+
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const verifyCode = searchParams.get("verify") ?? "";
+  const resetCode = searchParams.get("reset") ?? "";
+  const initialError = searchParams.get("error") ?? "";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    initialError && NEXTAUTH_ERROR_MESSAGES[initialError]
+      ? NEXTAUTH_ERROR_MESSAGES[initialError]!
+      : null,
+  );
   const [loading, setLoading] = useState(false);
+
+  const verifyBanner = VERIFY_MESSAGES[verifyCode];
+  const resetBanner =
+    resetCode === "ok"
+      ? "Password updated. Sign in with your new password."
+      : null;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,7 +64,10 @@ export function LoginForm() {
     });
     setLoading(false);
     if (!result || result.error) {
-      setError("Invalid email or password.");
+      const code = result?.error ?? "";
+      setError(
+        NEXTAUTH_ERROR_MESSAGES[code] ?? "Invalid email or password.",
+      );
       return;
     }
     router.push("/dashboard");
@@ -37,9 +79,30 @@ export function LoginForm() {
       <h1 className="font-display text-3xl font-extrabold tracking-tight mb-1">
         Welcome back
       </h1>
-      <p className="text-muted text-sm mb-8">
+      <p className="text-muted text-sm mb-6">
         Log in to manage your bot and leads.
       </p>
+
+      {verifyBanner ? (
+        <div
+          role="status"
+          className={`mb-4 rounded-lg border px-3 py-2 text-xs ${
+            verifyBanner.tone === "ok"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {verifyBanner.text}
+        </div>
+      ) : null}
+      {resetBanner ? (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+        >
+          {resetBanner}
+        </div>
+      ) : null}
 
       <OAuthRow email={email} />
 
@@ -70,12 +133,12 @@ export function LoginForm() {
             <label htmlFor="password" className="text-xs font-semibold">
               Password
             </label>
-            <span
-              className="text-xs text-muted opacity-50 cursor-not-allowed select-none"
-              title="Password reset arrives in Stage 7"
+            <Link
+              href="/forgot-password"
+              className="text-xs text-brand font-semibold hover:underline"
             >
               Forgot?
-            </span>
+            </Link>
           </div>
           <input
             id="password"

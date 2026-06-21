@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 // Slice A: bot switcher state. The dashboard shell shows one bot at a
-// time (URL pill, embed snippet, View live bot button, etc.) — the
+// time (URL pill, embed snippet, View live bot button, etc.) - the
 // selected bot ID is persisted in a per-user-browser cookie so the
 // selection survives page navigations AND server-rendered passes.
 //
@@ -33,7 +33,7 @@ export function resolveSelectedBotId(
   return fallbackId ?? validIds[0] ?? null;
 }
 
-// Server action target — invoked by <BotSwitcher> when the user picks a
+// Server action target - invoked by <BotSwitcher> when the user picks a
 // new bot from the dropdown. The action validates ownership before
 // writing the cookie so a forged form payload cannot select a bot the
 // user does not own.

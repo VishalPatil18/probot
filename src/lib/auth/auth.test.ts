@@ -50,13 +50,14 @@ describe("CredentialsProvider.authorize()", () => {
     findFirstMock.mockReset();
   });
 
-  it("returns the user on valid credentials", async () => {
+  it("returns the user on valid credentials when email is verified", async () => {
     const hashed = await hashPassword("hunter2hunter");
     findFirstMock.mockResolvedValueOnce({
       id: "user-id-1",
       username: "jane-doe",
       email: "jane@example.com",
       hashedPassword: hashed,
+      emailVerified: new Date(),
     });
 
     const result = await getAuthorize()({
@@ -69,6 +70,24 @@ describe("CredentialsProvider.authorize()", () => {
       username: "jane-doe",
       email: "jane@example.com",
     });
+  });
+
+  it("throws email_not_verified when credentials are valid but email is unverified", async () => {
+    const hashed = await hashPassword("hunter2hunter");
+    findFirstMock.mockResolvedValueOnce({
+      id: "user-id-1",
+      username: "jane-doe",
+      email: "jane@example.com",
+      hashedPassword: hashed,
+      emailVerified: null,
+    });
+
+    await expect(
+      getAuthorize()({
+        email: "jane@example.com",
+        password: "hunter2hunter",
+      }),
+    ).rejects.toThrow("email_not_verified");
   });
 
   it("returns null when the user is not found", async () => {

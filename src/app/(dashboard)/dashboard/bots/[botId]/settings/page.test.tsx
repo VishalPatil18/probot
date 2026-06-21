@@ -22,15 +22,21 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/auth/auth", () => ({ authOptions: {} }));
 
+const findDeletionMock = vi.fn().mockResolvedValue(undefined);
+
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
       bots: { findFirst: (...args: unknown[]) => findBotMock(...args) },
       users: { findFirst: (...args: unknown[]) => findUserMock(...args) },
+      deletionRequests: {
+        findFirst: (...args: unknown[]) => findDeletionMock(...args),
+      },
     },
   },
   bots: { id: "b.id", userId: "b.user_id" },
   users: { id: "u.id" },
+  deletionRequests: { userId: "d.user_id" },
 }));
 
 const fetchMock = vi.fn();
@@ -161,7 +167,7 @@ describe("BotSettingsPage (5-tab)", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens the AI model & key tab when ?tab=model (entire tab is Coming Soon)", async () => {
+  it("opens the AI model & key tab when ?tab=model and renders the live editor (Stage 7 Phase 3)", async () => {
     searchParamsState = new URLSearchParams("tab=model");
     getServerSessionMock.mockResolvedValueOnce(SESSION);
     findBotMock.mockResolvedValueOnce(botFixture());
@@ -170,8 +176,13 @@ describe("BotSettingsPage (5-tab)", () => {
     expect(
       screen.getByRole("heading", { name: /provider & model/i }),
     ).toBeInTheDocument();
-    // At least one Coming Soon pill on the tab
-    expect(screen.getAllByText(/coming soon/i).length).toBeGreaterThan(0);
+    // The live editor has the Managed key + Decrypt audit log sections.
+    expect(
+      screen.getByRole("heading", { name: /managed key storage/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /decrypt audit log/i }),
+    ).toBeInTheDocument();
   });
 
   it("falls back to default tab on an unknown ?tab= value", async () => {

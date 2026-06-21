@@ -9,7 +9,7 @@ import { bots, db } from "@/lib/db";
 import { writeSelectedBotCookie } from "@/lib/server/selected-bot";
 
 // Server action target for the bot switcher dropdown. Validates the
-// session AND the bot's ownership before writing the cookie — a forged
+// session AND the bot's ownership before writing the cookie - a forged
 // form payload pointing at another user's bot is rejected silently and
 // the cookie is not updated.
 //

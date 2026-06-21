@@ -11,22 +11,23 @@ import {
   SettingsTabPanel,
   SettingsTabs,
 } from "@/components/dashboard/settings/SettingsTabs";
+import { getPendingDeletion } from "@/lib/account/delete";
 import { authOptions } from "@/lib/auth/auth";
 import { bots, db, users } from "@/lib/db";
 import type { Personality } from "@/lib/bots/schemas";
 import { PERSONALITY_PRESETS } from "@/lib/bots/schemas";
 
-// Slice B settings page — 5 tabs ported from design/settings.html.
+// Slice B settings page - 5 tabs ported from design/settings.html.
 // URL state lives in `?tab=` so deep links into a specific tab work
 // (e.g. /dashboard/bots/<id>/settings?tab=kb).
 //
 // Tabs:
-//   Account            — read-only user display (write endpoints Stage 7)
-//   Bot configuration  — status toggle + name/headline/personality/theme
+//   Account            - read-only user display (write endpoints Stage 7)
+//   Bot configuration  - status toggle + name/headline/personality/theme
 //                         + suggested questions; PATCHes /api/bots/[botId]
-//   Knowledge base     — list + delete + upload + re-index (slice-2 endpoints)
-//   Security & privacy — rate-limit display + Coming Soon panels
-//   AI model & key     — entire tab Coming Soon (Stage 7 editor)
+//   Knowledge base     - list + delete + upload + re-index (slice-2 endpoints)
+//   Security & privacy - rate-limit display + Coming Soon panels
+//   AI model & key     - entire tab Coming Soon (Stage 7 editor)
 
 function isPersonality(value: string): value is Personality {
   return (PERSONALITY_PRESETS as readonly string[]).includes(value);
@@ -53,7 +54,7 @@ export default async function BotSettingsPage({
 
   const userId = session.user.id;
 
-  const [bot, userRow] = await Promise.all([
+  const [bot, userRow, pendingDeletion] = await Promise.all([
     db.query.bots.findFirst({
       where: and(eq(bots.id, params.botId), eq(bots.userId, userId)),
       columns: {
@@ -64,12 +65,18 @@ export default async function BotSettingsPage({
         suggestedQuestions: true,
         isActive: true,
         themeColor: true,
+        customInstructions: true,
+        rateLimitPerMinute: true,
+        rateLimitPerDay: true,
+        rateLimitMaxChars: true,
+        previewToken: true,
       },
     }),
     db.query.users.findFirst({
       where: eq(users.id, userId),
       columns: { llmProvider: true, llmModel: true },
     }),
+    getPendingDeletion(userId),
   ]);
   if (!bot) notFound();
 
@@ -96,12 +103,18 @@ export default async function BotSettingsPage({
         <SettingsTabPanel tab="bot">
           <BotConfigTab
             botId={bot.id}
+            ownerUsername={session.user.username}
             initialName={bot.name}
             initialHeadline={bot.headline ?? ""}
             initialPersonality={personality}
             initialSuggestedQuestions={bot.suggestedQuestions ?? []}
             initialIsActive={bot.isActive}
             initialThemeColor={bot.themeColor}
+            initialCustomInstructions={bot.customInstructions ?? ""}
+            initialRateLimitPerMinute={bot.rateLimitPerMinute}
+            initialRateLimitPerDay={bot.rateLimitPerDay}
+            initialRateLimitMaxChars={bot.rateLimitMaxChars}
+            previewToken={bot.previewToken}
           />
         </SettingsTabPanel>
 
@@ -110,11 +123,22 @@ export default async function BotSettingsPage({
         </SettingsTabPanel>
 
         <SettingsTabPanel tab="security">
-          <SecurityTab />
+          <SecurityTab
+            username={session.user.username}
+            pendingDeletion={
+              pendingDeletion
+                ? {
+                    scheduledPurgeAt:
+                      pendingDeletion.scheduledPurgeAt.toISOString(),
+                  }
+                : null
+            }
+          />
         </SettingsTabPanel>
 
         <SettingsTabPanel tab="model">
           <AIModelKeyTab
+            botId={bot.id}
             provider={userRow?.llmProvider ?? null}
             model={userRow?.llmModel ?? null}
           />

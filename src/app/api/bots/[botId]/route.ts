@@ -1,20 +1,20 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-import { botPatchInput } from "@/lib/bots/schemas";
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
+import { botPatchInput } from "@/lib/bots/schemas";
 import { bots, db } from "@/lib/db";
 
 // PATCH /api/bots/[botId]
 //
 // Stage 5: partial-update endpoint behind the bot detail page. Currently
-// only handles `themeColor` — additional editable fields (headline, etc.)
+// only handles `themeColor` - additional editable fields (headline, etc.)
 // can be added to `botPatchInput` without touching this handler since the
 // SET object is built from the parsed Zod object.
 //
 // Mass-assignment safety: the Zod schema explicitly whitelists fields, so a
 // request with `{userId: "...", contextText: "INJECTED", createdAt: "..."}`
-// is silently dropped — the route never trusts the raw body shape.
+// is silently dropped - the route never trusts the raw body shape.
 export async function PATCH(
   request: Request,
   { params }: { params: { botId: string } },
@@ -40,11 +40,16 @@ export async function PATCH(
 
   // Build the SET payload from defined fields only. Spread-conditional so
   // omitted fields retain their existing DB value. The Zod schema is the
-  // mass-assignment whitelist — fields like `userId`, `contextText`,
+  // mass-assignment whitelist - fields like `userId`, `contextText`,
   // `createdAt`, and `updatedAt` are not in `botPatchInput` so they can
   // never appear here even if a hostile client puts them in the body.
   // (Slice B widened the whitelist to include `isActive` for the status
-  // toggle, so it IS legitimately accepted now — see the schema.)
+  // toggle, so it IS legitimately accepted now - see the schema.)
+  //
+  // Stage 7 widens the whitelist to include `customInstructions` and the
+  // three per-bot rate-limit overrides. Each rate-limit field accepts
+  // `null` to mean "clear the override and use env defaults"; the Zod
+  // schema is `nullable().optional()` so undefined leaves it untouched.
   const {
     themeColor,
     name,
@@ -52,6 +57,10 @@ export async function PATCH(
     personality,
     suggestedQuestions,
     isActive,
+    customInstructions,
+    rateLimitPerMinute,
+    rateLimitPerDay,
+    rateLimitMaxChars,
   } = parsed.data;
   const set: Record<string, unknown> = {};
   if (themeColor !== undefined) set.themeColor = themeColor;
@@ -62,6 +71,21 @@ export async function PATCH(
     set.suggestedQuestions = suggestedQuestions;
   }
   if (isActive !== undefined) set.isActive = isActive;
+  if (customInstructions !== undefined) {
+    // Empty string from the form means "clear the addendum"; coerce to NULL
+    // so the schema column is unambiguously empty rather than storing "".
+    set.customInstructions =
+      customInstructions.trim().length > 0 ? customInstructions : null;
+  }
+  if (rateLimitPerMinute !== undefined) {
+    set.rateLimitPerMinute = rateLimitPerMinute;
+  }
+  if (rateLimitPerDay !== undefined) {
+    set.rateLimitPerDay = rateLimitPerDay;
+  }
+  if (rateLimitMaxChars !== undefined) {
+    set.rateLimitMaxChars = rateLimitMaxChars;
+  }
 
   // The Zod schema's `.refine()` already guarantees at least one field is
   // present, so the SET object is never empty by the time we get here.
@@ -77,7 +101,34 @@ export async function PATCH(
       suggestedQuestions: bots.suggestedQuestions,
       themeColor: bots.themeColor,
       isActive: bots.isActive,
+      customInstructions: bots.customInstructions,
+      rateLimitPerMinute: bots.rateLimitPerMinute,
+      rateLimitPerDay: bots.rateLimitPerDay,
+      rateLimitMaxChars: bots.rateLimitMaxChars,
     });
 
   return NextResponse.json({ bot: updated });
+}
+
+// DELETE /api/bots/[botId]
+//
+// Stage 7 Phase 5: permanently delete a single bot. The Drizzle CASCADE
+// on the `bots` FK takes everything dependent with it - knowledge_base,
+// conversations, messages, leads, encrypted_llm_keys, decrypt_audit_log.
+// No grace period; the user must already have re-typed the bot name and
+// confirm phrase in the DeleteBotModal client-side. We don't gate on a
+// typed-name re-check here because (a) the request comes from a same-
+// origin session-authed client, (b) the destructive intent is bot-scoped
+// (not account-scoped, where the typed-username server check is the
+// matching pattern - see /api/users/me/delete).
+export async function DELETE(
+  _request: Request,
+  { params }: { params: { botId: string } },
+): Promise<Response> {
+  const owner = await requireBotOwner(params.botId);
+  if (!owner.ok) return owner.response;
+  const { bot } = owner;
+
+  await db.delete(bots).where(eq(bots.id, bot.id));
+  return NextResponse.json({ ok: true });
 }

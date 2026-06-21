@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getServerSessionMock = vi.fn();
 
@@ -85,7 +85,12 @@ const validBody = {
 };
 
 describe("POST /api/bots", () => {
+  const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
+
   beforeEach(() => {
+    // mintPreviewToken (called in the route after a successful INSERT) needs
+    // a signing secret. Set a stable value for the test suite.
+    process.env.NEXTAUTH_SECRET = "test-secret-for-bots-route-suite";
     getServerSessionMock.mockReset();
     txUpdateUsersSetMock.mockReset();
     txUpdateUsersWhereMock.mockReset().mockResolvedValue(undefined);
@@ -94,7 +99,18 @@ describe("POST /api/bots", () => {
     txInsertReturningMock.mockReset();
     txUpdateBotsSetMock.mockReset();
     txUpdateBotsWhereMock.mockReset();
-    txUpdateBotsReturningMock.mockReset();
+    // Stage 7: the create path also UPDATEs the just-inserted row with the
+    // minted previewToken. Default the mock so the destructure doesn't blow
+    // up; individual tests can override.
+    txUpdateBotsReturningMock
+      .mockReset()
+      .mockResolvedValue([
+        { id: "bot-1", userId: "u1", name: "Jane Doe" },
+      ]);
+  });
+
+  afterEach(() => {
+    process.env.NEXTAUTH_SECRET = originalNextAuthSecret;
   });
 
   it("returns 401 when no session is present", async () => {
@@ -161,6 +177,17 @@ describe("POST /api/bots", () => {
     expect(inserted.contextText).toBe(
       "I am an ML engineer with 5 years experience.",
     );
+    // Stage 7 §FR-002.10: new bots are created as drafts.
+    expect(inserted.isActive).toBe(false);
+    // Stage 7: the route follows the INSERT with an UPDATE that sets the
+    // previewToken on the newly-created bot row.
+    expect(txUpdateBotsSetMock).toHaveBeenCalledTimes(1);
+    const updatedSet = txUpdateBotsSetMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(typeof updatedSet.previewToken).toBe("string");
+    expect((updatedSet.previewToken as string).length).toBeGreaterThan(20);
   });
 
   it("updates the existing bot (200) when the user already owns one", async () => {

@@ -42,7 +42,9 @@ function shouldShowLeadCard(
 // 300 chars. The server caps at 1024 so 300 leaves comfortable headroom.
 function buildContextSummary(messages: ChatMessage[]): string {
   const firstUserMessages = messages
-    .filter((m): m is Extract<ChatMessage, { role: "user" }> => m.role === "user")
+    .filter(
+      (m): m is Extract<ChatMessage, { role: "user" }> => m.role === "user",
+    )
     .slice(0, 3)
     .map((m) => m.text);
   const joined = firstUserMessages.join(" · ");
@@ -67,6 +69,11 @@ type Props = {
   suggestedQuestions: string[];
   loadingMessages: string[];
   llmProvider: ProviderName;
+  // Stage 7 §FR-002.10: when present, the chat is talking to a draft bot;
+  // we forward the token to the API so it can bypass the is_active gate
+  // server-side. Public visitors never see this prop - only the wizard's
+  // Step 5 / dashboard "open private preview" path supplies it.
+  previewToken?: string | null;
 };
 
 export function ChatWindow({
@@ -76,6 +83,7 @@ export function ChatWindow({
   suggestedQuestions,
   loadingMessages,
   llmProvider,
+  previewToken,
 }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -87,7 +95,7 @@ export function ChatWindow({
   const [conversationId, setConversationId] = useState<string | null>(null);
   // sessionId memoized once at mount so sessionStorage state lookups are
   // stable across renders (the lead-capture state machine is keyed by it).
-  // Lazy `useState` initializer over a render-body ref write — Strict
+  // Lazy `useState` initializer over a render-body ref write - Strict
   // Mode's double-render would run the ref-write side effect twice with
   // no cleanup; `useState`'s initializer is contract-guaranteed once.
   const [sessionId] = useState<string | null>(() =>
@@ -105,16 +113,16 @@ export function ChatWindow({
     const trimmed = text.trim();
     if (trimmed.length === 0 || loading) return;
 
-    const apiKey = getApiKey();
+    const apiKey = await getApiKey();
     if (!apiKey) {
       setMissingKey(true);
       return;
     }
 
     // Azure also needs endpoint + apiVersion alongside the key.
-    let azureCreds: ReturnType<typeof getAzureCreds> = null;
+    let azureCreds: Awaited<ReturnType<typeof getAzureCreds>> = null;
     if (llmProvider === "azure") {
-      azureCreds = getAzureCreds();
+      azureCreds = await getAzureCreds();
       if (!azureCreds) {
         setMissingKey(true);
         return;
@@ -141,9 +149,15 @@ export function ChatWindow({
     // Stage 3 RAG: include the optional OpenAI embedding key. Absent →
     // server skips retrieval and falls back to full-context. Same security
     // model as the chat key (localStorage only, never persisted server-side).
-    const embeddingKey = getEmbeddingApiKey();
+    const embeddingKey = await getEmbeddingApiKey();
     if (embeddingKey) {
       headers["x-embedding-api-key"] = embeddingKey;
+    }
+    // Stage 7 §FR-002.10: forward the draft preview token when present so
+    // the chat API allows the inactive bot. The route also accepts a
+    // `?preview=` query param as a fallback for hand-pasted URLs.
+    if (previewToken) {
+      headers["x-preview-token"] = previewToken;
     }
 
     // Stage 6 §6.1: per-tab session ID lets the server UPSERT a
@@ -159,7 +173,10 @@ export function ChatWindow({
       const res = await fetch(`/api/chat/${botId}`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message: trimmed, sessionId: effectiveSessionId }),
+        body: JSON.stringify({
+          message: trimmed,
+          sessionId: effectiveSessionId,
+        }),
       });
 
       if (res.status === 429) {
@@ -189,8 +206,8 @@ export function ChatWindow({
       if (body.conversationId) {
         setConversationId(body.conversationId);
       }
-      // Append the assistant reply AND — if this turn crosses the
-      // lead-capture threshold for the first time — a sentinel system
+      // Append the assistant reply AND - if this turn crosses the
+      // lead-capture threshold for the first time - a sentinel system
       // message that the renderer maps to <LeadCaptureCard>. Doing both
       // updates in one setMessages call avoids a flash of "card not yet
       // there" between renders.

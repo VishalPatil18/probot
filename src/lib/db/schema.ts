@@ -78,8 +78,34 @@ export const bots = pgTable(
     // Stage 5: per-bot theme color (hex #RRGGBB) used by the embeddable
     // widget and signature badge. Default matches the brand purple so bots
     // created before Stage 5 render coherently when the column backfills.
-    themeColor: varchar("theme_color", { length: 7 }).notNull().default("#7c5cff"),
-    isActive: boolean("is_active").notNull().default(true),
+    themeColor: varchar("theme_color", { length: 7 })
+      .notNull()
+      .default("#7c5cff"),
+    // Stage 7 §FR-002.7: free-form additions to the system prompt. Max length
+    // is enforced at the Zod layer (botInput / botPatchInput) so a future
+    // tightening of the cap doesn't require a migration. Injected into the
+    // assembled system prompt between the personality block and the response-
+    // style block - see prompt-builder.ts.
+    customInstructions: text("custom_instructions"),
+    // Stage 7 §FR-002.10: per-bot draft/publish flow. New bots are created
+    // with `is_active=false` + a signed `preview_token` so the creator can
+    // chat against the bot privately at `/u/<username>/chat?preview=<token>`
+    // before clicking Publish (which flips is_active=true and clears the
+    // token). The token is a JWT signed with NEXTAUTH_SECRET so its mere
+    // existence in the URL cannot grant anyone else access without verifying
+    // against the bot row.
+    previewToken: text("preview_token"),
+    // Stage 7 §FR-010.9: per-bot configurable rate limits. NULL means the
+    // env-var default (PROBOT_RATE_PER_MINUTE / PROBOT_RATE_PER_DAY /
+    // PROBOT_RATE_MAX_CHARS) takes over - lets a self-host operator tune the
+    // baseline without touching every bot row.
+    rateLimitPerMinute: integer("rate_limit_per_minute"),
+    rateLimitPerDay: integer("rate_limit_per_day"),
+    rateLimitMaxChars: integer("rate_limit_max_chars"),
+    // Stage 7 §FR-002.10: new bots default to inactive. Bots created before
+    // this migration backfill to `true` via the migration so existing
+    // published bots are unaffected.
+    isActive: boolean("is_active").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
       .notNull()
       .defaultNow(),
@@ -134,6 +160,199 @@ export const verificationTokens = pgTable(
   },
   (vt) => ({
     compoundKey: primaryKey({ columns: [vt.identifier, vt.token] }),
+  }),
+).enableRLS();
+
+// encrypted_llm_keys (Stage 7 Phase 3 §FR-010.5 / §SEC-D06 managed path)
+// One row per bot whose owner opted in to managed key storage. The user's
+// LLM API key is NEVER stored in plaintext - the columns hold an envelope-
+// encryption payload (see src/lib/crypto/envelope.ts):
+//   - {ciphertext, iv, auth_tag}: the user's key encrypted with a per-bot
+//     DEK (Data Encryption Key) under AES-256-GCM.
+//   - {wrapped_dek, dek_iv, dek_auth_tag}: the DEK encrypted with the KEK
+//     stored in PROBOT_KEY_ENCRYPTION_KEY (env). The KEK never touches the
+//     DB so a leaked DB dump alone cannot decrypt anything.
+// `provider` is a non-sensitive denormalisation of the bot owner's chosen
+// provider at key-store time so the chat route can confirm the key matches
+// the active provider without an extra users-table read.
+export const encryptedLlmKeys = pgTable(
+  "encrypted_llm_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    ciphertext: text("ciphertext").notNull(),
+    iv: text("iv").notNull(),
+    authTag: text("auth_tag").notNull(),
+    wrappedDek: text("wrapped_dek").notNull(),
+    dekIv: text("dek_iv").notNull(),
+    dekAuthTag: text("dek_auth_tag").notNull(),
+    provider: varchar("provider", { length: 20 }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    botIdUnique: uniqueIndex("encrypted_llm_keys_bot_id_unique").on(
+      table.botId,
+    ),
+  }),
+).enableRLS();
+
+// decrypt_audit_log (Stage 7 Phase 3)
+// One row per server-side decrypt of a managed LLM key. Surfaced in the
+// dashboard so creators can see when their key was used. We deliberately
+// store ONLY the timestamp and a SHA-256 hash of the recruiter IP - never
+// the raw IP, never any portion of the decrypted key. 30-day retention is
+// enforced by the Phase 5 cron job (no rows are pruned in Phase 3 since
+// the cron infrastructure lands later).
+export const decryptAuditLog = pgTable(
+  "decrypt_audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    decryptedAt: timestamp("decrypted_at", {
+      mode: "date",
+      withTimezone: false,
+    })
+      .notNull()
+      .defaultNow(),
+    requesterIpHash: varchar("requester_ip_hash", { length: 64 }),
+  },
+  (table) => ({
+    botDecryptedIdx: index("decrypt_audit_log_bot_decrypted_idx").on(
+      table.botId,
+      table.decryptedAt.desc(),
+    ),
+  }),
+).enableRLS();
+
+// password_reset_tokens (Stage 7 §FR-001.6)
+// One row per outstanding reset request. `token_hash` stores SHA-256 of the
+// raw token we email; the raw token never touches the DB so a leaked dump
+// cannot be used to take over accounts. TTL = 1 hour. `used_at` makes tokens
+// strictly single-use - a second POST with the same token is rejected.
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      mode: "date",
+      withTimezone: false,
+    }).notNull(),
+    usedAt: timestamp("used_at", { mode: "date", withTimezone: false }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    tokenHashUnique: uniqueIndex("password_reset_tokens_token_hash_unique").on(
+      table.tokenHash,
+    ),
+    userIdIdx: index("password_reset_tokens_user_id_idx").on(table.userId),
+  }),
+).enableRLS();
+
+// deletion_requests (Stage 7 Phase 5 §NFR-C01/C04/C05)
+// One row per outstanding account-deletion request. The grace period is
+// `scheduled_purge_at - requested_at` (7 days in code). Snapshots
+// `email_snapshot` + `username_snapshot` so the post-purge completion
+// email can still reach the (now-deleted) user.
+//
+// `undo_token_hash` is the SHA-256 of the raw token we email the user.
+// They click the link, type their username to confirm, and the row gets
+// deleted - cancelling the purge. The raw token never touches the DB; same
+// pattern as password_reset_tokens.
+//
+// `confirmation_username` is what the user typed in the GitHub-style
+// confirmation modal at delete-init time. Stored so the post-incident
+// audit can answer "did they type their own username, not someone else's
+// by mistake or via a CSRF?" - we already validate at request time but
+// the historic value is useful forensics.
+//
+// `purged_at` flips from null to a timestamp the moment the cron job
+// finishes purging this user's data. The row itself sticks around briefly
+// for one more cron run (so the completion email can be sent from the
+// snapshot), then gets cleaned up.
+export const deletionRequests = pgTable(
+  "deletion_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    emailSnapshot: varchar("email_snapshot", { length: 255 }).notNull(),
+    usernameSnapshot: varchar("username_snapshot", { length: 30 }).notNull(),
+    confirmationUsername: varchar("confirmation_username", {
+      length: 30,
+    }).notNull(),
+    undoTokenHash: varchar("undo_token_hash", { length: 64 }).notNull(),
+    requestedAt: timestamp("requested_at", {
+      mode: "date",
+      withTimezone: false,
+    })
+      .notNull()
+      .defaultNow(),
+    scheduledPurgeAt: timestamp("scheduled_purge_at", {
+      mode: "date",
+      withTimezone: false,
+    }).notNull(),
+    purgedAt: timestamp("purged_at", { mode: "date", withTimezone: false }),
+    completionEmailSentAt: timestamp("completion_email_sent_at", {
+      mode: "date",
+      withTimezone: false,
+    }),
+  },
+  (table) => ({
+    userIdUnique: uniqueIndex("deletion_requests_user_id_unique").on(
+      table.userId,
+    ),
+    undoTokenHashUnique: uniqueIndex(
+      "deletion_requests_undo_token_hash_unique",
+    ).on(table.undoTokenHash),
+    scheduledPurgeAtIdx: index(
+      "deletion_requests_scheduled_purge_at_idx",
+    ).on(table.scheduledPurgeAt),
+  }),
+).enableRLS();
+
+// email_verification_tokens (Stage 7 §FR-001.5)
+// Sent to credentials-registered users at signup time. Magic-link signups
+// don't use this table - NextAuth's `verification_tokens` covers them and
+// sets `email_verified` on click. TTL = 24 hours. Verifying the email
+// deletes the row (no `used_at` column needed - presence implies pending).
+export const emailVerificationTokens = pgTable(
+  "email_verification_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      mode: "date",
+      withTimezone: false,
+    }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    tokenHashUnique: uniqueIndex(
+      "email_verification_tokens_token_hash_unique",
+    ).on(table.tokenHash),
+    userIdIdx: index("email_verification_tokens_user_id_idx").on(table.userId),
   }),
 ).enableRLS();
 
@@ -222,7 +441,7 @@ export const conversations = pgTable(
 
 // messages
 // One row per chat turn (user + assistant), child of conversations. Created
-// in Stage 4 for the Stage 6 analytics surface — no code writes yet.
+// in Stage 4 for the Stage 6 analytics surface - no code writes yet.
 // `tokens_used` is nullable because the provider response may not include a
 // usage breakdown for every model.
 export const messages = pgTable(
@@ -262,7 +481,7 @@ export const messages = pgTable(
 // leads (Stage 6 §6.1)
 // Captured recruiter emails per bot. `conversation_id` is ON DELETE SET NULL
 // (not cascade) so a GDPR-driven conversation purge in Stage 7 still
-// preserves the lead — the email is business-valuable even if the chat log
+// preserves the lead - the email is business-valuable even if the chat log
 // is gone. `context_summary` is filled by the lead-capture client in slice
 // 6.4 with a truncated concatenation of the first 2-3 recruiter messages
 // (deterministic + free; LLM-generated summaries would violate CLAUDE.md §7).
@@ -295,7 +514,7 @@ export const leads = pgTable(
 
 // notifications (Stage 6 §6.6)
 // In-app notifications surfaced by the dashboard bell. No email transport in
-// Stage 6 — that lands post-Stage 7 once Resend is wired for auth emails.
+// Stage 6 - that lands post-Stage 7 once Resend is wired for auth emails.
 // `kind` is extensible; only 'lead_captured' is emitted in Stage 6. CHECK
 // constraint mirrors the messages.role pattern so a typo cannot silently
 // corrupt the unread badge query. Partial index on `read_at IS NULL` keeps
@@ -334,6 +553,18 @@ export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 export type VerificationToken = typeof verificationTokens.$inferSelect;
 export type NewVerificationToken = typeof verificationTokens.$inferInsert;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+export type EmailVerificationToken =
+  typeof emailVerificationTokens.$inferSelect;
+export type NewEmailVerificationToken =
+  typeof emailVerificationTokens.$inferInsert;
+export type EncryptedLlmKey = typeof encryptedLlmKeys.$inferSelect;
+export type NewEncryptedLlmKey = typeof encryptedLlmKeys.$inferInsert;
+export type DecryptAuditLogEntry = typeof decryptAuditLog.$inferSelect;
+export type NewDecryptAuditLogEntry = typeof decryptAuditLog.$inferInsert;
+export type DeletionRequest = typeof deletionRequests.$inferSelect;
+export type NewDeletionRequest = typeof deletionRequests.$inferInsert;
 export type KnowledgeChunk = typeof knowledgeBase.$inferSelect;
 export type NewKnowledgeChunk = typeof knowledgeBase.$inferInsert;
 export type Conversation = typeof conversations.$inferSelect;

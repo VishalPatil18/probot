@@ -12,7 +12,7 @@ type Props = {
   liveBotUrl: string | null;
 };
 
-// Sticky topbar — shared across all (dashboard) pages. Hosts the mobile
+// Sticky topbar - shared across all (dashboard) pages. Hosts the mobile
 // hamburger button (left), page title (derived from pathname), public
 // URL pill with copy button (when a bot is selected), and the
 // notification bell + "View live bot" CTA on the right.

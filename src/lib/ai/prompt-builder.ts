@@ -36,6 +36,11 @@ type Bot = {
   name: string;
   personality: Personality;
   contextText: string;
+  // Stage 7 §FR-002.7: optional free-form additions to the system prompt.
+  // Length is capped at the Zod layer (max 2000). When null/empty/whitespace,
+  // the block is omitted entirely so a non-customising bot's prompt is byte-
+  // identical to its pre-Stage-7 shape.
+  customInstructions?: string | null;
 };
 
 export function buildSystemPrompt(args: {
@@ -56,18 +61,31 @@ export function buildSystemPrompt(args: {
       : bot.contextText;
   const context = `## CONTEXT\n${contextBody}`;
 
-  return [
+  // Stage 7: custom-instructions block lives BETWEEN personality and the
+  // response-style block. Personality establishes voice, custom instructions
+  // refine bot-specific intent, then RESPONSE_STYLE locks the structural
+  // rules - this order keeps the immutable structural rules as the last
+  // word so a malformed custom block can't override "no filler phrases" or
+  // "max 6 sentences." The IMMUTABLE RULES block above all of this still
+  // governs identity / context-only / prompt protection regardless of what
+  // the custom block says.
+  const trimmedCustom = bot.customInstructions?.trim() ?? "";
+  const customBlock =
+    trimmedCustom.length > 0
+      ? `## CUSTOM INSTRUCTIONS\n${trimmedCustom}`
+      : null;
+
+  const sections = [
     identity,
     "",
     "## IMMUTABLE RULES",
     IMMUTABLE_RULES,
     "",
     personality,
-    "",
-    RESPONSE_STYLE,
-    "",
-    unknown,
-    "",
-    context,
-  ].join("\n");
+  ];
+  if (customBlock) {
+    sections.push("", customBlock);
+  }
+  sections.push("", RESPONSE_STYLE, "", unknown, "", context);
+  return sections.join("\n");
 }

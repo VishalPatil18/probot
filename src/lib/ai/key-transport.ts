@@ -50,7 +50,7 @@ export function readApiKey(headers: Headers): string {
 
 // Stage 3 RAG: the OpenAI key used for embedding generation and chat-time
 // query embedding. Independent of `x-llm-api-key` because the user's chat
-// provider may not be OpenAI. Returns null when the header is absent — the
+// provider may not be OpenAI. Returns null when the header is absent - the
 // caller treats this as "skip embeddings, fall back to full-context". Only
 // throws when the header is present but malformed (length out of range).
 export function readEmbeddingApiKey(headers: Headers): string | null {

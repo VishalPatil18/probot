@@ -50,7 +50,7 @@ ProBot transforms the existing single-user VAi chatbot (built for Vishal Patil's
 - Embeddable widget (script tag)
 - User dashboard with analytics and lead tracking
 - Open-source distribution (MIT licensed); free to use and to self-host
-- Bring-your-own-key LLM configuration (Anthropic, Google, DeepSeek, OpenAI, and others) with local-only key storage - keys are never tracked by ProBot
+- Bring-your-own-key LLM configuration (Anthropic, Google, OpenAI, Azure) with local-only key storage - keys are never tracked by ProBot
 
 **Out of Scope (V1):**
 
@@ -97,7 +97,7 @@ ProBot evolves from the VAi chatbot, which is a single-tenant implementation emb
 | -------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | **Tenancy**          | Single user (Vishal)           | Multi-tenant (any job seeker)                                                                             |
 | **Data Source**      | Hardcoded `vaiContext.js` file | Dynamic per-user knowledge base with vector storage                                                       |
-| **AI Provider**      | Azure OpenAI (gpt-4o-mini)     | User-supplied (BYO key): Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT, etc. - key stored locally |
+| **AI Provider**      | Azure OpenAI (gpt-4o-mini)     | User-supplied (BYO key): Anthropic Claude, Google Gemini, OpenAI GPT, etc. - key stored locally |
 | **Context Delivery** | Full JSON in system prompt     | RAG pipeline with top-K chunk retrieval                                                                   |
 | **Deployment**       | Embedded in portfolio site     | Standalone platform + embeddable widget                                                                   |
 | **Authentication**   | None                           | User registration/login with email/OAuth                                                                  |
@@ -128,7 +128,7 @@ ProBot evolves from the VAi chatbot, which is a single-tenant implementation emb
 - **Server**: Node.js 20+ runtime, deployed on Vercel or similar edge platform
 - **Database**: PostgreSQL (relational) + Pinecone/Supabase Vector (embeddings)
 - **Cache**: Redis (rate limiting, session management)
-- **AI**: User-configured LLM provider via BYO API key (Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT, etc.); key stored locally, never tracked by ProBot
+- **AI**: User-configured LLM provider via BYO API key (Anthropic Claude, Google Gemini, OpenAI GPT, etc.); key stored locally, never tracked by ProBot
 
 ### 2.5 Design and Implementation Constraints
 
@@ -204,7 +204,7 @@ Phase 4: Analytics & Management
 | FR-002.8  | System SHALL allow theme color selection for the chat interface                                                                                      | Low      | Brand customization         |
 | FR-002.9  | System SHALL generate a unique URL slug upon bot creation                                                                                            | High     | Deployment requirement      |
 | FR-002.10 | System SHALL allow users to preview their bot before publishing                                                                                      | Medium   | Quality assurance           |
-| FR-002.11 | System SHALL provide an "AI Model" step to select an LLM provider (Anthropic, Google, DeepSeek, OpenAI, etc.) and a specific model (v1.1)            | High     | BYO-key core requirement    |
+| FR-002.11 | System SHALL provide an "AI Model" step to select an LLM provider (Anthropic, Google, OpenAI, Azure) and a specific model (v1.1)            | High     | BYO-key core requirement    |
 | FR-002.12 | System SHALL accept the user's LLM API key and store it locally (browser / self-hosted config) only - never transmitting it to ProBot servers (v1.1) | High     | Privacy / BYO-key guarantee |
 
 #### FR-003: Data Ingestion and Processing Pipeline
@@ -318,7 +318,7 @@ Phase 4: Analytics & Management
 | FR-010.1 | System SHALL be distributed as free, open-source software under a permissive license (MIT)                                                                                                                                   | High     | Open-source product model  |
 | FR-010.2 | System SHALL make all features (unlimited bots, messages, analytics, lead capture, custom branding) available at no charge                                                                                                   | High     | No paywalls                |
 | FR-010.3 | System SHALL support self-hosting via the public repository, configured through a local config file / environment                                                                                                            | High     | User control & portability |
-| FR-010.4 | System SHALL let users select an LLM provider and model from supported options: Anthropic (Claude Opus / Sonnet / Haiku), Google (Gemini), DeepSeek (V3 / R1), OpenAI (GPT), and additional providers                        | High     | BYO-key core requirement   |
+| FR-010.4 | System SHALL let users select an LLM provider and model from supported options: Anthropic (Claude Opus / Sonnet / Haiku), Google (Gemini), OpenAI (GPT), Azure OpenAI                                                            | High     | BYO-key core requirement   |
 | FR-010.5 | System SHALL accept a user-supplied API key for the selected provider and store it locally only (browser local storage / self-hosted config); the key SHALL NEVER be transmitted to, logged by, or tracked by ProBot servers | High     | Privacy guarantee          |
 | FR-010.6 | System SHALL allow users to switch providers/models and update or remove their API key at any time                                                                                                                           | Medium   | Flexibility                |
 | FR-010.7 | System SHALL surface API-key status (active / invalid) without persisting the key server-side                                                                                                                                | Medium   | UX & trust                 |
@@ -369,7 +369,7 @@ Query vector DB (namespace: bot_id, top_k: 3)
 Build system prompt (identity + rules + personality + retrieved chunks)
     |
     v
-LLM completion via user's provider/model (Claude / Gemini / DeepSeek / GPT; temp: 0.3, max_tokens: 500), authenticated with the user's local API key
+LLM completion via user's provider/model (Claude / Gemini / GPT / Azure-OpenAI; temp: 0.3, max_tokens: 500), authenticated with the user's local API key
     |
     v
 Sanitize output (adapted from VAi's sanitizeOutput)
@@ -451,7 +451,7 @@ ProBot.com/u/{username}       ->  Redirect to /chat
 - URL input with validation and preview
 - Rich text area for custom bio
 - Personality preset selector with preview of tone
-- AI Model step _(v1.1)_: provider selector (Anthropic / Google / DeepSeek / OpenAI), model dropdown, and API-key field with a "stored locally, never tracked" assurance
+- AI Model step _(v1.1)_: provider selector (Anthropic / Google / OpenAI / Azure), model dropdown, and API-key field with a "stored locally, never tracked" assurance
 - Live bot preview panel
 
 #### 5.1.3 Public Chat Interface
@@ -490,7 +490,7 @@ No specific hardware interfaces required. The system is web-based and accessed v
 
 | Interface | System                                                                           | Protocol          | Purpose                                                                      |
 | --------- | -------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------- |
-| SI-001    | LLM Provider APIs (user-supplied key): Anthropic, Google, DeepSeek, OpenAI, etc. | HTTPS REST        | Chat completions and embeddings, authenticated with the user's local API key |
+| SI-001    | LLM Provider APIs (user-supplied key): Anthropic, Google, OpenAI, Azure | HTTPS REST        | Chat completions and embeddings, authenticated with the user's local API key |
 | SI-002    | Pinecone / Supabase Vector                                                       | HTTPS REST        | Vector storage and similarity search                                         |
 | SI-003    | PostgreSQL                                                                       | TCP (pg protocol) | Relational data storage                                                      |
 | SI-004    | Redis                                                                            | TCP               | Rate limiting, caching, sessions                                             |
@@ -559,7 +559,7 @@ No specific hardware interfaces required. The system is web-based and accessed v
 
 - Containerizable via Docker for alternative deployment targets
 - Database abstraction layer for vector DB provider switching
-- AI provider abstraction supporting multiple BYO-key providers (Anthropic, Google, DeepSeek, OpenAI / Azure OpenAI) with a user-selectable model
+- AI provider abstraction supporting multiple BYO-key providers (Anthropic, Google, OpenAI, Azure OpenAI) with a user-selectable model
 
 #### 6.4.5 Usability
 
@@ -603,7 +603,7 @@ Users (1) ---< (N) Bots (1) ---< (N) KnowledgeBase
 | `hashed_password` | VARCHAR(255) | NULL (OAuth users)  | bcrypt hashed password                                                                                |
 | `oauth_provider`  | VARCHAR(20)  | NULL                | google, github, linkedin                                                                              |
 | `oauth_id`        | VARCHAR(255) | NULL                | Provider-specific user ID                                                                             |
-| `llm_provider`    | VARCHAR(20)  | DEFAULT 'anthropic' | Selected LLM provider (anthropic, google, deepseek, openai, …) - non-sensitive preference only (v1.1) |
+| `llm_provider`    | VARCHAR(20)  | DEFAULT 'anthropic' | Selected LLM provider (anthropic, google, openai, azure) - non-sensitive preference only (v1.1) |
 | `llm_model`       | VARCHAR(60)  | NULL                | Selected model identifier (e.g., claude-opus-4) - non-sensitive preference only (v1.1)                |
 | `email_verified`  | BOOLEAN      | DEFAULT false       | Email verification status                                                                             |
 | `created_at`      | TIMESTAMP    | DEFAULT NOW()       | Registration date                                                                                     |
@@ -919,7 +919,7 @@ Adapted from VAi's rate-limiting system, extended for multi-tenancy. With no sub
 # LLM provider key - BYO, user-supplied. Stored LOCALLY (browser / self-host config),
 # never sent to ProBot servers. The platform ships NO default LLM credentials.
 # Example local self-host config (kept out of version control):
-#   PROBOT_LLM_PROVIDER=anthropic        # anthropic | google | deepseek | openai
+#   PROBOT_LLM_PROVIDER=anthropic        # anthropic | google | openai | azure
 #   PROBOT_LLM_MODEL=claude-opus-4
 #   PROBOT_LLM_API_KEY=...               # read from local env / secure store only
 
@@ -1016,7 +1016,7 @@ ALLOWED_ORIGINS=https://ProBot.com
 | `sanitizeOutput()`           | Shared security module            | Adapt context key detection to be per-bot                                                                |
 | `buildSystemPrompt()`        | Dynamic per-bot prompt builder    | Replace hardcoded identity with bot config, add RAG chunks                                               |
 | In-memory rate limit Maps    | Redis-backed rate limiting        | Required for serverless persistence                                                                      |
-| Azure OpenAI client          | Multi-provider BYO-key client     | Provider abstraction for Anthropic / Google / DeepSeek / OpenAI; user-supplied key stored locally (v1.1) |
+| Azure OpenAI client          | Multi-provider BYO-key client     | Provider abstraction for Anthropic / Google / OpenAI / Azure; user-supplied key stored locally (v1.1) |
 | `next.config.js` headers     | Same + CSP for widget             | Add widget-specific CORS and CSP headers                                                                 |
 
 ### 13.2 Technology Stack Summary
@@ -1025,7 +1025,7 @@ ALLOWED_ORIGINS=https://ProBot.com
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | **Frontend**   | Next.js 14+, React 18, TypeScript, Tailwind CSS                                                                                       |
 | **Backend**    | Next.js API Routes (Node.js), serverless functions                                                                                    |
-| **AI**         | User-configured BYO-key LLM (Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT, …) + provider embedding model; key stored locally |
+| **AI**         | User-configured BYO-key LLM (Anthropic Claude, Google Gemini, OpenAI GPT, …) + provider embedding model; key stored locally |
 | **Database**   | PostgreSQL (Supabase/Neon), Pinecone (vectors), Upstash Redis (cache)                                                                 |
 | **Auth**       | NextAuth.js (email + OAuth)                                                                                                           |
 | **License**    | Open source (MIT) - no payments / billing                                                                                             |

@@ -141,7 +141,9 @@ probot/
 ├── package.json              # Next.js 14 / React 18 / Drizzle / NextAuth / Anthropic + OpenAI SDKs / Zod / Vitest
 ├── drizzle/                  # Generated Drizzle migrations (committed)
 ├── claude/
-│   ├── plan.md               # 7-stage incremental build plan
+│   ├── beta.md               # 7-stage Beta build plan (shipped) + features checklist
+│   ├── plan-v1.md            # Active 9-stage Version 1.0 plan
+│   ├── plan-v2.md            # Version 2.0 backlog
 │   ├── srs.md                # Software Requirements Specification
 │   ├── context.md            # Append-only session history
 │   └── learnings.md          # Topic-keyed learning journal
@@ -174,7 +176,7 @@ probot/
 ## Where to start
 
 - **First-time?** Look for issues labelled [`good first issue`](https://github.com/vishalpatil18/probot/labels/good%20first%20issue).
-- **Larger feature?** Open a feature-request issue first so we can align on scope before you build. The 7-stage plan in `claude/plan.md` is the source of truth for what's in-flight.
+- **Larger feature?** Open a feature-request issue first so we can align on scope before you build. The active plan in `claude/plan-v1.md` is the source of truth for what's in-flight (and `claude/plan-v2.md` lists what's on the backlog).
 - **Doc fix?** Just open the PR - no issue needed.
 - **Security issue?** **Don't open a public issue or PR.** See [`SECURITY.md`](./SECURITY.md).
 

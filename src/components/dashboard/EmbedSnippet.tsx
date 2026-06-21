@@ -3,10 +3,10 @@
 import { CopyUrlButton } from "./CopyUrlButton";
 
 // Stage 5: Embed surface shown on the bot detail page. Three copyable
-// snippets — public chat URL, <script> tag for embedding the widget, and
+// snippets - public chat URL, <script> tag for embedding the widget, and
 // a hand-rolled HTML signature badge for email clients.
 //
-// All snippets are static text — copy uses the existing CopyUrlButton
+// All snippets are static text - copy uses the existing CopyUrlButton
 // component (which wraps navigator.clipboard). The labels distinguish
 // the three buttons so the feedback toast is unambiguous.
 
@@ -73,7 +73,7 @@ function SnippetCard({
 
 // Email-signature template. Hand-rolled HTML rather than a React render
 // because Gmail / Apple Mail / Outlook each have a different sanitizer
-// — only inline styles + anchor tags survive everywhere. The emoji is
+// - only inline styles + anchor tags survive everywhere. The emoji is
 // a U+1F4AC speech-balloon (renders consistently across mail clients).
 export function signatureBadgeHtml(args: {
   username: string;

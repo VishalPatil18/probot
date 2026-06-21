@@ -14,7 +14,7 @@ type Props = {
 // Stage 6 §6.4: shared pagination control for the dashboard list pages.
 // URL-driven (no JS) so that prev/next is bookmarkable and browser back
 // works out of the box. Renders nothing when the result fits in a single
-// page — caller doesn't need to gate.
+// page - caller doesn't need to gate.
 export function Pagination({
   basePath,
   page,

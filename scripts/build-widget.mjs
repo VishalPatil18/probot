@@ -6,7 +6,7 @@
  *   widget needs zero runtime CSS fetches.
  * - Compiles src/widget/widget.ts as an IIFE so it self-executes when the
  *   <script> tag is loaded on the host page.
- * - Targets es2017 — wide browser support without burning bytes on
+ * - Targets es2017 - wide browser support without burning bytes on
  *   transforms for syntax most browsers have shipped for years.
  * - Minified output is the deploy artifact; the un-minified copy used to
  *   exist behind a flag but Vercel never serves it, so we only build the
@@ -26,7 +26,7 @@ const cssPath = resolve(projectRoot, "src/widget/widget.css");
 const outfile = resolve(projectRoot, "public/widget.js");
 
 const apiBaseDefault =
-  process.env.PROBOT_WIDGET_API_BASE ?? "https://probot.dev";
+  process.env.PROBOT_WIDGET_API_BASE ?? "https://pro-bot.dev";
 
 mkdirSync(dirname(outfile), { recursive: true });
 

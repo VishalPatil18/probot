@@ -42,5 +42,24 @@ export const loginInput = z.object({
   password: z.string().min(1).max(200),
 });
 
+export const forgotPasswordInput = z.object({
+  email: z.string().email("Invalid email address").max(255),
+});
+
+export const resetPasswordInput = z.object({
+  token: z.string().min(32).max(128),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(200, "Password must be at most 200 characters"),
+});
+
+export const verifyEmailInput = z.object({
+  token: z.string().min(32).max(128),
+});
+
 export type RegisterInput = z.infer<typeof registerInput>;
 export type LoginInput = z.infer<typeof loginInput>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordInput>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordInput>;
+export type VerifyEmailInput = z.infer<typeof verifyEmailInput>;

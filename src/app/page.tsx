@@ -1,12 +1,9 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
+
+import { SiteFooter } from "@/components/marketing/SiteFooter";
+import { SiteHeader } from "@/components/marketing/SiteHeader";
 
 const DOCS_URL = "https://pro-bot-ai.vercel.app/docs";
-const GITHUB_URL = "https://github.com/VishalPatil18";
-const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
-const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
 
 const EMBED_SNIPPET =
   '<script src="probot.com/widget.js" data-bot-id="…"></script>';
@@ -26,118 +23,9 @@ function MaterialIcon({
 }
 
 export default function HomePage() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-
   return (
     <>
-      {/* ============ HEADER ============ */}
-      <header className="sticky top-0 z-50 w-full bg-bg-app/85 backdrop-blur-md border-b border-border-base">
-        <div className="mx-auto max-w-[1180px] h-16 px-6 flex items-center gap-8">
-          <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <svg width="30" height="30" viewBox="0 0 40 40" fill="none">
-              <circle cx="20" cy="20" r="16" fill="oklch(0.55 0.193 251.78)" />
-              <circle cx="20" cy="20" r="16" fill="url(#nav-orb)" />
-              <circle cx="14" cy="20" r="3.4" fill="#fff" />
-              <circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65" />
-              <defs>
-                <radialGradient id="nav-orb" cx="0.35" cy="0.3" r="0.8">
-                  <stop offset="0" stopColor="#fff" stopOpacity="0.35" />
-                  <stop offset="1" stopColor="#fff" stopOpacity="0" />
-                </radialGradient>
-              </defs>
-            </svg>
-            <span className="font-display text-xl font-extrabold tracking-tight">
-              ProBot
-            </span>
-          </Link>
-          <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
-            <a
-              href="#how"
-              className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
-            >
-              How it works
-            </a>
-            <a
-              href="#features"
-              className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
-            >
-              Features
-            </a>
-            <a
-              href="#free-to-use"
-              className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
-            >
-              Free to Use
-            </a>
-            <a
-              href={DOCS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
-            >
-              Docs
-            </a>
-            <Link
-              href="/u/vishal/chat"
-              className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
-            >
-              Live demo
-            </Link>
-          </nav>
-          <div className="hidden md:flex items-center gap-2 ml-auto">
-            <Link href="/login" className="btn btn-secondary">
-              Log in
-            </Link>
-            <Link href="/dashboard/bots/new" className="btn btn-primary">
-              Create your bot
-            </Link>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-expanded={mobileOpen}
-            aria-label="Toggle navigation"
-            className="md:hidden ml-auto size-9 grid place-items-center rounded-lg border border-border-base"
-          >
-            <MaterialIcon name="menu" className="!text-xl" />
-          </button>
-        </div>
-        {mobileOpen && (
-          <div className="md:hidden border-t border-border-base bg-bg-app px-6 py-4 flex flex-col gap-1">
-            <a href="#how" className="py-2 font-medium">
-              How it works
-            </a>
-            <a href="#features" className="py-2 font-medium">
-              Features
-            </a>
-            <a href="#free-to-use" className="py-2 font-medium">
-              Free to Use
-            </a>
-            <a
-              href={DOCS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="py-2 font-medium"
-            >
-              Docs
-            </a>
-            <Link href="/u/vishal/chat" className="py-2 font-medium">
-              Live demo
-            </Link>
-            <div className="flex gap-2 mt-3">
-              <Link href="/login" className="btn btn-secondary flex-1">
-                Log in
-              </Link>
-              <Link
-                href="/dashboard/bots/new"
-                className="btn btn-primary flex-1"
-              >
-                Create bot
-              </Link>
-            </div>
-          </div>
-        )}
-      </header>
+      <SiteHeader />
 
       <main>
         {/* ============ HERO ============ */}
@@ -155,7 +43,14 @@ export default function HomePage() {
                 ProBot turns your resume, LinkedIn, and portfolio into a
                 personal AI chatbot that answers recruiters&apos; questions -
                 powered by <strong className="text-ink">your own LLM</strong>{" "}
-                (Claude, Gemini, OpenAI &amp; more), with keys stored locally.
+                (Claude, Gemini, OpenAI &amp; more).{" "}
+                <Link
+                  href="/about#hybrid"
+                  className="text-brand font-semibold hover:underline"
+                >
+                  Self-host or use managed
+                </Link>{" "}
+                - your key, your call.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
@@ -186,7 +81,7 @@ export default function HomePage() {
                     name="check_circle"
                     className="!text-base text-success"
                   />
-                  Your keys stay local
+                  Envelope-encrypted keys (or self-host)
                 </span>
               </div>
             </div>
@@ -254,7 +149,7 @@ export default function HomePage() {
                   <p className="text-[10px] text-muted text-center mt-2">
                     Powered by your own LLM key ·{" "}
                     <span className="text-brand font-semibold">
-                      stored locally
+                      encrypted or self-hosted
                     </span>
                   </p>
                 </div>
@@ -888,9 +783,12 @@ export default function HomePage() {
                   Bring your own model
                 </h3>
                 <p className="text-sm text-muted leading-relaxed mb-4">
-                  Pick Claude Opus, Haiku, Gemini, OpenAI - whatever you prefer.
-                  Your API key is stored locally and{" "}
-                  <strong className="text-ink">never tracked by ProBot</strong>.
+                  Pick Claude, Gemini, OpenAI, or Azure - whatever you prefer.
+                  Your key is{" "}
+                  <strong className="text-ink">
+                    envelope-encrypted on our infra or never sent at all
+                  </strong>{" "}
+                  if you self-host. Your call, your trust level.
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {["Claude", "Gemini", "OpenAI"].map((m) => (
@@ -1058,178 +956,7 @@ export default function HomePage() {
         </section>
       </main>
 
-      {/* ============ FOOTER ============ */}
-      <footer className="border-t border-border-base bg-white">
-        <div className="mx-auto max-w-[1180px] px-6 pt-14 pb-8">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
-            <div className="col-span-2 md:col-span-1">
-              <Link href="/" className="flex items-center gap-2.5 mb-3">
-                <svg width="26" height="26" viewBox="0 0 40 40" fill="none">
-                  <circle
-                    cx="20"
-                    cy="20"
-                    r="16"
-                    fill="oklch(0.55 0.193 251.78)"
-                  />
-                  <circle cx="14" cy="20" r="3.4" fill="#fff" />
-                  <circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65" />
-                </svg>
-                <span className="font-display text-lg font-extrabold tracking-tight">
-                  ProBot
-                </span>
-              </Link>
-              <p className="text-xs text-muted leading-relaxed">
-                Your AI digital recruiter. Available 24/7.
-              </p>
-            </div>
-            <div>
-              <p className="text-sm font-bold mb-3">Product</p>
-              <ul className="space-y-2 text-sm text-muted">
-                <li>
-                  <a href="#features" className="hover:text-ink">
-                    Features
-                  </a>
-                </li>
-                <li>
-                  <a href="#free-to-use" className="hover:text-ink">
-                    Free to Use
-                  </a>
-                </li>
-                <li>
-                  <Link href="/u/vishal/chat" className="hover:text-ink">
-                    Live demo
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/dashboard/bots/new" className="hover:text-ink">
-                    Create a bot
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm font-bold mb-3">Developers</p>
-              <ul className="space-y-2 text-sm text-muted">
-                <li>
-                  <a
-                    href={DOCS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-ink"
-                  >
-                    Documentation
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={DOCS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-ink"
-                  >
-                    Models &amp; API keys
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={DOCS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-ink"
-                  >
-                    Embed widget
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={GITHUB_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-ink"
-                  >
-                    GitHub
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm font-bold mb-3">Account</p>
-              <ul className="space-y-2 text-sm text-muted">
-                <li>
-                  <Link href="/login" className="hover:text-ink">
-                    Log in
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/dashboard" className="hover:text-ink">
-                    Dashboard
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/dashboard" className="hover:text-ink">
-                    Settings
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm font-bold mb-3">Company</p>
-              <ul className="space-y-2 text-sm text-muted">
-                <li>
-                  <a href="#" className="hover:text-ink">
-                    About
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-ink">
-                    Privacy
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-ink">
-                    Terms
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="mt-12 pt-6 border-t border-border-base flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-xs text-muted">
-              © 2026 ProBot · Free to use, MIT licensed. Built on the VAi
-              engine.
-            </p>
-            <div className="flex gap-4 text-muted text-sm">
-              <a
-                href={GITHUB_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 hover:text-ink"
-              >
-                <MaterialIcon name="code" className="!text-base" />
-                GitHub
-              </a>
-              <a
-                href={PORTFOLIO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 hover:text-ink"
-              >
-                <MaterialIcon name="public" className="!text-base" />
-                Portfolio
-              </a>
-              <a
-                href={LINKEDIN_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 hover:text-ink"
-              >
-                <MaterialIcon name="badge" className="!text-base" />
-                LinkedIn
-              </a>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }

@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   images: {
     // Stage 4: Cloudinary hosts the curated animal-icon avatars used as the
-    // default users.image. The allowlist is intentionally narrow — any future
+    // default users.image. The allowlist is intentionally narrow - any future
     // remote source (e.g. profile-photo upload in Stage 6) gets added here
     // explicitly so we never proxy arbitrary URLs through the Next image
     // optimizer.
@@ -18,7 +18,7 @@ const nextConfig = {
   // Stage 5: CORS headers on the two public endpoints called by the
   // embeddable widget. `next.config.js` headers apply to GET/POST responses
   // automatically; preflight OPTIONS is handled by explicit `OPTIONS` exports
-  // in each route handler. Mirror of src/lib/bots/cors-headers.ts —
+  // in each route handler. Mirror of src/lib/bots/cors-headers.ts -
   // intentionally duplicated because the headers() runtime cannot import TS.
   async headers() {
     const corsHeaders = [

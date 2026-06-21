@@ -9,7 +9,7 @@ describe("EmbedSnippet", () => {
     botId: "11111111-1111-1111-1111-111111111111",
     username: "jane-doe",
     themeColor: "#7c5cff",
-    origin: "https://probot.dev",
+    origin: "https://pro-bot.dev",
   };
 
   it("renders the three snippet cards", () => {
@@ -22,14 +22,14 @@ describe("EmbedSnippet", () => {
   it("shows the public chat URL", () => {
     render(<EmbedSnippet {...baseProps} />);
     expect(
-      screen.getByText("https://probot.dev/u/jane-doe/chat"),
+      screen.getByText("https://pro-bot.dev/u/jane-doe/chat"),
     ).toBeInTheDocument();
   });
 
   it("renders the <script> embed snippet with the botId injected", () => {
     render(<EmbedSnippet {...baseProps} />);
     const snippet = screen.getByText(
-      /<script src="https:\/\/probot\.dev\/widget\.js" data-bot-id="11111111-1111-1111-1111-111111111111"><\/script>/,
+      /<script src="https:\/\/pro-bot\.dev\/widget\.js" data-bot-id="11111111-1111-1111-1111-111111111111"><\/script>/,
     );
     expect(snippet).toBeInTheDocument();
   });
@@ -38,7 +38,7 @@ describe("EmbedSnippet", () => {
     render(<EmbedSnippet {...baseProps} />);
     // The signature snippet is rendered verbatim in a <pre><code> block.
     expect(
-      screen.getByText(/Chat with my AI · probot\.dev\/u\/jane-doe/),
+      screen.getByText(/Chat with my AI · pro-bot\.dev\/u\/jane-doe/),
     ).toBeInTheDocument();
   });
 
@@ -47,7 +47,7 @@ describe("EmbedSnippet", () => {
     const html = signatureBadgeHtml({
       username: "jane-doe",
       themeColor: "#ff00aa",
-      origin: "https://probot.dev",
+      origin: "https://pro-bot.dev",
     });
     expect(html).toContain("color:#ff00aa");
   });
@@ -58,10 +58,10 @@ describe("signatureBadgeHtml", () => {
     const html = signatureBadgeHtml({
       username: "jane",
       themeColor: "#7c5cff",
-      origin: "https://probot.dev",
+      origin: "https://pro-bot.dev",
     });
-    expect(html).toContain("probot.dev/u/jane");
-    // The visible body should NOT show the leading https:// — only the
+    expect(html).toContain("pro-bot.dev/u/jane");
+    // The visible body should NOT show the leading https:// - only the
     // href attribute carries it. Anchor text is the user-facing slug.
     const innerText = html.replace(/<a [^>]+>/, "").replace(/<\/a>/, "");
     expect(innerText).not.toContain("https://");
@@ -71,9 +71,9 @@ describe("signatureBadgeHtml", () => {
     const html = signatureBadgeHtml({
       username: "jane",
       themeColor: "#7c5cff",
-      origin: "https://probot.dev",
+      origin: "https://pro-bot.dev",
     });
-    expect(html).toContain('href="https://probot.dev/u/jane/chat"');
+    expect(html).toContain('href="https://pro-bot.dev/u/jane/chat"');
   });
 
   it("respects http (dev) origins", () => {

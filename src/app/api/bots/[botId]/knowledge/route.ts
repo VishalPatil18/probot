@@ -2,10 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { EmbeddingError } from "@/lib/ai/embeddings";
-import {
-  KeyTransportError,
-  readEmbeddingApiKey,
-} from "@/lib/ai/key-transport";
+import { KeyTransportError, readEmbeddingApiKey } from "@/lib/ai/key-transport";
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { db, knowledgeBase } from "@/lib/db";
 import {
@@ -21,6 +18,7 @@ import {
   PDF_MIME_TYPE,
   extractPdfText,
 } from "@/lib/ingestion/extract-pdf";
+import { assertSafeBuffer } from "@/lib/uploads/malware-scan";
 
 const MANUAL_TEXT_SOURCE = "manual_text";
 
@@ -71,7 +69,7 @@ export async function POST(
   }
 
   // Stage 3 RAG: optional OpenAI key for embedding generation. Absent header
-  // means "skip embeddings" — the bot falls back to full-context at chat
+  // means "skip embeddings" - the bot falls back to full-context at chat
   // time. Malformed header (wrong length) is rejected early.
   let embeddingApiKey: string | null;
   try {
@@ -101,7 +99,9 @@ export async function POST(
 
   const fileEntries = formData
     .getAll("files")
-    .filter((v): v is File => typeof v === "object" && v !== null && "name" in v);
+    .filter(
+      (v): v is File => typeof v === "object" && v !== null && "name" in v,
+    );
 
   if (fileEntries.length === 0 && manualText.length === 0) {
     return NextResponse.json(
@@ -159,6 +159,12 @@ export async function POST(
         );
       }
       const buffer = Buffer.from(await file.arrayBuffer());
+      // Stage 7 Phase 6 §NFR-S02: heuristic safety scan BEFORE handing
+      // the buffer to pdf-parse. Rejects renamed executables, Office
+      // macro containers, EICAR, and magic-byte / MIME / extension
+      // mismatches. See src/lib/uploads/malware-scan.ts for the trade
+      // (no real AV scan in the serverless path; documented limitation).
+      assertSafeBuffer(buffer, file.name, file.type || PDF_MIME_TYPE);
       const text = await extractPdfText(buffer);
       await deleteSource(bot.id, file.name);
       await persistChunks(bot.id, file.name, "pdf", text);
@@ -181,7 +187,7 @@ export async function POST(
   }
 
   // Stage 3 RAG: embed each newly persisted source. Embedding failures are
-  // logged but do NOT fail the request — the chunks remain queryable via the
+  // logged but do NOT fail the request - the chunks remain queryable via the
   // legacy full-context path (assembled below). The user gets a degraded but
   // working bot rather than a 5xx on an OpenAI hiccup.
   let embeddingError: string | null = null;
@@ -195,7 +201,7 @@ export async function POST(
         });
       }
     } catch (err) {
-      // Bound the error surface to a category — never serialize raw `err.message`
+      // Bound the error surface to a category - never serialize raw `err.message`
       // because a network-layer error could carry the BYO key in headers or
       // URL parts. `EmbeddingError.category` is a small string union; all
       // other errors collapse to a generic label.
@@ -282,4 +288,3 @@ async function summarizeSources(botId: string): Promise<SourceSummary[]> {
   }
   return Array.from(grouped.values());
 }
-

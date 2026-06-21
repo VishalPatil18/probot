@@ -14,7 +14,7 @@ const MAX_CHARS = 200;
 // page. Mirrors the Bot Factory affordance but is its own component (the
 // wizard step has different copy / spacing).
 //
-// Editing in place is intentionally out of scope — users delete + re-add.
+// Editing in place is intentionally out of scope - users delete + re-add.
 // Cap enforced at 6 to match the slice-5 `botInput` schema; Add button
 // disables when the cap is hit so the UI matches the server contract.
 export function SuggestedQuestionsEditor({ value, onChange }: Props) {
@@ -27,7 +27,7 @@ export function SuggestedQuestionsEditor({ value, onChange }: Props) {
     if (trimmed.length > MAX_CHARS) return;
     if (value.length >= MAX_QUESTIONS) return;
     if (value.includes(trimmed)) {
-      // Silent dedupe is confusing — surface "already in the list" so the
+      // Silent dedupe is confusing - surface "already in the list" so the
       // user knows why their Add appeared to do nothing.
       setHint("Already in the list.");
       setDraft("");

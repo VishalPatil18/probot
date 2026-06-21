@@ -98,7 +98,7 @@ describe("BotFactoryForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders Google as the only disabled provider with SOON badge (anthropic/openai/azure enabled)", async () => {
+  it("renders all four providers as enabled (Stage 7 Phase 4 - Google Gemini live)", async () => {
     const user = userEvent.setup();
     render(<BotFactoryForm username="jane" />);
     await fillStep1(user);
@@ -108,13 +108,16 @@ describe("BotFactoryForm", () => {
     const google = screen.getByRole("button", { name: /Google/i });
     const azure = screen.getByRole("button", { name: /Azure/i });
     // `/^OpenAI/i` anchors to the start of the accessible name so it matches
-    // only the OpenAI provider button — not Azure, whose family label also
+    // only the OpenAI provider button - not Azure, whose family label also
     // contains "OpenAI" ("Azure / OpenAI").
     const openai = screen.getByRole("button", { name: /^OpenAI/i });
-    expect(google).toBeDisabled();
+    const anthropic = screen.getByRole("button", { name: /Anthropic/i });
+    expect(google).toBeEnabled();
     expect(azure).toBeEnabled();
     expect(openai).toBeEnabled();
-    expect(within(google).getByText("SOON")).toBeInTheDocument();
+    expect(anthropic).toBeEnabled();
+    // The SOON badge that used to live on the Google card is gone.
+    expect(within(google).queryByText(/SOON/i)).toBeNull();
   });
 
   it("Azure flow: shows endpoint + deployment + apiVersion fields, saves Azure creds, submits with deployment as llmModel", async () => {
@@ -138,7 +141,7 @@ describe("BotFactoryForm", () => {
       screen.getByLabelText(/azure api key/i),
       "azure-test-key-1234567890",
     );
-    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
+    await user.click(screen.getByRole("button", { name: /save as draft/i }));
 
     expect(setApiKeyMock).toHaveBeenCalledWith("azure-test-key-1234567890");
     expect(setAzureCredsMock).toHaveBeenCalledWith({
@@ -165,7 +168,7 @@ describe("BotFactoryForm", () => {
     await fillStep2(user);
     await passStep3(user);
     await fillStep4(user, "sk-ant-test-1234567890");
-    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
+    await user.click(screen.getByRole("button", { name: /save as draft/i }));
 
     expect(setApiKeyMock).toHaveBeenCalledWith("sk-ant-test-1234567890");
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -180,7 +183,7 @@ describe("BotFactoryForm", () => {
     expect(init.body).not.toContain("sk-ant-test-1234567890");
 
     expect(
-      await screen.findByRole("heading", { name: /ready to deploy/i }),
+      await screen.findByRole("heading", { name: /preview before you publish/i }),
     ).toBeInTheDocument();
   });
 
@@ -194,7 +197,7 @@ describe("BotFactoryForm", () => {
     await fillStep2(user);
     await passStep3(user);
     await fillStep4(user, "sk-ant-test-1234567890");
-    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
+    await user.click(screen.getByRole("button", { name: /save as draft/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /validation failed/i,
@@ -209,7 +212,7 @@ describe("BotFactoryForm", () => {
     await fillStep2(user);
     await passStep3(user);
     await fillStep4(user, "sk-ant-test-1234567890");
-    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
+    await user.click(screen.getByRole("button", { name: /save as draft/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /network error/i,
@@ -257,7 +260,7 @@ describe("BotFactoryForm", () => {
     await fillStep2(user);
     await passStep3(user);
     await fillStep4(user, "sk-ant-test-1234567890");
-    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
+    await user.click(screen.getByRole("button", { name: /save as draft/i }));
 
     expect(fetchMock).toHaveBeenCalled();
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -290,7 +293,7 @@ describe("BotFactoryForm", () => {
     await user.click(screen.getByRole("button", { name: /continue/i }));
     await passStep3(user);
     await fillStep4(user, "sk-ant-test-1234567890");
-    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
+    await user.click(screen.getByRole("button", { name: /save as draft/i }));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const secondCall = fetchMock.mock.calls[1] as [string, RequestInit];
@@ -315,9 +318,9 @@ describe("BotFactoryForm", () => {
     await fillStep2(user);
     await passStep3(user);
     await fillStep4(user, "sk-ant-test-1234567890");
-    await user.click(screen.getByRole("button", { name: /save & deploy/i }));
-    await screen.findByRole("heading", { name: /ready to deploy/i });
-    await user.click(screen.getByRole("button", { name: /preview bot/i }));
+    await user.click(screen.getByRole("button", { name: /save as draft/i }));
+    await screen.findByRole("heading", { name: /preview before you publish/i });
+    await user.click(screen.getByRole("button", { name: /open chat/i }));
     expect(pushMock).toHaveBeenCalledWith("/u/jane/chat");
   });
 });

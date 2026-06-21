@@ -15,7 +15,7 @@ type Props = {
   className?: string;
   /**
    * When true, render only the clipboard icon (matches the topbar URL
-   * pill in design/dashboard.html — `content_copy` material icon).
+   * pill in design/dashboard.html - `content_copy` material icon).
    * The button's accessible name still carries the human-readable state.
    */
   iconOnly?: boolean;
@@ -97,7 +97,7 @@ export function CopyUrlButton({
         "rounded-xl border border-border-base bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50"
       }
     >
-      {iconOnly ? (copied ? <CheckIcon /> : <CopyIcon />) : text}
+      {iconOnly ? copied ? <CheckIcon /> : <CopyIcon /> : text}
     </button>
   );
 }

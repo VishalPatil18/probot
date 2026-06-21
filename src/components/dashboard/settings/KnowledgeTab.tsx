@@ -17,7 +17,7 @@ type Props = {
 
 type Status = "idle" | "loading" | "uploading" | "reprocessing" | "error";
 
-// Slice B — Knowledge base tab. Same wiring as slice 6.5 KnowledgeManager
+// Slice B - Knowledge base tab. Same wiring as slice 6.5 KnowledgeManager
 // (the underlying /knowledge endpoints don't change) but visual layout
 // matches design/settings.html: source rows with type-icon + filename +
 // "N chunks · indexed" caption + small icon-only delete, "Re-index all"
@@ -54,9 +54,7 @@ export function KnowledgeTab({ botId }: Props) {
   }, [refresh]);
 
   async function handleUpload(files: FileList | File[]) {
-    const list = Array.from(files).filter(
-      (f) => f.type === "application/pdf",
-    );
+    const list = Array.from(files).filter((f) => f.type === "application/pdf");
     if (list.length === 0) {
       setErrorMsg("Only PDF files are supported.");
       return;
@@ -139,8 +137,7 @@ export function KnowledgeTab({ botId }: Props) {
     e.target.value = "";
   }
 
-  const totalChunks =
-    sources?.reduce((sum, s) => sum + s.chunkCount, 0) ?? 0;
+  const totalChunks = sources?.reduce((sum, s) => sum + s.chunkCount, 0) ?? 0;
 
   return (
     <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
@@ -174,7 +171,8 @@ export function KnowledgeTab({ botId }: Props) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{src.name}</p>
                 <p className="text-[11px] text-success">
-                  {src.chunkCount} chunk{src.chunkCount === 1 ? "" : "s"} · indexed
+                  {src.chunkCount} chunk{src.chunkCount === 1 ? "" : "s"} ·
+                  indexed
                 </p>
               </div>
               <button

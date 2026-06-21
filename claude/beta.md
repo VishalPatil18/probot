@@ -1,6 +1,6 @@
 # ProBot - v1.0 7-Stage Build Plan
 
-> ProBot is free, open-source software (MIT). There is no Stripe integration, no Free/Pro tiers, and no paid features. Users bring their own LLM API key (Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT, etc.); the key is stored locally (browser local storage or self-host config) and is **never** transmitted to or persisted on ProBot servers. Rate limits remain, but exist only to protect the user's own LLM credits and are configurable when self-hosting.
+> ProBot is free, open-source software (MIT). There is no Stripe integration, no Free/Pro tiers, and no paid features. Users bring their own LLM API key (Anthropic Claude, Google Gemini, OpenAI GPT, Azure OpenAI, etc.); the key is stored locally (browser local storage or self-host config) and is **never** transmitted to or persisted on ProBot servers. Rate limits remain, but exist only to protect the user's own LLM credits and are configurable when self-hosting.
 
 ## Overview
 
@@ -12,7 +12,7 @@ This document outlines a **7-stage incremental development plan** for pro-bot, d
 
 - **Open-source, no billing**: Stage 7 no longer adds Stripe, tier enforcement, or "Upgrade to Pro" prompts. It focuses on OAuth, compliance (GDPR / ToS / Privacy), landing page, security hardening, monitoring, and self-host packaging.
 - **BYO-key LLM from Stage 1**: The Bot Factory now includes an "AI Model" step (FR-002.11, FR-002.12). The chat API resolves the user's selected provider/model and uses the locally stored key passed in per request (`x-llm-api-key` header) - never persisted server-side.
-- **Multi-provider abstraction**: From Stage 1, the AI client is provider-agnostic (Anthropic / Google / DeepSeek / OpenAI). Stage 3 extends this to embeddings.
+- **Multi-provider abstraction**: From Stage 1, the AI client is provider-agnostic (Anthropic / Google / OpenAI / Azure). Stage 3 extends this to embeddings.
 - **Schema deltas**: `users` table gains `llm_provider` / `llm_model` (non-sensitive preferences only). Columns `tier`, `stripe_customer_id`, `stripe_subscription_id` from the v1.0 plan are removed.
 - **Rate limits as cost protection**: Limits are uniform (no Free vs Pro split), configurable via env / self-host config, and exist only to protect the user's own LLM credits.
 
@@ -95,12 +95,12 @@ probot/
         index.ts                   # DB connection
       ai/
         providers/
-          index.ts                 # Provider registry (anthropic, google, deepseek, openai)
+          index.ts                 # Provider registry (anthropic, google, openai, azure)
           types.ts                 # Shared LLMProvider interface
           anthropic.ts             # Claude completion adapter
           openai.ts                # GPT completion adapter
           google.ts                # Gemini completion adapter (stub ok in S1)
-          deepseek.ts              # DeepSeek completion adapter (stub ok in S1)
+          azure.ts                 # Azure OpenAI completion adapter
         prompt-builder.ts          # Adapted from VAi's buildSystemPrompt
         sanitize-input.ts          # Adapted from VAi's sanitizeMessage
         sanitize-output.ts         # Adapted from VAi's sanitizeOutput
@@ -236,7 +236,7 @@ NEXTAUTH_URL=http://localhost:3000
 - [x] NextAuth.js email/password authentication
 - [x] Bot Factory form (name, headline, text area, personality selector, **AI Model step with BYO API key field**)
 - [x] Browser-side LLM key store (`localStorage`) with "stored locally, never tracked" UI assurance
-- [x] Multi-provider LLM client abstraction (Anthropic + OpenAI minimum; Google/DeepSeek stubs)
+- [x] Multi-provider LLM client abstraction (Anthropic + OpenAI + Azure + Google Gemini)
 - [x] Chat API ported from VAi's `ask_vai.ts` (full-context injection) using BYO key via `x-llm-api-key` header
 - [x] Key-transport guarantees: header is never logged, never persisted, never forwarded except to the chosen provider
 - [x] Chat UI ported from VAi's `VAi.tsx` (markdown, loading, suggestions)
@@ -407,7 +407,7 @@ Replace full-context injection with Retrieval-Augmented Generation. When a recru
 
 ### SRS Requirements Covered
 
-- **FR-003.4**: Generate vector embeddings using the user's configured provider (OpenAI `text-embedding-3-small`, or a provider equivalent for Anthropic / Google / DeepSeek), authenticated with the user-supplied BYO key
+- **FR-003.4**: Generate vector embeddings using the user's configured provider (OpenAI `text-embedding-3-small`, or a provider equivalent for Anthropic / Google), authenticated with the user-supplied BYO key
 - **FR-003.5**: Store embeddings in vector DB namespaced by Bot ID
 - **FR-004.1-4.8**: Full RAG pipeline (embed query, retrieve top-3, construct prompt, generate via user's LLM provider)
 
@@ -473,7 +473,7 @@ Call embeddings.embed(chunk.content_text)  // dispatched by provider registry
   - openai: text-embedding-3-small (1536d)
   - anthropic: voyage-3 or equivalent (mapped to 1536d via projection if needed)
   - google: text-embedding-004
-  - deepseek: provider's embedding model
+  - azure: deployment-mapped text-embedding-3-small
   Uses the BYO API key passed in the ingestion request header.
     |
     v
@@ -1332,7 +1332,7 @@ All items from SRS Section 9, verified and production-ready:
 - Vercel Analytics for performance monitoring
 - Custom logging for: chat API errors, rate limit hits, ingestion failures
 
-#### 7.11 Dashboard Redesign — Stage 7 Follow-ups
+#### 7.11 Dashboard Redesign - Stage 7 Follow-ups
 
 Items deferred from Slices A / B / C of the dashboard visual redesign
 (2026-06-20). Each is a self-contained Stage 7 task; the corresponding
@@ -1348,13 +1348,13 @@ faded preview of the future state.
   `clearApiKey` helpers + an Azure-creds variant for the dual-field case.
 - Model dropdown contents come from a small per-provider catalog:
   `{ anthropic: ['claude-opus-4', 'claude-sonnet-4', 'claude-haiku-4-5'],
-  google: ['gemini-2.5-pro', 'gemini-2.5-flash'], openai: ['gpt-4o',
-  'gpt-4o-mini', 'o3-mini'] }`. Extract from the Bot Factory's existing
+google: ['gemini-2.5-pro', 'gemini-2.5-flash'], openai: ['gpt-4o',
+'gpt-4o-mini', 'o3-mini'] }`. Extract from the Bot Factory's existing
   catalog.
 - Show "key validated · last used X ago" by inspecting localStorage's
   last-used timestamp (write it in the chat route's success path,
   client-side after the response).
-- Telemetry toggle is optional — keep it off by default, store the
+- Telemetry toggle is optional - keep it off by default, store the
   preference in localStorage only (no server roundtrip).
 
 **B. Custom instructions field (Slice B placeholder → live field)**
@@ -1371,7 +1371,7 @@ faded preview of the future state.
 **C. Account tab editing endpoints (Slice B placeholder → live form)**
 
 - `PUT /api/account` with Zod-validated `{ name?, email?, username?,
-  currentPassword?, newPassword? }`. Trims, lowercases email, enforces
+currentPassword?, newPassword? }`. Trims, lowercases email, enforces
   USERNAME_REGEX + reserved-slug check (same as registration), bcrypt
   password verification before update.
 - Email change requires a verification round-trip (Resend magic link
@@ -1384,7 +1384,7 @@ faded preview of the future state.
 
 - Add `getWeekOverWeekDelta(userId)` to `src/lib/analytics/queries.ts`.
   Returns `{ conversations: { current, previous }, leads: { current,
-  previous }, messages: ... }` for the trailing 7 days vs. the 7 days
+previous }, messages: ... }` for the trailing 7 days vs. the 7 days
   before that.
 - Format as "+18%" / "-3%" / "= 0%" in the MetricTile. Removes the
   faded opacity + Coming Soon pill.
@@ -1393,7 +1393,7 @@ faded preview of the future state.
 
 - Persist `tokens_used` AND `latency_ms` on the `messages` table for
   assistant rows. Migration: `ALTER TABLE messages ADD COLUMN
-  latency_ms integer`. The chat route already times the provider call
+latency_ms integer`. The chat route already times the provider call
   before sanitize-output; capture that span.
 - New analytics function: `getAvgAssistantLatency(userId, days)`
   averaging the last 7 days of assistant messages. Format as "X.Xs" in
@@ -1417,13 +1417,13 @@ faded preview of the future state.
 **H. Export / Retention / Delete account (Slice B Coming Soon → live)**
 
 - Three endpoints, each Stage-7-GDPR-scoped:
-  - `POST /api/account/export` — streams ZIP of conversations + leads +
+  - `POST /api/account/export` - streams ZIP of conversations + leads +
     knowledge base sources as JSON. Generated on-demand (no background
     job at this stage).
   - Retention configuration: `users.retention_days` column (default 90)
-    + nightly cron deleting `conversations` + `messages` older than the
-    user's setting.
-  - `DELETE /api/account` — soft-delete with 30-day grace period; cron
+    - nightly cron deleting `conversations` + `messages` older than the
+      user's setting.
+  - `DELETE /api/account` - soft-delete with 30-day grace period; cron
     hard-deletes after 30 days. Cascades to bots, conversations, leads,
     knowledge_base, notifications, sessions.
 
@@ -1439,10 +1439,10 @@ faded preview of the future state.
 **J. Docs site stub (Slice A/C follow-up)**
 
 - Sidebar "Embed & share" + dashboard "Full embed guide" both point at
-  `https://docs.probot.dev/guides/embed-widget` which 404s today. Either:
+  `https://docs.pro-bot.dev/guides/embed-widget` which 404s today. Either:
   (a) Build a real docs site (Mintlify, Docusaurus, or a static
   `/docs/` route in this Next app), OR (b) keep the external URL and
-  ensure it resolves once probot.dev is live in the Stage 7 launch
+  ensure it resolves once pro-bot.dev is live in the Stage 7 launch
   push. Decision deferred until the open-source landing-page work
   starts.
 
@@ -1469,7 +1469,7 @@ faded preview of the future state.
 **Everything.** The full ProBot platform is production-ready and open source:
 
 - Users sign up (email or OAuth), pick an LLM provider/model, paste their own API key (stored locally only), and create bots from PDFs/URLs/text
-- Bots use RAG for intelligent, contextual answers via the user's chosen provider (Anthropic / Google / DeepSeek / OpenAI)
+- Bots use RAG for intelligent, contextual answers via the user's chosen provider (Anthropic / Google / OpenAI / Azure)
 - Public URLs and embeddable widgets for distribution
 - Dashboard with analytics, conversation logs, lead capture, and LLM key status
 - Uniform, configurable rate limits protecting users' own LLM credits
@@ -1532,28 +1532,158 @@ faded preview of the future state.
 
 ## Tech Stack (Final)
 
-| Layer                    | Technology                                                                                                               | Introduced In |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------- |
-| **Framework**            | Next.js 14+ (App Router)                                                                                                 | Stage 1       |
-| **Language**             | TypeScript                                                                                                               | Stage 1       |
-| **Styling**              | Tailwind CSS                                                                                                             | Stage 1       |
-| **ORM**                  | Drizzle ORM                                                                                                              | Stage 1       |
-| **Database**             | PostgreSQL (Supabase/Neon)                                                                                               | Stage 1       |
-| **Auth**                 | NextAuth.js (email/password in Stage 1; OAuth in Stage 7)                                                                | Stage 1       |
-| **AI (Chat)**            | Multi-provider BYO-key client: Anthropic Claude, Google Gemini, DeepSeek, OpenAI GPT (key stored locally, never tracked) | Stage 1       |
-| **AI (Embeddings)**      | Provider-matched embeddings (OpenAI `text-embedding-3-small`, Google `text-embedding-004`, Anthropic Voyage, DeepSeek)   | Stage 3       |
-| **Vector DB**            | Pinecone or Supabase pgvector                                                                                            | Stage 3       |
-| **File Storage**         | AWS S3 (Always Free: 5 GB + 20K GET + 2K PUT)                                                                            | Stage 2       |
-| **CDN**                  | AWS CloudFront (Always Free: 1 TB + 10M req) - fronts S3 for `widget.js`                                                 | Stage 5       |
-| **Widget Build**         | esbuild                                                                                                                  | Stage 5       |
-| **In-app notifications** | Postgres `notifications` table + dashboard bell badge (no email)                                                         | Stage 6       |
-| **Transactional email**  | **Resend** (auth flows only: verify email + password reset). AWS SES intentionally not used.                             | Stage 7       |
-| **License**              | MIT (open source, no payments)                                                                                           | Stage 7       |
-| **Cache/Rate Limit**     | Upstash Redis (uniform, configurable, BYO-credit protection)                                                             | Stage 7       |
-| **Self-Host**            | Docker + docker-compose                                                                                                  | Stage 7       |
-| **Monitoring**           | Sentry + Vercel Analytics (with `x-llm-api-key` header scrubbing)                                                        | Stage 7       |
-| **Hosting**              | Vercel (also self-hostable on any Node 20+ host)                                                                         | Stage 1       |
+| Layer                    | Technology                                                                                                                   | Introduced In |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| **Framework**            | Next.js 14+ (App Router)                                                                                                     | Stage 1       |
+| **Language**             | TypeScript                                                                                                                   | Stage 1       |
+| **Styling**              | Tailwind CSS                                                                                                                 | Stage 1       |
+| **ORM**                  | Drizzle ORM                                                                                                                  | Stage 1       |
+| **Database**             | PostgreSQL (Supabase/Neon)                                                                                                   | Stage 1       |
+| **Auth**                 | NextAuth.js (email/password in Stage 1; OAuth in Stage 7)                                                                    | Stage 1       |
+| **AI (Chat)**            | Multi-provider BYO-key client: Anthropic Claude, Google Gemini, OpenAI GPT, Azure OpenAI (key stored locally, never tracked) | Stage 1       |
+| **AI (Embeddings)**      | Provider-matched embeddings (OpenAI `text-embedding-3-small`, Google `text-embedding-004`, Anthropic Voyage, Azure OpenAI)   | Stage 3       |
+| **Vector DB**            | Pinecone or Supabase pgvector                                                                                                | Stage 3       |
+| **File Storage**         | AWS S3 (Always Free: 5 GB + 20K GET + 2K PUT)                                                                                | Stage 2       |
+| **CDN**                  | AWS CloudFront (Always Free: 1 TB + 10M req) - fronts S3 for `widget.js`                                                     | Stage 5       |
+| **Widget Build**         | esbuild                                                                                                                      | Stage 5       |
+| **In-app notifications** | Postgres `notifications` table + dashboard bell badge (no email)                                                             | Stage 6       |
+| **Transactional email**  | **Resend** (auth flows only: verify email + password reset). AWS SES intentionally not used.                                 | Stage 7       |
+| **License**              | MIT (open source, no payments)                                                                                               | Stage 7       |
+| **Cache/Rate Limit**     | Upstash Redis (uniform, configurable, BYO-credit protection)                                                                 | Stage 7       |
+| **Self-Host**            | Docker + docker-compose                                                                                                      | Stage 7       |
+| **Monitoring**           | Sentry + Vercel Analytics (with `x-llm-api-key` header scrubbing)                                                            | Stage 7       |
+| **Hosting**              | Vercel (also self-hostable on any Node 20+ host)                                                                             | Stage 1       |
 
 > **Removed in v1.1:** Stripe is not part of the stack.
 >
 > **Removed in this revision (post Stage 1 close-out):** AWS SES (replaced by Resend for auth-only emails; Stage 6 lead notifications are now in-app). AWS EC2 (not a recommended deploy target - Vercel primary; Render / Fly.io / Railway / Lightsail for self-hosters). The AWS surface is now strictly **S3 (Stage 2) + CloudFront (Stage 5)** for clean Always Free tier coverage.
+
+---
+
+## ✅ Beta Version - Shipped Features
+
+> This plan (formerly `plan.md`) drove the Beta build. Below is the complete checkbox list of what shipped across all 7 stages. The active forward-looking plan is `plan-v1.md`; v2.0 backlog lives in `plan-v2.md`.
+
+### Stage 1 - Foundation & Bot Creation
+
+- [x] Next.js 14 App Router scaffolding with TypeScript strict, Tailwind, Drizzle ORM
+- [x] PostgreSQL schema: `users` + `bots` tables with UUID PKs and proper FK cascades
+- [x] NextAuth email/password authentication with JWT session strategy
+- [x] Login + register UI (split-panel design with brand panel)
+- [x] Multi-provider LLM client abstraction: Anthropic, OpenAI, Azure OpenAI adapters
+- [x] BYO key transport via `x-llm-api-key` header (never in JSON body, never logged)
+- [x] Browser key store (`localStorage` Beta default; migrated to encrypted IndexedDB in Stage 7 Phase 6)
+- [x] 5-step Bot Factory wizard (identity → knowledge → personality → AI model → deploy)
+- [x] `POST /api/bots` upsert with one-bot-per-user model
+- [x] Chat UI with `react-markdown` + `remark-gfm`, auto-expanding textarea, suggested questions
+- [x] `POST /api/chat/[botId]` with full sanitization (input + output) and 2-tier rate limit
+
+### Stage 2 - Data Ingestion Pipeline
+
+- [x] PDF text extraction via `pdf-parse` with magic-byte verification
+- [x] Token-aware chunking via `tiktoken` (cl100k_base, 750/100 with overlap)
+- [x] `knowledge_base` table with per-source replace semantics
+- [x] `bots.context_text` reassembly from chunks ordered by (source_name, chunk_index)
+- [x] Per-bot `context_token_cap` (default 12,000) with Advanced disclosure in wizard
+
+### Stage 3 - RAG & Vector Search
+
+- [x] pgvector extension with 1536-dim embedding column
+- [x] OpenAI `text-embedding-3-large` truncated via Matryoshka representation
+- [x] Optional BYO embedding key (`x-embedding-api-key` header) - bots without a key fall back to full-context
+- [x] Cosine similarity retrieval with top-K=3 chunks injected into system prompt
+- [x] Graceful fallback to full-context when retrieval fails
+
+### Stage 4 - Public Chat & Onboarding
+
+- [x] Public `/u/[username]/chat` route (no-auth, recruiter-facing)
+- [x] Username slug enforcement at registration via `USERNAME_REGEX` + reserved-slug set
+- [x] Onboarding flow for OAuth/magic-link users to pick a real username
+- [x] Default avatar selection (deterministic animal icons by username)
+
+### Stage 5 - Embeddable Widget
+
+- [x] Single-file embeddable widget (`/widget.js`, 8 KB minified)
+- [x] Shadow DOM isolation to prevent host-page CSS conflicts
+- [x] CORS-enabled chat API for cross-origin widget calls
+- [x] Per-bot theme color (hex, default `#7c5cff`) flowing through widget + signature badge
+
+### Stage 6 - Dashboard, Analytics & Lead Capture
+
+- [x] Conversation persistence: `conversations` + `messages` tables with UPSERT on (bot_id, session_id)
+- [x] In-chat lead capture after N messages with `leads` table
+- [x] In-app notifications with `notifications` table + 30-second poll
+- [x] Dashboard home: conversations chart, recent leads, bot share card
+- [x] 5-tab settings page: Account / Bot configuration / Knowledge base / Security & privacy / AI model & key
+- [x] Notification bell + unread badge in topbar
+
+### Stage 7 - Open-Source Hardening, Compliance & Launch
+
+**Phase 1 - Auth hardening**
+
+- [x] `allowDangerousEmailAccountLinking: false` on GitHub + Google providers
+- [x] Email verification gate on credentials login (throws `email_not_verified` until verified)
+- [x] Full password reset flow: `password_reset_tokens` table (SHA-256 hashed, 1h TTL, single-use), `/forgot-password` + `/reset-password` pages, Resend email
+- [x] Email verification tokens (24h TTL) sent on credentials registration
+
+**Phase 2 - Bot enhancements**
+
+- [x] `custom_instructions` column (max 2000 chars) wired into wizard Step 3 + dashboard settings + system prompt builder
+- [x] Bot draft/publish flow: `is_active=false` by default, signed HMAC `preview_token`, `POST /api/bots/[botId]/publish`
+- [x] Per-bot configurable rate limits (`rate_limit_per_minute`, `rate_limit_per_day`, `rate_limit_max_chars`) with dashboard editor and chat-route enforcement
+- [x] Private preview URL (`/u/[username]/chat?preview=<token>`) for draft bots with `robots: { index: false }`
+
+**Phase 3 - Hybrid managed key storage**
+
+- [x] AES-256-GCM envelope encryption (`src/lib/crypto/envelope.ts`) with per-bot DEK + env-stored KEK
+- [x] `encrypted_llm_keys` table (one row per bot) + `decrypt_audit_log` table (30-day retention)
+- [x] `POST/DELETE /api/bots/[botId]/llm-key` for managed key store + revoke
+- [x] `GET /api/bots/[botId]/llm-key/audit` returning last 30 days of decrypt events
+- [x] `PATCH /api/users/me/llm-prefs` backing the dashboard provider/model switcher
+- [x] Live `AIModelKeyTab` with provider switcher, key status badge, audit log, revoke button
+- [x] Salted IP hashing (`src/lib/crypto/ip-hash.ts`) for audit-log requester identification
+- [x] `redactSensitive` helper (`src/lib/server/redact.ts`) for logger payload sanitization
+
+**Phase 4 - Provider polish + reliability**
+
+- [x] Real Google Gemini adapter (`@google/generative-ai`, `gemini-2.5-flash` default)
+- [x] DeepSeek removed from forward-looking docs + provider registry
+- [x] In-process per-provider circuit breaker (closed/open/half-open, 5-failure threshold, 30s cooldown)
+- [x] NFR-S04 graceful AI fallback: 200 response with `fallback: "circuit_open"` when breaker is open
+- [x] All four providers enabled in bot factory (Anthropic, OpenAI, Azure, Google Gemini)
+
+**Phase 5 - GDPR compliance**
+
+- [x] `GET /api/users/me/export` streaming JSON bundle (strips `hashedPassword`, `previewToken`, vector embeddings)
+- [x] `POST /api/users/me/delete` with 7-day grace period and `deletion_requests` table (email + username snapshot)
+- [x] `POST /api/users/me/undo-deletion` public route (token IS auth) + `/(auth)/undo-deletion` landing page
+- [x] Daily Vercel Cron at `/api/cron/purge-deleted-accounts` with `CRON_SECRET` auth, fail-closed
+- [x] `DeleteAccountModal` + `DeleteBotModal` (GitHub-style typed-identifier + typed-phrase confirmation)
+- [x] `DELETE /api/bots/[botId]` (immediate, no grace) wired into bot config tab Danger Zone
+- [x] Deletion-initiated + deletion-complete email templates with undo link
+- [x] Privacy + Terms copy updated for 7-day grace + undo + 30-day outer bound
+
+**Phase 6 - Upload + key store hardening**
+
+- [x] Malware-scan module (`src/lib/uploads/malware-scan.ts`) with magic-byte + extension + MIME + executable signature blocklist + EICAR detection
+- [x] Wired into PDF upload route before `pdf-parse`
+- [x] Secure key store (`src/lib/client/secure-key-store.ts`) with IndexedDB + non-extractable Web Crypto AES-256-GCM master key
+- [x] `llm-key-store` + `embedding-key-store` rewritten async on top of secure-key-store with one-time localStorage migration
+- [x] All three callers (`ChatWindow`, `BotFactoryForm`, `AIModelKeyTab`) migrated to await new async API
+
+**Phase 7 - Launch prep**
+
+- [x] KEK rotation CLI (`npm run kek:rotate` with `--dry-run`); per-row idempotent; re-wraps DEK only
+- [x] CI key-leak grep guard (`npm run check:key-leaks`) with per-file allow-list of 13 modules
+- [x] Landing page copy updated for hybrid managed/self-host model with `/about#hybrid` link
+- [x] About page `#hybrid` section with side-by-side managed vs self-hosted cards + operator-trust caveat
+- [x] `/self-hosting` docs page (requirements, deploy steps, key-storage choice, KEK rotation runbook, cron secret, honest caveats)
+- [x] README rewritten: hybrid hero, updated architecture table, two-panel BYO-key flow diagram, KEK rotation section, Stage 8+ roadmap
+
+### Beta-wide stats
+
+- **12 Drizzle migrations** (0000 → 0012)
+- **803 tests** across **87 files**, all green
+- **263 source files** scanned by the key-leak guard, 0 violations
+- **4 LLM providers** live: Anthropic, OpenAI, Azure OpenAI, Google Gemini
+- **TypeScript strict**, zero `any` in application code, Next.js production build green

@@ -77,8 +77,9 @@ function resetTransactionMock() {
   txCalls.leadInsertValues = undefined;
   txCalls.conversationUpdateSet = undefined;
   txCalls.notificationInsertValues = undefined;
-  transactionMock.mockReset().mockImplementation(
-    async (cb: (tx: unknown) => Promise<unknown>) => {
+  transactionMock
+    .mockReset()
+    .mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
       let insertCallCount = 0;
       const tx = {
         insert: () => {
@@ -119,8 +120,7 @@ function resetTransactionMock() {
         }),
       };
       return cb(tx);
-    },
-  );
+    });
 }
 
 describe("GET /api/bots/[botId]/leads", () => {
@@ -242,7 +242,10 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
     );
 
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { lead: { id: string }; deduped: boolean };
+    const body = (await res.json()) as {
+      lead: { id: string };
+      deduped: boolean;
+    };
     expect(body.deduped).toBe(false);
     expect(body.lead.id).toBe("lead-new");
 
@@ -295,7 +298,7 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
     };
     expect(body.deduped).toBe(true);
     expect(body.lead.id).toBe("lead-existing");
-    // No transaction was opened — idempotent path skips the write entirely
+    // No transaction was opened - idempotent path skips the write entirely
     expect(transactionMock).not.toHaveBeenCalled();
   });
 
