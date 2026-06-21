@@ -27,13 +27,30 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+const AVAILABILITY_OK = {
+  username: { available: true },
+  email: { available: true },
+};
+
+// The form fires a debounced availability check AND the register POST through
+// the same global fetch. Route by URL: availability returns "all clear" unless
+// a test overrides it; the register call uses the supplied responder.
+function routeFetch(registerResponder: () => Promise<Response>) {
+  fetchMock.mockImplementation((url: string) => {
+    if (String(url).includes("check-availability")) {
+      return Promise.resolve(jsonResponse(200, AVAILABILITY_OK));
+    }
+    return registerResponder();
+  });
+}
+
 async function fillAndSubmit(
   user: ReturnType<typeof userEvent.setup>,
   values: { username: string; email: string; password: string },
 ) {
   await user.type(screen.getByLabelText(/username/i), values.username);
   await user.type(screen.getByLabelText(/email/i), values.email);
-  await user.type(screen.getByLabelText(/password/i), values.password);
+  await user.type(screen.getByLabelText("Password"), values.password);
   await user.click(screen.getByRole("button", { name: /create account/i }));
 }
 
@@ -54,22 +71,24 @@ describe("RegisterForm", () => {
     render(<RegisterForm />);
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /create account/i }),
     ).toBeInTheDocument();
   });
 
   it("shows the check-your-email panel on 201 and does NOT auto-sign-in", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(201, {
-        user: {
-          id: "new-id",
-          username: "jane-doe",
-          email: "jane@example.com",
-        },
-        verificationEmailSent: true,
-      }),
+    routeFetch(() =>
+      Promise.resolve(
+        jsonResponse(201, {
+          user: {
+            id: "new-id",
+            username: "jane-doe",
+            email: "jane@example.com",
+          },
+          verificationEmailSent: true,
+        }),
+      ),
     );
 
     const user = userEvent.setup();
@@ -102,10 +121,12 @@ describe("RegisterForm", () => {
   });
 
   it("shows the server message on 409 (duplicate)", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(409, {
-        error: "A user with this email already exists",
-      }),
+    routeFetch(() =>
+      Promise.resolve(
+        jsonResponse(409, {
+          error: "A user with this email already exists",
+        }),
+      ),
     );
 
     const user = userEvent.setup();
@@ -125,16 +146,18 @@ describe("RegisterForm", () => {
   });
 
   it("surfaces the first field error from a 400 validation payload", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(400, {
-        error: "Validation failed",
-        details: {
-          fieldErrors: {
-            password: ["Password must be at least 8 characters"],
+    routeFetch(() =>
+      Promise.resolve(
+        jsonResponse(400, {
+          error: "Validation failed",
+          details: {
+            fieldErrors: {
+              password: ["Password must be at least 8 characters"],
+            },
+            formErrors: [],
           },
-          formErrors: [],
-        },
-      }),
+        }),
+      ),
     );
 
     const user = userEvent.setup();
@@ -153,7 +176,7 @@ describe("RegisterForm", () => {
   });
 
   it("shows a network-error message when fetch rejects", async () => {
-    fetchMock.mockRejectedValueOnce(new Error("offline"));
+    routeFetch(() => Promise.reject(new Error("offline")));
 
     const user = userEvent.setup();
     render(<RegisterForm />);
@@ -167,5 +190,35 @@ describe("RegisterForm", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /network error/i,
     );
+  });
+
+  it("flags a taken username inline and disables submit", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes("check-availability")) {
+        return Promise.resolve(
+          jsonResponse(200, {
+            username: { available: false, reason: "This username is taken" },
+            email: { available: true },
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse(201, {}));
+    });
+
+    const user = userEvent.setup();
+    render(<RegisterForm />);
+
+    await user.type(screen.getByLabelText(/username/i), "takenname");
+
+    expect(
+      await screen.findByText(
+        /this username is taken/i,
+        {},
+        { timeout: 2000 },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /create account/i }),
+    ).toBeDisabled();
   });
 });

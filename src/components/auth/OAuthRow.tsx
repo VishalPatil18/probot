@@ -31,6 +31,9 @@ export function OAuthRow({ email }: OAuthRowProps) {
     await signIn("email", { email, callbackUrl: "/dashboard" });
   }
 
+  // Every provider button shares `baseClass` (equal height + layout) and wraps
+  // its icon in a fixed 18px square so the Google / GitHub / Magic Link marks
+  // sit on the same baseline regardless of each glyph's intrinsic dimensions.
   return (
     <div className="space-y-2.5 mb-6" aria-label="Sign-in providers">
       <button
@@ -38,7 +41,9 @@ export function OAuthRow({ email }: OAuthRowProps) {
         onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
         className={baseClass + " w-full"}
       >
-        <GoogleLogo />
+        <IconSlot>
+          <GoogleLogo />
+        </IconSlot>
         Continue with Google
       </button>
       <div className="grid grid-cols-2 gap-2.5">
@@ -47,7 +52,9 @@ export function OAuthRow({ email }: OAuthRowProps) {
           onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
           className={baseClass}
         >
-          <GitHubLogo />
+          <IconSlot>
+            <GitHubLogo />
+          </IconSlot>
           GitHub
         </button>
         <button
@@ -58,7 +65,9 @@ export function OAuthRow({ email }: OAuthRowProps) {
             baseClass + (magicLinkLoading ? " opacity-60 cursor-wait" : "")
           }
         >
-          <GmailLogo />
+          <IconSlot>
+            <GmailLogo />
+          </IconSlot>
           {magicLinkLoading ? "Sending…" : "Magic Link"}
         </button>
       </div>
@@ -68,6 +77,14 @@ export function OAuthRow({ email }: OAuthRowProps) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+function IconSlot({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="grid size-[18px] shrink-0 place-items-center">
+      {children}
+    </span>
   );
 }
 
@@ -97,8 +114,8 @@ function GoogleLogo() {
 function GitHubLogo() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="18"
+      height="18"
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden="true"

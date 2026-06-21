@@ -11,7 +11,7 @@
 | Stage | Title                                       | Priority | Deployable? | Estimated effort |
 | ----- | ------------------------------------------- | -------- | ----------- | ---------------- |
 | **1** | ✅ Branding & Copy Cleanup                  | P0       | yes         | 1–2 days         |
-| **2** | Auth UX & Bug-fix Sprint                    | P0       | yes         | 3–4 days         |
+| **2** | ✅ Auth UX & Bug-fix Sprint                 | P0       | yes         | 3–4 days         |
 | **3** | Account & Settings Hardening                | P0       | yes         | 4–5 days         |
 | **4** | Bot Factory & Dashboard Polish              | P1       | yes         | 3–4 days         |
 | **5** | Sidebar, Notifications & Empty-State Polish | P1       | yes         | 2–3 days         |
@@ -53,6 +53,8 @@ Cheap, broad, and removes the noise that the rest of v1.0 would otherwise inheri
 ---
 
 ## Stage 2 - Auth UX & Bug-fix Sprint
+
+**Status:** ✅ Shipped 2026-06-21. Show-password toggles, "remember me" (JWT-encode maxAge: 30d vs 1d), debounced signup availability check (`GET /api/auth/check-availability`), forgot-password modal, OAuth-row alignment, inline sidebar sign-out (`SidebarAccountFooter`). Magic-link delivery bug was already resolved by the user (dropped); onboarding parity verified already-shipped (no code change). typecheck + key-leak guard green; full `npm test`/`npm run build` to be re-run natively (sandbox platform mismatch). See `context.md` 2026-06-21 Stage 2 entry.
 
 **Priority:** P0 (auth blocking issues + UX wins)
 **Deployable artifact:** Auth flows feel professional; the magic-link bug from Beta is fixed; signup catches collisions before the API call.

@@ -7,6 +7,9 @@ declare module "next-auth" {
   interface User extends DefaultUser {
     id: string;
     username?: string;
+    // Set only on the credentials path; controls session lifetime. Absent for
+    // OAuth/magic-link users, who default to the persistent (remembered) window.
+    remember?: boolean;
   }
 
   interface Session {
@@ -21,5 +24,8 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     username: string;
+    // `false` shortens the token lifetime (see auth.ts jwt.encode). Undefined
+    // is treated as remembered.
+    remember?: boolean;
   }
 }

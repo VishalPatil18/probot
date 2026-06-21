@@ -2,9 +2,8 @@ import Link from "next/link";
 
 import { BotSwitcher } from "./BotSwitcher";
 import { ComingSoonPill } from "./ComingSoonPill";
-import { ModelStatusCard } from "./ModelStatusCard";
+import { SidebarAccountFooter } from "./SidebarAccountFooter";
 import { SidebarNavLink } from "./SidebarNavLink";
-import { SignOutButton } from "./SignOutButton";
 
 type SidebarBot = {
   id: string;
@@ -139,22 +138,11 @@ export function Sidebar({
         <SidebarNavDisabled icon="hub" label="AI model & key" />
       </nav>
 
-      <div className="p-3">
-        <ModelStatusCard provider={llmProvider} model={llmModel} />
-      </div>
-
-      <div className="border-t border-border-base p-3">
-        <div className="flex items-center gap-3 px-2 py-1.5">
-          <div className="grid size-8 shrink-0 place-items-center rounded-full bg-neutral-200 text-xs font-bold">
-            {user.initials}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-bold">{user.name}</p>
-            <p className="truncate text-[10px] text-muted">{user.email}</p>
-          </div>
-          <SignOutButton />
-        </div>
-      </div>
+      <SidebarAccountFooter
+        llmProvider={llmProvider}
+        llmModel={llmModel}
+        user={user}
+      />
     </aside>
   );
 }

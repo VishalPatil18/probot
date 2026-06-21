@@ -1,9 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { useDebouncedValue } from "@/lib/client/use-debounced-value";
 
 import { OAuthRow } from "./OAuthRow";
+import { PasswordInput } from "./PasswordInput";
+
+interface FieldAvailability {
+  available: boolean;
+  reason?: string;
+}
+
+interface AvailabilityResult {
+  username?: FieldAvailability;
+  email?: FieldAvailability;
+}
 
 type RegisterErrorPayload = {
   error?: string;
@@ -44,6 +57,49 @@ export function RegisterForm() {
   const [submitted, setSubmitted] = useState<RegisterSuccessPayload | null>(
     null,
   );
+
+  // Debounced username/email availability check. We only query once the value
+  // is plausibly checkable (username ≥ 3 chars, email contains "@") so we don't
+  // flag a half-typed field. The register endpoint stays the source of truth -
+  // this is a pre-submit hint, not a replacement for the server-side check.
+  const debouncedUsername = useDebouncedValue(username, 400);
+  const debouncedEmail = useDebouncedValue(email, 400);
+  const [availability, setAvailability] = useState<AvailabilityResult>({});
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (debouncedUsername.length >= 3) {
+      params.set("username", debouncedUsername);
+    }
+    if (debouncedEmail.includes("@")) {
+      params.set("email", debouncedEmail);
+    }
+    if ([...params.keys()].length === 0) {
+      setAvailability({});
+      return;
+    }
+    let cancelled = false;
+    setChecking(true);
+    fetch(`/api/auth/check-availability?${params.toString()}`)
+      .then((response) => (response.ok ? response.json() : {}))
+      .then((data: AvailabilityResult) => {
+        if (!cancelled) setAvailability(data);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailability({});
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedUsername, debouncedEmail]);
+
+  const usernameTaken = availability.username?.available === false;
+  const emailTaken = availability.email?.available === false;
+  const submitDisabled = loading || checking || usernameTaken || emailTaken;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -126,12 +182,19 @@ export function RegisterForm() {
               maxLength={30}
               autoComplete="username"
               placeholder="jane-doe"
+              aria-invalid={usernameTaken}
               className="flex-1 py-2.5 pr-3 text-sm outline-none bg-transparent"
             />
           </div>
-          <p className="text-[11px] text-muted mt-1">
-            3–30 chars · lowercase, numbers, hyphens.
-          </p>
+          {usernameTaken ? (
+            <p className="text-[11px] text-red-600 mt-1" role="alert">
+              {availability.username?.reason}
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted mt-1">
+              3–30 chars · lowercase, numbers, hyphens.
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor="email" className="block text-xs font-semibold mb-1.5">
@@ -145,8 +208,14 @@ export function RegisterForm() {
             required
             autoComplete="email"
             placeholder="you@email.com"
+            aria-invalid={emailTaken}
             className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand transition-colors"
           />
+          {emailTaken ? (
+            <p className="text-[11px] text-red-600 mt-1" role="alert">
+              {availability.email?.reason}
+            </p>
+          ) : null}
         </div>
         <div>
           <label
@@ -155,16 +224,14 @@ export function RegisterForm() {
           >
             Password
           </label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={setPassword}
             required
             minLength={8}
             autoComplete="new-password"
             placeholder="At least 8 characters"
-            className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand transition-colors"
           />
         </div>
 
@@ -176,7 +243,7 @@ export function RegisterForm() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={submitDisabled}
           className="btn btn-primary w-full !py-3"
         >
           <span>{loading ? "Creating account…" : "Create account"}</span>
