@@ -7,10 +7,10 @@ import { headers } from "next/headers";
 //
 // `x-forwarded-proto` comes from upstream proxies and isn't trustworthy
 // in arbitrary deployments, so we allowlist the value to `http` | `https`.
-// Falls back to `https://probot.dev` if every signal is missing.
+// Falls back to `https://pro-bot.dev` if every signal is missing.
 export function getOrigin(): string {
   const headersList = headers();
-  const host = headersList.get("host") ?? "probot.dev";
+  const host = headersList.get("host") ?? "pro-bot.dev";
   const rawProto = headersList.get("x-forwarded-proto");
   const proto =
     rawProto === "https" || rawProto === "http"

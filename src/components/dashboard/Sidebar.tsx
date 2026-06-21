@@ -33,7 +33,7 @@ type Props = {
   llmModel: string | null;
 };
 
-const EMBED_GUIDE_URL = "https://docs.probot.dev/guides/embed-widget";
+const EMBED_GUIDE_URL = "https://docs.pro-bot.dev/guides/embed-widget";
 
 // Sidebar - server component used by every (dashboard) page. Active
 // nav highlight is computed inside SidebarNavLink via usePathname(),

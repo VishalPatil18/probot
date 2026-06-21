@@ -1110,7 +1110,7 @@ function StepDeploy({
   const origin =
     typeof window !== "undefined" && window.location.origin
       ? window.location.origin
-      : "https://probot.dev";
+      : "https://pro-bot.dev";
   const publicUrl = `${origin}/u/${username}/chat`;
   const previewUrl = previewToken
     ? `${publicUrl}?preview=${encodeURIComponent(previewToken)}`

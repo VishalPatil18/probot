@@ -26,8 +26,8 @@
 
 ProBot is a multi-tenant, BYO-key chatbot platform for job seekers. You paste your resume and bio, pick an LLM provider (Anthropic, OpenAI, Azure OpenAI, Google Gemini), and paste **your own** API key. Two ways to deploy:
 
-- **Managed (probot.dev)** - Your key is encrypted with [envelope encryption](#key-storage--kek-rotation) under a KEK that lives in the deployment environment, never in the database. Decrypted in-memory per chat request, never logged.
-- **Self-hosted** - Clone the repo, deploy under your own domain, leave the KEK env var unset; your key never leaves your server. See [`/self-hosting`](https://probot.dev/self-hosting) for the full guide.
+- **Managed (pro-bot.dev)** - Your key is encrypted with [envelope encryption](#key-storage--kek-rotation) under a KEK that lives in the deployment environment, never in the database. Decrypted in-memory per chat request, never logged.
+- **Self-hosted** - Clone the repo, deploy under your own domain, leave the KEK env var unset; your key never leaves your server. See [`/self-hosting`](https://pro-bot.dev/self-hosting) for the full guide.
 
 Recruiters chat with your bot at a public URL or via an embeddable `<script>` tag. Both deploy modes are free.
 
@@ -67,20 +67,20 @@ ProBot is a single Next.js 14 App Router app - frontend pages and `/api/*` route
 
 ### Stack at a glance
 
-| Layer             | Choice                                                                                                   | Notes                                                              |
-| ----------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Framework**     | Next.js 14 (App Router) + TypeScript 5.6 strict                                                          | One deployment unit; API routes are serverless functions.          |
-| **Styling**       | Tailwind CSS 3.4 + custom oklch palette, `next/font/google` for Bricolage Grotesque + Inter Tight        | No inline CSS.                                                     |
-| **ORM**           | Drizzle 0.36 + `drizzle-kit` migrations                                                                  | `pg.Pool` singleton, lazy.                                         |
-| **Database**      | PostgreSQL (Supabase free tier in production)                                                            | `users` + `bots` tables; `bots.loading_messages` is JSONB.         |
-| **Auth**          | NextAuth.js 4, Credentials + Google + GitHub + magic-link, JWT session, `bcryptjs` cost 10                | Email verification gate on credentials login; password reset.      |
-| **LLM clients**   | Anthropic + OpenAI + Azure OpenAI + Google Gemini adapters; per-provider circuit breaker                  | Common `LLMProvider.complete({…})` interface; per-request clients. |
-| **BYO-key store** | IndexedDB + Web Crypto AES-256-GCM (non-extractable key) - OR - envelope-encrypted in DB if opted in      | Sent via `x-llm-api-key` header; managed-key path decrypts in-memory only. |
-| **Markdown**      | `react-markdown` 9 + `remark-gfm` 4 + `SafeLink` for `rel/target`                                        | No `rehype-raw` (XSS-safe by default).                             |
-| **Testing**       | Vitest 2.1 + `@vitejs/plugin-react` + Testing Library; `node` env for `.ts`, jsdom for `.tsx`            | 803 specs across 87 files, all green.                              |
-| **Hosting**       | **Vercel** (primary)                                                                                     | Render / Fly.io / Railway / AWS Lightsail for self-hosters.        |
-| **File storage**  | AWS S3 (Always Free tier) - Stage 2                                                                      | PDF + photo uploads via presigned URLs.                            |
-| **CDN**           | AWS CloudFront (Always Free tier) - Stage 5                                                              | Fronts S3 for the embeddable `widget.js`.                          |
+| Layer             | Choice                                                                                               | Notes                                                                      |
+| ----------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Framework**     | Next.js 14 (App Router) + TypeScript 5.6 strict                                                      | One deployment unit; API routes are serverless functions.                  |
+| **Styling**       | Tailwind CSS 3.4 + custom oklch palette, `next/font/google` for Bricolage Grotesque + Inter Tight    | No inline CSS.                                                             |
+| **ORM**           | Drizzle 0.36 + `drizzle-kit` migrations                                                              | `pg.Pool` singleton, lazy.                                                 |
+| **Database**      | PostgreSQL (Supabase free tier in production)                                                        | `users` + `bots` tables; `bots.loading_messages` is JSONB.                 |
+| **Auth**          | NextAuth.js 4, Credentials + Google + GitHub + magic-link, JWT session, `bcryptjs` cost 10           | Email verification gate on credentials login; password reset.              |
+| **LLM clients**   | Anthropic + OpenAI + Azure OpenAI + Google Gemini adapters; per-provider circuit breaker             | Common `LLMProvider.complete({…})` interface; per-request clients.         |
+| **BYO-key store** | IndexedDB + Web Crypto AES-256-GCM (non-extractable key) - OR - envelope-encrypted in DB if opted in | Sent via `x-llm-api-key` header; managed-key path decrypts in-memory only. |
+| **Markdown**      | `react-markdown` 9 + `remark-gfm` 4 + `SafeLink` for `rel/target`                                    | No `rehype-raw` (XSS-safe by default).                                     |
+| **Testing**       | Vitest 2.1 + `@vitejs/plugin-react` + Testing Library; `node` env for `.ts`, jsdom for `.tsx`        | 803 specs across 87 files, all green.                                      |
+| **Hosting**       | **Vercel** (primary)                                                                                 | Render / Fly.io / Railway / AWS Lightsail for self-hosters.                |
+| **File storage**  | AWS S3 (Always Free tier) - Stage 2                                                                  | PDF + photo uploads via presigned URLs.                                    |
+| **CDN**           | AWS CloudFront (Always Free tier) - Stage 5                                                          | Fronts S3 for the embeddable `widget.js`.                                  |
 
 ### BYO-key flow (two paths)
 
@@ -100,7 +100,7 @@ Self-hosted / creator-local path:
                                               ▼
                    provider.complete({ apiKey, … })  ──HTTPS──►  Anthropic / OpenAI / Azure / Gemini
 
-Managed (probot.dev opt-in) path:
+Managed (pro-bot.dev opt-in) path:
   AIModelKeyTab → POST /api/bots/[botId]/llm-key { apiKey }
                                               │
                                               ▼

@@ -88,7 +88,7 @@ describe("SidebarNavLink - active state via usePathname", () => {
     pathname = "/dashboard";
     render(
       <SidebarNavLink
-        href="https://docs.probot.dev/guides/embed-widget"
+        href="https://docs.pro-bot.dev/guides/embed-widget"
         icon="code"
         label="Embed & share"
         external
@@ -100,10 +100,10 @@ describe("SidebarNavLink - active state via usePathname", () => {
   });
 
   it("never marks external links active even when pathname matches the href shape", () => {
-    pathname = "https://docs.probot.dev/guides/embed-widget";
+    pathname = "https://docs.pro-bot.dev/guides/embed-widget";
     render(
       <SidebarNavLink
-        href="https://docs.probot.dev/guides/embed-widget"
+        href="https://docs.pro-bot.dev/guides/embed-widget"
         icon="code"
         label="Embed & share"
         external

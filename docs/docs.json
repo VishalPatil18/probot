@@ -78,7 +78,7 @@
   "logo": {
     "light": "/logo/icon.svg",
     "dark": "/logo/icon.svg",
-    "href": "https://docs.probot.dev"
+    "href": "https://docs.pro-bot.dev"
   },
   "navbar": {
     "links": [

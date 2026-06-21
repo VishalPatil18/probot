@@ -19,7 +19,7 @@ import { listRecentLeadsForUser } from "@/lib/leads/queries";
 import { resolveSelectedBotId } from "@/lib/server/selected-bot";
 import { getOrigin } from "@/lib/server/origin";
 
-const EMBED_GUIDE_URL = "https://docs.probot.dev/guides/embed-widget";
+const EMBED_GUIDE_URL = "https://docs.pro-bot.dev/guides/embed-widget";
 
 // Dashboard home - ported from design/dashboard.html.
 //

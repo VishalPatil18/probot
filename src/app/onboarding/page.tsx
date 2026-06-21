@@ -36,7 +36,7 @@ export default async function OnboardingPage() {
           <p className="mt-2 text-sm text-muted">
             Your username becomes your share URL:{" "}
             <code className="rounded bg-neutral-100 px-1 py-0.5 text-xs">
-              probot.dev/u/&lt;name&gt;/chat
+              pro-bot.dev/u/&lt;name&gt;/chat
             </code>
             . Both can be changed later.
           </p>

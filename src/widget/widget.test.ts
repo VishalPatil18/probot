@@ -14,7 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.stubGlobal("__WIDGET_CSS__", ".test-stub{color:red}");
-vi.stubGlobal("__API_BASE_DEFAULT__", "https://probot.dev");
+vi.stubGlobal("__API_BASE_DEFAULT__", "https://pro-bot.dev");
 
 import {
   escapeHtml,
@@ -177,7 +177,7 @@ describe("renderBubbleInner", () => {
 
 describe("renderDialogInner", () => {
   it("includes the owner's display name and bot headline", () => {
-    const html = renderDialogInner(FULL_CONFIG, "https://probot.dev");
+    const html = renderDialogInner(FULL_CONFIG, "https://pro-bot.dev");
     expect(html).toContain("Jane Doe");
     expect(html).toContain("Senior ML Engineer");
   });
@@ -194,7 +194,7 @@ describe("renderDialogInner", () => {
         headline: "</script><script>alert(1)</script>",
       },
     };
-    const html = renderDialogInner(malicious, "https://probot.dev");
+    const html = renderDialogInner(malicious, "https://pro-bot.dev");
     expect(html).not.toContain("<img src=x onerror=alert(1)>");
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
@@ -208,7 +208,7 @@ describe("renderDialogInner", () => {
         suggestedQuestions: ["<script>alert(1)</script>"],
       },
     };
-    const html = renderDialogInner(malicious, "https://probot.dev");
+    const html = renderDialogInner(malicious, "https://pro-bot.dev");
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
@@ -218,8 +218,8 @@ describe("renderDialogInner", () => {
       ...FULL_CONFIG,
       owner: { ...FULL_CONFIG.owner, username: "jane doe" },
     };
-    const html = renderDialogInner(config, "https://probot.dev");
-    expect(html).toContain("https://probot.dev/u/jane%20doe/chat");
+    const html = renderDialogInner(config, "https://pro-bot.dev");
+    expect(html).toContain("https://pro-bot.dev/u/jane%20doe/chat");
   });
 
   it("escapes the CTA href so a quoted apiBase cannot break out of the attribute", () => {
@@ -237,7 +237,7 @@ describe("renderDialogInner", () => {
       ...FULL_CONFIG,
       bot: { ...FULL_CONFIG.bot, suggestedQuestions: [] },
     };
-    const html = renderDialogInner(config, "https://probot.dev");
+    const html = renderDialogInner(config, "https://pro-bot.dev");
     expect(html).not.toContain("Suggested questions");
   });
 
@@ -249,7 +249,7 @@ describe("renderDialogInner", () => {
         suggestedQuestions: ["a", "b", "c", "d", "e", "f"],
       },
     };
-    const html = renderDialogInner(config, "https://probot.dev");
+    const html = renderDialogInner(config, "https://pro-bot.dev");
     expect(html).toContain("<li>a</li>");
     expect(html).toContain("<li>d</li>");
     expect(html).not.toContain("<li>e</li>");
@@ -260,7 +260,7 @@ describe("renderDialogInner", () => {
       ...FULL_CONFIG,
       owner: { ...FULL_CONFIG.owner, name: null },
     };
-    const html = renderDialogInner(config, "https://probot.dev");
+    const html = renderDialogInner(config, "https://pro-bot.dev");
     expect(html).toContain("jane-doe");
   });
 
@@ -269,7 +269,7 @@ describe("renderDialogInner", () => {
       ...FULL_CONFIG,
       owner: { ...FULL_CONFIG.owner, image: null },
     };
-    const html = renderDialogInner(config, "https://probot.dev");
+    const html = renderDialogInner(config, "https://pro-bot.dev");
     // No <img> tag - the placeholder is a <div class="probot-avatar"...>
     expect(html).not.toContain('<img class="probot-avatar"');
     expect(html).toContain('<div class="probot-avatar"');
@@ -291,25 +291,25 @@ describe("readScriptConfig", () => {
     script.setAttribute("data-bot-id", "bot-xyz");
     expect(readScriptConfig(script)).toEqual({
       botId: "bot-xyz",
-      apiBase: "https://probot.dev",
+      apiBase: "https://pro-bot.dev",
     });
   });
 
   it("uses data-api-base override when it is an http(s) URL", () => {
     const script = document.createElement("script");
     script.setAttribute("data-bot-id", "bot-xyz");
-    script.setAttribute("data-api-base", "https://staging.probot.dev");
+    script.setAttribute("data-api-base", "https://staging.pro-bot.dev");
     expect(readScriptConfig(script)?.apiBase).toBe(
-      "https://staging.probot.dev",
+      "https://staging.pro-bot.dev",
     );
   });
 
   it("strips trailing slash from data-api-base", () => {
     const script = document.createElement("script");
     script.setAttribute("data-bot-id", "bot-xyz");
-    script.setAttribute("data-api-base", "https://staging.probot.dev/");
+    script.setAttribute("data-api-base", "https://staging.pro-bot.dev/");
     expect(readScriptConfig(script)?.apiBase).toBe(
-      "https://staging.probot.dev",
+      "https://staging.pro-bot.dev",
     );
   });
 
@@ -317,7 +317,7 @@ describe("readScriptConfig", () => {
     const script = document.createElement("script");
     script.setAttribute("data-bot-id", "bot-xyz");
     script.setAttribute("data-api-base", "javascript:alert(1)");
-    expect(readScriptConfig(script)?.apiBase).toBe("https://probot.dev");
+    expect(readScriptConfig(script)?.apiBase).toBe("https://pro-bot.dev");
   });
 });
 
@@ -329,7 +329,7 @@ describe("mount (DOM integration)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.stubGlobal("__WIDGET_CSS__", ".test-stub{color:red}");
-    vi.stubGlobal("__API_BASE_DEFAULT__", "https://probot.dev");
+    vi.stubGlobal("__API_BASE_DEFAULT__", "https://pro-bot.dev");
   });
 
   function makeScript(): HTMLScriptElement {

@@ -11,10 +11,10 @@ import { db, encryptedLlmKeys } from "@/lib/db";
 //
 // Stage 7 Phase 3 §FR-010.5 / §SEC-D06.
 //
-// Stores the user-supplied LLM API key on probot.dev encrypted with
+// Stores the user-supplied LLM API key on pro-bot.dev encrypted with
 // envelope encryption. This is the "managed-key" opt-in: lets the bot
 // respond to recruiters even when the creator's browser is offline,
-// at the cost of trusting probot.dev's infra (not its DB - DB leak alone
+// at the cost of trusting pro-bot.dev's infra (not its DB - DB leak alone
 // can't decrypt). The DELETE path below revokes.
 //
 // The key never appears in the response, never in a log line, never in
@@ -43,10 +43,7 @@ export async function POST(
 
   const parsed = storeInput.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "validation_failed" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "validation_failed" }, { status: 400 });
   }
 
   // Read the bot owner's current provider so we can stamp it on the row.
@@ -58,10 +55,7 @@ export async function POST(
     columns: { llmProvider: true },
   });
   if (!ownerRow || !isProviderName(ownerRow.llmProvider)) {
-    return NextResponse.json(
-      { error: "provider_unset" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "provider_unset" }, { status: 400 });
   }
   const provider: ProviderName = ownerRow.llmProvider;
 

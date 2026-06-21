@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CopyUrlButton } from "./CopyUrlButton";
@@ -29,7 +35,7 @@ describe("CopyUrlButton", () => {
   });
 
   it('renders the default label "Copy link"', () => {
-    render(<CopyUrlButton url="https://probot.dev/u/jane/chat" />);
+    render(<CopyUrlButton url="https://pro-bot.dev/u/jane/chat" />);
     expect(
       screen.getByRole("button", { name: /Copy link/i }),
     ).toBeInTheDocument();
@@ -37,13 +43,13 @@ describe("CopyUrlButton", () => {
 
   it("writes the URL to the clipboard on click and shows Copied! feedback", async () => {
     writeTextMock.mockResolvedValueOnce(undefined);
-    render(<CopyUrlButton url="https://probot.dev/u/jane/chat" />);
+    render(<CopyUrlButton url="https://pro-bot.dev/u/jane/chat" />);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Copy link/i }));
     });
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalledWith(
-        "https://probot.dev/u/jane/chat",
+        "https://pro-bot.dev/u/jane/chat",
       );
     });
     expect(
@@ -53,7 +59,7 @@ describe("CopyUrlButton", () => {
 
   it("shows fallback feedback when clipboard write fails", async () => {
     writeTextMock.mockRejectedValueOnce(new Error("no permission"));
-    render(<CopyUrlButton url="https://probot.dev/u/jane/chat" />);
+    render(<CopyUrlButton url="https://pro-bot.dev/u/jane/chat" />);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Copy link/i }));
     });
@@ -64,10 +70,7 @@ describe("CopyUrlButton", () => {
 
   it("uses a custom label when provided", () => {
     render(
-      <CopyUrlButton
-        url="https://probot.dev/u/jane/chat"
-        label="Share URL"
-      />,
+      <CopyUrlButton url="https://pro-bot.dev/u/jane/chat" label="Share URL" />,
     );
     expect(
       screen.getByRole("button", { name: /Share URL/i }),
@@ -75,10 +78,10 @@ describe("CopyUrlButton", () => {
   });
 
   it("aria-label includes the URL and current state for screen readers", () => {
-    render(<CopyUrlButton url="https://probot.dev/u/jane/chat" />);
+    render(<CopyUrlButton url="https://pro-bot.dev/u/jane/chat" />);
     const btn = screen.getByRole("button");
     expect(btn.getAttribute("aria-label")).toContain(
-      "https://probot.dev/u/jane/chat",
+      "https://pro-bot.dev/u/jane/chat",
     );
     expect(btn.getAttribute("aria-label")).toContain("Copy link");
   });

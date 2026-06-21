@@ -57,9 +57,9 @@ export function AIModelKeyTab({
   );
   const [model, setModel] = useState<string>(initialModel ?? "");
   const [savingPrefs, setSavingPrefs] = useState(false);
-  const [prefsStatus, setPrefsStatus] = useState<
-    "idle" | "saved" | "error"
-  >("idle");
+  const [prefsStatus, setPrefsStatus] = useState<"idle" | "saved" | "error">(
+    "idle",
+  );
   const [prefsError, setPrefsError] = useState<string | null>(null);
 
   const [managedKey, setManagedKey] = useState("");
@@ -222,9 +222,8 @@ export function AIModelKeyTab({
         </svg>
         <p className="text-sm leading-relaxed text-ink">
           <strong>Your key, your choice.</strong> Keep it local (your browser
-          only) or store it encrypted on probot.dev so recruiters can chat
-          when you&apos;re offline. Either way, the plaintext key is never
-          logged.
+          only) or store it encrypted on pro-bot.dev so recruiters can chat when
+          you&apos;re offline. Either way, the plaintext key is never logged.
         </p>
       </div>
 
@@ -313,15 +312,15 @@ export function AIModelKeyTab({
           <ManagedKeyStatusPill audit={audit} />
         </div>
         <p className="mb-5 text-xs text-muted">
-          Stored encrypted with envelope encryption. The plaintext is in
-          memory only during one chat request, then discarded. Required for
-          recruiters to chat with your bot when you&apos;re offline.
+          Stored encrypted with envelope encryption. The plaintext is in memory
+          only during one chat request, then discarded. Required for recruiters
+          to chat with your bot when you&apos;re offline.
         </p>
 
         {provider === "azure" ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            Azure keys aren&apos;t supported by managed storage in this
-            release - the endpoint + apiVersion live in your browser. Use the
+            Azure keys aren&apos;t supported by managed storage in this release
+            - the endpoint + apiVersion live in your browser. Use the
             self-hosted path for now.
           </div>
         ) : (
@@ -378,9 +377,7 @@ export function AIModelKeyTab({
               <button
                 type="button"
                 onClick={storeManagedKey}
-                disabled={
-                  storingKey || managedKey.trim().length < 8
-                }
+                disabled={storingKey || managedKey.trim().length < 8}
                 className="btn btn-primary disabled:opacity-60"
               >
                 {storingKey
@@ -397,14 +394,16 @@ export function AIModelKeyTab({
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <h3 className="mb-1 font-bold">Decrypt audit log</h3>
         <p className="mb-5 text-xs text-muted">
-          Every time your managed key is used to serve a recruiter, a row
-          lands here (timestamp + a short hash suffix of the recruiter IP).
-          Retained for 30 days. No raw IPs, no key material is ever stored.
+          Every time your managed key is used to serve a recruiter, a row lands
+          here (timestamp + a short hash suffix of the recruiter IP). Retained
+          for 30 days. No raw IPs, no key material is ever stored.
         </p>
         {auditError ? (
           <p className="text-xs text-rose-700">{auditError}</p>
         ) : !audit || audit.entries.length === 0 ? (
-          <p className="text-xs text-muted">No decrypt events in the last 30 days.</p>
+          <p className="text-xs text-muted">
+            No decrypt events in the last 30 days.
+          </p>
         ) : (
           <ul className="thin-scroll max-h-72 overflow-y-auto rounded-xl border border-border-base">
             {audit.entries.map((entry, i) => (
@@ -412,7 +411,9 @@ export function AIModelKeyTab({
                 key={`${entry.decryptedAt}-${i}`}
                 className="flex items-center justify-between border-b border-border-base px-3 py-2 text-xs last:border-b-0"
               >
-                <span className="font-mono">{formatTimestamp(entry.decryptedAt)}</span>
+                <span className="font-mono">
+                  {formatTimestamp(entry.decryptedAt)}
+                </span>
                 <span className="text-muted">
                   {entry.ipHashSuffix
                     ? `from …${entry.ipHashSuffix}`
@@ -471,7 +472,9 @@ function formatRelative(iso: string): string {
   }
 }
 
-function isProviderName(value: string | null | undefined): value is ProviderName {
+function isProviderName(
+  value: string | null | undefined,
+): value is ProviderName {
   if (!value) return false;
   return (PROVIDER_NAMES as readonly string[]).includes(value);
 }

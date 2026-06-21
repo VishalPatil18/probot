@@ -299,7 +299,7 @@ The host page's CSS is hostile to your widget by default. Not in a malicious way
 
 > Why does the build step inline CSS as a JavaScript string constant instead of `<link>`-ing it from a CDN?
 
-Three reasons. **Latency:** a `<link>` would force a second network round-trip after `widget.js` loads. The bubble would render with no styles for the duration of that round-trip, producing a visible flash. Inlining the CSS means the widget renders fully-styled in one network request. **Origin friction:** the host page (`janedoe.com`) and the widget CSS host (`probot.dev`) are different origins - cross-origin stylesheets work but every CORS misconfiguration on either side breaks the widget. Inlining sidesteps the whole CORS surface for the styles. **Cache poisoning:** if the widget.js bundle and the CSS file are versioned independently and the user has an old widget.js in their browser cache fetching a new CSS file, you get visual inconsistencies. Inlining locks the JS and CSS together - they ship as one artifact, you never have skew. The cost is bundle size: 3 KB of CSS adds 3 KB to the JS. At our scale (8 KB total widget) this is invisible; at 500 KB it might matter. For now, inlining wins on every dimension.
+Three reasons. **Latency:** a `<link>` would force a second network round-trip after `widget.js` loads. The bubble would render with no styles for the duration of that round-trip, producing a visible flash. Inlining the CSS means the widget renders fully-styled in one network request. **Origin friction:** the host page (`janedoe.com`) and the widget CSS host (`pro-bot.dev`) are different origins - cross-origin stylesheets work but every CORS misconfiguration on either side breaks the widget. Inlining sidesteps the whole CORS surface for the styles. **Cache poisoning:** if the widget.js bundle and the CSS file are versioned independently and the user has an old widget.js in their browser cache fetching a new CSS file, you get visual inconsistencies. Inlining locks the JS and CSS together - they ship as one artifact, you never have skew. The cost is bundle size: 3 KB of CSS adds 3 KB to the JS. At our scale (8 KB total widget) this is invisible; at 500 KB it might matter. For now, inlining wins on every dimension.
 
 ---
 
@@ -450,7 +450,7 @@ What's left? A determined attacker with infinite emails and patience can still t
 
 The decision pivot is **whether the path serves more than one method with different CORS requirements.** The chat route is single-purpose: POST is public (CORS), OPTIONS preflight returns 204 with the same headers, there is no GET handler. The path's CORS posture is uniform across methods, so `next.config.js`'s path-level header injection is a clean fit - declare once, apply to every method.
 
-The leads route is dual-purpose: POST is public (CORS, called by the widget from `janedoe.com`), GET is owner-gated (same-origin, called by the dashboard at `probot.dev`). The GET response _technically_ doesn't need CORS headers - the dashboard is same-origin, the browser never even checks them. But `next.config.js` would attach them anyway, which is noisy and accidentally documents an intent ("this endpoint is cross-origin") that isn't true for the GET surface. Inline `jsonWithCors` lets the POST surface its CORS posture explicitly and the GET surface stay quiet. Same path, two strategies, no muddled signal.
+The leads route is dual-purpose: POST is public (CORS, called by the widget from `janedoe.com`), GET is owner-gated (same-origin, called by the dashboard at `pro-bot.dev`). The GET response _technically_ doesn't need CORS headers - the dashboard is same-origin, the browser never even checks them. But `next.config.js` would attach them anyway, which is noisy and accidentally documents an intent ("this endpoint is cross-origin") that isn't true for the GET surface. Inline `jsonWithCors` lets the POST surface its CORS posture explicitly and the GET surface stay quiet. Same path, two strategies, no muddled signal.
 
 **A secondary reason to prefer inline**: when the route has multiple error responses (415, 413, 400, 404, 500), each one needs to carry CORS headers - otherwise the browser blocks the response and the widget can't read the error. The `jsonWithCors` helper makes this trivial (every `return jsonWithCors(body, status)` is one line). With `next.config.js`, the headers are attached to every response regardless of status, which is also fine - but you lose the at-a-call-site visibility that the inline helper provides.
 
@@ -1575,6 +1575,7 @@ The general principle: **when you need to know something about a record after th
 It would be dangerous if the threat model were "anyone on the internet can fire the route." It isn't - the route requires a 256-bit token only sent to the email address that initiated the deletion. The token IS the authentication; possessing it proves you're the account owner (or you've compromised their email, in which case they have bigger problems than a recovered ProBot account).
 
 This pattern is everywhere in modern auth flows:
+
 - Password-reset links work without a session (the token authenticates).
 - Email-verification links work without a session (the token authenticates).
 - Magic-link sign-in works without a session (the token authenticates).
@@ -1647,6 +1648,7 @@ The general principle: **destructive UI should require enough friction that a ti
 The inconsistency reflects a real difference in attack surface, not laziness.
 
 **`timingSafeEqual`** prevents timing-oracle attacks where an attacker measures how long the comparison takes to deduce the secret byte-by-byte. To exploit a timing oracle you need:
+
 - Many requests per second (to average out network noise)
 - A consistent measurement environment
 - The ability to keep trying until you crack the full secret
@@ -1677,6 +1679,7 @@ The heuristic checks are valuable in their own right, just for different threats
 For ProBot's threat model (resume PDFs from job seekers, mostly), the heuristic scan is the right tool: the most common "attacks" are accidentally-uploaded .exe / .docx / .doc files that the user mislabeled, and these all fail the magic-byte vs MIME vs extension cross-check. A real malicious actor crafting a weaponized PDF would bypass the heuristic scan AND would need a separate pdf-parse exploit to actually do anything; the threat model says they'd go elsewhere first.
 
 Free serverless ClamAV doesn't exist. It needs a persistent daemon (the virus database alone is ~200MB and takes time to load), and Vercel serverless functions are ephemeral (~50MB code size limit, cold-start every few seconds). The alternatives are:
+
 - Run ClamAV as a sidecar on a non-serverless host (defeats the deployment model).
 - Use a paid third-party API like VirusTotal (violates the "zero-cost" project constraint).
 - Skip it and document the limitation.
@@ -1692,12 +1695,14 @@ The general principle: **security features should match the threat model, not im
 It buys "the key bytes cannot leave the browser via JS." That sounds narrow until you consider what attackers can and cannot do:
 
 **With extractable=true:**
+
 - Malicious JS on the origin can call `crypto.subtle.exportKey(key)` and get the raw 32-byte key material.
 - It can then SEND that key to an attacker server.
 - The attacker now holds the key permanently and can decrypt any future ciphertext they steal - even if the user changes their LLM API key, the master key stays the same.
 - A browser-data export tool (extension that reads IDB) could similarly extract.
 
 **With extractable=false:**
+
 - `crypto.subtle.exportKey(key)` throws.
 - Malicious JS can call `crypto.subtle.decrypt({ ... }, key, ciphertext)` to decrypt SPECIFIC ciphertexts it sees during its execution window.
 - It cannot exfiltrate the master key for future use.
@@ -1711,6 +1716,7 @@ Two related things to know:
 2. **Structured clone of a CryptoKey preserves the flag.** IndexedDB serialises CryptoKey objects via structured clone, so the persisted-and-rehydrated key keeps `extractable=false` across browser restarts. The flag isn't a runtime property checked at use site; it's bound to the key material at the cryptographic primitive level.
 
 The pattern fails when:
+
 - The host has DOM/JS execution control (XSS, malicious extension) - the attacker just calls decrypt() with the key they can access via `subtle.crypto`. Mitigation is keeping the origin clean of third-party JS.
 - The host is not in a secure context (http://) - `crypto.subtle` doesn't exist. Mitigation is "run TLS in production."
 
@@ -1727,12 +1733,15 @@ Sync-with-hydration looks tempting because it preserves existing call sites - no
 let cached: string | null = null;
 let hydrationPromise: Promise<void> | null = null;
 function hydrate() {
-  if (!hydrationPromise) hydrationPromise = loadFromIDB().then(v => { cached = v; });
+  if (!hydrationPromise)
+    hydrationPromise = loadFromIDB().then((v) => {
+      cached = v;
+    });
   return hydrationPromise;
 }
 export function getApiKey(): string | null {
-  hydrate();   // fire-and-forget
-  return cached;  // ← returns null on first call before hydration resolves
+  hydrate(); // fire-and-forget
+  return cached; // ← returns null on first call before hydration resolves
 }
 ```
 
@@ -1866,7 +1875,7 @@ DRY is a heuristic, not a law. Three reasons the duplication wins here:
 
 The general principle: **DRY is correct in proportion to how often the duplicated code changes.** For business logic that changes often, duplicating is a tax that compounds with every change. For primitives that never change, duplicating is a one-time cost that buys you smaller blast radius + simpler dependencies.
 
-When NOT to duplicate: when the duplication encodes a CHOICE (which algorithm, which key length, which IV strategy) that you might want to change in one place but not another - that's the recipe for a security bug. Use a shared constant instead. Our script does this: the `KEY_ALGO = "aes-256-gcm"`, `KEY_LEN = 32`, `IV_LEN = 12` constants are duplicated literals matching the module's constants. If we ever change AES-256 to ChaCha20, we'd update both. The DUPLICATION is the encryption *function*; the *decision* is in matching constants.
+When NOT to duplicate: when the duplication encodes a CHOICE (which algorithm, which key length, which IV strategy) that you might want to change in one place but not another - that's the recipe for a security bug. Use a shared constant instead. Our script does this: the `KEY_ALGO = "aes-256-gcm"`, `KEY_LEN = 32`, `IV_LEN = 12` constants are duplicated literals matching the module's constants. If we ever change AES-256 to ChaCha20, we'd update both. The DUPLICATION is the encryption _function_; the _decision_ is in matching constants.
 
 A useful smell-test: **does updating one copy require updating the other?** If yes (the two copies are coupled by domain semantics), duplication is fine and the coupling lives in your head + the runbook. If no (the two copies were independently arrived at via separate decisions), congratulations - you have two unrelated pieces of code that happen to look similar, and forcing them through a shared abstraction would couple things that shouldn't be coupled.
 

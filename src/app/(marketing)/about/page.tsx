@@ -169,10 +169,7 @@ export default function AboutPage() {
       </section>
 
       {/* HYBRID KEY STORAGE */}
-      <section
-        id="hybrid"
-        className="border-b border-border-base scroll-mt-20"
-      >
+      <section id="hybrid" className="border-b border-border-base scroll-mt-20">
         <div className="mx-auto max-w-[1180px] px-6 py-20">
           <div className="max-w-2xl mb-10">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-3">
@@ -182,15 +179,15 @@ export default function AboutPage() {
               Two ways to run ProBot.
             </h2>
             <p className="text-muted leading-relaxed">
-              ProBot ships in a hybrid model. Either path lets you put your
-              own LLM key behind your bot; what differs is who holds the
-              key at the moment a recruiter chats with it.
+              ProBot ships in a hybrid model. Either path lets you put your own
+              LLM key behind your bot; what differs is who holds the key at the
+              moment a recruiter chats with it.
             </p>
           </div>
           <div className="grid lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-2xl border border-border-base p-7 shadow-soft">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand">
-                Managed (probot.dev)
+                Managed (pro-bot.dev)
               </p>
               <h3 className="font-display text-2xl font-bold mt-1 mb-3">
                 Encrypted on our infra.
@@ -200,12 +197,12 @@ export default function AboutPage() {
                 <strong className="text-ink">
                   envelope-encrypt it with a per-bot key
                 </strong>
-                , which is itself wrapped under a key encryption key (KEK)
-                that lives in our deployment environment, not the
-                database. Decryption happens in-memory for the duration
-                of one recruiter chat, then discarded. We never log it,
-                never echo it, and the dashboard surfaces every server-
-                side decrypt in a 30-day audit panel.
+                , which is itself wrapped under a key encryption key (KEK) that
+                lives in our deployment environment, not the database.
+                Decryption happens in-memory for the duration of one recruiter
+                chat, then discarded. We never log it, never echo it, and the
+                dashboard surfaces every server- side decrypt in a 30-day audit
+                panel.
               </p>
               <ul className="space-y-2 text-sm text-muted">
                 <li className="flex gap-2">
@@ -213,9 +210,7 @@ export default function AboutPage() {
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
-                  <span>
-                    Your bot keeps replying when you&apos;re offline.
-                  </span>
+                  <span>Your bot keeps replying when you&apos;re offline.</span>
                 </li>
                 <li className="flex gap-2">
                   <MaterialIcon
@@ -223,8 +218,8 @@ export default function AboutPage() {
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
                   <span>
-                    DB leak alone can&apos;t decrypt - the KEK isn&apos;t
-                    in the database.
+                    DB leak alone can&apos;t decrypt - the KEK isn&apos;t in the
+                    database.
                   </span>
                 </li>
                 <li className="flex gap-2">
@@ -244,12 +239,11 @@ export default function AboutPage() {
                 Never leaves your server.
               </h3>
               <p className="text-sm text-muted leading-relaxed mb-4">
-                Clone the open-source repo and deploy it under your own
-                domain. Your LLM key goes into your own environment as a
-                config value. ProBot never sees it - your bot calls the
-                LLM provider directly from your infra. The right pick if
-                you can&apos;t trust any operator (including us) with the
-                key, ever.
+                Clone the open-source repo and deploy it under your own domain.
+                Your LLM key goes into your own environment as a config value.
+                ProBot never sees it - your bot calls the LLM provider directly
+                from your infra. The right pick if you can&apos;t trust any
+                operator (including us) with the key, ever.
               </p>
               <ul className="space-y-2 text-sm text-muted">
                 <li className="flex gap-2">
@@ -257,16 +251,14 @@ export default function AboutPage() {
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
-                  <span>Zero key material on probot.dev infra.</span>
+                  <span>Zero key material on pro-bot.dev infra.</span>
                 </li>
                 <li className="flex gap-2">
                   <MaterialIcon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
-                  <span>
-                    Full source, MIT licensed - audit every byte.
-                  </span>
+                  <span>Full source, MIT licensed - audit every byte.</span>
                 </li>
                 <li className="flex gap-2">
                   <MaterialIcon
@@ -288,12 +280,11 @@ export default function AboutPage() {
             </div>
           </div>
           <p className="text-xs text-muted mt-6 max-w-2xl">
-            Honest caveat: managed mode protects against database leaks
-            and code leaks, but NOT against full infrastructure
-            compromise of probot.dev (anyone with deploy access can read
-            the KEK). If that&apos;s the threat you&apos;re defending
-            against, self-host is the right answer - that&apos;s exactly
-            why both paths exist.
+            Honest caveat: managed mode protects against database leaks and code
+            leaks, but NOT against full infrastructure compromise of pro-bot.dev
+            (anyone with deploy access can read the KEK). If that&apos;s the
+            threat you&apos;re defending against, self-host is the right answer
+            - that&apos;s exactly why both paths exist.
           </p>
         </div>
       </section>

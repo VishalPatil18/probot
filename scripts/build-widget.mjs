@@ -26,7 +26,7 @@ const cssPath = resolve(projectRoot, "src/widget/widget.css");
 const outfile = resolve(projectRoot, "public/widget.js");
 
 const apiBaseDefault =
-  process.env.PROBOT_WIDGET_API_BASE ?? "https://probot.dev";
+  process.env.PROBOT_WIDGET_API_BASE ?? "https://pro-bot.dev";
 
 mkdirSync(dirname(outfile), { recursive: true });
 

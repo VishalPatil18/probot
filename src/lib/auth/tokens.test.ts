@@ -46,10 +46,10 @@ describe("buildTokenUrl", () => {
   });
 
   it("uses NEXTAUTH_URL when set", () => {
-    process.env.NEXTAUTH_URL = "https://probot.dev";
+    process.env.NEXTAUTH_URL = "https://pro-bot.dev";
     delete process.env.APP_URL;
     const url = buildTokenUrl({ path: "/reset-password", token: "abc" });
-    expect(url).toBe("https://probot.dev/reset-password?token=abc");
+    expect(url).toBe("https://pro-bot.dev/reset-password?token=abc");
   });
 
   it("falls back to APP_URL when NEXTAUTH_URL is missing", () => {
@@ -67,20 +67,20 @@ describe("buildTokenUrl", () => {
   });
 
   it("strips a trailing slash on the base URL", () => {
-    process.env.NEXTAUTH_URL = "https://probot.dev/";
+    process.env.NEXTAUTH_URL = "https://pro-bot.dev/";
     const url = buildTokenUrl({ path: "/x", token: "t" });
-    expect(url).toBe("https://probot.dev/x?token=t");
+    expect(url).toBe("https://pro-bot.dev/x?token=t");
   });
 
   it("normalizes a path missing the leading slash", () => {
-    process.env.NEXTAUTH_URL = "https://probot.dev";
+    process.env.NEXTAUTH_URL = "https://pro-bot.dev";
     const url = buildTokenUrl({ path: "x", token: "t" });
-    expect(url).toBe("https://probot.dev/x?token=t");
+    expect(url).toBe("https://pro-bot.dev/x?token=t");
   });
 
   it("URL-encodes the token", () => {
-    process.env.NEXTAUTH_URL = "https://probot.dev";
+    process.env.NEXTAUTH_URL = "https://pro-bot.dev";
     const url = buildTokenUrl({ path: "/x", token: "a b/c?d" });
-    expect(url).toBe("https://probot.dev/x?token=a%20b%2Fc%3Fd");
+    expect(url).toBe("https://pro-bot.dev/x?token=a%20b%2Fc%3Fd");
   });
 });

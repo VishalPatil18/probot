@@ -2,10 +2,10 @@
  * ProBot embeddable widget - Stage 5
  *
  * Usage:
- *   <script src="https://probot.dev/widget.js" data-bot-id="<uuid>"></script>
+ *   <script src="https://pro-bot.dev/widget.js" data-bot-id="<uuid>"></script>
  *
  * Optional:
- *   data-api-base="https://staging.probot.dev"
+ *   data-api-base="https://staging.pro-bot.dev"
  *
  * The script reads its config from its own <script> tag, fetches the bot's
  * public config from /api/bots/[botId]/config, attaches a Shadow DOM to the

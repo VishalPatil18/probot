@@ -1439,10 +1439,10 @@ latency_ms integer`. The chat route already times the provider call
 **J. Docs site stub (Slice A/C follow-up)**
 
 - Sidebar "Embed & share" + dashboard "Full embed guide" both point at
-  `https://docs.probot.dev/guides/embed-widget` which 404s today. Either:
+  `https://docs.pro-bot.dev/guides/embed-widget` which 404s today. Either:
   (a) Build a real docs site (Mintlify, Docusaurus, or a static
   `/docs/` route in this Next app), OR (b) keep the external URL and
-  ensure it resolves once probot.dev is live in the Stage 7 launch
+  ensure it resolves once pro-bot.dev is live in the Stage 7 launch
   push. Decision deferred until the open-source landing-page work
   starts.
 
@@ -1491,14 +1491,14 @@ Take the launch-ready platform from Stage 7 and harden it for sustained traffic.
 
 #### Performance NFRs (SRS §6.1, deferred from Stage 7)
 
-| ID      | Requirement                     | Metric            | Approach                                                          |
-| ------- | ------------------------------- | ----------------- | ----------------------------------------------------------------- |
-| NFR-P01 | Chat response latency           | < 3 seconds (P95) | Vercel Speed Insights + Sentry traces; tune RAG chunk count.      |
-| NFR-P02 | Page load time (chat interface) | < 2 seconds (LCP) | `next/font` swap mode, prefetched OG image, smaller initial JS.   |
-| NFR-P03 | Widget load time                | < 1 second        | Already 8KB minified - measure on real CDN, may need preconnect.  |
-| NFR-P04 | Data ingestion (1-3 page PDF)   | < 60 seconds      | Defer embedding to a background job if pdf-parse + embed > 30s.   |
-| NFR-P05 | Vector similarity search        | < 200ms (P99)     | HNSW index audit; cap top-K at 3; warm queries with a pre-prompt. |
-| NFR-P06 | Concurrent users per bot        | 50+ simultaneous  | Load test (k6) + ensure rate-limit windows don't deadlock.        |
+| ID      | Requirement                     | Metric            | Approach                                                            |
+| ------- | ------------------------------- | ----------------- | ------------------------------------------------------------------- |
+| NFR-P01 | Chat response latency           | < 3 seconds (P95) | Vercel Speed Insights + Sentry traces; tune RAG chunk count.        |
+| NFR-P02 | Page load time (chat interface) | < 2 seconds (LCP) | `next/font` swap mode, prefetched OG image, smaller initial JS.     |
+| NFR-P03 | Widget load time                | < 1 second        | Already 8KB minified - measure on real CDN, may need preconnect.    |
+| NFR-P04 | Data ingestion (1-3 page PDF)   | < 60 seconds      | Defer embedding to a background job if pdf-parse + embed > 30s.     |
+| NFR-P05 | Vector similarity search        | < 200ms (P99)     | HNSW index audit; cap top-K at 3; warm queries with a pre-prompt.   |
+| NFR-P06 | Concurrent users per bot        | 50+ simultaneous  | Load test (k6) + ensure rate-limit windows don't deadlock.          |
 | NFR-P07 | Dashboard page load             | < 3 seconds       | Move N+1 queries (`buildExportBundle`, dashboard listings) to CTEs. |
 
 #### Shared-state infrastructure
@@ -1578,27 +1578,27 @@ Take the launch-ready platform from Stage 7 and harden it for sustained traffic.
 
 ## Tech Stack (Final)
 
-| Layer                    | Technology                                                                                                               | Introduced In |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------- |
-| **Framework**            | Next.js 14+ (App Router)                                                                                                 | Stage 1       |
-| **Language**             | TypeScript                                                                                                               | Stage 1       |
-| **Styling**              | Tailwind CSS                                                                                                             | Stage 1       |
-| **ORM**                  | Drizzle ORM                                                                                                              | Stage 1       |
-| **Database**             | PostgreSQL (Supabase/Neon)                                                                                               | Stage 1       |
-| **Auth**                 | NextAuth.js (email/password in Stage 1; OAuth in Stage 7)                                                                | Stage 1       |
+| Layer                    | Technology                                                                                                                   | Introduced In |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| **Framework**            | Next.js 14+ (App Router)                                                                                                     | Stage 1       |
+| **Language**             | TypeScript                                                                                                                   | Stage 1       |
+| **Styling**              | Tailwind CSS                                                                                                                 | Stage 1       |
+| **ORM**                  | Drizzle ORM                                                                                                                  | Stage 1       |
+| **Database**             | PostgreSQL (Supabase/Neon)                                                                                                   | Stage 1       |
+| **Auth**                 | NextAuth.js (email/password in Stage 1; OAuth in Stage 7)                                                                    | Stage 1       |
 | **AI (Chat)**            | Multi-provider BYO-key client: Anthropic Claude, Google Gemini, OpenAI GPT, Azure OpenAI (key stored locally, never tracked) | Stage 1       |
 | **AI (Embeddings)**      | Provider-matched embeddings (OpenAI `text-embedding-3-small`, Google `text-embedding-004`, Anthropic Voyage, Azure OpenAI)   | Stage 3       |
-| **Vector DB**            | Pinecone or Supabase pgvector                                                                                            | Stage 3       |
-| **File Storage**         | AWS S3 (Always Free: 5 GB + 20K GET + 2K PUT)                                                                            | Stage 2       |
-| **CDN**                  | AWS CloudFront (Always Free: 1 TB + 10M req) - fronts S3 for `widget.js`                                                 | Stage 5       |
-| **Widget Build**         | esbuild                                                                                                                  | Stage 5       |
-| **In-app notifications** | Postgres `notifications` table + dashboard bell badge (no email)                                                         | Stage 6       |
-| **Transactional email**  | **Resend** (auth flows only: verify email + password reset). AWS SES intentionally not used.                             | Stage 7       |
-| **License**              | MIT (open source, no payments)                                                                                           | Stage 7       |
-| **Cache/Rate Limit**     | Upstash Redis (uniform, configurable, BYO-credit protection)                                                             | Stage 7       |
-| **Self-Host**            | Docker + docker-compose                                                                                                  | Stage 7       |
-| **Monitoring**           | Sentry + Vercel Analytics (with `x-llm-api-key` header scrubbing)                                                        | Stage 7       |
-| **Hosting**              | Vercel (also self-hostable on any Node 20+ host)                                                                         | Stage 1       |
+| **Vector DB**            | Pinecone or Supabase pgvector                                                                                                | Stage 3       |
+| **File Storage**         | AWS S3 (Always Free: 5 GB + 20K GET + 2K PUT)                                                                                | Stage 2       |
+| **CDN**                  | AWS CloudFront (Always Free: 1 TB + 10M req) - fronts S3 for `widget.js`                                                     | Stage 5       |
+| **Widget Build**         | esbuild                                                                                                                      | Stage 5       |
+| **In-app notifications** | Postgres `notifications` table + dashboard bell badge (no email)                                                             | Stage 6       |
+| **Transactional email**  | **Resend** (auth flows only: verify email + password reset). AWS SES intentionally not used.                                 | Stage 7       |
+| **License**              | MIT (open source, no payments)                                                                                               | Stage 7       |
+| **Cache/Rate Limit**     | Upstash Redis (uniform, configurable, BYO-credit protection)                                                                 | Stage 7       |
+| **Self-Host**            | Docker + docker-compose                                                                                                      | Stage 7       |
+| **Monitoring**           | Sentry + Vercel Analytics (with `x-llm-api-key` header scrubbing)                                                            | Stage 7       |
+| **Hosting**              | Vercel (also self-hostable on any Node 20+ host)                                                                             | Stage 1       |
 
 > **Removed in v1.1:** Stripe is not part of the stack.
 >
