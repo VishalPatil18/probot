@@ -2316,3 +2316,47 @@ _Tests + types:_
 - **No structured audit log of deletion lifecycle events.** Request-row timestamps cover the basics; dedicated event log lands with Phase 7.
 - **`buildExportBundle` does per-table queries (N+1).** Fine at v1; Stage 8 can swap to a single CTE if it becomes hot.
 - **No retention on `deletion_requests` for purged rows.** CASCADE drops them at purge time; the cleanup pass is defence-in-depth.
+
+### 2026-06-21 08:41 - Stage 7 Phase 6: malware-scan hardening + IndexedDB/Web-Crypto key store
+
+**What was asked to do:** Two unrelated security improvements - heuristic upload-safety scan to reject renamed executables / Office macro containers / EICAR / magic-byte mismatches before pdf-parse sees the buffer (NFR-S02), and a hardened replacement for the plaintext localStorage key store using IndexedDB + a non-extractable Web Crypto AES-256-GCM key.
+
+**What I did:**
+- `src/lib/uploads/malware-scan.ts` + 27 tests. `scanBuffer(buffer, filename, mimeType)` runs in this order: empty check → extension blocklist (.exe, .dll, .bat, .scr, .msi, .js, .vbs, .ps1, .app, .pkg, .deb, .rpm) → extension allowlist (.pdf only) → MIME allowlist (application/pdf only, strips `;charset=...` params first) → magic-byte detection (PDF, PE/MZ, ELF, 5 Mach-O variants, OLE compound document, ZIP/OOXML, RAR, 7z) → executable-signature reject → office-macro-container reject → magic↔MIME mismatch reject → magic↔extension mismatch reject → EICAR scan of the first 2KB. Returns a discriminated union; `assertSafeBuffer` is the throwing wrapper mapping to `IngestionError("invalid_file_type", ...)` so HTTP status stays unchanged.
+- Wired into `POST /api/bots/[botId]/knowledge` at the per-file loop, BEFORE `extractPdfText`. The existing PDF-magic check in extract-pdf.ts stays as a defence-in-depth second pass.
+- `src/lib/client/secure-key-store.ts` - new browser-side primitive. Opens IDB (`probot-secure-store`, version 1, object store `keys`). On first use, generates a non-extractable AES-256-GCM CryptoKey via `crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, [...])` and stores it under id `master.aes-gcm-256.v1`. Subsequent secrets are encrypted with that key + a fresh 12-byte random IV, stored under id `secret.<name>`. The CryptoKey itself is `extractable: false` so `crypto.subtle.exportKey` will refuse. Public API: `getSecureKeyStore() → SecureKeyStore | null` (returns null in SSR or old browsers without IDB/crypto.subtle).
+- `src/lib/client/llm-key-store.ts` + `embedding-key-store.ts` - rewritten on top of `secure-key-store`. Public API is now async. One-time migration: on first `getApiKey` with no IDB row, reads the legacy localStorage slot, writes to IDB, removes localStorage entry. Subsequent reads hit IDB only.
+- Updated three callers to await the new async functions: `ChatWindow.tsx`, `BotFactoryForm.tsx`, `AIModelKeyTab.tsx`.
+- `llm-key-store.test.ts` rewritten: imports `fake-indexeddb/auto` at the top so `indexedDB` is on the global before the SUT loads. `beforeEach` calls `__resetSecureKeyStoreForTests()` (which CLOSES the cached DB connection so `deleteDatabase` isn't blocked) and then deletes the fake DB. New tests cover the localStorage migration and a "no plaintext API key in localStorage after a fresh write" canary.
+- `fake-indexeddb` added as devDependency (^6.2.5).
+- Total tests: 803 pass (was 775; +28).
+
+**Files changed:**
+- `src/lib/uploads/malware-scan.ts` + `malware-scan.test.ts` - create.
+- `src/app/api/bots/[botId]/knowledge/route.ts` - update - `assertSafeBuffer` before `extractPdfText`.
+- `src/lib/client/secure-key-store.ts` - create.
+- `src/lib/client/llm-key-store.ts` - update - async API + localStorage migration.
+- `src/lib/client/embedding-key-store.ts` - update - same shape.
+- `src/lib/client/llm-key-store.test.ts` - update - async + IDB-aware + migration test.
+- `src/components/chat/ChatWindow.tsx` - update - await async key reads.
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - await async key writes.
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` - update - await `setApiKey`.
+- `package.json` + `package-lock.json` - update - `fake-indexeddb` ^6.2.5.
+
+**Decisions made:**
+- **No real AV scan; documented honestly.** Free serverless ClamAV doesn't exist (needs a persistent daemon). The heuristic checks catch what users actually try (renamed .exe, double-extension tricks, accidentally-uploaded .docx) without pretending to be a malware scanner. Self-host operators can layer an AV sidecar.
+- **EICAR scan in first 2KB only.** Real malware doesn't carry the signature; the scan exists for test-wiring verification + flagging security testers. Full-buffer scan would be O(n) for no benefit.
+- **PDF is the ONLY allowed extension AND MIME** for the knowledge route. Any future route wanting other types passes its own allowlist.
+- **`extractable: false` is the load-bearing property of the IDB store.** With it, key bytes cannot leave the browser via `crypto.subtle.exportKey`. Attacker who exports the IDB row gets back a CryptoKey object still bound to the non-extractable flag.
+- **Async API everywhere, not a sync façade over an async cache.** Sync-with-hydration would mean a race window where the first read returns null. Async forces correct awaits at every caller for a 3-file refactor.
+- **One-time localStorage migration on first read.** Creators who set keys pre-Phase-6 don't have to re-enter. Subsequent reads hit IDB only. Legacy localStorage entries get cleared on every successful IDB write too as defence-in-depth.
+- **`__resetSecureKeyStoreForTests` closes the DB before resetting the cached promise.** Without the close, `indexedDB.deleteDatabase` blocks forever (open connection = blocker; fake-indexeddb fires `onblocked` and never settles). This was the bug that caused the first test run to hang for 135 seconds.
+- **No "regenerate master key" UI.** Rotation requires re-encrypting every stored secret; benefit is unclear (the key never leaves the browser). Operators can `indexedDB.deleteDatabase("probot-secure-store")` from console if they really need to.
+- **`fake-indexeddb/auto` over manual polyfill** because the `auto` entry point installs on the global at import time, matching what vitest needs.
+
+**Open questions / follow-ups:**
+- **The encrypted store doesn't help against XSS on our origin.** Malicious JS on probot.dev can call `crypto.subtle.decrypt` exactly the same way our own code does. Residual risk; mitigation is keeping the origin clean of third-party JS (already enforced - no analytics).
+- **No "scan failed = quarantine" path.** Rejected uploads are silently 415'd; operators don't get notified. Phase 7 observability work can wire a Sentry breadcrumb.
+- **Brand-new master key generated silently on first visit.** No UI surface confirming this. Could add a "🔒 keys encrypted locally" pill in AIModelKeyTab.
+- **Web Crypto requires a secure context (HTTPS or localhost).** Insecure http:// origins fall back to localStorage with no encryption. Documented; operators should run TLS.
+- **EICAR detection is substring-only.** A zipped EICAR inside a PDF would not be caught because the outer magic check rejects the non-PDF first. The substring check covers the "raw EICAR file renamed .pdf" case.

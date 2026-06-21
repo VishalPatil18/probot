@@ -201,13 +201,14 @@ export function BotFactoryForm({
     setSubmitting(true);
     setError(null);
     try {
-      // Stash the BYO key in localStorage BEFORE the network call - so even if
-      // the server request hangs, the key is captured locally for the chat UI.
-      setApiKey(form.apiKey);
+      // Stash the BYO key in the (Phase 6) encrypted IndexedDB store BEFORE
+      // the network call - so even if the server request hangs, the key is
+      // captured locally for the chat UI.
+      await setApiKey(form.apiKey);
       // Azure needs endpoint + apiVersion alongside the key. Store separately
       // so switching providers doesn't wipe the other provider's key.
       if (form.llmProvider === "azure") {
-        setAzureCreds({
+        await setAzureCreds({
           endpoint: form.azureEndpoint,
           apiVersion: form.azureApiVersion || DEFAULT_AZURE_API_VERSION,
         });
@@ -215,7 +216,7 @@ export function BotFactoryForm({
       // Stage 3 RAG: persist the OpenAI embedding key (when supplied) so the
       // chat UI can attach it as `x-embedding-api-key` on every chat request.
       // Empty value clears any previously stored key.
-      setEmbeddingApiKey(form.embeddingApiKey);
+      await setEmbeddingApiKey(form.embeddingApiKey);
 
       const res = await fetch("/api/bots", {
         method: "POST",

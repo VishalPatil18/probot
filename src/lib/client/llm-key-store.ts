@@ -1,56 +1,99 @@
 // Browser-only store for the user's LLM API key.
 //
-// The key is persisted under a single per-origin localStorage entry and
-// attached to chat requests via the `x-llm-api-key` header. It is never
-// sent in JSON bodies (so accidental request-body logging cannot leak it)
-// and never round-tripped through any ProBot API endpoint.
+// Stage 7 Phase 6: switched from plaintext localStorage to IndexedDB +
+// Web Crypto AES-256-GCM (see ./secure-key-store.ts). The public API
+// here is async; callers await the get/set/clear functions. localStorage
+// is still consulted on first read as a one-time migration so creators
+// who set their key before Phase 6 don't have to re-enter it.
+//
+// The key is attached to chat requests via the `x-llm-api-key` header
+// and is never sent in JSON bodies or round-tripped through any ProBot
+// API endpoint.
 
-const STORAGE_KEY = "probot.llm.key.v1";
-const AZURE_STORAGE_KEY = "probot.llm.azure.v1";
+import { getSecureKeyStore } from "./secure-key-store";
 
-function isBrowser(): boolean {
-  return (
-    typeof window !== "undefined" && typeof window.localStorage !== "undefined"
-  );
+const LEGACY_STORAGE_KEY = "probot.llm.key.v1";
+const LEGACY_AZURE_KEY = "probot.llm.azure.v1";
+const SECRET_NAME = "llm.key.v1";
+const AZURE_SECRET_NAME = "llm.azure.v1";
+
+function legacyLocal(): Storage | null {
+  if (typeof window === "undefined") return null;
+  if (typeof window.localStorage === "undefined") return null;
+  return window.localStorage;
 }
 
-export function getApiKey(): string | null {
-  if (!isBrowser()) return null;
-  const value = window.localStorage.getItem(STORAGE_KEY);
+async function migrateFromLocalStorage(
+  secretName: string,
+  legacyKey: string,
+): Promise<string | null> {
+  const ls = legacyLocal();
+  if (!ls) return null;
+  const value = ls.getItem(legacyKey);
   if (value === null) return null;
   const trimmed = value.trim();
-  return trimmed.length === 0 ? null : trimmed;
+  if (trimmed.length === 0) {
+    ls.removeItem(legacyKey);
+    return null;
+  }
+  const store = getSecureKeyStore();
+  if (!store) return trimmed; // best-effort: at least return the value
+  try {
+    await store.setSecret(secretName, trimmed);
+    ls.removeItem(legacyKey);
+  } catch {
+    // Migration failure - leave the localStorage entry in place so a
+    // future visit retries. We still return the value so the current
+    // request keeps working.
+  }
+  return trimmed;
 }
 
-export function setApiKey(key: string): void {
-  if (!isBrowser()) return;
-  const trimmed = key.trim();
-  if (trimmed.length === 0) {
-    window.localStorage.removeItem(STORAGE_KEY);
+export async function getApiKey(): Promise<string | null> {
+  const store = getSecureKeyStore();
+  if (!store) {
+    // No IDB / no crypto.subtle (e.g. SSR or old browser). Fall back
+    // to the legacy localStorage read so the chat still works.
+    const ls = legacyLocal();
+    if (!ls) return null;
+    const value = ls.getItem(LEGACY_STORAGE_KEY);
+    if (value === null) return null;
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  }
+  const stored = await store.getSecret(SECRET_NAME);
+  if (stored !== null) return stored;
+  return migrateFromLocalStorage(SECRET_NAME, LEGACY_STORAGE_KEY);
+}
+
+export async function setApiKey(key: string): Promise<void> {
+  const store = getSecureKeyStore();
+  if (!store) {
+    const ls = legacyLocal();
+    if (!ls) return;
+    const trimmed = key.trim();
+    if (trimmed.length === 0) ls.removeItem(LEGACY_STORAGE_KEY);
+    else ls.setItem(LEGACY_STORAGE_KEY, trimmed);
     return;
   }
-  window.localStorage.setItem(STORAGE_KEY, trimmed);
+  await store.setSecret(SECRET_NAME, key);
+  // Clear the legacy localStorage entry so the post-migration browser
+  // doesn't show the API key in DevTools.
+  legacyLocal()?.removeItem(LEGACY_STORAGE_KEY);
 }
 
-export function clearApiKey(): void {
-  if (!isBrowser()) return;
-  window.localStorage.removeItem(STORAGE_KEY);
+export async function clearApiKey(): Promise<void> {
+  const store = getSecureKeyStore();
+  if (store) await store.clearSecret(SECRET_NAME);
+  legacyLocal()?.removeItem(LEGACY_STORAGE_KEY);
 }
-
-// Azure-specific extra credentials. The API key still goes through the
-// existing single-key path (`getApiKey`/`setApiKey`). These two fields are
-// stored separately so switching between providers (e.g. Anthropic ↔ Azure)
-// doesn't wipe the other provider's key.
 
 export type AzureCreds = {
   endpoint: string;
   apiVersion: string;
 };
 
-export function getAzureCreds(): AzureCreds | null {
-  if (!isBrowser()) return null;
-  const raw = window.localStorage.getItem(AZURE_STORAGE_KEY);
-  if (raw === null) return null;
+function parseAzureBlob(raw: string): AzureCreds | null {
   try {
     const parsed = JSON.parse(raw) as Partial<AzureCreds>;
     const endpoint =
@@ -60,26 +103,47 @@ export function getAzureCreds(): AzureCreds | null {
     if (endpoint.length === 0) return null;
     return { endpoint, apiVersion };
   } catch {
-    // Corrupted entry - treat as absent. Caller decides what to do.
     return null;
   }
 }
 
-export function setAzureCreds(creds: AzureCreds): void {
-  if (!isBrowser()) return;
-  const endpoint = creds.endpoint.trim();
-  const apiVersion = creds.apiVersion.trim();
-  if (endpoint.length === 0) {
-    window.localStorage.removeItem(AZURE_STORAGE_KEY);
-    return;
+export async function getAzureCreds(): Promise<AzureCreds | null> {
+  const store = getSecureKeyStore();
+  if (!store) {
+    const ls = legacyLocal();
+    if (!ls) return null;
+    const raw = ls.getItem(LEGACY_AZURE_KEY);
+    return raw === null ? null : parseAzureBlob(raw);
   }
-  window.localStorage.setItem(
-    AZURE_STORAGE_KEY,
-    JSON.stringify({ endpoint, apiVersion }),
+  const stored = await store.getSecret(AZURE_SECRET_NAME);
+  if (stored !== null) return parseAzureBlob(stored);
+  const migrated = await migrateFromLocalStorage(
+    AZURE_SECRET_NAME,
+    LEGACY_AZURE_KEY,
   );
+  return migrated === null ? null : parseAzureBlob(migrated);
 }
 
-export function clearAzureCreds(): void {
-  if (!isBrowser()) return;
-  window.localStorage.removeItem(AZURE_STORAGE_KEY);
+export async function setAzureCreds(creds: AzureCreds): Promise<void> {
+  const endpoint = creds.endpoint.trim();
+  const apiVersion = creds.apiVersion.trim();
+  const store = getSecureKeyStore();
+  if (endpoint.length === 0) {
+    if (store) await store.clearSecret(AZURE_SECRET_NAME);
+    legacyLocal()?.removeItem(LEGACY_AZURE_KEY);
+    return;
+  }
+  const payload = JSON.stringify({ endpoint, apiVersion });
+  if (store) {
+    await store.setSecret(AZURE_SECRET_NAME, payload);
+    legacyLocal()?.removeItem(LEGACY_AZURE_KEY);
+  } else {
+    legacyLocal()?.setItem(LEGACY_AZURE_KEY, payload);
+  }
+}
+
+export async function clearAzureCreds(): Promise<void> {
+  const store = getSecureKeyStore();
+  if (store) await store.clearSecret(AZURE_SECRET_NAME);
+  legacyLocal()?.removeItem(LEGACY_AZURE_KEY);
 }

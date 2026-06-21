@@ -1662,3 +1662,114 @@ The general principle: **match the cost of the defence to the cost of the attack
 A related lesson: **`timingSafeEqual` requires equal-length buffers** (it throws otherwise). The buffer-length check itself is a timing oracle on the secret length, so the canonical pattern is: hash both inputs to a fixed length first, then compare. We don't do that here because length-leak on the env var is irrelevant; for higher-stakes comparisons (e.g., comparing user-supplied passwords), always hash first.
 
 ---
+
+### Heuristic Upload Safety Is Not "Antivirus" - And That's Fine If You Say So (Stage 7 Phase 6)
+
+> The malware-scan module does magic-byte checks and signature lookups, not actual virus detection. Isn't that misleading branding?
+
+It would be if we called it antivirus. We don't - the file is named `malware-scan.ts` because "scan" describes what it does (look for patterns) without claiming a guarantee. The comment block at the top explicitly says what it catches and what it doesn't, including the line "real PDF-embedded malware (encrypted payload that pdf-parse doesn't trigger)" as a known gap. Honest scope is the right move.
+
+The heuristic checks are valuable in their own right, just for different threats than antivirus:
+
+- **Antivirus** scans for KNOWN malicious signatures in arbitrary binary content. Catches viruses; doesn't care about file extensions.
+- **Heuristic upload scan** catches MISMATCHES between claimed-and-actual file type. Catches lazy attackers; doesn't catch sophisticated payloads inside legitimate file formats.
+
+For ProBot's threat model (resume PDFs from job seekers, mostly), the heuristic scan is the right tool: the most common "attacks" are accidentally-uploaded .exe / .docx / .doc files that the user mislabeled, and these all fail the magic-byte vs MIME vs extension cross-check. A real malicious actor crafting a weaponized PDF would bypass the heuristic scan AND would need a separate pdf-parse exploit to actually do anything; the threat model says they'd go elsewhere first.
+
+Free serverless ClamAV doesn't exist. It needs a persistent daemon (the virus database alone is ~200MB and takes time to load), and Vercel serverless functions are ephemeral (~50MB code size limit, cold-start every few seconds). The alternatives are:
+- Run ClamAV as a sidecar on a non-serverless host (defeats the deployment model).
+- Use a paid third-party API like VirusTotal (violates the "zero-cost" project constraint).
+- Skip it and document the limitation.
+
+We picked option 3. The README + module-level comment make the trade explicit so a future operator who needs real AV scans knows where to add a sidecar.
+
+The general principle: **security features should match the threat model, not impress security reviewers.** A heuristic scan that catches 95% of accidental misuploads with zero cost beats a real AV scan that requires architectural changes. Naming matters too - "malware-scan" with documented scope is fine; "antivirus.ts" with the same code would be a lie.
+
+### `extractable: false` Is The One Property That Makes Browser Crypto Storage Real (Stage 7 Phase 6)
+
+> The IndexedDB key store generates a CryptoKey with `extractable: false`. The data it encrypts is still recoverable by any JS on the origin (call `crypto.subtle.decrypt`). So what does the flag actually buy?
+
+It buys "the key bytes cannot leave the browser via JS." That sounds narrow until you consider what attackers can and cannot do:
+
+**With extractable=true:**
+- Malicious JS on the origin can call `crypto.subtle.exportKey(key)` and get the raw 32-byte key material.
+- It can then SEND that key to an attacker server.
+- The attacker now holds the key permanently and can decrypt any future ciphertext they steal - even if the user changes their LLM API key, the master key stays the same.
+- A browser-data export tool (extension that reads IDB) could similarly extract.
+
+**With extractable=false:**
+- `crypto.subtle.exportKey(key)` throws.
+- Malicious JS can call `crypto.subtle.decrypt({ ... }, key, ciphertext)` to decrypt SPECIFIC ciphertexts it sees during its execution window.
+- It cannot exfiltrate the master key for future use.
+- A leaked IDB dump contains a CryptoKey object that's still bound to the non-extractable flag in the browser that re-imports it (structured clone preserves the flag).
+
+The two-line summary: **`extractable=true` leaks a key for forever; `extractable=false` leaks at most the secrets currently in scope during the compromise window.** For a chat-time-only API key that the user can rotate, that's a meaningful reduction.
+
+Two related things to know:
+
+1. **`crypto.subtle.generateKey({...}, extractable, keyUsages)`** is the only place the flag lives. You can't promote an extractable key to non-extractable later (you'd have to re-generate). Build it right the first time.
+2. **Structured clone of a CryptoKey preserves the flag.** IndexedDB serialises CryptoKey objects via structured clone, so the persisted-and-rehydrated key keeps `extractable=false` across browser restarts. The flag isn't a runtime property checked at use site; it's bound to the key material at the cryptographic primitive level.
+
+The pattern fails when:
+- The host has DOM/JS execution control (XSS, malicious extension) - the attacker just calls decrypt() with the key they can access via `subtle.crypto`. Mitigation is keeping the origin clean of third-party JS.
+- The host is not in a secure context (http://) - `crypto.subtle` doesn't exist. Mitigation is "run TLS in production."
+
+The general principle: **`extractable=false` doesn't make the data unreachable; it makes the KEY unreplicable.** For threats where the key is the long-lived asset (it is, for a per-origin master encryption key) that's the property that matters most.
+
+### Async Public API Beats Sync-With-Hydration For New Browser-Storage Modules (Stage 7 Phase 6)
+
+> The Phase 6 key store has a fully async public API - `getApiKey()` returns `Promise<string | null>`. We could have wrapped it in a sync façade that returns a cached value after a one-time async hydration. Why did the async version win?
+
+Sync-with-hydration looks tempting because it preserves existing call sites - no `await` to add, no async-bubbling refactor. But it has a load-bearing race that's almost invisible until production:
+
+```typescript
+// Pseudocode for the sync-with-hydration trap
+let cached: string | null = null;
+let hydrationPromise: Promise<void> | null = null;
+function hydrate() {
+  if (!hydrationPromise) hydrationPromise = loadFromIDB().then(v => { cached = v; });
+  return hydrationPromise;
+}
+export function getApiKey(): string | null {
+  hydrate();   // fire-and-forget
+  return cached;  // ← returns null on first call before hydration resolves
+}
+```
+
+The first call always returns null. The second call might return null or the actual value, depending on whether the microtask queue drained between calls. The chat fails with `missing_llm_key` for the very first message of every session because the cache was empty when the send button was clicked. Then it works for the rest of the session, which makes the bug look intermittent and hard to reproduce. Classic Heisenbug.
+
+The async version forces every caller to wait for the actual value:
+
+```typescript
+export async function getApiKey(): Promise<string | null> {
+  // No race - the IDB read is fully resolved before the caller sees a value.
+}
+```
+
+This adds an `await` at every call site (3 files in our case), but the refactor is mechanical - those call sites were already in async contexts (event handlers, useEffect callbacks). The cost was ~10 line changes. The benefit is correctness on the first call of every session.
+
+The general principle: **don't paper over async with sync façades unless the cache invariants are bulletproof.** "I'll just preload" works for static read-only data; it breaks down the moment writes happen too (the write would need a same-tick cache invalidation to be observable on the next read), and the second-order failure modes are subtle. Async-everywhere is the honest pattern; the syntactic overhead is small.
+
+A related lesson: **once a module is async, it stays async transitively.** Every caller becomes async, and their callers do too. This is what made the localStorage-to-IDB migration a non-trivial refactor despite the small line count - we had to touch the chat client, the bot factory, and the dashboard. The Phase 6 architecture doc called this out explicitly so we knew the scope going in.
+
+### `deleteDatabase` Will Block Forever If You Hold An Open Connection (Stage 7 Phase 6)
+
+> The first test run of the new key-store hung for 135 seconds before timing out. The fix was closing the cached DB handle in the test reset hook. What was actually happening?
+
+IndexedDB's `deleteDatabase` is a destructive operation that the browser refuses to fire until ALL open connections to that database are closed. The reasoning is reasonable: a JS context with an open IDBDatabase handle is mid-transaction; dropping the database under it would corrupt that transaction. So the spec says: queue the delete, wait for all connections to close, then fire.
+
+The protocol surfaces this via `IDBOpenDBRequest.onblocked` - fired when a delete is pending and there's an open connection. In real browsers, the browser also fires `versionchange` on the open connection so the holder can choose to close it. In fake-indexeddb (which is faithful to the spec), neither the close nor a synthetic timeout fires - if the test code never explicitly closes the connection, `deleteDatabase` is pending forever and the test times out.
+
+The fix has two parts:
+
+1. **The SUT's test reset must close the cached DB handle BEFORE the test runner deletes the DB.** That's why `__resetSecureKeyStoreForTests` was changed from a synchronous "null out the cache" to an async "open the cached connection, call .close(), then null." The .close() lets the queued deleteDatabase proceed.
+
+2. **The test setup must await both operations.** The reset is awaited, then the deleteDatabase is awaited (via the onsuccess/onerror/onblocked Promise wrapper). Skip either await and you're back to the race.
+
+The general principle: **destructive DB operations in tests need explicit lifecycle management of the SUT's connections.** This is more obvious for SQL (you'd never blow away a Postgres schema mid-transaction), less obvious for IDB because the API looks "fire and forget." The lesson generalises to any persistent resource: file handles, network sockets, web workers - the SUT may be holding a handle that prevents the test runner from cleaning up.
+
+A useful pattern: **expose a `__resetForTests` (or similar) that owns the cleanup ordering.** Production code never calls it; tests do. The reset function knows the internal lifecycle better than the test does, so encapsulating the "close handle, drop cache, anything else" sequence inside the module is more maintainable than spreading it across every test file.
+
+The specific symptom to watch for: a test hangs until the test runner's hook timeout fires (often 10 seconds default), error message says "Hook timed out." That's almost always a resource-leak or fire-and-forget-async issue, not a slow operation. The instinct should be "what's not getting closed" before "what's slow."
+
+---

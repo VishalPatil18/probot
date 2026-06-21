@@ -113,16 +113,16 @@ export function ChatWindow({
     const trimmed = text.trim();
     if (trimmed.length === 0 || loading) return;
 
-    const apiKey = getApiKey();
+    const apiKey = await getApiKey();
     if (!apiKey) {
       setMissingKey(true);
       return;
     }
 
     // Azure also needs endpoint + apiVersion alongside the key.
-    let azureCreds: ReturnType<typeof getAzureCreds> = null;
+    let azureCreds: Awaited<ReturnType<typeof getAzureCreds>> = null;
     if (llmProvider === "azure") {
-      azureCreds = getAzureCreds();
+      azureCreds = await getAzureCreds();
       if (!azureCreds) {
         setMissingKey(true);
         return;
@@ -149,7 +149,7 @@ export function ChatWindow({
     // Stage 3 RAG: include the optional OpenAI embedding key. Absent →
     // server skips retrieval and falls back to full-context. Same security
     // model as the chat key (localStorage only, never persisted server-side).
-    const embeddingKey = getEmbeddingApiKey();
+    const embeddingKey = await getEmbeddingApiKey();
     if (embeddingKey) {
       headers["x-embedding-api-key"] = embeddingKey;
     }

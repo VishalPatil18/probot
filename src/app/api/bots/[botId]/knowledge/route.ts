@@ -18,6 +18,7 @@ import {
   PDF_MIME_TYPE,
   extractPdfText,
 } from "@/lib/ingestion/extract-pdf";
+import { assertSafeBuffer } from "@/lib/uploads/malware-scan";
 
 const MANUAL_TEXT_SOURCE = "manual_text";
 
@@ -158,6 +159,12 @@ export async function POST(
         );
       }
       const buffer = Buffer.from(await file.arrayBuffer());
+      // Stage 7 Phase 6 §NFR-S02: heuristic safety scan BEFORE handing
+      // the buffer to pdf-parse. Rejects renamed executables, Office
+      // macro containers, EICAR, and magic-byte / MIME / extension
+      // mismatches. See src/lib/uploads/malware-scan.ts for the trade
+      // (no real AV scan in the serverless path; documented limitation).
+      assertSafeBuffer(buffer, file.name, file.type || PDF_MIME_TYPE);
       const text = await extractPdfText(buffer);
       await deleteSource(bot.id, file.name);
       await persistChunks(bot.id, file.name, "pdf", text);

@@ -157,9 +157,10 @@ export function AIModelKeyTab({
         );
         return;
       }
-      // Mirror the key into localStorage too so the creator's own dashboard
-      // test chat keeps working without re-entry.
-      setApiKey(trimmed);
+      // Mirror the key into the (Phase 6) encrypted IndexedDB store too so
+      // the creator's own dashboard test chat keeps working without
+      // re-entry.
+      await setApiKey(trimmed);
       setManagedKey("");
       setKeyStatus("stored");
       await fetchAudit();
