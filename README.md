@@ -59,7 +59,7 @@ You need:
 
 Open <http://localhost:3000/register>, create an account, navigate to `/dashboard/bots/new`, walk through the 5 steps, then click **Preview bot** to chat.
 
-Full walkthrough: [`claude/plan.md` Stage 1](claude/plan.md).
+Full walkthrough: see [`claude/beta.md`](claude/beta.md) for the 7-stage Beta build that's now shipped, and [`claude/plan-v1.md`](claude/plan-v1.md) for the active v1.0 plan.
 
 ## Architecture
 
@@ -128,7 +128,7 @@ The key never enters a JSON body, never gets logged, never appears in any error 
 - **Stage 6 - shipped:** dashboard, analytics, lead capture, in-app notifications.
 - **Stage 7 - shipped:** OAuth lock-down + email verification + password reset (Phase 1); custom instructions + draft/publish bot flow + per-bot rate limits (Phase 2); envelope encryption + managed key path + live dashboard (Phase 3); Google Gemini live + DeepSeek removed + circuit breaker + AI fallback (Phase 4); GDPR export + 7-day delete grace + undo link + nightly purge cron (Phase 5); malware-scan hardening + IndexedDB/Web-Crypto key store (Phase 6); marketing copy + KEK rotation runbook + CI key-leak grep (Phase 7).
 
-See [`claude/plan.md`](claude/plan.md) for the full stage-by-stage breakdown and [`claude/context.md`](claude/context.md) for the per-phase journal.
+See [`claude/beta.md`](claude/beta.md) for the full Beta stage-by-stage breakdown, [`claude/plan-v1.md`](claude/plan-v1.md) for the active v1.0 plan, [`claude/plan-v2.md`](claude/plan-v2.md) for the v2.0 backlog, and [`claude/context.md`](claude/context.md) for the per-phase journal.
 
 ## Key storage & KEK rotation
 
@@ -143,7 +143,9 @@ Self-host operators who don't enable managed mode leave the KEK env var unset; t
 
 ## Documentation
 
-- [`claude/plan.md`](claude/plan.md) - 7-stage incremental build plan
+- [`claude/beta.md`](claude/beta.md) - 7-stage Beta build plan (shipped) + final features checklist
+- [`claude/plan-v1.md`](claude/plan-v1.md) - active 9-stage Version 1.0 plan
+- [`claude/plan-v2.md`](claude/plan-v2.md) - v2.0 backlog
 - [`claude/srs.md`](claude/srs.md) - Software Requirements Specification
 - [`claude/context.md`](claude/context.md) - Append-only session history (what's been built, files touched, decisions)
 - [`claude/learnings.md`](claude/learnings.md) - Topic-keyed learning journal (Drizzle, JWT, BYO-key, React list keys, prompt-injection defenses, rate-limit windows, …)

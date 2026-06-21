@@ -22,6 +22,12 @@
             ]
           },
           {
+            "group": "Release notes",
+            "pages": [
+              "changelog"
+            ]
+          },
+          {
             "group": "Concepts",
             "pages": [
               "concepts/architecture",

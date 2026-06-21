@@ -1479,52 +1479,6 @@ latency_ms integer`. The chat route already times the provider call
 
 ---
 
-## Stage 8: Performance, Scale & Operational Polish (Post-Launch)
-
-> Added in Stage 7 Phase 7. Stage 7 explicitly deferred the performance NFRs (NFR-P01 through NFR-P07) and a handful of "make it scale" follow-ups. Stage 8 is where they land - post-launch, with real traffic to tune against.
-
-### Goal
-
-Take the launch-ready platform from Stage 7 and harden it for sustained traffic. Two themes: (1) hit the SRS §6.1 performance budgets with measurement and tuning, and (2) replace per-process state (rate limiter, circuit breaker) with shared Upstash Redis so a multi-instance deployment behaves correctly.
-
-### What lands in Stage 8
-
-#### Performance NFRs (SRS §6.1, deferred from Stage 7)
-
-| ID      | Requirement                     | Metric            | Approach                                                            |
-| ------- | ------------------------------- | ----------------- | ------------------------------------------------------------------- |
-| NFR-P01 | Chat response latency           | < 3 seconds (P95) | Vercel Speed Insights + Sentry traces; tune RAG chunk count.        |
-| NFR-P02 | Page load time (chat interface) | < 2 seconds (LCP) | `next/font` swap mode, prefetched OG image, smaller initial JS.     |
-| NFR-P03 | Widget load time                | < 1 second        | Already 8KB minified - measure on real CDN, may need preconnect.    |
-| NFR-P04 | Data ingestion (1-3 page PDF)   | < 60 seconds      | Defer embedding to a background job if pdf-parse + embed > 30s.     |
-| NFR-P05 | Vector similarity search        | < 200ms (P99)     | HNSW index audit; cap top-K at 3; warm queries with a pre-prompt.   |
-| NFR-P06 | Concurrent users per bot        | 50+ simultaneous  | Load test (k6) + ensure rate-limit windows don't deadlock.          |
-| NFR-P07 | Dashboard page load             | < 3 seconds       | Move N+1 queries (`buildExportBundle`, dashboard listings) to CTEs. |
-
-#### Shared-state infrastructure
-
-- **Upstash Redis backing for `src/lib/ai/rate-limit.ts`** so per-bot limits are accurate across cold-started serverless instances (today they reset every cold start).
-- **Upstash Redis backing for `src/lib/ai/circuit-breaker.ts`** so an outage tripping one instance immediately protects every other instance.
-- **Vercel Pro upgrade** if cron-job count grows beyond one (Hobby limit). Today the daily purge job is the only cron; Stage 8 may add an audit-log-prune-only cron, a metrics-scrape cron, or a "resend deletion link after 3 days" reminder cron.
-
-#### Smaller hardening items deferred from Stage 7
-
-- "Resend deletion email" UI for users who lose the undo link before the 7-day grace expires.
-- "Account deletion revokes OTHER browser sessions at init time" - today only the current session is signed out.
-- Dashboard breaker-state indicator ("your provider is currently throttled - retrying soon").
-- Real malware scan via a ClamAV sidecar (current heuristic catches accidental misuploads; a real AV scan needs persistent infrastructure).
-- Provider-mismatch dashboard prompt: "your stored managed key was minted for OpenAI but you've switched to Anthropic - re-store?"
-- Sentry / structured-logger wiring for the chat route's circuit-breaker `circuit_open` events so operators get an alert when a provider outage starts.
-- Gemini SDK error-mapping integration test against a real free-tier endpoint (current mapping is regex-on-message and could drift on SDK upgrades).
-- Per-tab CSRF on bearer-authenticated routes if user research shows real attack patterns.
-- One-command `docker compose up` self-host for operators who don't want to manage a separate Postgres + Resend account.
-
-#### Out of scope (kept on the V2 list)
-
-- Voice mode, interview simulation, company-IP enrichment - these stay in SRS §11 Future Enhancements.
-
----
-
 ## Summary: Stage Comparison Matrix
 
 | Feature                              | S1  | S2  | S3  | S4  | S5  | S6  | S7  |
@@ -1603,3 +1557,133 @@ Take the launch-ready platform from Stage 7 and harden it for sustained traffic.
 > **Removed in v1.1:** Stripe is not part of the stack.
 >
 > **Removed in this revision (post Stage 1 close-out):** AWS SES (replaced by Resend for auth-only emails; Stage 6 lead notifications are now in-app). AWS EC2 (not a recommended deploy target - Vercel primary; Render / Fly.io / Railway / Lightsail for self-hosters). The AWS surface is now strictly **S3 (Stage 2) + CloudFront (Stage 5)** for clean Always Free tier coverage.
+
+---
+
+## ✅ Beta Version - Shipped Features
+
+> This plan (formerly `plan.md`) drove the Beta build. Below is the complete checkbox list of what shipped across all 7 stages. The active forward-looking plan is `plan-v1.md`; v2.0 backlog lives in `plan-v2.md`.
+
+### Stage 1 - Foundation & Bot Creation
+
+- [x] Next.js 14 App Router scaffolding with TypeScript strict, Tailwind, Drizzle ORM
+- [x] PostgreSQL schema: `users` + `bots` tables with UUID PKs and proper FK cascades
+- [x] NextAuth email/password authentication with JWT session strategy
+- [x] Login + register UI (split-panel design with brand panel)
+- [x] Multi-provider LLM client abstraction: Anthropic, OpenAI, Azure OpenAI adapters
+- [x] BYO key transport via `x-llm-api-key` header (never in JSON body, never logged)
+- [x] Browser key store (`localStorage` Beta default; migrated to encrypted IndexedDB in Stage 7 Phase 6)
+- [x] 5-step Bot Factory wizard (identity → knowledge → personality → AI model → deploy)
+- [x] `POST /api/bots` upsert with one-bot-per-user model
+- [x] Chat UI with `react-markdown` + `remark-gfm`, auto-expanding textarea, suggested questions
+- [x] `POST /api/chat/[botId]` with full sanitization (input + output) and 2-tier rate limit
+
+### Stage 2 - Data Ingestion Pipeline
+
+- [x] PDF text extraction via `pdf-parse` with magic-byte verification
+- [x] Token-aware chunking via `tiktoken` (cl100k_base, 750/100 with overlap)
+- [x] `knowledge_base` table with per-source replace semantics
+- [x] `bots.context_text` reassembly from chunks ordered by (source_name, chunk_index)
+- [x] Per-bot `context_token_cap` (default 12,000) with Advanced disclosure in wizard
+
+### Stage 3 - RAG & Vector Search
+
+- [x] pgvector extension with 1536-dim embedding column
+- [x] OpenAI `text-embedding-3-large` truncated via Matryoshka representation
+- [x] Optional BYO embedding key (`x-embedding-api-key` header) - bots without a key fall back to full-context
+- [x] Cosine similarity retrieval with top-K=3 chunks injected into system prompt
+- [x] Graceful fallback to full-context when retrieval fails
+
+### Stage 4 - Public Chat & Onboarding
+
+- [x] Public `/u/[username]/chat` route (no-auth, recruiter-facing)
+- [x] Username slug enforcement at registration via `USERNAME_REGEX` + reserved-slug set
+- [x] Onboarding flow for OAuth/magic-link users to pick a real username
+- [x] Default avatar selection (deterministic animal icons by username)
+
+### Stage 5 - Embeddable Widget
+
+- [x] Single-file embeddable widget (`/widget.js`, 8 KB minified)
+- [x] Shadow DOM isolation to prevent host-page CSS conflicts
+- [x] CORS-enabled chat API for cross-origin widget calls
+- [x] Per-bot theme color (hex, default `#7c5cff`) flowing through widget + signature badge
+
+### Stage 6 - Dashboard, Analytics & Lead Capture
+
+- [x] Conversation persistence: `conversations` + `messages` tables with UPSERT on (bot_id, session_id)
+- [x] In-chat lead capture after N messages with `leads` table
+- [x] In-app notifications with `notifications` table + 30-second poll
+- [x] Dashboard home: conversations chart, recent leads, bot share card
+- [x] 5-tab settings page: Account / Bot configuration / Knowledge base / Security & privacy / AI model & key
+- [x] Notification bell + unread badge in topbar
+
+### Stage 7 - Open-Source Hardening, Compliance & Launch
+
+**Phase 1 - Auth hardening**
+
+- [x] `allowDangerousEmailAccountLinking: false` on GitHub + Google providers
+- [x] Email verification gate on credentials login (throws `email_not_verified` until verified)
+- [x] Full password reset flow: `password_reset_tokens` table (SHA-256 hashed, 1h TTL, single-use), `/forgot-password` + `/reset-password` pages, Resend email
+- [x] Email verification tokens (24h TTL) sent on credentials registration
+
+**Phase 2 - Bot enhancements**
+
+- [x] `custom_instructions` column (max 2000 chars) wired into wizard Step 3 + dashboard settings + system prompt builder
+- [x] Bot draft/publish flow: `is_active=false` by default, signed HMAC `preview_token`, `POST /api/bots/[botId]/publish`
+- [x] Per-bot configurable rate limits (`rate_limit_per_minute`, `rate_limit_per_day`, `rate_limit_max_chars`) with dashboard editor and chat-route enforcement
+- [x] Private preview URL (`/u/[username]/chat?preview=<token>`) for draft bots with `robots: { index: false }`
+
+**Phase 3 - Hybrid managed key storage**
+
+- [x] AES-256-GCM envelope encryption (`src/lib/crypto/envelope.ts`) with per-bot DEK + env-stored KEK
+- [x] `encrypted_llm_keys` table (one row per bot) + `decrypt_audit_log` table (30-day retention)
+- [x] `POST/DELETE /api/bots/[botId]/llm-key` for managed key store + revoke
+- [x] `GET /api/bots/[botId]/llm-key/audit` returning last 30 days of decrypt events
+- [x] `PATCH /api/users/me/llm-prefs` backing the dashboard provider/model switcher
+- [x] Live `AIModelKeyTab` with provider switcher, key status badge, audit log, revoke button
+- [x] Salted IP hashing (`src/lib/crypto/ip-hash.ts`) for audit-log requester identification
+- [x] `redactSensitive` helper (`src/lib/server/redact.ts`) for logger payload sanitization
+
+**Phase 4 - Provider polish + reliability**
+
+- [x] Real Google Gemini adapter (`@google/generative-ai`, `gemini-2.5-flash` default)
+- [x] DeepSeek removed from forward-looking docs + provider registry
+- [x] In-process per-provider circuit breaker (closed/open/half-open, 5-failure threshold, 30s cooldown)
+- [x] NFR-S04 graceful AI fallback: 200 response with `fallback: "circuit_open"` when breaker is open
+- [x] All four providers enabled in bot factory (Anthropic, OpenAI, Azure, Google Gemini)
+
+**Phase 5 - GDPR compliance**
+
+- [x] `GET /api/users/me/export` streaming JSON bundle (strips `hashedPassword`, `previewToken`, vector embeddings)
+- [x] `POST /api/users/me/delete` with 7-day grace period and `deletion_requests` table (email + username snapshot)
+- [x] `POST /api/users/me/undo-deletion` public route (token IS auth) + `/(auth)/undo-deletion` landing page
+- [x] Daily Vercel Cron at `/api/cron/purge-deleted-accounts` with `CRON_SECRET` auth, fail-closed
+- [x] `DeleteAccountModal` + `DeleteBotModal` (GitHub-style typed-identifier + typed-phrase confirmation)
+- [x] `DELETE /api/bots/[botId]` (immediate, no grace) wired into bot config tab Danger Zone
+- [x] Deletion-initiated + deletion-complete email templates with undo link
+- [x] Privacy + Terms copy updated for 7-day grace + undo + 30-day outer bound
+
+**Phase 6 - Upload + key store hardening**
+
+- [x] Malware-scan module (`src/lib/uploads/malware-scan.ts`) with magic-byte + extension + MIME + executable signature blocklist + EICAR detection
+- [x] Wired into PDF upload route before `pdf-parse`
+- [x] Secure key store (`src/lib/client/secure-key-store.ts`) with IndexedDB + non-extractable Web Crypto AES-256-GCM master key
+- [x] `llm-key-store` + `embedding-key-store` rewritten async on top of secure-key-store with one-time localStorage migration
+- [x] All three callers (`ChatWindow`, `BotFactoryForm`, `AIModelKeyTab`) migrated to await new async API
+
+**Phase 7 - Launch prep**
+
+- [x] KEK rotation CLI (`npm run kek:rotate` with `--dry-run`); per-row idempotent; re-wraps DEK only
+- [x] CI key-leak grep guard (`npm run check:key-leaks`) with per-file allow-list of 13 modules
+- [x] Landing page copy updated for hybrid managed/self-host model with `/about#hybrid` link
+- [x] About page `#hybrid` section with side-by-side managed vs self-hosted cards + operator-trust caveat
+- [x] `/self-hosting` docs page (requirements, deploy steps, key-storage choice, KEK rotation runbook, cron secret, honest caveats)
+- [x] README rewritten: hybrid hero, updated architecture table, two-panel BYO-key flow diagram, KEK rotation section, Stage 8+ roadmap
+
+### Beta-wide stats
+
+- **12 Drizzle migrations** (0000 → 0012)
+- **803 tests** across **87 files**, all green
+- **263 source files** scanned by the key-leak guard, 0 violations
+- **4 LLM providers** live: Anthropic, OpenAI, Azure OpenAI, Google Gemini
+- **TypeScript strict**, zero `any` in application code, Next.js production build green

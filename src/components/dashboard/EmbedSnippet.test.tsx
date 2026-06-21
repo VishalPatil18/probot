@@ -29,7 +29,7 @@ describe("EmbedSnippet", () => {
   it("renders the <script> embed snippet with the botId injected", () => {
     render(<EmbedSnippet {...baseProps} />);
     const snippet = screen.getByText(
-      /<script src="https:\/\/probot\.dev\/widget\.js" data-bot-id="11111111-1111-1111-1111-111111111111"><\/script>/,
+      /<script src="https:\/\/pro-bot\.dev\/widget\.js" data-bot-id="11111111-1111-1111-1111-111111111111"><\/script>/,
     );
     expect(snippet).toBeInTheDocument();
   });
@@ -38,7 +38,7 @@ describe("EmbedSnippet", () => {
     render(<EmbedSnippet {...baseProps} />);
     // The signature snippet is rendered verbatim in a <pre><code> block.
     expect(
-      screen.getByText(/Chat with my AI · probot\.dev\/u\/jane-doe/),
+      screen.getByText(/Chat with my AI · pro-bot\.dev\/u\/jane-doe/),
     ).toBeInTheDocument();
   });
 

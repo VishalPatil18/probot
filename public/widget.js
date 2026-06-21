@@ -35,7 +35,7 @@
         Powered by ProBot
       </a>
     </footer>
-  `}function y(t){if(!t)return null;let o=t.getAttribute("data-bot-id");if(!o)return null;let e=t.getAttribute("data-api-base"),n=typeof e=="string"&&/^https?:\/\//.test(e)?e.replace(/\/$/,""):"https://probot.dev";return{botId:o,apiBase:n}}async function C(t,o=document){let e=y(t);if(!e)return;let n;try{let g=await fetch(`${e.apiBase}/api/bots/${encodeURIComponent(e.botId)}/config`,{headers:{Accept:"application/json"}});if(!g.ok)return;n=await g.json()}catch(g){return}let r=h(n);if(!r)return;let a=o.createElement("div");a.setAttribute("data-probot-widget",""),o.body.appendChild(a);let d=a.attachShadow({mode:"closed"}),u=o.createElement("style");u.textContent=`/*
+  `}function y(t){if(!t)return null;let o=t.getAttribute("data-bot-id");if(!o)return null;let e=t.getAttribute("data-api-base"),n=typeof e=="string"&&/^https?:\/\//.test(e)?e.replace(/\/$/,""):"https://pro-bot.dev";return{botId:o,apiBase:n}}async function C(t,o=document){let e=y(t);if(!e)return;let n;try{let g=await fetch(`${e.apiBase}/api/bots/${encodeURIComponent(e.botId)}/config`,{headers:{Accept:"application/json"}});if(!g.ok)return;n=await g.json()}catch(g){return}let r=h(n);if(!r)return;let a=o.createElement("div");a.setAttribute("data-probot-widget",""),o.body.appendChild(a);let d=a.attachShadow({mode:"closed"}),u=o.createElement("style");u.textContent=`/*
  * ProBot widget styles. All selectors are scoped to the Shadow DOM root the
  * widget creates - there is no \`:host { all: initial }\` reset because
  * \`mode: "closed"\` already isolates from host-page styles.

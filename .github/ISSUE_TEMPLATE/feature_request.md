@@ -30,7 +30,7 @@ Screenshots, Figma links, or examples from other tools.
 
 ## Which stage does this belong to?
 
-Check `claude/plan.md` for the 7-stage roadmap. If this proposal targets a stage that's already shipped, say so; if it targets one in flight, note which one.
+The Beta (7 stages) is fully shipped - see `claude/beta.md` for the complete features checklist. The active plan is `claude/plan-v1.md` (8 stages); the v2.0 backlog is `claude/plan-v2.md`. If this proposal targets a stage that's already shipped, say so; if it targets one in flight, note which.
 
 - [ ] Stage 1 - Foundation + auth + BYO-key chat _(shipped)_
 - [ ] Stage 2 - PDF + URL ingestion

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 const DOCS_URL = "https://pro-bot-ai.vercel.app/docs";
+const CHANGELOG_URL = "https://pro-bot-ai.vercel.app/docs/changelog";
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
 const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
@@ -66,6 +67,16 @@ export function SiteFooter() {
                 <Link href="/dashboard/bots/new" className="hover:text-ink">
                   Create a bot
                 </Link>
+              </li>
+              <li>
+                <a
+                  href={CHANGELOG_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-ink"
+                >
+                  Changelog
+                </a>
               </li>
             </ul>
           </div>
