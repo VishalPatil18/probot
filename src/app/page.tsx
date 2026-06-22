@@ -1,9 +1,10 @@
 import Link from "next/link";
 
+import { DemoVideoModal } from "@/components/marketing/DemoVideoModal";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { SiteHeader } from "@/components/marketing/SiteHeader";
 
-const DOCS_URL = "https://pro-bot-ai.vercel.app/docs";
+const DOCS_URL = "https://pro-bot.dev/docs";
 
 const EMBED_SNIPPET =
   '<script src="pro-bot.dev/widget.js" data-bot-id="…"></script>';
@@ -60,13 +61,7 @@ export default function HomePage() {
                   Create your bot in 2 min
                   <MaterialIcon name="arrow_forward" className="!text-lg" />
                 </Link>
-                <Link
-                  href="/u/vishal/chat"
-                  className="btn btn-secondary !px-6 !py-3 !text-base"
-                >
-                  <MaterialIcon name="play_circle" className="!text-lg" />
-                  See a live demo
-                </Link>
+                <DemoVideoModal />
               </div>
               <div className="flex items-center gap-6 pt-2 text-sm text-muted">
                 <span className="flex items-center gap-1.5">

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-const DOCS_URL = "https://pro-bot-ai.vercel.app/docs";
-const CHANGELOG_URL = "https://pro-bot-ai.vercel.app/docs/changelog";
+const DOCS_URL = "https://pro-bot.dev/docs";
+const CHANGELOG_URL = "https://pro-bot.dev/docs/changelog";
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
 const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
@@ -51,6 +51,16 @@ export function SiteFooter() {
               <li>
                 <Link href="/#features" className="hover:text-ink">
                   Features
+                </Link>
+              </li>
+              <li>
+                <Link href="/why-pro-bot" className="hover:text-ink">
+                  Why ProBot
+                </Link>
+              </li>
+              <li>
+                <Link href="/roadmap" className="hover:text-ink">
+                  Roadmap
                 </Link>
               </li>
               <li>
@@ -131,6 +141,11 @@ export function SiteFooter() {
               <li>
                 <Link href="/about" className="hover:text-ink">
                   About
+                </Link>
+              </li>
+              <li>
+                <Link href="/hire-me" className="hover:text-ink">
+                  Hire me
                 </Link>
               </li>
               <li>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-const DOCS_URL = "https://pro-bot-ai.vercel.app/docs";
+const DOCS_URL = "https://pro-bot.dev/docs";
 
 function MaterialIcon({
   name,
@@ -56,6 +56,18 @@ export function SiteHeader() {
             Features
           </Link>
           <Link
+            href="/why-pro-bot"
+            className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
+          >
+            Why ProBot
+          </Link>
+          <Link
+            href="/roadmap"
+            className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
+          >
+            Roadmap
+          </Link>
+          <Link
             href="/about"
             className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
           >
@@ -101,6 +113,12 @@ export function SiteHeader() {
           </Link>
           <Link href="/#features" className="py-2 font-medium">
             Features
+          </Link>
+          <Link href="/why-pro-bot" className="py-2 font-medium">
+            Why ProBot
+          </Link>
+          <Link href="/roadmap" className="py-2 font-medium">
+            Roadmap
           </Link>
           <Link href="/about" className="py-2 font-medium">
             About
