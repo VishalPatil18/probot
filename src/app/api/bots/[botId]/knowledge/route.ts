@@ -136,10 +136,21 @@ export async function POST(
   // Track sources we touched in this request so we only re-embed those (not
   // the whole bot every upload).
   const processedSources: string[] = [];
+  const fileResults: Array<{
+    name: string;
+    ok: boolean;
+    error?: string;
+    category?: IngestionError["category"];
+  }> = [];
 
-  try {
-    // Process PDFs first so per-source replace by filename is deterministic.
-    for (const file of fileEntries) {
+  // Process each PDF independently. A single bad file (oversize, non-PDF,
+  // unsafe, or unreadable) records a per-file error while the rest still ingest;
+  // the wizard surfaces these inline and lets the user retry just the failed
+  // file, instead of one page-level "ingestion failed" that discards the good
+  // files. Per-source replace by filename keeps this deterministic on retry.
+  for (const file of fileEntries) {
+    const name = file.name || "file";
+    try {
       if (!file.name) {
         throw new IngestionError(
           "invalid_file_type",
@@ -159,18 +170,38 @@ export async function POST(
         );
       }
       const buffer = Buffer.from(await file.arrayBuffer());
-      // Heuristic safety scan BEFORE handing
-      // the buffer to pdf-parse. Rejects renamed executables, Office
-      // macro containers, EICAR, and magic-byte / MIME / extension
-      // mismatches. See src/lib/uploads/malware-scan.ts for the trade
-      // (no real AV scan in the serverless path; documented limitation).
+      // Heuristic safety scan BEFORE handing the buffer to pdf-parse. Rejects
+      // renamed executables, Office macro containers, EICAR, and magic-byte /
+      // MIME / extension mismatches. See src/lib/uploads/malware-scan.ts.
       assertSafeBuffer(buffer, file.name, file.type || PDF_MIME_TYPE);
       const text = await extractPdfText(buffer);
       await deleteSource(bot.id, file.name);
       await persistChunks(bot.id, file.name, "pdf", text);
       processedSources.push(file.name);
+      fileResults.push({ name, ok: true });
+    } catch (e: unknown) {
+      if (e instanceof IngestionError) {
+        fileResults.push({
+          name,
+          ok: false,
+          error: e.message,
+          category: e.category,
+        });
+      } else {
+        // Unexpected failure: record it per-file rather than 500-ing the batch.
+        fileResults.push({
+          name,
+          ok: false,
+          error: "ingestion_failed",
+          category: "pdf_unreadable",
+        });
+      }
     }
+  }
 
+  // Manual text is not a retriable "file"; a failure here still fails the
+  // request loudly (it's the form's text field, not a per-file row).
+  try {
     if (manualText.length > 0) {
       await deleteSource(bot.id, MANUAL_TEXT_SOURCE);
       await persistChunks(bot.id, MANUAL_TEXT_SOURCE, "text", manualText);
@@ -215,6 +246,7 @@ export async function POST(
 
   return NextResponse.json({
     sources,
+    files: fileResults,
     totalTokens: result.totalTokens,
     truncated: result.truncated,
     embedded: embeddingApiKey !== null && embeddingError === null,

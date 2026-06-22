@@ -227,26 +227,62 @@ describe("POST /api/bots/[botId]/knowledge", () => {
     expect(chunkTextMock).toHaveBeenCalledWith("pdf body");
   });
 
-  it("maps IngestionError('file_too_large') to 413", async () => {
+  it("records a per-file error for IngestionError('file_too_large') without 4xx-ing the batch", async () => {
     extractPdfTextMock.mockRejectedValueOnce(
       new IngestionError("file_too_large", "too big"),
     );
     const res = await POST(multipart({ files: [pdfFile("big.pdf")] }), PARAMS);
-    expect(res.status).toBe(413);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      files: Array<{ name: string; ok: boolean; category?: string }>;
+    };
+    expect(body.files[0]).toMatchObject({
+      name: "big.pdf",
+      ok: false,
+      category: "file_too_large",
+    });
   });
 
-  it("maps IngestionError('pdf_unreadable') to 422", async () => {
+  it("records a per-file error for IngestionError('pdf_unreadable')", async () => {
     extractPdfTextMock.mockRejectedValueOnce(
       new IngestionError("pdf_unreadable", "corrupt"),
     );
     const res = await POST(multipart({ files: [pdfFile("bad.pdf")] }), PARAMS);
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      files: Array<{ ok: boolean; category?: string }>;
+    };
+    expect(body.files[0]).toMatchObject({ ok: false, category: "pdf_unreadable" });
   });
 
-  it("rejects non-pdf mime type with 415", async () => {
+  it("records a per-file error for a non-pdf mime type", async () => {
     const txtFile = new File(["hi"], "notes.txt", { type: "text/plain" });
     const res = await POST(multipart({ files: [txtFile] }), PARAMS);
-    expect(res.status).toBe(415);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      files: Array<{ ok: boolean; category?: string }>;
+    };
+    expect(body.files[0]).toMatchObject({
+      ok: false,
+      category: "invalid_file_type",
+    });
+  });
+
+  it("processes good files and records failures independently (partial success)", async () => {
+    extractPdfTextMock
+      .mockResolvedValueOnce("good content")
+      .mockRejectedValueOnce(new IngestionError("pdf_unreadable", "corrupt"));
+    const res = await POST(
+      multipart({ files: [pdfFile("good.pdf"), pdfFile("bad.pdf")] }),
+      PARAMS,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      files: Array<{ name: string; ok: boolean }>;
+    };
+    expect(body.files).toHaveLength(2);
+    expect(body.files.find((f) => f.name === "good.pdf")?.ok).toBe(true);
+    expect(body.files.find((f) => f.name === "bad.pdf")?.ok).toBe(false);
   });
 
   describe("Stage 3 RAG (embedding key)", () => {

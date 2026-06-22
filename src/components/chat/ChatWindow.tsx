@@ -66,6 +66,7 @@ type Props = {
   botId: string;
   botName: string;
   botHeadline: string | null;
+  botImage?: string | null;
   suggestedQuestions: string[];
   loadingMessages: string[];
   llmProvider: ProviderName;
@@ -80,6 +81,7 @@ export function ChatWindow({
   botId,
   botName,
   botHeadline,
+  botImage,
   suggestedQuestions,
   loadingMessages,
   llmProvider,
@@ -259,7 +261,11 @@ export function ChatWindow({
 
   return (
     <div className="h-screen flex flex-col bg-bg-app">
-      <ChatHeader botName={botName} botHeadline={botHeadline} />
+      <ChatHeader
+        botName={botName}
+        botHeadline={botHeadline}
+        botImage={botImage}
+      />
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-4">
@@ -375,9 +381,11 @@ export function ChatWindow({
 function ChatHeader({
   botName,
   botHeadline,
+  botImage,
 }: {
   botName: string;
   botHeadline: string | null;
+  botImage?: string | null;
 }) {
   const initials =
     botName
@@ -390,9 +398,18 @@ function ChatHeader({
   return (
     <header className="bg-white border-b border-border-base shrink-0">
       <div className="mx-auto max-w-3xl px-5 py-4 flex items-center gap-4">
-        <div className="size-12 rounded-full brand-blue-gradient grid place-items-center text-white font-display font-extrabold text-lg shrink-0">
-          {initials}
-        </div>
+        {botImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={botImage}
+            alt={`${botName} avatar`}
+            className="size-12 rounded-full object-cover shrink-0"
+          />
+        ) : (
+          <div className="size-12 rounded-full brand-blue-gradient grid place-items-center text-white font-display font-extrabold text-lg shrink-0">
+            {initials}
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-lg font-bold leading-tight truncate">
             {botName}{" "}

@@ -308,6 +308,41 @@ describe("BotFactoryForm", () => {
     expect((files[0] as File).name).toBe("cv.pdf");
   });
 
+  it("surfaces per-file ingestion failures on Step 5 with a retry button", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(201, { bot: { id: "bot-9", name: "Jane Doe" } }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          sources: [],
+          files: [{ name: "cv.pdf", ok: false, category: "pdf_unreadable" }],
+        }),
+      );
+    const user = userEvent.setup();
+    render(<BotFactoryForm username="jane" />);
+    await fillStep1(user);
+
+    const fileInput = document.getElementById(
+      "bf-pdf-input",
+    ) as HTMLInputElement;
+    await user.upload(
+      fileInput,
+      new File(["%PDF-1.4 cv"], "cv.pdf", { type: "application/pdf" }),
+    );
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await passStep3(user);
+    await fillStep4(user, "sk-ant-test-1234567890");
+    await user.click(screen.getByRole("button", { name: /save as draft/i }));
+
+    expect(
+      await screen.findByText(/some files couldn.t be processed/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^retry$/i }),
+    ).toBeInTheDocument();
+  });
+
   it("navigates to /u/{username}/chat when Preview is clicked on Step 5", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(201, { bot: { id: "bot-1", name: "Jane Doe" } }),

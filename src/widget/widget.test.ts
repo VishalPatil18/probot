@@ -33,6 +33,7 @@ const FULL_CONFIG: WidgetConfig = {
     name: "Jane Doe",
     headline: "Senior ML Engineer",
     themeColor: "#7c5cff",
+    image: null,
     suggestedQuestions: ["What does she do?", "Tell me about her ML work."],
   },
   owner: {

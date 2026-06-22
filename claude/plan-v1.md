@@ -13,7 +13,7 @@
 | **1** | ✅ Branding & Copy Cleanup                  | P0       | yes         | 1–2 days         |
 | **2** | ✅ Auth UX & Bug-fix Sprint                 | P0       | yes         | 3–4 days         |
 | **3** | ✅ Account & Settings Hardening             | P0       | yes         | 4–5 days         |
-| **4** | Bot Factory & Dashboard Polish              | P1       | yes         | 3–4 days         |
+| **4** | ✅ Bot Factory & Dashboard Polish           | P1       | yes         | 3–4 days         |
 | **5** | Sidebar, Notifications & Empty-State Polish | P1       | yes         | 2–3 days         |
 | **6** | Marketing & Trust Pages                     | P1       | yes         | 5–7 days         |
 | **7** | SEO, Docs & Discoverability                 | P2       | yes         | 3–4 days         |
@@ -115,6 +115,8 @@ Stage 2 (show-password toggle, availability endpoint).
 ---
 
 ## Stage 4 - Bot Factory & Dashboard Polish
+
+**Status:** ✅ Shipped 2026-06-22. Bot profile picture (Postgres bytea `bot_avatars` + `bots.image`, Bot Factory Step 1, rendered on chat header + widget, default ProBot icon), PDF dustbin icon, per-file ingestion fix (knowledge route returns `files[]`; wizard Step 5 shows retriable failures), theme picker in wizard Step 3, dark code-block embed snippets, shared `image-upload.ts` helper. **Requires `npx drizzle-kit push`** for `bot_avatars`/`bots.image`. typecheck + key-leak green; full test/build run natively. See `context.md` 2026-06-22 Stage 4 entry.
 
 **Priority:** P1 (highest UX-impact wizard pass since Beta Phase 2)
 **Deployable artifact:** Wizard step 1 has a bot avatar picker; PDF removal uses a dustbin icon; the dashboard's "Share your bot" section shows embed snippets as code blocks; PDF-ingestion failure no longer surfaces as a generic error.

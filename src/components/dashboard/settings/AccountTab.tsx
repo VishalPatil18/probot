@@ -221,11 +221,6 @@ export function AccountTab({ name, email, username, image, initials }: Props) {
                 )}
               </span>
             </button>
-            <p className="mt-2 text-center text-[11px] leading-tight text-muted">
-              JPG · PNG · WebP
-              <br />
-              2 MB max
-            </p>
             {avatarError ? (
               <p
                 className="mt-1 text-center text-[11px] text-red-600"
@@ -237,7 +232,7 @@ export function AccountTab({ name, email, username, image, initials }: Props) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
               onChange={handleAvatarChange}
               className="hidden"
             />

@@ -26,6 +26,7 @@ export interface WidgetConfig {
     name: string;
     headline: string | null;
     themeColor: string;
+    image: string | null;
     suggestedQuestions: string[];
   };
   owner: {
@@ -92,6 +93,7 @@ export function parseConfig(raw: unknown): WidgetConfig | null {
       name: botName,
       headline: typeof bot.headline === "string" ? bot.headline : null,
       themeColor: safeThemeColor(bot.themeColor),
+      image: typeof bot.image === "string" ? bot.image : null,
       suggestedQuestions: suggested,
     },
     owner: {
@@ -126,8 +128,11 @@ export function renderDialogInner(
   const { bot, owner } = config;
   const displayName = owner.name ?? owner.username;
   const chatUrl = `${apiBase}/u/${encodeURIComponent(owner.username)}/chat`;
-  const avatarHtml = owner.image
-    ? `<img class="probot-avatar" src="${escapeHtml(owner.image)}" alt="${escapeHtml(displayName)}" />`
+  // Prefer the bot's own picture; fall back to the owner's photo, then a plain
+  // placeholder. The bot avatar is the widget's primary identity.
+  const avatarSrc = bot.image ?? owner.image;
+  const avatarHtml = avatarSrc
+    ? `<img class="probot-avatar" src="${escapeHtml(avatarSrc)}" alt="${escapeHtml(bot.name)}" />`
     : `<div class="probot-avatar" aria-hidden="true"></div>`;
 
   const suggestedHtml =

@@ -1,6 +1,7 @@
 "use client";
 
-const THEME_PRESETS = ["#7c5cff", "#10a37f", "#9b5cff", "#404040"];
+// Blue (primary brand color), Red, Green, Black.
+const THEME_PRESETS = ["#0070dd", "#ef4444", "#16a34a", "#000000"];
 
 interface ThemeColorFieldProps {
   value: string;

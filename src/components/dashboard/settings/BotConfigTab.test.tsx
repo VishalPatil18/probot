@@ -225,7 +225,7 @@ describe("BotConfigTab", () => {
   it("clicking a theme preset swatch enables Save and sends the new color on PATCH", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { bot: {} }));
     render(<BotConfigTab {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /theme color #10a37f/i }));
+    fireEvent.click(screen.getByRole("button", { name: /theme color #16a34a/i }));
     expect(
       screen.getByRole("button", { name: /save bot settings/i }),
     ).not.toBeDisabled();
@@ -237,6 +237,6 @@ describe("BotConfigTab", () => {
     });
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(body).toEqual({ themeColor: "#10a37f" });
+    expect(body).toEqual({ themeColor: "#16a34a" });
   });
 });

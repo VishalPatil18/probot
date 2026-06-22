@@ -91,6 +91,11 @@ export const bots = pgTable(
     themeColor: varchar("theme_color", { length: 7 })
       .notNull()
       .default("#7c5cff"),
+    // Per-bot avatar URL. NULL = render the default ProBot icon. When the
+    // owner uploads a bot photo it points at GET /api/bot-avatar/<botId>,
+    // which streams the bytes stored in `bot_avatars`. Shown on the public
+    // chat header and the embeddable widget.
+    image: text("image"),
     // Free-form additions to the system prompt. Max length
     // is enforced at the Zod layer (botInput / botPatchInput) so a future
     // tightening of the cap doesn't require a migration. Injected into the
@@ -573,6 +578,22 @@ export const userAvatars = pgTable("user_avatars", {
     .defaultNow(),
 }).enableRLS();
 
+// bot_avatars
+// One row per bot whose owner uploaded a custom picture. Same shape + rationale
+// as user_avatars: raw image bytes + MIME, one per bot (`bot_id` PK). When set,
+// `bots.image` points at GET /api/bot-avatar/<botId>. Bots with the default
+// ProBot icon never create a row here.
+export const botAvatars = pgTable("bot_avatars", {
+  botId: uuid("bot_id")
+    .primaryKey()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  data: bytea("data").notNull(),
+  contentType: varchar("content_type", { length: 40 }).notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: false })
+    .notNull()
+    .defaultNow(),
+}).enableRLS();
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Bot = typeof bots.$inferSelect;
@@ -605,3 +626,5 @@ export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 export type UserAvatar = typeof userAvatars.$inferSelect;
 export type NewUserAvatar = typeof userAvatars.$inferInsert;
+export type BotAvatar = typeof botAvatars.$inferSelect;
+export type NewBotAvatar = typeof botAvatars.$inferInsert;

@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **v1.0 STAGE 3 (Account & Settings Hardening) SHIPPED** (2026-06-21) - editable Settings → Account (full name + username w/ debounced uniqueness, password change, profile-photo upload to Postgres bytea via `user_avatars` + `/api/avatar/[userId]` serve route), `auth.ts` jwt/session refresh of name+image, and a redesigned theme picker (`ThemeColorField` circle + popover). Items 4/6/7 verified already-shipped. typecheck + key-leak green; **run `npx drizzle-kit push` to create `user_avatars`** before photo upload works. See latest Session History entry. **Prior:** **v1.0 STAGE 2 (Auth UX & Bug-fix Sprint) SHIPPED** (2026-06-21) - show-password toggles, "remember me" (JWT-encode maxAge override: 30d vs 1d), debounced signup availability check (`GET /api/auth/check-availability`), forgot-password modal, OAuth-row icon alignment, and an inline sidebar sign-out (`SidebarAccountFooter`, replacing `SignOutButton`). Magic-link bug was already resolved (dropped); onboarding parity verified already-shipped. typecheck + key-leak guard green; vitest deferred to native run (sandbox platform mismatch). See latest Session History entry. **Prior:** **v1.0 STAGE 1 (Branding & Copy Cleanup) SHIPPED** (2026-06-21) - on top of the Beta release. "AI Recruiter"→"AI Assistant", `probot.com`→`pro-bot.dev`, post-Beta auth hero copy, and a Beta-vocab comment sweep across ~95 source files. typecheck + key-leak guard green; full test/build to be re-run natively (sandbox platform mismatch). See the latest Session History entry. **Prior Beta status:** **STAGE 6 COMPLETE + Dashboard Redesign DONE** - Stages 1–6 shipped end-to-end. Full dashboard visual redesign (Slices A + B + C) ported from `design/dashboard.html` + `design/settings.html`. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints - type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon - Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Slice C closes out: bot detail page → redirect to settings, sub-page back-links + duplicate empty-state CTAs trimmed, 41-spec test backfill (BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar), `LabeledInput` gets `useId()` for proper label association, Stage 7 task block (§7.11) appended to plan.md tracking 10 deferred items. 689/689 tests, build green. Next: Stage 7 (OAuth, GDPR, hardening, launch). **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **v1.0 STAGE 4 (Bot Factory & Dashboard Polish) SHIPPED** (2026-06-22) - net-new bot profile picture (Postgres bytea `bot_avatars` + `bots.image`, uploaded in Bot Factory Step 1, rendered on the public chat header + embeddable widget, default ProBot icon), PDF dustbin icon, per-file PDF ingestion fix (knowledge route returns `files[]`; wizard shows retriable failures on Step 5 instead of a page-level error), theme picker in wizard Step 3, and dark code-block embed snippets. Shared `image-upload.ts` helper de-dupes avatar validation. **Run `npx drizzle-kit push`** to create `bot_avatars`/`bots.image` (and the pending Stage 3 `user_avatars`). typecheck + key-leak green. See latest Session History entry. **Prior:** **v1.0 STAGE 3 (Account & Settings Hardening) SHIPPED** (2026-06-21) - editable Settings → Account (full name + username w/ debounced uniqueness, password change, profile-photo upload to Postgres bytea via `user_avatars` + `/api/avatar/[userId]` serve route), `auth.ts` jwt/session refresh of name+image, and a redesigned theme picker (`ThemeColorField` circle + popover). Items 4/6/7 verified already-shipped. typecheck + key-leak green; **run `npx drizzle-kit push` to create `user_avatars`** before photo upload works. See latest Session History entry. **Prior:** **v1.0 STAGE 2 (Auth UX & Bug-fix Sprint) SHIPPED** (2026-06-21) - show-password toggles, "remember me" (JWT-encode maxAge override: 30d vs 1d), debounced signup availability check (`GET /api/auth/check-availability`), forgot-password modal, OAuth-row icon alignment, and an inline sidebar sign-out (`SidebarAccountFooter`, replacing `SignOutButton`). Magic-link bug was already resolved (dropped); onboarding parity verified already-shipped. typecheck + key-leak guard green; vitest deferred to native run (sandbox platform mismatch). See latest Session History entry. **Prior:** **v1.0 STAGE 1 (Branding & Copy Cleanup) SHIPPED** (2026-06-21) - on top of the Beta release. "AI Recruiter"→"AI Assistant", `probot.com`→`pro-bot.dev`, post-Beta auth hero copy, and a Beta-vocab comment sweep across ~95 source files. typecheck + key-leak guard green; full test/build to be re-run natively (sandbox platform mismatch). See the latest Session History entry. **Prior Beta status:** **STAGE 6 COMPLETE + Dashboard Redesign DONE** - Stages 1–6 shipped end-to-end. Full dashboard visual redesign (Slices A + B + C) ported from `design/dashboard.html` + `design/settings.html`. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints - type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon - Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Slice C closes out: bot detail page → redirect to settings, sub-page back-links + duplicate empty-state CTAs trimmed, 41-spec test backfill (BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar), `LabeledInput` gets `useId()` for proper label association, Stage 7 task block (§7.11) appended to plan.md tracking 10 deferred items. 689/689 tests, build green. Next: Stage 7 (OAuth, GDPR, hardening, launch). **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -2604,3 +2604,75 @@ _Tests + types:_
 **Open questions / follow-ups:**
 
 - typecheck + check:key-leaks pass (285 files); vitest unexecuted in-sandbox as always - run `npm test` natively.
+
+---
+
+### 2026-06-22 00:20 - Stage 3 follow-up: sniff-authoritative avatar upload (JPEG) + brand theme presets
+
+**What was asked to do:** Avatar upload should accept JPEG (`.jpg`/`.jpeg`) reliably, and the theme-color presets should be Blue (primary), Red, Green, Black. (Also surfaced: the avatar upload 500 was `relation "user_avatars" does not exist` - the Stage 3 migration not yet applied; fixed by running `npx drizzle-kit push`, not a code change.)
+
+**What I did:**
+
+- **Avatar upload made sniff-authoritative** (`src/app/api/users/me/avatar/route.ts`): removed the declared-MIME allowlist + the `sniffed !== file.type` strict-match check. The magic-byte sniff (JPEG `FF D8 FF`, PNG, WebP) is now the sole gate, and the *sniffed* type is stored as `content_type`. This fixes browsers/files that label JPEGs as the non-standard `image/jpg` (previously rejected with 415) and is stricter against spoofed Content-Types. File-size cap (2 MB) unchanged.
+- **Broadened the file input `accept`** (`AccountTab.tsx`) to `image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp` so the OS picker clearly offers `.jpeg` files.
+- **Theme presets** (`ThemeColorField.tsx`) changed from the old purples/teal to Blue `#0070dd` (the brand primary, converted from `tailwind.config.ts` `oklch(0.55 0.193 251.78)`), Red `#ef4444`, Green `#16a34a`, Black `#000000`.
+
+**Files changed:**
+
+- `src/app/api/users/me/avatar/route.ts` - update - sniff-authoritative validation.
+- `src/app/api/users/me/avatar/route.test.ts` - update - added a "JPEG labeled image/jpg succeeds" case.
+- `src/components/dashboard/settings/AccountTab.tsx` - update - broadened `accept`.
+- `src/components/dashboard/settings/ThemeColorField.tsx` - update - new preset palette.
+- `src/components/dashboard/settings/ThemeColorField.test.tsx` + `BotConfigTab.test.tsx` - update - swap the old `#10a37f` preset reference for the new green `#16a34a`.
+
+**Decisions made:**
+
+- **Sniff is authoritative, declared MIME is ignored.** `.jpg` and `.jpeg` are the same format (both `image/jpeg`); the only real failure mode was a browser declaring `image/jpg`. Trusting magic bytes fixes that and removes a spoofing vector instead of widening the allowlist string-by-string.
+
+**Open questions / follow-ups:**
+
+- **No bot-picture upload exists yet** (Stage 4 - Bot Factory avatar). When built, it should reuse this same magic-byte sniff rather than a declared-MIME allowlist.
+- typecheck + check:key-leaks pass (285 files); run `npm test` natively. And the `user_avatars` table must exist (`npx drizzle-kit push`) for upload to work at all.
+
+---
+
+### 2026-06-22 01:30 - v1.0 Stage 4: Bot Factory & Dashboard Polish
+
+**What was asked to do:** Ship Stage 4 of `claude/plan-v1.md`: a net-new bot profile picture (Bot Factory Step 1, defaulting to the ProBot icon, rendered on the public chat header + embeddable widget), a PDF dustbin icon, a per-file "PDF ingestion failed" fix (inline + retriable instead of a wizard-killer), the Stage 3 theme picker brought into wizard Step 3, and dark code blocks for the dashboard "Share your bot" snippets. One batch; bot avatar rendered on chat header + widget (user's choice).
+
+**What I did:**
+
+- **Bot avatar storage (Postgres bytea):** new `bots.image` column + `bot_avatars` table (bytea, mirrors `user_avatars`). `POST /api/bots/[botId]/avatar` (owner-gated) stores bytes + sets `bots.image`; `GET /api/bot-avatar/[botId]` serves them. Default (no upload) = NULL → ProBot icon fallback.
+- **Shared image-upload helper:** extracted `src/lib/uploads/image-upload.ts` (`sniffImageType`, `parseImageUpload`, `appBaseUrl`) and refactored the Stage 3 user-avatar route to use it - both avatar routes now share sniff-authoritative validation.
+- **Render bot avatar:** config endpoint exposes `bot.image`; chat page threads it to `ChatWindow` (header avatar slot, falls back to the gradient/initials); widget prefers `bot.image` over the owner photo. (The owner's personal photo from Stage 3 stays on `OwnerCard` - bot vs person are distinct identities.)
+- **Wizard (BotFactoryForm):** Step 1 bot-picture picker holding a `File` in form state, uploaded after `POST /api/bots` returns the id (like the knowledge upload); Step 2 "Remove" text → red `TrashIcon`; Step 3 `ThemeColorField` (sends `themeColor` in the create payload - new bots now default to blue `#0070dd` instead of the old purple).
+- **Per-file ingestion fix:** the knowledge route processes each PDF in its own try/catch and returns `200` with `files: [{ name, ok, error?, category? }]` instead of failing the whole batch on the first bad file. The wizard collects failures, advances to Step 5 anyway (the bot exists + good files are saved), and shows an `IngestFailuresPanel` with a per-file Retry that re-POSTs just that one file.
+- **Embed snippets:** `EmbedSnippet` `<pre><code>` restyled to a dark theme (no syntax-highlighter dependency); existing copy buttons kept.
+
+**Files changed:**
+
+- `src/lib/db/schema.ts` - update - `bots.image` + `bot_avatars` table + types.
+- `src/lib/uploads/image-upload.ts` - create - shared sniff/parse/base-url helper.
+- `src/app/api/users/me/avatar/route.ts` - update - use the shared helper.
+- `src/app/api/bots/[botId]/avatar/route.ts` - create - bot avatar upload (+ test).
+- `src/app/api/bot-avatar/[botId]/route.ts` - create - bot avatar serve (+ test).
+- `src/app/api/bots/[botId]/knowledge/route.ts` - update - per-file results (+ test updates).
+- `src/app/api/bots/[botId]/config/route.ts` - update - expose `bot.image`.
+- `src/app/u/[username]/chat/page.tsx` - update - pass `botImage`.
+- `src/components/chat/ChatWindow.tsx` - update - render bot avatar in header.
+- `src/widget/widget.ts` - update - prefer bot.image in the bubble (+ test fixture).
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - avatar picker, dustbin, theme field, per-file failure panel + retry (+ test).
+- `src/components/dashboard/EmbedSnippet.tsx` - update - dark code blocks.
+
+**Decisions made:**
+
+- **Bot avatar is distinct from the owner photo.** The chat header shows the bot's picture (its own identity, default ProBot icon); the owner's personal photo (Stage 3) stays on `OwnerCard`. The widget prefers `bot.image`, falling back to the owner image then a placeholder.
+- **Per-file results, not a 4xx batch.** The route now returns 200 even when some files fail; statuses like 413/422/415 for a single bad file are gone (the knowledge route tests were updated accordingly). Manual-text failures still fail loudly (not a retriable "file").
+- **Theme presets in the wizard mean new bots default to blue**, not the schema's legacy purple default - the picker always sends a value on create.
+- **Shared image-upload helper** removes the Stage 3 inline-sniff duplication so the bot route can't drift from the user route's validation.
+
+**Open questions / follow-ups:**
+
+- **`npx drizzle-kit push` required** to create `bot_avatars` + `bots.image` (alongside the still-pending Stage 3 `user_avatars`). Until then the bot-avatar upload/serve routes 500 with `relation "bot_avatars" does not exist`.
+- typecheck + check:key-leaks pass (290 files); vitest unexecuted in-sandbox - run `npm test` + `npm run build` natively.
+- **BotFactoryForm is now ~1340 lines.** If it grows further, the step components are good extraction candidates (e.g. pull `StepIdentity`/`StepKnowledge`/`StepPersonality` into their own files).

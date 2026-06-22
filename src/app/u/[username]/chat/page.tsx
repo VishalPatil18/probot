@@ -26,6 +26,7 @@ type ResolvedBot = {
   id: string;
   name: string;
   headline: string | null;
+  image: string | null;
   suggestedQuestions: string[] | null;
   loadingMessages: string[];
   isActive: boolean;
@@ -60,6 +61,7 @@ const resolve = cache(async function resolve(
       id: true,
       name: true,
       headline: true,
+      image: true,
       suggestedQuestions: true,
       loadingMessages: true,
       isActive: true,
@@ -157,6 +159,7 @@ export default async function PublicChatPage({
             botId={bot.id}
             botName={bot.name}
             botHeadline={bot.headline}
+            botImage={bot.image}
             suggestedQuestions={bot.suggestedQuestions ?? []}
             loadingMessages={bot.loadingMessages}
             llmProvider={llmProvider}

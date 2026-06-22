@@ -27,8 +27,9 @@ import { POST } from "./route";
 
 const USER_ID = "11111111-1111-1111-1111-111111111111";
 
-// Minimal valid PNG byte header so the magic-byte sniff passes for image/png.
+// Minimal valid magic-byte headers so the sniff passes for each format.
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
 function makeRequest(file: File | null): Request {
   const form = new FormData();
@@ -91,5 +92,13 @@ describe("POST /api/users/me/avatar", () => {
     expect(body.image).toContain(`/api/avatar/${USER_ID}`);
     expect(transactionMock).toHaveBeenCalledTimes(1);
     expect(onConflictMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a JPEG even when the browser labels it image/jpg", async () => {
+    const res = await POST(
+      makeRequest(new File([JPEG_BYTES], "a.jpeg", { type: "image/jpg" })),
+    );
+    expect(res.status).toBe(200);
+    expect(transactionMock).toHaveBeenCalledTimes(1);
   });
 });

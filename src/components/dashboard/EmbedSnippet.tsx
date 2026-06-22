@@ -64,8 +64,8 @@ function SnippetCard({
         <CopyUrlButton url={snippet} label={copyLabel} />
       </div>
       <p className="mb-3 text-xs text-muted">{description}</p>
-      <pre className="overflow-x-auto rounded-xl border border-border-base bg-neutral-50 px-3 py-2 font-mono text-xs leading-relaxed">
-        <code>{snippet}</code>
+      <pre className="overflow-x-auto rounded-xl bg-neutral-900 px-3.5 py-3 font-mono text-xs leading-relaxed text-neutral-100 ring-1 ring-white/10">
+        <code className="text-neutral-100">{snippet}</code>
       </pre>
     </div>
   );

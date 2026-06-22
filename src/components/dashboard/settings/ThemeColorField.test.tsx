@@ -9,15 +9,15 @@ describe("ThemeColorField", () => {
     render(<ThemeColorField value="#7c5cff" onChange={() => {}} />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /theme color #10a37f/i }),
+      screen.getByRole("button", { name: /theme color #16a34a/i }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/custom theme color picker/i)).toBeInTheDocument();
   });
 
   it("marks the active preset as pressed", () => {
-    render(<ThemeColorField value="#10a37f" onChange={() => {}} />);
+    render(<ThemeColorField value="#16a34a" onChange={() => {}} />);
     expect(
-      screen.getByRole("button", { name: /theme color #10a37f/i }),
+      screen.getByRole("button", { name: /theme color #16a34a/i }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -26,8 +26,8 @@ describe("ThemeColorField", () => {
     const user = userEvent.setup();
     render(<ThemeColorField value="#7c5cff" onChange={onChange} />);
     await user.click(
-      screen.getByRole("button", { name: /theme color #10a37f/i }),
+      screen.getByRole("button", { name: /theme color #16a34a/i }),
     );
-    expect(onChange).toHaveBeenCalledWith("#10a37f");
+    expect(onChange).toHaveBeenCalledWith("#16a34a");
   });
 });
