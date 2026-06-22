@@ -186,104 +186,128 @@ export function AccountTab({ name, email, username, image, initials }: Props) {
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <h3 className="mb-5 font-bold">Profile</h3>
 
-        <div className="mb-6 flex items-center gap-4">
-          {avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatar}
-              alt="Your avatar"
-              className="size-16 rounded-full object-cover"
-            />
-          ) : (
-            <div className="brand-blue-gradient font-display grid size-16 place-items-center rounded-full text-xl font-extrabold text-white">
-              {initials}
-            </div>
-          )}
-          <div>
+        <div className="flex flex-col gap-6 sm:flex-row">
+          <div className="shrink-0">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="btn btn-secondary !py-2 text-xs disabled:opacity-60"
+              aria-label="Change photo"
+              className="group relative block size-20 overflow-hidden rounded-full"
             >
-              {uploading ? "Uploading…" : "Change photo"}
+              {avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatar}
+                  alt="Your avatar"
+                  className="size-20 rounded-full object-cover"
+                />
+              ) : (
+                <div className="brand-blue-gradient font-display grid size-20 place-items-center rounded-full text-xl font-extrabold text-white">
+                  {initials}
+                </div>
+              )}
+              <span
+                className={`absolute inset-0 grid place-items-center bg-black/45 text-white transition-opacity ${
+                  uploading
+                    ? "opacity-100"
+                    : "opacity-0 group-hover:opacity-100"
+                }`}
+              >
+                {uploading ? (
+                  <span className="text-[10px] font-semibold">Uploading…</span>
+                ) : (
+                  <CameraIcon />
+                )}
+              </span>
             </button>
-            <p className="mt-1 text-[11px] text-muted">JPG, PNG, or WebP · 2 MB max</p>
+            <p className="mt-2 text-center text-[11px] leading-tight text-muted">
+              JPG · PNG · WebP
+              <br />
+              2 MB max
+            </p>
             {avatarError ? (
-              <p className="mt-1 text-[11px] text-red-600" role="alert">
+              <p
+                className="mt-1 text-center text-[11px] text-red-600"
+                role="alert"
+              >
                 {avatarError}
               </p>
             ) : null}
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handleAvatarChange}
-            className="hidden"
-          />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label
-              htmlFor="account-name"
-              className="mb-1.5 block text-xs font-semibold"
-            >
-              Full name
-            </label>
             <input
-              id="account-name"
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              maxLength={100}
-              autoComplete="name"
-              className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors"
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleAvatarChange}
+              className="hidden"
             />
           </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold">Email</label>
-            <div className="w-full rounded-xl border border-border-base bg-neutral-50 px-3 py-2.5 text-sm text-muted">
-              {email || "-"}
+
+          <div className="flex-1 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="account-name"
+                  className="mb-1.5 block text-xs font-semibold"
+                >
+                  Full name
+                </label>
+                <input
+                  id="account-name"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  maxLength={100}
+                  autoComplete="name"
+                  className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold">
+                  Email
+                </label>
+                <div className="w-full rounded-xl border border-border-base bg-neutral-50 px-3 py-2.5 text-sm text-muted">
+                  {email || "-"}
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="sm:col-span-2">
-            <label
-              htmlFor="account-username"
-              className="mb-1.5 block text-xs font-semibold"
-            >
-              Username
-            </label>
-            <div className="flex items-center overflow-hidden rounded-xl border border-border-base bg-white focus-within:border-brand transition-colors">
-              <span className="pl-3 pr-1 text-sm text-muted">
-                pro-bot.dev/u/
-              </span>
-              <input
-                id="account-username"
-                type="text"
-                value={usernameValue}
-                onChange={(e) =>
-                  setUsernameValue(
-                    e.target.value.toLowerCase().replace(/\s+/g, "-"),
-                  )
-                }
-                minLength={3}
-                maxLength={30}
-                autoComplete="username"
-                aria-invalid={usernameTaken}
-                className="flex-1 bg-transparent py-2.5 pr-3 text-sm outline-none"
-              />
+            <div>
+              <label
+                htmlFor="account-username"
+                className="mb-1.5 block text-xs font-semibold"
+              >
+                Username
+              </label>
+              <div className="flex items-center overflow-hidden rounded-xl border border-border-base bg-white focus-within:border-brand transition-colors">
+                <span className="pl-3 pr-1 text-sm text-muted">
+                  pro-bot.dev/u/
+                </span>
+                <input
+                  id="account-username"
+                  type="text"
+                  value={usernameValue}
+                  onChange={(e) =>
+                    setUsernameValue(
+                      e.target.value.toLowerCase().replace(/\s+/g, "-"),
+                    )
+                  }
+                  minLength={3}
+                  maxLength={30}
+                  autoComplete="username"
+                  aria-invalid={usernameTaken}
+                  className="flex-1 bg-transparent py-2.5 pr-3 text-sm outline-none"
+                />
+              </div>
+              {usernameTaken ? (
+                <p className="mt-1 text-[11px] text-red-600" role="alert">
+                  {usernameStatus?.reason}
+                </p>
+              ) : (
+                <p className="mt-1 text-[11px] text-muted">
+                  3–30 chars · lowercase, numbers, hyphens.
+                </p>
+              )}
             </div>
-            {usernameTaken ? (
-              <p className="mt-1 text-[11px] text-red-600" role="alert">
-                {usernameStatus?.reason}
-              </p>
-            ) : (
-              <p className="mt-1 text-[11px] text-muted">
-                3–30 chars · lowercase, numbers, hyphens.
-              </p>
-            )}
           </div>
         </div>
 
@@ -367,5 +391,24 @@ export function AccountTab({ name, email, username, image, initials }: Props) {
         </form>
       </section>
     </div>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
+      <circle cx="12" cy="13" r="3" />
+    </svg>
   );
 }

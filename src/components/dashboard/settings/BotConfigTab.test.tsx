@@ -225,8 +225,6 @@ describe("BotConfigTab", () => {
   it("clicking a theme preset swatch enables Save and sends the new color on PATCH", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { bot: {} }));
     render(<BotConfigTab {...baseProps} />);
-    // The swatch grid now lives inside the ThemeColorField popover.
-    fireEvent.click(screen.getByRole("button", { name: "Theme color" }));
     fireEvent.click(screen.getByRole("button", { name: /theme color #10a37f/i }));
     expect(
       screen.getByRole("button", { name: /save bot settings/i }),

@@ -54,18 +54,8 @@ export function SiteFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/#free-to-use" className="hover:text-ink">
-                  Free to Use
-                </Link>
-              </li>
-              <li>
                 <Link href="/u/vishal/chat" className="hover:text-ink">
                   Live demo
-                </Link>
-              </li>
-              <li>
-                <Link href="/dashboard/bots/new" className="hover:text-ink">
-                  Create a bot
                 </Link>
               </li>
               <li>
@@ -111,16 +101,6 @@ export function SiteFooter() {
                   className="hover:text-ink"
                 >
                   Embed widget
-                </a>
-              </li>
-              <li>
-                <a
-                  href={GITHUB_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-ink"
-                >
-                  GitHub
                 </a>
               </li>
             </ul>

@@ -2577,3 +2577,30 @@ _Tests + types:_
 - **`user_avatars` table must be created before photo upload works.** drizzle-kit can't generate the migration in the Linux sandbox (esbuild platform mismatch), so the table isn't in a versioned migration yet. Apply it natively with `npx drizzle-kit push` (push-managed dev DB) or `npm run db:generate` for a migrate-file. Until then, `POST /api/users/me/avatar` and the serve route will 500 (relation does not exist).
 - **Vitest unexecuted in-sandbox** (same macOS-native `node_modules` limit); typecheck + check:key-leaks pass (285 files). Run `npm test` + `npm run build` natively.
 - **bytea round-trip assumes node-postgres returns `bytea` as a Buffer** (its default); the serve route wraps it in `new Uint8Array(row.data)`. Worth a quick manual smoke test after the table exists.
+
+---
+
+### 2026-06-21 23:55 - Stage 3 follow-up: avatar hover-upload + inline theme picker
+
+**What was asked to do:** Two UI refinements to the Stage 3 settings work: (1) replace the separate "Change photo" button with a hover overlay on the avatar that triggers the upload on click, and move Full name / Username / Email beside the photo; (2) make the theme picker inline (no popover) - presets always visible with the active one highlighted, plus a custom-color button shaped as a color-picker icon filled with the current color.
+
+**What I did:**
+
+- **AccountTab profile section:** the avatar is now itself the upload trigger - a circular `button` (`aria-label="Change photo"`) with a `group-hover` dark overlay + camera icon (and an "Uploading…" state); clicking it opens the same hidden file input → `POST /api/users/me/avatar`. The standalone "Change photo" button was removed. Layout reflowed into a flex row: avatar on the left, a fields column on the right (Full name + Email as a 2-col grid, Username full-width below), stacking on mobile.
+- **ThemeColorField:** removed the popover (and its open/outside-click/Escape state). Presets render inline with the active color ringed; a trailing custom button is a swatch filled with `value`, overlaid with a color-picker (eyedropper) icon via `mix-blend-difference` for contrast, wrapping a transparent native `<input type="color">`. When `value` matches no preset, the custom button carries the active ring.
+
+**Files changed:**
+
+- `src/components/dashboard/settings/AccountTab.tsx` - update - avatar hover-upload + side-by-side layout + CameraIcon.
+- `src/components/dashboard/settings/ThemeColorField.tsx` - update - inline (no popover) presets + color-picker-icon custom button.
+- `src/components/dashboard/settings/ThemeColorField.test.tsx` - update - rewritten for inline behavior (no dialog).
+- `src/components/dashboard/settings/BotConfigTab.test.tsx` - update - reverted the "open popover" step; swatch is clicked directly again.
+
+**Decisions made:**
+
+- **Custom button uses `mix-blend-difference`** on the eyedropper icon so it stays legible against any chosen background color, light or dark.
+- **Avatar button keeps an `aria-label`** ("Change photo") since the visible label moved into a hover-only overlay - preserves the accessible name the old text button provided.
+
+**Open questions / follow-ups:**
+
+- typecheck + check:key-leaks pass (285 files); vitest unexecuted in-sandbox as always - run `npm test` natively.
