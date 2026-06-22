@@ -61,6 +61,7 @@ export default async function BotSettingsPage({
         id: true,
         name: true,
         headline: true,
+        image: true,
         personality: true,
         suggestedQuestions: true,
         isActive: true,
@@ -105,6 +106,7 @@ export default async function BotSettingsPage({
           <BotConfigTab
             botId={bot.id}
             ownerUsername={session.user.username}
+            initialImage={bot.image}
             initialName={bot.name}
             initialHeadline={bot.headline ?? ""}
             initialPersonality={personality}

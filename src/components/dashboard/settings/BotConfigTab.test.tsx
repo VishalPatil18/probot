@@ -13,6 +13,7 @@ const BOT_ID = "11111111-1111-1111-1111-111111111111";
 const baseProps = {
   botId: BOT_ID,
   ownerUsername: "jane-doe",
+  initialImage: null,
   initialName: "Jane Doe",
   initialHeadline: "ML Engineer",
   initialPersonality: "professional" as const,

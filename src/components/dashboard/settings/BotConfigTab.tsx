@@ -17,6 +17,7 @@ import {
   PER_MINUTE_DEFAULT,
 } from "@/lib/ai/rate-limit";
 
+import { AvatarUploader } from "./AvatarUploader";
 import { ThemeColorField } from "./ThemeColorField";
 
 import { DeleteBotModal } from "../DeleteBotModal";
@@ -25,6 +26,7 @@ import { SuggestedQuestionsEditor } from "../SuggestedQuestionsEditor";
 type Props = {
   botId: string;
   ownerUsername: string;
+  initialImage: string | null;
   initialName: string;
   initialHeadline: string;
   initialPersonality: Personality;
@@ -65,6 +67,16 @@ const PERSONALITY_CARDS: Record<
   },
 };
 
+// Default bot mark shown when no custom picture is set (the two-dot ProBot eye).
+function ProBotMark() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <circle cx="14" cy="20" r="3.4" fill="#fff" />
+      <circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65" />
+    </svg>
+  );
+}
+
 // Bot Configuration tab. Single PATCH per save, diffed against
 // initial values so only changed fields are sent. A future change enables the
 // previously-disabled custom-instructions textarea, adds a per-bot rate-
@@ -73,6 +85,7 @@ const PERSONALITY_CARDS: Record<
 export function BotConfigTab({
   botId,
   ownerUsername,
+  initialImage,
   initialName,
   initialHeadline,
   initialPersonality,
@@ -355,20 +368,35 @@ export function BotConfigTab({
             />
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <LabeledInput
-            label="Bot name"
-            value={name}
-            onChange={setName}
-            maxLength={100}
-          />
-          <LabeledInput
-            label="Headline"
-            value={headline}
-            onChange={setHeadline}
-            maxLength={120}
-            placeholder="e.g. ML Engineer · San Francisco"
-          />
+        <div className="flex flex-col gap-6 sm:flex-row">
+          <div>
+            <p className="mb-1.5 text-xs font-semibold">Bot picture</p>
+            <AvatarUploader
+              initialImage={initialImage}
+              uploadUrl={`/api/bots/${botId}/avatar`}
+              ariaLabel="Change bot picture"
+              fallback={
+                <div className="brand-blue-gradient grid size-full place-items-center rounded-full">
+                  <ProBotMark />
+                </div>
+              }
+            />
+          </div>
+          <div className="grid flex-1 content-start gap-4 sm:grid-cols-2">
+            <LabeledInput
+              label="Bot name"
+              value={name}
+              onChange={setName}
+              maxLength={100}
+            />
+            <LabeledInput
+              label="Headline"
+              value={headline}
+              onChange={setHeadline}
+              maxLength={120}
+              placeholder="e.g. ML Engineer · San Francisco"
+            />
+          </div>
         </div>
       </section>
 

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { useDebouncedValue } from "@/lib/client/use-debounced-value";
+
+import { AvatarUploader } from "./AvatarUploader";
 
 type Props = {
   name: string;
@@ -19,7 +21,6 @@ interface FieldAvailability {
   reason?: string;
 }
 
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const PASSWORD_ERRORS: Record<string, string> = {
   invalid_current_password: "Your current password is incorrect.",
   no_password_set:
@@ -33,11 +34,6 @@ const PASSWORD_ERRORS: Record<string, string> = {
 // save so the server-rendered session values re-read.
 export function AccountTab({ name, email, username, image, initials }: Props) {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [avatar, setAvatar] = useState<string | null>(image);
-  const [uploading, setUploading] = useState(false);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState(name);
   const [usernameValue, setUsernameValue] = useState(username);
@@ -87,39 +83,6 @@ export function AccountTab({ name, email, username, image, initials }: Props) {
   const profileDirty = fullName !== name || usernameValue !== username;
   const profileDisabled =
     profileSaving || checkingUsername || usernameTaken || !profileDirty;
-
-  async function handleAvatarChange(
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setAvatarError(null);
-    if (file.size > MAX_AVATAR_BYTES) {
-      setAvatarError("Image must be 2 MB or smaller.");
-      return;
-    }
-    setUploading(true);
-    try {
-      const data = new FormData();
-      data.append("file", file);
-      const res = await fetch("/api/users/me/avatar", {
-        method: "POST",
-        body: data,
-      });
-      if (!res.ok) {
-        setAvatarError("Upload failed. Use a JPG, PNG, or WebP under 2 MB.");
-        return;
-      }
-      const payload = (await res.json()) as { image: string };
-      setAvatar(payload.image);
-      router.refresh();
-    } catch {
-      setAvatarError("Network error. Please try again.");
-    } finally {
-      setUploading(false);
-    }
-  }
 
   async function handleProfileSave() {
     setProfileError(null);
@@ -187,56 +150,16 @@ export function AccountTab({ name, email, username, image, initials }: Props) {
         <h3 className="mb-5 font-bold">Profile</h3>
 
         <div className="flex flex-col gap-6 sm:flex-row">
-          <div className="shrink-0">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              aria-label="Change photo"
-              className="group relative block size-20 overflow-hidden rounded-full"
-            >
-              {avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatar}
-                  alt="Your avatar"
-                  className="size-20 rounded-full object-cover"
-                />
-              ) : (
-                <div className="brand-blue-gradient font-display grid size-20 place-items-center rounded-full text-xl font-extrabold text-white">
-                  {initials}
-                </div>
-              )}
-              <span
-                className={`absolute inset-0 grid place-items-center bg-black/45 text-white transition-opacity ${
-                  uploading
-                    ? "opacity-100"
-                    : "opacity-0 group-hover:opacity-100"
-                }`}
-              >
-                {uploading ? (
-                  <span className="text-[10px] font-semibold">Uploading…</span>
-                ) : (
-                  <CameraIcon />
-                )}
-              </span>
-            </button>
-            {avatarError ? (
-              <p
-                className="mt-1 text-center text-[11px] text-red-600"
-                role="alert"
-              >
-                {avatarError}
-              </p>
-            ) : null}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-              onChange={handleAvatarChange}
-              className="hidden"
-            />
-          </div>
+          <AvatarUploader
+            initialImage={image}
+            uploadUrl="/api/users/me/avatar"
+            ariaLabel="Change profile photo"
+            fallback={
+              <div className="brand-blue-gradient font-display grid size-full place-items-center text-xl font-extrabold text-white">
+                {initials}
+              </div>
+            }
+          />
 
           <div className="flex-1 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -386,24 +309,5 @@ export function AccountTab({ name, email, username, image, initials }: Props) {
         </form>
       </section>
     </div>
-  );
-}
-
-function CameraIcon() {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
-      <circle cx="12" cy="13" r="3" />
-    </svg>
   );
 }

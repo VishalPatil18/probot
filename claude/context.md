@@ -2676,3 +2676,34 @@ _Tests + types:_
 - **`npx drizzle-kit push` required** to create `bot_avatars` + `bots.image` (alongside the still-pending Stage 3 `user_avatars`). Until then the bot-avatar upload/serve routes 500 with `relation "bot_avatars" does not exist`.
 - typecheck + check:key-leaks pass (290 files); vitest unexecuted in-sandbox - run `npm test` + `npm run build` natively.
 - **BotFactoryForm is now ~1340 lines.** If it grows further, the step components are good extraction candidates (e.g. pull `StepIdentity`/`StepKnowledge`/`StepPersonality` into their own files).
+
+---
+
+### 2026-06-22 02:00 - Stage 4 follow-up: bot picture in Bot configuration + shared AvatarUploader
+
+**What was asked to do:** Make the bot profile picture editable from Settings → Bot configuration with the same hover-icon UX as the account profile photo, and confirm the bot picture accepts JPEG like the account photo.
+
+**What I did:**
+
+- **Extracted a shared `AvatarUploader`** (`src/components/dashboard/settings/AvatarUploader.tsx`) from AccountTab's avatar block: a circular avatar that is its own upload control (hover camera overlay, "Uploading…" state, hidden file input, 2 MB cap, `accept` includes jpg/jpeg/png/webp), POSTs to a configurable `uploadUrl` returning `{ image }`, then `router.refresh()`es. Takes `initialImage`, `uploadUrl`, and a `fallback` node (initials vs ProBot icon).
+- **AccountTab** now uses `AvatarUploader` (uploadUrl `/api/users/me/avatar`, initials fallback) - removed its inline avatar state/handler/CameraIcon.
+- **BotConfigTab** gained a "Bot picture" `AvatarUploader` (uploadUrl `/api/bots/${botId}/avatar`, ProBot-icon fallback) at the top of the identity section, beside name/headline. New `initialImage` prop.
+- **Settings page** selects `bot.image` and passes it as `initialImage` to BotConfigTab.
+- **JPEG**: no change needed - the bot-avatar route already shares the sniff-authoritative `parseImageUpload` (jpg/jpeg/png/webp by magic bytes); the perceived gap was just the missing uploader in Bot configuration.
+
+**Files changed:**
+
+- `src/components/dashboard/settings/AvatarUploader.tsx` - create - shared hover-upload avatar (+ test).
+- `src/components/dashboard/settings/AccountTab.tsx` - update - use AvatarUploader.
+- `src/components/dashboard/settings/BotConfigTab.tsx` - update - bot-picture AvatarUploader + `initialImage` prop + ProBotMark.
+- `src/components/dashboard/settings/BotConfigTab.test.tsx` - update - `initialImage: null` in baseProps.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` - update - select + pass `bot.image`.
+
+**Decisions made:**
+
+- **One shared `AvatarUploader`** for both account + bot pictures so the hover UX and validation can't drift; the only per-use difference is `uploadUrl` and the `fallback` node.
+- **Bot avatar uploads immediately** (separate endpoint), independent of BotConfigTab's diffed Save button - matches the account-photo behavior.
+
+**Open questions / follow-ups:**
+
+- typecheck + check:key-leaks pass (292 files); run `npm test` natively. `bot_avatars`/`bots.image` still need `npx drizzle-kit push` for any bot-picture upload to work.
