@@ -1,0 +1,31 @@
+---
+title: Managed vs self-hosted
+description: "Two ways to run ProBot - the hosted app at pro-bot.dev or your own deployment - and how your LLM key is handled in each."
+---
+
+ProBot can run two ways. Both are the *same* open-source codebase; the only difference is who operates the server and where your LLM API key lives.
+
+## At a glance
+
+| | **Managed (pro-bot.dev)** | **Self-hosted** |
+| --- | --- | --- |
+| Who runs the server | The ProBot maintainer | You |
+| Where your account data lives | The managed Postgres | Your Postgres |
+| Default LLM-key storage | Your browser (encrypted IndexedDB) | Your browser (encrypted IndexedDB) |
+| Optional key storage | Envelope-encrypted on the server (opt-in) | Envelope-encrypted on your server (opt-in) |
+| Cost | Free | Free (you pay only your own infra + LLM provider) |
+| Setup | None - sign up and build | Deploy the repo + set a few env vars |
+
+## How your LLM key is handled
+
+By default, on **both** paths, your LLM API key never leaves your browser as plaintext. It's held in a hardened browser store (IndexedDB + a non-extractable Web Crypto key) and sent per-request in the `x-llm-api-key` header, used once server-side, and discarded. It is never written to the database and never logged.
+
+If you opt in to **managed key storage**, the key is wrapped with [envelope encryption](/guides/managed-key-storage) and stored as ciphertext. On the managed app the operator holds the key-encryption key (KEK); when you self-host, *you* hold it - so no third party can decrypt your key. See [Managed key storage](/guides/managed-key-storage) for the full threat model.
+
+## When to self-host
+
+Choose self-hosting when you want zero trust in any operator, need the data to live in a specific jurisdiction, or want to modify the product. Everything you need is in the [Self-hosting guide](/guides/self-host); the architecture is a single Next.js deployment plus a Postgres database, so any Node 20+ host works.
+
+## When managed is enough
+
+For most job seekers the managed app is the fastest path: there's nothing to deploy, the key stays in your browser by default, and you can [export](/guides/account-deletion#export-your-data) or [delete](/guides/account-deletion) everything at any time.

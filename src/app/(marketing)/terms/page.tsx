@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-
 import {
   CONTACT_EMAIL,
   DELETION_GRACE_DAYS,
@@ -9,12 +7,14 @@ import {
   OPERATOR_DESCRIPTION,
   OPERATOR_NAME,
 } from "@/lib/marketing/legal";
+import { buildMetadata } from "@/lib/seo/site";
 
-export const metadata: Metadata = {
-  title: "Terms of Service · ProBot",
+export const metadata = buildMetadata({
+  title: "Terms of Service",
   description:
     "The rules of the road for using ProBot - a free, open-source AI chatbot for job seekers.",
-};
+  path: "/terms",
+});
 
 const SECTIONS = [
   { id: "acceptance", label: "Acceptance & eligibility" },

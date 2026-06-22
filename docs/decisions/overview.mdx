@@ -1,0 +1,25 @@
+---
+title: Architecture decision records
+description: "Why ProBot is built the way it is - the major decisions, the alternatives considered, and the trade-offs accepted."
+---
+
+Architecture Decision Records (ADRs) capture the *why* behind ProBot's significant technical choices: the context, the options weighed, the decision, and its consequences. They're short, dated, and immutable - if a decision is later reversed, a new ADR supersedes the old one rather than editing it.
+
+These records distil decisions originally captured in the project's build log (`claude/context.md`) and learning journal (`claude/learnings.md`).
+
+## Records
+
+| # | Decision | Status |
+| --- | --- | --- |
+| [0001](/decisions/0001-hybrid-key-model) | Hybrid BYO-key model (browser default, server opt-in) | Accepted |
+| [0002](/decisions/0002-deletion-grace-window) | 7-day account-deletion grace window | Accepted |
+| [0003](/decisions/0003-circuit-breaker-store) | In-process circuit breaker (Redis deferred) | Accepted |
+
+## Format
+
+Each record follows the same shape:
+
+- **Context** - the forces at play and the problem to solve.
+- **Decision** - what was chosen.
+- **Alternatives considered** - what was rejected and why.
+- **Consequences** - what this makes easy, what it makes harder, and the residual risk.

@@ -3,6 +3,10 @@ import Link from "next/link";
 import { DemoVideoModal } from "@/components/marketing/DemoVideoModal";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { SiteHeader } from "@/components/marketing/SiteHeader";
+import {
+  organizationJsonLd,
+  softwareApplicationJsonLd,
+} from "@/lib/seo/structured-data";
 
 const DOCS_URL = "https://pro-bot.dev/docs";
 
@@ -26,6 +30,18 @@ function MaterialIcon({
 export default function HomePage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(organizationJsonLd()),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(softwareApplicationJsonLd()),
+        }}
+      />
       <SiteHeader />
 
       <main>

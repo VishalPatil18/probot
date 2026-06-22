@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-
 import {
   CONTACT_EMAIL,
   DELETION_FINAL_DAYS,
@@ -11,12 +9,14 @@ import {
   OPERATOR_DESCRIPTION,
   OPERATOR_NAME,
 } from "@/lib/marketing/legal";
+import { buildMetadata } from "@/lib/seo/site";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy · ProBot",
+export const metadata = buildMetadata({
+  title: "Privacy Policy",
   description:
     "How ProBot collects, uses, stores, and protects your data - including data obtained via Google Sign-In.",
-};
+  path: "/privacy",
+});
 
 const SECTIONS = [
   { id: "summary", label: "Plain-language summary" },

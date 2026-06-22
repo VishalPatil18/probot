@@ -1,11 +1,13 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata: Metadata = {
-  title: "Why ProBot · ProBot",
+import { buildMetadata } from "@/lib/seo/site";
+
+export const metadata = buildMetadata({
+  title: "Why ProBot",
   description:
     "How ProBot compares to generic chatbot platforms: bring your own LLM key, free and open source, self-hostable, and GDPR-ready by default.",
-};
+  path: "/why-pro-bot",
+});
 
 // Honest, defensible comparison. Each row is a property a job-seeker actually
 // cares about; the "generic platform" column reflects the common default of

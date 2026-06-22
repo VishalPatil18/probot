@@ -22,15 +22,10 @@
             ]
           },
           {
-            "group": "Release notes",
-            "pages": [
-              "changelog"
-            ]
-          },
-          {
             "group": "Concepts",
             "pages": [
               "concepts/architecture",
+              "concepts/managed-vs-self-hosted",
               "concepts/byo-key",
               "concepts/security",
               "concepts/stages"
@@ -40,8 +35,32 @@
             "group": "Guides",
             "pages": [
               "guides/build-your-bot",
-              "guides/self-host",
-              "guides/embed-widget"
+              "guides/custom-instructions",
+              "embed-share",
+              "guides/embed-widget",
+              "guides/managed-key-storage",
+              "guides/account-deletion"
+            ]
+          },
+          {
+            "group": "Self-hosting",
+            "pages": [
+              "guides/self-host"
+            ]
+          },
+          {
+            "group": "Decisions",
+            "pages": [
+              "decisions/overview",
+              "decisions/0001-hybrid-key-model",
+              "decisions/0002-deletion-grace-window",
+              "decisions/0003-circuit-breaker-store"
+            ]
+          },
+          {
+            "group": "Release notes",
+            "pages": [
+              "changelog"
             ]
           }
         ]

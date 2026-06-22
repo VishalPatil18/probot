@@ -153,3 +153,47 @@ Errors normalize into `ProviderError` with a `category` field:
 12. **Respond** - `{ reply }`.
 
 For the full status-code table, see [`/api/chat/[botId]` reference](/api-reference/chat).
+
+## Key handling: managed vs self-hosted
+
+The same request flow runs whether the app is the managed deployment at pro-bot.dev or your own. What differs is *where the LLM key comes from* and *who holds the key-encryption key*.
+
+```mermaid
+flowchart TD
+    subgraph Browser
+      BK["BYO key<br/>(encrypted IndexedDB)"]
+    end
+    BK -->|x-llm-api-key header| Route["/api/chat/[botId]"]
+    Route -->|opted into managed storage?| Decide{Stored key?}
+    Decide -->|no| UseHeader["Use header key once,<br/>discard"]
+    Decide -->|yes| Unwrap["Unwrap DEK with KEK<br/>→ decrypt stored key"]
+    UseHeader --> LLM["LLM provider"]
+    Unwrap --> LLM
+```
+
+On the **managed** app the operator holds the KEK (`PROBOT_KEY_ENCRYPTION_KEY`); when you **self-host**, you hold it. Either way the key is decrypted per request, used once, and never logged. See [Managed key storage](/guides/managed-key-storage) for the envelope-encryption detail.
+
+## Envelope encryption
+
+```mermaid
+flowchart LR
+    Key["LLM key"] -->|AES-256-GCM<br/>(DEK)| CT["Ciphertext"]
+    DEK["DEK (per bot)"] -->|wrapped by KEK| WDEK["Wrapped DEK"]
+    CT --> DB[("Postgres")]
+    WDEK --> DB
+    KEK["KEK (env var only)"] -.never stored.-> DB
+```
+
+A database leak yields ciphertext plus a wrapped DEK - both useless without the KEK, which lives only in an environment variable.
+
+## Deletion lifecycle
+
+```mermaid
+flowchart LR
+    Req["Delete request<br/>(username confirm)"] --> Grace["7-day grace<br/>+ undo email"]
+    Grace -->|undo| Cancel["Cancelled"]
+    Grace -->|expires| Purge["Cron purge"]
+    Purge --> Done["Completion email,<br/>record dropped"]
+```
+
+Deletion is reversible during the 7-day grace window, then a scheduled job purges every row. See [Export & delete your account](/guides/account-deletion).

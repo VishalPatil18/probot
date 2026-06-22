@@ -2,6 +2,12 @@ import type { Metadata } from "next";
 import { Bricolage_Grotesque, Inter_Tight } from "next/font/google";
 
 import { SessionProvider } from "@/lib/auth/session-provider";
+import {
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TITLE,
+  siteUrl,
+} from "@/lib/seo/site";
 
 import "./globals.css";
 
@@ -20,8 +26,26 @@ const sans = Inter_Tight({
 });
 
 export const metadata: Metadata = {
-  title: "ProBot - Your AI Digital Recruiter",
-  description: "Free-to-use, BYO-key AI bots for job seekers.",
+  metadataBase: new URL(siteUrl()),
+  title: {
+    default: SITE_TITLE,
+    template: "%s · ProBot",
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: siteUrl(),
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({

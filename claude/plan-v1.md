@@ -16,7 +16,7 @@
 | **4** | ✅ Bot Factory & Dashboard Polish           | P1       | yes         | 3–4 days         |
 | **5** | ✅ Sidebar, Notifications & Empty-State Polish | P1     | yes         | 2–3 days         |
 | **6** | ✅ Marketing & Trust Pages                  | P1       | yes         | 5–7 days         |
-| **7** | SEO, Docs & Discoverability                 | P2       | yes         | 3–4 days         |
+| **7** | ✅ SEO, Docs & Discoverability              | P2       | yes         | 3–4 days         |
 | **8** | Performance, Scale & Operational Polish     | P0 perf  | yes         | 1–2 weeks        |
 | **9** | Self-Hosted Bot Repo Architecture           | P0 arch  | yes         | 2–3 weeks        |
 

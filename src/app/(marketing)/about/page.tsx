@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
@@ -6,16 +5,18 @@ import {
   OPERATOR_DESCRIPTION,
   OPERATOR_NAME,
 } from "@/lib/marketing/legal";
+import { buildMetadata } from "@/lib/seo/site";
 
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
 const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
 
-export const metadata: Metadata = {
-  title: "About · ProBot",
+export const metadata = buildMetadata({
+  title: "About",
   description:
     "ProBot is a free, open-source AI representative for job seekers. Built by an individual maintainer with a bring-your-own-key philosophy.",
-};
+  path: "/about",
+});
 
 function MaterialIcon({
   name,

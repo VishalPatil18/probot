@@ -1,24 +1,19 @@
 ---
 title: Embed widget
-description: "Drop a one-line script tag to embed your ProBot chat anywhere. (Stage 5 - planned)"
+description: "Drop a one-line script tag to embed your ProBot chat anywhere."
 ---
 
-<Info>
-  **Status: planned (Stage 5).** The embed widget is not yet shipped. This page
-  documents the planned shape so contributors and early adopters can give
-  feedback before implementation. Track progress in the
-  [Roadmap](/concepts/stages).
-</Info>
+The embed widget is shipped. For a quick overview of sharing options, see
+[Embed & share](/embed-share); this page is the full configuration reference.
 
-## What it will look like
+## What it looks like
 
 A single `<script>` tag on any HTML page:
 
 ```html
 <script
-  src="https://d1234abcd.cloudfront.net/widget.js"
-  data-bot="00000000-0000-0000-0000-000000000000"
-  data-theme="light"
+  src="https://pro-bot.dev/widget.js"
+  data-bot-id="00000000-0000-0000-0000-000000000000"
   async
 ></script>
 ```

@@ -198,6 +198,16 @@ Detailed stage breakdowns will land in [the changelog](.) as each stage ships.
 - Header and footer now link the new pages; docs links point at `pro-bot.dev/docs`
 - Added `sitemap.xml` covering the public marketing pages
 
+### Stage 7 - SEO, Docs & Discoverability ✅ (2026-06-22)
+
+- Site-wide SEO: shared metadata layer with canonical URLs, Open Graph + Twitter cards on every public page, and a metadata base URL
+- Dynamic social-card images generated at the edge via `next/og` (no static assets to maintain)
+- `Organization` + `SoftwareApplication` JSON-LD structured data on the landing page
+- `robots.txt` (allows public pages, keeps the dashboard + API out of the index) alongside the existing `sitemap.xml`
+- Documentation reorganized: new Concepts/Guides/Self-hosting/Decisions structure, with new pages for managed vs self-hosted, custom instructions, managed key storage, account export & deletion, and an Embed & share guide
+- Architecture page gains diagrams for the managed-vs-self-hosted key flow, envelope encryption, and the deletion lifecycle
+- New Architecture Decision Records (ADRs) for the hybrid key model, the deletion grace window, and the circuit-breaker design
+
 ---
 
 ## Version 2.0 - Backlog

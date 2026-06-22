@@ -1,11 +1,13 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata: Metadata = {
-  title: "Hire Vishal Patil · ProBot",
+import { buildMetadata } from "@/lib/seo/site";
+
+export const metadata = buildMetadata({
+  title: "Hire Vishal Patil",
   description:
     "Vishal Patil built ProBot. Spec-Driven Development, full-stack + AI engineering, open to roles across the US and Europe.",
-};
+  path: "/hire-me",
+});
 
 const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
 const GITHUB_URL = "https://github.com/VishalPatil18";

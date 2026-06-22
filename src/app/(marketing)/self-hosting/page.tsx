@@ -1,11 +1,13 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata: Metadata = {
-  title: "Self-hosting ProBot · ProBot",
+import { buildMetadata } from "@/lib/seo/site";
+
+export const metadata = buildMetadata({
+  title: "Self-hosting ProBot",
   description:
     "Deploy ProBot on your own infrastructure so your LLM key never touches pro-bot.dev.",
-};
+  path: "/self-hosting",
+});
 
 export default function SelfHostingPage() {
   return (

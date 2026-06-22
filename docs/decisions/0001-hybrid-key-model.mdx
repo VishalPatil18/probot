@@ -1,0 +1,33 @@
+---
+title: "ADR 0001: Hybrid BYO-key model"
+description: "Why ProBot defaults to browser-held LLM keys but offers opt-in server-side envelope encryption."
+---
+
+**Status:** Accepted
+
+## Context
+
+ProBot is bring-your-own-key: each user supplies their own LLM provider API key. A key is a high-value secret. We needed a storage model that is safe by default, costs nothing to operate, and still allows convenience (not re-entering the key on every device) for users who want it.
+
+Two pressures pull in opposite directions. Storing keys server-side is convenient but makes the database a high-value target. Keeping keys only in the browser is safer for the operator but less convenient and historically meant plaintext in `localStorage`.
+
+## Decision
+
+A **hybrid** model:
+
+- **Default - browser only.** The key lives in a hardened browser store (IndexedDB + a non-extractable Web Crypto AES-256-GCM key), sent per request in the `x-llm-api-key` header, used once server-side, and discarded. Never written to the database, never logged.
+- **Opt-in - server storage via envelope encryption.** A per-bot Data Encryption Key (DEK) encrypts the LLM key; the DEK is wrapped by a Key Encryption Key (KEK) that lives only in an environment variable. A DB leak yields only ciphertext + a wrapped DEK.
+
+## Alternatives considered
+
+- **Plaintext `localStorage`** (Beta default) - simplest, but the key is readable in DevTools and casual storage exports. Rejected: too easy to leak.
+- **Always store server-side with a single static secret** - convenient, but one secret compromise decrypts every key, and the secret tends to drift into backups. Rejected in favour of envelope encryption.
+- **Never store; always browser** - safest for the operator but forces re-entry per device and blocks any future server-side automation. Rejected as the *only* option, kept as the default.
+
+## Consequences
+
+- The operator's database is not a single point of catastrophic key compromise: by default it holds no keys at all, and opted-in keys are envelope-encrypted with a KEK that isn't in the database.
+- Self-hosters hold their own KEK, so even the managed operator cannot decrypt their stored keys.
+- **Residual risk:** malicious same-origin JavaScript (XSS) could call `decrypt()` in the browser. Mitigated by sanitizing all rendered markdown (no `rehype-raw`) and a strict origin, but it remains the accepted residual risk of any browser-held secret.
+
+See [Managed key storage](/guides/managed-key-storage) for the user-facing explanation.

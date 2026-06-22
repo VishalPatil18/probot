@@ -1,0 +1,32 @@
+---
+title: Custom instructions
+description: "Refine your bot's behaviour with free-form custom instructions - and understand the guardrails they can't override."
+---
+
+Every ProBot has a **personality** preset (the tone) and an optional **custom instructions** field. Custom instructions are free-form text you add in **Bot configuration** to steer bot-specific behaviour - for example, "Always mention I'm open to relocation" or "If asked about salary, say it's negotiable and point to my email."
+
+## Where they sit in the prompt
+
+The system prompt is assembled in a deliberate order so your instructions have real influence without being able to break the bot's safety rules:
+
+```
+IDENTITY
+IMMUTABLE RULES        ← identity, context-only answers, prompt protection
+TONE (personality)
+CUSTOM INSTRUCTIONS    ← your free-form text
+RESPONSE STYLE         ← structural rules (length, no filler) - last word
+UNKNOWN-answer template
+CONTEXT                ← your resume / knowledge chunks
+```
+
+Personality establishes the voice, your custom instructions refine intent, and the structural response rules come *after* them - so a malformed or over-eager custom block can't override "answer only from context" or the length limits.
+
+## What they can and can't do
+
+**Can:** add emphasis, set preferences, add a call-to-action, tweak how the bot frames answers.
+
+**Can't:** override the immutable rules. Regardless of what you write, the bot still answers only from your provided context (no hallucinating a job you didn't list), keeps its identity, and refuses to reveal its own system prompt. If someone asks it to "ignore previous instructions," the immutable block wins.
+
+## Tips
+
+Keep instructions short and declarative. They're additive to your knowledge base, not a replacement for it - if you want the bot to *know* something, add it as [knowledge](/guides/build-your-bot); if you want the bot to *behave* a certain way, put it here.

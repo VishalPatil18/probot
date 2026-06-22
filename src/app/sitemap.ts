@@ -1,13 +1,10 @@
 import type { MetadataRoute } from "next";
 
+import { siteUrl } from "@/lib/seo/site";
+
 // Static sitemap of public marketing routes. Next.js serves this at
-// /sitemap.xml. Base URL follows the same env convention as the rest of the
-// app (NEXTAUTH_URL → APP_URL → localhost) so it stays correct per-deploy.
-const BASE_URL = (
-  process.env.NEXTAUTH_URL ??
-  process.env.APP_URL ??
-  "http://localhost:3000"
-).replace(/\/$/, "");
+// /sitemap.xml. Base URL is shared with robots.ts + the metadata layer.
+const BASE_URL = siteUrl();
 
 const ROUTES = [
   "/",

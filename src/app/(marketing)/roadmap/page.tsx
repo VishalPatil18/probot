@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import { buildMetadata } from "@/lib/seo/site";
 
-export const metadata: Metadata = {
-  title: "Roadmap · ProBot",
+export const metadata = buildMetadata({
+  title: "Roadmap",
   description:
     "What's shipped and what's next for ProBot v1.0 - from branding and auth UX through account hardening, the Bot Factory, marketing pages, performance, and the self-hosted bot runtime.",
-};
+  path: "/roadmap",
+});
 
 const DISCUSSIONS_URL = "https://github.com/vishalpatil18/probot/discussions";
 
