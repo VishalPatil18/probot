@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -119,24 +119,40 @@ describe("LoginForm", () => {
     expect(screen.queryByText(/soon/i)).not.toBeInTheDocument();
   });
 
-  it("Magic Link button shows hint when email field is empty", async () => {
+  it("Magic Link button opens the magic-link modal (no immediate signIn)", async () => {
     const user = userEvent.setup();
     render(<LoginForm />);
     await user.click(screen.getByRole("button", { name: /magic link/i }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /enter your email/i,
-    );
+    expect(
+      screen.getByRole("dialog", { name: /sign in with a magic link/i }),
+    ).toBeInTheDocument();
     expect(signInMock).not.toHaveBeenCalled();
   });
 
-  it("Magic Link button calls signIn('email', ...) when email is valid", async () => {
+  it("magic-link modal sends the link and shows a confirmation", async () => {
+    signInMock.mockResolvedValueOnce({ ok: true, error: null });
+
     const user = userEvent.setup();
     render(<LoginForm />);
+
+    // The typed login email seeds the modal.
     await user.type(screen.getByLabelText(/email/i), "jane@example.com");
     await user.click(screen.getByRole("button", { name: /magic link/i }));
+
+    const dialog = screen.getByRole("dialog", {
+      name: /sign in with a magic link/i,
+    });
+    await user.click(
+      within(dialog).getByRole("button", { name: /send magic link/i }),
+    );
+
     expect(signInMock).toHaveBeenCalledWith("email", {
       email: "jane@example.com",
       callbackUrl: "/dashboard",
+      redirect: false,
     });
+    expect(
+      await screen.findByText(/sent a sign-in link/i),
+    ).toBeInTheDocument();
   });
 });

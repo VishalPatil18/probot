@@ -3,6 +3,8 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
+import { MagicLinkModal } from "./MagicLinkModal";
+
 interface OAuthRowProps {
   email: string;
 }
@@ -10,73 +12,60 @@ interface OAuthRowProps {
 // Three sign-in options:
 //  - Google (full-width row)
 //  - GitHub + Magic Link (side-by-side row)
-// The Magic Link button uses the email already typed in the parent form;
-// clicking with an empty/invalid email shows an inline hint instead of
-// firing the request.
+// The Magic Link button opens a modal (seeded with any email already typed in
+// the parent form) that collects the address and sends the sign-in link.
 export function OAuthRow({ email }: OAuthRowProps) {
-  const [magicLinkLoading, setMagicLinkLoading] = useState(false);
-  const [magicLinkError, setMagicLinkError] = useState<string | null>(null);
+  const [magicOpen, setMagicOpen] = useState(false);
 
   const baseClass =
     "flex items-center justify-center gap-2 h-11 rounded-xl border border-border-base bg-white text-sm font-semibold hover:bg-gray-50 transition-colors";
-
-  async function handleMagicLink() {
-    if (!email || !email.includes("@")) {
-      setMagicLinkError("Enter your email above first");
-      return;
-    }
-    setMagicLinkError(null);
-    setMagicLinkLoading(true);
-    // NextAuth redirects to /auth/verify-request on success.
-    await signIn("email", { email, callbackUrl: "/dashboard" });
-  }
 
   // Every provider button shares `baseClass` (equal height + layout) and wraps
   // its icon in a fixed 18px square so the Google / GitHub / Magic Link marks
   // sit on the same baseline regardless of each glyph's intrinsic dimensions.
   return (
-    <div className="space-y-2.5 mb-6" aria-label="Sign-in providers">
-      <button
-        type="button"
-        onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-        className={baseClass + " w-full"}
-      >
-        <IconSlot>
-          <GoogleLogo />
-        </IconSlot>
-        Continue with Google
-      </button>
-      <div className="grid grid-cols-2 gap-2.5">
+    <>
+      <div className="space-y-2.5 mb-6" aria-label="Sign-in providers">
         <button
           type="button"
-          onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
-          className={baseClass}
+          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+          className={baseClass + " w-full"}
         >
           <IconSlot>
-            <GitHubLogo />
+            <GoogleLogo />
           </IconSlot>
-          GitHub
+          Continue with Google
         </button>
-        <button
-          type="button"
-          onClick={handleMagicLink}
-          disabled={magicLinkLoading}
-          className={
-            baseClass + (magicLinkLoading ? " opacity-60 cursor-wait" : "")
-          }
-        >
-          <IconSlot>
-            <GmailLogo />
-          </IconSlot>
-          {magicLinkLoading ? "Sending…" : "Magic Link"}
-        </button>
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
+            className={baseClass}
+          >
+            <IconSlot>
+              <GitHubLogo />
+            </IconSlot>
+            GitHub
+          </button>
+          <button
+            type="button"
+            onClick={() => setMagicOpen(true)}
+            className={baseClass}
+          >
+            <IconSlot>
+              <GmailLogo />
+            </IconSlot>
+            Magic Link
+          </button>
+        </div>
       </div>
-      {magicLinkError ? (
-        <p className="text-xs text-red-600 mt-2" role="alert">
-          {magicLinkError}
-        </p>
-      ) : null}
-    </div>
+
+      <MagicLinkModal
+        open={magicOpen}
+        onClose={() => setMagicOpen(false)}
+        initialEmail={email}
+      />
+    </>
   );
 }
 
@@ -125,17 +114,30 @@ function GitHubLogo() {
   );
 }
 
-// Gmail-style envelope: red base, multicoloured fold lines evoke the Gmail mark.
+// Official Gmail "M" envelope mark (white envelope, red/blue/green/yellow swoosh).
 function GmailLogo() {
   return (
-    <svg width="18" height="14" viewBox="0 0 24 18" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
       <path
-        fill="#EA4335"
-        d="M2 2h20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"
+        fill="#4caf50"
+        d="M45,16.2l-5,2.75l-5,4.75L35,40h7c1.657,0,3-1.343,3-3V16.2z"
       />
-      <path fill="#FBBC04" d="M1 3l11 7 11-7v3l-11 7L1 6z" />
-      <path fill="#34A853" d="M1 3l11 7v8H2a1 1 0 0 1-1-1z" />
-      <path fill="#4285F4" d="M23 3v14a1 1 0 0 1-1 1H12v-8z" />
+      <path
+        fill="#1e88e5"
+        d="M3,16.2l3.614,1.71L13,23.7V40H6c-1.657,0-3-1.343-3-3V16.2z"
+      />
+      <polygon
+        fill="#e53935"
+        points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"
+      />
+      <path
+        fill="#c62828"
+        d="M3,12.298V16.2l10,7.5V11.2L9.876,8.859C9.132,8.301,8.228,8,7.298,8h0C4.924,8,3,9.924,3,12.298z"
+      />
+      <path
+        fill="#fbc02d"
+        d="M45,12.298V16.2l-10,7.5V11.2l3.124-2.341C38.868,8.301,39.772,8,40.702,8h0C43.076,8,45,9.924,45,12.298z"
+      />
     </svg>
   );
 }

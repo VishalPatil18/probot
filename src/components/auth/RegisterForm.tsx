@@ -170,7 +170,7 @@ export function RegisterForm() {
             Username{" "}
             <span className="text-muted font-normal">· your bot URL</span>
           </label>
-          <div className="flex items-center border border-border-base rounded-xl overflow-hidden focus-within:border-brand transition-colors">
+          <div className="flex items-center bg-white border border-border-base rounded-xl overflow-hidden focus-within:border-brand transition-colors">
             <span className="pl-3 pr-1 text-sm text-muted">pro-bot.dev/u/</span>
             <input
               id="username"

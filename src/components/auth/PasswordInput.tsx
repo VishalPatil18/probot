@@ -32,7 +32,7 @@ export function PasswordInput({
   const [visible, setVisible] = useState(false);
 
   return (
-    <div className="relative flex items-center border border-border-base rounded-xl focus-within:border-brand transition-colors">
+    <div className="relative flex items-center bg-white border border-border-base rounded-xl focus-within:border-brand transition-colors">
       <input
         id={inputId}
         name={name}

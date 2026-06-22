@@ -2505,3 +2505,32 @@ _Tests + types:_
 - **Vitest suite not run after Stage 2.** Same sandbox limit as Stage 1: `node_modules` is macOS-native, so vitest's rollup (4.62 native vs 4.61 JS, fixed) and vite-bundled esbuild binaries fault on linux-arm64 (bus error / EPIPE). `typecheck` + `check:key-leaks` pass; run `npm test` natively before the Stage 2 PR merges. The new/updated tests (PasswordInput, check-availability, SidebarAccountFooter, LoginForm, RegisterForm, auth) were written to existing patterns and are typecheck-clean but unexecuted here.
 - **Restored `@types/node`** (Stage 1's interrupted in-sandbox install had left it incomplete, which would break `tsc` on any machine). Native rollup/esbuild binaries in `node_modules` are still macOS builds; a clean `npm install` on macOS is the canonical reset.
 - **Remember-me "session-only cookie" is approximated as a 1-day inactivity window**, not a true browser-session cookie. If product wants the cookie cleared exactly on browser close, that needs a custom cookie handler - deferred unless requested.
+
+---
+
+### 2026-06-21 22:30 - Stage 2 follow-up: Magic-link modal + branded confirmation emails
+
+**What was asked to do:** Make the Magic Link button open a pop-up (like forgot-password) that collects an email and shows a confirmation that a sign-in link was sent, with the email address in blue primary. Apply the same blue-email treatment to the forgot-password modal confirmation. Keep the Gmail icon on the button.
+
+**What I did:**
+
+- New `MagicLinkModal` mirroring `ForgotPasswordModal`: collects an email and calls `signIn("email", { email, callbackUrl: "/dashboard", redirect: false })` so the NextAuth EmailProvider sends the link without navigating to `/auth/verify-request`. On success it shows an in-modal confirmation with the address in `text-brand`.
+- `OAuthRow`: the Magic Link button (Gmail icon kept) now opens `MagicLinkModal` seeded with any email already typed in the parent form, replacing the previous inline `signIn` + empty-email hint. Wrapped the return in a fragment to render the modal alongside the provider buttons.
+- `ForgotPasswordModal`: confirmation email recolored from `text-base` to `text-brand` (blue primary) to match.
+
+**Files changed:**
+
+- `src/components/auth/MagicLinkModal.tsx` - create - email-collecting magic-link modal with branded confirmation.
+- `src/components/auth/MagicLinkModal.test.tsx` - create - send + confirmation + invalid-email specs.
+- `src/components/auth/OAuthRow.tsx` - update - Magic Link opens the modal; removed inline send/loading/error state.
+- `src/components/auth/ForgotPasswordModal.tsx` - update - confirmation email in `text-brand`.
+- `src/components/auth/LoginForm.test.tsx` - update - the two magic-link specs now assert the modal opens and that submitting it calls `signIn("email", …, redirect:false)` and shows the confirmation.
+
+**Decisions made:**
+
+- **`redirect: false` on the magic-link signIn.** Keeps the user in the modal to show the confirmation instead of NextAuth bouncing to the verify-request page - consistent with the forgot-password modal UX. NextAuth still sends the email and does not reveal whether the address exists.
+- **Modal lives in `OAuthRow`, so it appears on both login and register** (the row is shared), matching the existing Magic Link placement.
+
+**Open questions / follow-ups:**
+
+- typecheck + check:key-leaks pass (273 files); vitest still unexecuted in-sandbox (same macOS-native `node_modules` limit). Run `npm test` natively to exercise the new MagicLinkModal + updated LoginForm specs.
