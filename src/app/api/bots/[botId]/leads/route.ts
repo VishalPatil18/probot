@@ -1,12 +1,14 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+import { sendLeadCapturedEmail } from "@/lib/auth/email";
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { corsPreflight, PUBLIC_CORS_HEADERS } from "@/lib/bots/cors-headers";
-import { bots, conversations, db, leads, notifications } from "@/lib/db";
+import { bots, conversations, db, leads, notifications, users } from "@/lib/db";
 import { listLeads } from "@/lib/leads/queries";
 import { leadCaptureInput } from "@/lib/leads/schemas";
 import { parsePagination } from "@/lib/pagination";
+import { appBaseUrl } from "@/lib/uploads/image-upload";
 
 // /api/bots/[botId]/leads
 //
@@ -157,6 +159,25 @@ export async function POST(
 
       return lead;
     });
+
+    // Best-effort owner email if opted in. Never blocks or fails the public
+    // lead-capture response on a Resend hiccup or missing config.
+    try {
+      const owner = await db.query.users.findFirst({
+        where: eq(users.id, bot.userId),
+        columns: { email: true, notifyLeadsEmail: true },
+      });
+      if (owner?.notifyLeadsEmail && owner.email) {
+        await sendLeadCapturedEmail({
+          to: owner.email,
+          botName: bot.name,
+          leadEmail: email,
+          dashboardUrl: `${appBaseUrl()}/dashboard/bots/${bot.id}/leads`,
+        });
+      }
+    } catch (err) {
+      console.warn("[leads] notify email failed", err);
+    }
 
     return jsonWithCors({ lead: result, deduped: false }, 201);
   } catch (err) {

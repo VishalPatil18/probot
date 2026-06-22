@@ -32,7 +32,7 @@ type Props = {
   llmModel: string | null;
 };
 
-const EMBED_GUIDE_URL = "https://docs.pro-bot.dev/guides/embed-widget";
+const EMBED_GUIDE_URL = "https://docs.pro-bot.dev/embed-share";
 
 // Sidebar - server component used by every (dashboard) page. Active
 // nav highlight is computed inside SidebarNavLink via usePathname(),
@@ -50,6 +50,15 @@ export function Sidebar({
   llmProvider,
   llmModel,
 }: Props) {
+  // Zero-bot users get a clean sidebar: the Workspace links (Dashboard /
+  // Conversations / Leads) and Embed & share are dead-ends until a bot exists,
+  // so we hide them and show only the Create-bot CTA + Account.
+  const hasBots = bots.length > 0;
+  // Settings is reachable with or without a bot: the bot-scoped settings page
+  // when a bot exists, else the account-only /dashboard/settings route.
+  const settingsHref = selectedBotId
+    ? `/dashboard/bots/${selectedBotId}/settings`
+    : "/dashboard/settings";
   return (
     <aside className="flex h-full flex-col">
       {/* Fixed `h-16` matches the topbar height so the sidebar's brand
@@ -86,55 +95,51 @@ export function Sidebar({
       ) : null}
 
       <nav className="thin-scroll flex-1 space-y-1 overflow-y-auto px-3">
-        <SidebarSection title="Workspace" />
-        <SidebarNavLink href="/dashboard" icon="dashboard" label="Dashboard" />
-        <SidebarNavLink
-          href={
-            selectedBotId
-              ? `/dashboard/bots/${selectedBotId}/conversations`
-              : "/dashboard"
-          }
-          icon="forum"
-          label="Conversations"
-          rightBadge={
-            counts.conversations > 0 ? formatCount(counts.conversations) : null
-          }
-        />
-        <SidebarNavLink
-          href={
-            selectedBotId
-              ? `/dashboard/bots/${selectedBotId}/leads`
-              : "/dashboard"
-          }
-          icon="contact_mail"
-          label="Leads"
-          rightBadge={counts.leads > 0 ? formatCount(counts.leads) : null}
-          badgeTone={counts.leads > 0 ? "brand" : "muted"}
-        />
+        {hasBots ? (
+          <>
+            <SidebarSection title="Workspace" />
+            <SidebarNavLink
+              href="/dashboard"
+              icon="dashboard"
+              label="Dashboard"
+            />
+            <SidebarNavLink
+              href={`/dashboard/bots/${selectedBotId}/conversations`}
+              icon="forum"
+              label="Conversations"
+              rightBadge={
+                counts.conversations > 0
+                  ? formatCount(counts.conversations)
+                  : null
+              }
+            />
+            <SidebarNavLink
+              href={`/dashboard/bots/${selectedBotId}/leads`}
+              icon="contact_mail"
+              label="Leads"
+              rightBadge={counts.leads > 0 ? formatCount(counts.leads) : null}
+              badgeTone={counts.leads > 0 ? "brand" : "muted"}
+            />
+          </>
+        ) : null}
 
         <SidebarSection title="Build" />
         <SidebarNavLink
           href="/dashboard/bots/new"
           icon="build"
-          label="Bot Factory"
+          label={hasBots ? "Bot Factory" : "Create bot"}
         />
-        <SidebarNavLink
-          href={EMBED_GUIDE_URL}
-          icon="code"
-          label="Embed & share"
-          external
-        />
+        {hasBots ? (
+          <SidebarNavLink
+            href={EMBED_GUIDE_URL}
+            icon="code"
+            label="Embed & share"
+            external
+          />
+        ) : null}
 
         <SidebarSection title="Account" />
-        <SidebarNavLink
-          href={
-            selectedBotId
-              ? `/dashboard/bots/${selectedBotId}/settings`
-              : "/dashboard"
-          }
-          icon="settings"
-          label="Settings"
-        />
+        <SidebarNavLink href={settingsHref} icon="settings" label="Settings" />
         <SidebarNavDisabled icon="hub" label="AI model & key" />
       </nav>
 
@@ -142,6 +147,7 @@ export function Sidebar({
         llmProvider={llmProvider}
         llmModel={llmModel}
         user={user}
+        settingsHref={settingsHref}
       />
     </aside>
   );

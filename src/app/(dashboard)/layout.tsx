@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { LegalBanner } from "@/components/dashboard/LegalBanner";
 import {
   MobileSidebarPanel,
   MobileSidebarProvider,
@@ -12,6 +13,7 @@ import { Topbar } from "@/components/dashboard/Topbar";
 import { getAnalyticsForUser } from "@/lib/analytics/queries";
 import { authOptions } from "@/lib/auth/auth";
 import { bots, db, users } from "@/lib/db";
+import { LEGAL_EFFECTIVE_AT } from "@/lib/marketing/legal";
 import { resolveSelectedBotId } from "@/lib/server/selected-bot";
 import { getOrigin } from "@/lib/server/origin";
 import { isPlaceholderUsername } from "@/lib/users/placeholder";
@@ -54,9 +56,19 @@ export default async function DashboardLayout({
     getAnalyticsForUser(userId),
     db.query.users.findFirst({
       where: eq(users.id, userId),
-      columns: { llmProvider: true, llmModel: true },
+      columns: {
+        llmProvider: true,
+        llmModel: true,
+        lastLegalAckDate: true,
+      },
     }),
   ]);
+
+  // ToS-change banner: show when the legal effective date is newer than the
+  // user's acknowledgement (or they've never acknowledged).
+  const showLegalBanner =
+    !userRow?.lastLegalAckDate ||
+    userRow.lastLegalAckDate < LEGAL_EFFECTIVE_AT;
 
   const botList = ownedBots.map((b) => ({ id: b.id, name: b.name }));
   const fallbackId = botList[0]?.id ?? null;
@@ -107,6 +119,7 @@ export default async function DashboardLayout({
             liveBotUrl={selectedBotId ? publicUrl : null}
           />
           <main className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            {showLegalBanner ? <LegalBanner /> : null}
             {children}
           </main>
         </div>

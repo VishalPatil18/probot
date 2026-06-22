@@ -4,6 +4,7 @@ import {
   deletionCompleteEmail,
   deletionInitiatedEmail,
   emailVerificationEmail,
+  leadCapturedEmail,
   magicLinkEmail,
   passwordResetEmail,
 } from "./email-templates";
@@ -58,6 +59,27 @@ export async function sendPasswordResetEmail(
   await sendTemplated({
     ...args,
     template: passwordResetEmail({ url: args.url }),
+  });
+}
+
+interface SendLeadCapturedArgs {
+  to: string;
+  botName: string;
+  leadEmail: string;
+  dashboardUrl: string;
+}
+
+export async function sendLeadCapturedEmail(
+  args: SendLeadCapturedArgs,
+): Promise<void> {
+  await sendTemplated({
+    to: args.to,
+    url: args.dashboardUrl,
+    template: leadCapturedEmail({
+      botName: args.botName,
+      leadEmail: args.leadEmail,
+      dashboardUrl: args.dashboardUrl,
+    }),
   });
 }
 

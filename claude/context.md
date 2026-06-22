@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **v1.0 STAGE 4 (Bot Factory & Dashboard Polish) SHIPPED** (2026-06-22) - net-new bot profile picture (Postgres bytea `bot_avatars` + `bots.image`, uploaded in Bot Factory Step 1, rendered on the public chat header + embeddable widget, default ProBot icon), PDF dustbin icon, per-file PDF ingestion fix (knowledge route returns `files[]`; wizard shows retriable failures on Step 5 instead of a page-level error), theme picker in wizard Step 3, and dark code-block embed snippets. Shared `image-upload.ts` helper de-dupes avatar validation. **Run `npx drizzle-kit push`** to create `bot_avatars`/`bots.image` (and the pending Stage 3 `user_avatars`). typecheck + key-leak green. See latest Session History entry. **Prior:** **v1.0 STAGE 3 (Account & Settings Hardening) SHIPPED** (2026-06-21) - editable Settings → Account (full name + username w/ debounced uniqueness, password change, profile-photo upload to Postgres bytea via `user_avatars` + `/api/avatar/[userId]` serve route), `auth.ts` jwt/session refresh of name+image, and a redesigned theme picker (`ThemeColorField` circle + popover). Items 4/6/7 verified already-shipped. typecheck + key-leak green; **run `npx drizzle-kit push` to create `user_avatars`** before photo upload works. See latest Session History entry. **Prior:** **v1.0 STAGE 2 (Auth UX & Bug-fix Sprint) SHIPPED** (2026-06-21) - show-password toggles, "remember me" (JWT-encode maxAge override: 30d vs 1d), debounced signup availability check (`GET /api/auth/check-availability`), forgot-password modal, OAuth-row icon alignment, and an inline sidebar sign-out (`SidebarAccountFooter`, replacing `SignOutButton`). Magic-link bug was already resolved (dropped); onboarding parity verified already-shipped. typecheck + key-leak guard green; vitest deferred to native run (sandbox platform mismatch). See latest Session History entry. **Prior:** **v1.0 STAGE 1 (Branding & Copy Cleanup) SHIPPED** (2026-06-21) - on top of the Beta release. "AI Recruiter"→"AI Assistant", `probot.com`→`pro-bot.dev`, post-Beta auth hero copy, and a Beta-vocab comment sweep across ~95 source files. typecheck + key-leak guard green; full test/build to be re-run natively (sandbox platform mismatch). See the latest Session History entry. **Prior Beta status:** **STAGE 6 COMPLETE + Dashboard Redesign DONE** - Stages 1–6 shipped end-to-end. Full dashboard visual redesign (Slices A + B + C) ported from `design/dashboard.html` + `design/settings.html`. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints - type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon - Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Slice C closes out: bot detail page → redirect to settings, sub-page back-links + duplicate empty-state CTAs trimmed, 41-spec test backfill (BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar), `LabeledInput` gets `useId()` for proper label association, Stage 7 task block (§7.11) appended to plan.md tracking 10 deferred items. 689/689 tests, build green. Next: Stage 7 (OAuth, GDPR, hardening, launch). **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **v1.0 STAGE 5 (Sidebar, Notifications & Empty-State Polish) SHIPPED** (2026-06-22) - zero-bot sidebar empty-state, clickable profile row, docs link by the bell, embed-share URL, new bot-independent `/dashboard/settings` account route (SettingsTabs subset + optional-botId AIModelKeyTab), lead-capture email opt-in (`notify_leads_email` + `notification-prefs` endpoint + dropdown toggle + best-effort owner email), and a dismissible ToS-change banner (`last_legal_ack_date` + `LEGAL_EFFECTIVE_AT` + `LegalBanner` + `legal-ack` endpoint). **Run `npx drizzle-kit push`** for the 2 new columns. typecheck + key-leak green. See latest Session History entry. **Prior:** **v1.0 STAGE 4 (Bot Factory & Dashboard Polish) SHIPPED** (2026-06-22) - net-new bot profile picture (Postgres bytea `bot_avatars` + `bots.image`, uploaded in Bot Factory Step 1, rendered on the public chat header + embeddable widget, default ProBot icon), PDF dustbin icon, per-file PDF ingestion fix (knowledge route returns `files[]`; wizard shows retriable failures on Step 5 instead of a page-level error), theme picker in wizard Step 3, and dark code-block embed snippets. Shared `image-upload.ts` helper de-dupes avatar validation. **Run `npx drizzle-kit push`** to create `bot_avatars`/`bots.image` (and the pending Stage 3 `user_avatars`). typecheck + key-leak green. See latest Session History entry. **Prior:** **v1.0 STAGE 3 (Account & Settings Hardening) SHIPPED** (2026-06-21) - editable Settings → Account (full name + username w/ debounced uniqueness, password change, profile-photo upload to Postgres bytea via `user_avatars` + `/api/avatar/[userId]` serve route), `auth.ts` jwt/session refresh of name+image, and a redesigned theme picker (`ThemeColorField` circle + popover). Items 4/6/7 verified already-shipped. typecheck + key-leak green; **run `npx drizzle-kit push` to create `user_avatars`** before photo upload works. See latest Session History entry. **Prior:** **v1.0 STAGE 2 (Auth UX & Bug-fix Sprint) SHIPPED** (2026-06-21) - show-password toggles, "remember me" (JWT-encode maxAge override: 30d vs 1d), debounced signup availability check (`GET /api/auth/check-availability`), forgot-password modal, OAuth-row icon alignment, and an inline sidebar sign-out (`SidebarAccountFooter`, replacing `SignOutButton`). Magic-link bug was already resolved (dropped); onboarding parity verified already-shipped. typecheck + key-leak guard green; vitest deferred to native run (sandbox platform mismatch). See latest Session History entry. **Prior:** **v1.0 STAGE 1 (Branding & Copy Cleanup) SHIPPED** (2026-06-21) - on top of the Beta release. "AI Recruiter"→"AI Assistant", `probot.com`→`pro-bot.dev`, post-Beta auth hero copy, and a Beta-vocab comment sweep across ~95 source files. typecheck + key-leak guard green; full test/build to be re-run natively (sandbox platform mismatch). See the latest Session History entry. **Prior Beta status:** **STAGE 6 COMPLETE + Dashboard Redesign DONE** - Stages 1–6 shipped end-to-end. Full dashboard visual redesign (Slices A + B + C) ported from `design/dashboard.html` + `design/settings.html`. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints - type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon - Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Slice C closes out: bot detail page → redirect to settings, sub-page back-links + duplicate empty-state CTAs trimmed, 41-spec test backfill (BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar), `LabeledInput` gets `useId()` for proper label association, Stage 7 task block (§7.11) appended to plan.md tracking 10 deferred items. 689/689 tests, build green. Next: Stage 7 (OAuth, GDPR, hardening, launch). **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -2707,3 +2707,98 @@ _Tests + types:_
 **Open questions / follow-ups:**
 
 - typecheck + check:key-leaks pass (292 files); run `npm test` natively. `bot_avatars`/`bots.image` still need `npx drizzle-kit push` for any bot-picture upload to work.
+
+---
+
+### 2026-06-22 03:30 - v1.0 Stage 5: Sidebar, Notifications & Empty-State Polish
+
+**What was asked to do:** Ship Stage 5 of `claude/plan-v1.md`: zero-bot sidebar empty-state, account settings reachable without a bot, clickable sidebar profile, a docs link by the bell, the embed-share URL, a lead-capture email opt-in, and a dismissible ToS-change banner. One batch; account settings via a new bot-independent route.
+
+**What I did:**
+
+- **Schema:** `users.notify_leads_email` (boolean, default false) + `users.last_legal_ack_date` (timestamp, nullable). `LEGAL_EFFECTIVE_AT` (parsed Date) added to `legal.ts`.
+- **Sidebar empty-state (item 1/3/5):** `Sidebar` hides Workspace (Dashboard/Conversations/Leads) + Embed & share when `bots.length === 0`, relabels Bot Factory → "Create bot", and always shows Settings (→ `/dashboard/bots/[id]/settings` with a bot, else `/dashboard/settings`). The `SidebarAccountFooter` profile row is now a `<Link>` to that settings href. `EMBED_GUIDE_URL` → `https://docs.pro-bot.dev/embed-share`.
+- **Topbar docs link (item 4):** a "?" icon link to `https://docs.pro-bot.dev` beside the notification bell.
+- **Account settings without a bot (item 2):** new `/dashboard/settings` page reusing AccountTab / SecurityTab / AIModelKeyTab. `SettingsTabs` gained an optional `tabs` subset prop; `AIModelKeyTab` `botId` is now `string | null` - the provider/model switcher (user-level) always renders, the per-bot managed-key + audit sections hide when there's no bot.
+- **Lead-capture email opt-in (item 6):** new `GET/PATCH /api/users/me/notification-prefs`; the lead-email pref is folded into the existing `GET /api/notifications` response (single fetch) and toggled from a row in `NotificationDropdown`. New `leadCapturedEmail` template + `sendLeadCapturedEmail`; the public leads route best-effort emails the owner after a lead is saved if they opted in (never fails the response). Per-item mark-read + "mark all read" already existed.
+- **ToS banner (item 7):** new `LegalBanner` (dismissible) rendered by the dashboard layout when `LEGAL_EFFECTIVE_AT` is newer than the user's `last_legal_ack_date` (or null); dismiss POSTs `/api/users/me/legal-ack` (sets the date to now).
+
+**Files changed:**
+
+- `src/lib/db/schema.ts`, `src/lib/marketing/legal.ts` - update - columns + effective-date.
+- `src/components/dashboard/Sidebar.tsx` (+ new `Sidebar.test.tsx`), `SidebarAccountFooter.tsx` (+ test), `Topbar.tsx` - update - empty-state, profile link, docs link, embed URL.
+- `src/app/(dashboard)/dashboard/settings/page.tsx` - create - account settings route.
+- `src/components/dashboard/settings/SettingsTabs.tsx`, `AIModelKeyTab.tsx` - update - tab subset + optional botId.
+- `src/app/api/users/me/notification-prefs/route.ts` - create (+ test).
+- `src/components/dashboard/NotificationDropdown.tsx` - update - email-leads toggle (pref read from notifications response).
+- `src/app/api/notifications/route.ts` (+ test) - update - include `notifyLeadsEmail`.
+- `src/lib/auth/email-templates.ts`, `src/lib/auth/email.ts` - update - lead-captured template + send.
+- `src/app/api/bots/[botId]/leads/route.ts` (+ test) - update - best-effort owner email.
+- `src/components/dashboard/LegalBanner.tsx` - create (+ test); `src/app/api/users/me/legal-ack/route.ts` - create (+ test); `src/app/(dashboard)/layout.tsx` - update - render banner.
+
+**Decisions made:**
+
+- **Lead-email pref folded into `GET /api/notifications`** instead of a second mount fetch, so the dropdown makes one request and the existing dropdown tests' call-ordering isn't disturbed.
+- **New `/dashboard/settings` route** (user's choice) over making the bot-settings page bot-optional: the bot page keeps its botId-keyed URL/state; the account route reuses the same tab components with `tabs={["account","security","model"]}`.
+- **Owner email is best-effort** (try/catch, after the transaction) so a Resend hiccup never fails the public, anonymous lead-capture call. `appBaseUrl()` (from the image-upload helper) builds the absolute dashboard URL.
+- **ToS banner decision lives server-side** in the layout (date comparison) so the client component only handles dismissal; the `Date` parse of `LEGAL_EFFECTIVE_DATE` is centralised as `LEGAL_EFFECTIVE_AT`.
+
+**Open questions / follow-ups:**
+
+- **`npx drizzle-kit push` required** for `notify_leads_email` + `last_legal_ack_date` (and the still-pending `user_avatars`/`bot_avatars`/`bots.image`). Until then the prefs/legal-ack/leads-email paths error on the missing columns.
+- typecheck + check:key-leaks pass (300 files); vitest unexecuted in-sandbox - run `npm test` + `npm run build` natively.
+- `appBaseUrl` living in `src/lib/uploads/image-upload.ts` is now used by the leads route too; if a third caller appears it's worth moving to a neutral `src/lib/server/` module.
+
+---
+
+### 2026-06-22 04:00 - Bot Factory fixes: theme-driven chat, live preview, red PDF delete
+
+**What was asked to do:** Four Bot Factory bugs - (1) suggested questions not visible while creating a bot, (2) PDF delete button should be red, (3) the theme color should actually re-skin the chatbot, (4) the live preview should update as the user changes theme color / suggested questions.
+
+**What I did:**
+
+- **Theme color now drives the real chat (item 3).** The public chat page (`/u/[username]/chat`) didn't pass `themeColor` and `ChatWindow` hardcoded the brand. Now: the page selects `bot.themeColor` and passes it; `ChatWindow` sets a `--bot-accent` CSS variable on its root; the header avatar, send button, the user's message bubbles, and the reply avatar (`MessageBubble`) all read `var(--bot-accent, #0070dd)`. The embeddable widget already themed via `themeColor` (Stage 4), so the two surfaces are now consistent.
+- **Live preview reflects theme + questions (items 1, 4).** `LivePreview` in `BotFactoryForm` previously themed nothing and showed only the first suggested question as a bubble. Now the avatar + a send-accent swatch use `form.themeColor`, and all suggested questions render as themed chips - all reactive to `form`, so the preview updates live.
+- **Red PDF delete (item 2).** The Step 2 file-list trash button is now `text-red-600` (was muted with a red hover).
+
+**Files changed:**
+
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - LivePreview (themeColor + all suggested questions as chips), red trash button.
+- `src/app/u/[username]/chat/page.tsx` - update - select + pass `themeColor` (ResolvedBot gains `themeColor`).
+- `src/components/chat/ChatWindow.tsx` - update - `themeColor` prop → `--bot-accent` CSS var; send button + header avatar themed.
+- `src/components/chat/MessageBubble.tsx` - update - user bubble + reply avatar use `var(--bot-accent)`.
+
+**Decisions made:**
+
+- **CSS variable (`--bot-accent`) over prop-drilling.** Setting it once on the `ChatWindow` root lets `MessageBubble` (a child) pick up the accent without threading `themeColor` through every bubble; `var(--bot-accent, #0070dd)` keeps a brand fallback if a bubble ever renders outside a themed root.
+
+**Open questions / follow-ups:**
+
+- The suggested-question chips in the *real* chat (`SuggestedQuestions`) still use the brand hover accent, not the bot theme - minor; left untouched to keep the change focused on the primary accent surfaces.
+- typecheck + check:key-leaks pass (300 files); run `npm test` natively (no existing tests asserted the old brand classes).
+
+---
+
+### 2026-06-22 04:20 - Chat bot avatar: uploaded image or ProBot icon (not initials/"AI")
+
+**What was asked to do:** The chat header showed placeholder initials and assistant replies showed an "AI" text avatar. Both should show the bot's uploaded picture, or the ProBot icon as the default.
+
+**What I did:**
+
+- New shared `src/components/chat/BotAvatarIcon.tsx`: renders the uploaded image when set, else the ProBot mark (two dots) on a circle tinted with `--bot-accent`. Sized via a `sizeClass` prop.
+- `ChatWindow` header uses it (`size-12`) - removed the initials fallback/computation - and passes `botImage` into both `MessageBubble` renders (intro + each message).
+- `MessageBubble` accepts an optional `botImage` and its reply avatar uses `BotAvatarIcon` (`size-8`) instead of the old "AI" text `BotAvatar` (removed).
+
+**Files changed:**
+
+- `src/components/chat/BotAvatarIcon.tsx` - create - shared image/ProBot-icon avatar.
+- `src/components/chat/ChatWindow.tsx` - update - header + thread `botImage` to MessageBubble.
+- `src/components/chat/MessageBubble.tsx` - update - reply avatar via BotAvatarIcon; optional `botImage` prop.
+
+**Decisions made:**
+
+- **Default is the ProBot icon, not initials/"AI".** The bot is an entity with its own identity; the two-dot ProBot mark (themed via `--bot-accent`) matches the wizard's default bot picture and the widget. `MessageBubble`'s `botImage` is optional so the dashboard transcript view keeps working (shows the ProBot default there).
+
+**Open questions / follow-ups:**
+
+- typecheck + check:key-leaks pass (301 files). The uploaded bot image only renders after `npx drizzle-kit push` creates `bot_avatars`/`bots.image` and a picture is uploaded; otherwise the ProBot icon shows.

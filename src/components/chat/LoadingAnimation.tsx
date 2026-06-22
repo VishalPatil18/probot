@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 
+import { BotAvatarIcon } from "./BotAvatarIcon";
+
 const CYCLE_MS = 3000;
 const DEFAULT_MESSAGE = "Thinking…";
 
 type Props = {
   messages: string[];
+  botImage?: string | null;
 };
 
-export function LoadingAnimation({ messages }: Props) {
+export function LoadingAnimation({ messages, botImage }: Props) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -24,11 +27,8 @@ export function LoadingAnimation({ messages }: Props) {
 
   return (
     <div className="flex gap-3">
-      <div
-        aria-hidden
-        className="size-8 rounded-full brand-blue-gradient grid place-items-center text-white shrink-0 mt-0.5 text-xs font-bold"
-      >
-        AI
+      <div className="mt-0.5">
+        <BotAvatarIcon image={botImage} name="Assistant" sizeClass="size-8" />
       </div>
       <div
         role="status"

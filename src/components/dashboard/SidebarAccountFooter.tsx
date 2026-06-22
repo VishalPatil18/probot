@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { ModelStatusCard } from "./ModelStatusCard";
@@ -9,6 +10,7 @@ interface SidebarAccountFooterProps {
   llmProvider: string | null;
   llmModel: string | null;
   user: { name: string; email: string; initials: string };
+  settingsHref: string;
 }
 
 // Sidebar footer: the AI-model status card plus the profile row + sign-out
@@ -19,6 +21,7 @@ export function SidebarAccountFooter({
   llmProvider,
   llmModel,
   user,
+  settingsHref,
 }: SidebarAccountFooterProps) {
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
@@ -69,13 +72,19 @@ export function SidebarAccountFooter({
 
       <div className="border-t border-border-base p-3">
         <div className="flex items-center gap-3 px-2 py-1.5">
-          <div className="grid size-8 shrink-0 place-items-center rounded-full bg-neutral-200 text-xs font-bold">
-            {user.initials}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-bold">{user.name}</p>
-            <p className="truncate text-[10px] text-muted">{user.email}</p>
-          </div>
+          <Link
+            href={settingsHref}
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:opacity-80"
+            aria-label="Account settings"
+          >
+            <div className="grid size-8 shrink-0 place-items-center rounded-full bg-neutral-200 text-xs font-bold">
+              {user.initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-bold">{user.name}</p>
+              <p className="truncate text-[10px] text-muted">{user.email}</p>
+            </div>
+          </Link>
           <button
             type="button"
             onClick={() => setConfirming(true)}

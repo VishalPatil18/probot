@@ -706,7 +706,15 @@ function StepIdentity({
 
 // Live preview of the chosen bot picture (or the default ProBot mark). Manages
 // the object URL lifecycle so the blob is revoked when the file changes/clears.
-function BotAvatarPreview({ file }: { file: File | null }) {
+function BotAvatarPreview({
+  file,
+  sizeClass = "size-16",
+  themeColor,
+}: {
+  file: File | null;
+  sizeClass?: string;
+  themeColor?: string;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!file) {
@@ -724,26 +732,23 @@ function BotAvatarPreview({ file }: { file: File | null }) {
       <img
         src={url}
         alt="Bot picture preview"
-        className="size-16 shrink-0 rounded-full border border-border-base object-cover"
+        className={`${sizeClass} shrink-0 rounded-full border border-border-base object-cover`}
       />
     );
   }
   return (
     <div
-      className="brand-blue-gradient grid size-16 shrink-0 place-items-center rounded-full"
+      className={`grid ${sizeClass} shrink-0 place-items-center rounded-full ${
+        themeColor ? "" : "brand-blue-gradient"
+      }`}
+      style={themeColor ? { background: themeColor } : undefined}
       aria-hidden="true"
     >
-      <ProBotMark />
+      <svg viewBox="0 0 40 40" fill="none" className="h-3/5 w-3/5">
+        <circle cx="14" cy="20" r="3.4" fill="#fff" />
+        <circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65" />
+      </svg>
     </div>
-  );
-}
-
-function ProBotMark() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-      <circle cx="14" cy="20" r="3.4" fill="#fff" />
-      <circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65" />
-    </svg>
   );
 }
 
@@ -926,7 +931,7 @@ function StepKnowledge({
                   <button
                     type="button"
                     onClick={() => removeFile(file.name)}
-                    className="shrink-0 text-muted transition-colors hover:text-error"
+                    className="shrink-0 text-red-600 transition-colors hover:text-red-700"
                     aria-label={`Remove ${file.name}`}
                   >
                     <TrashIcon />
@@ -1469,10 +1474,6 @@ function StepDeploy({
 function LivePreview({ form }: { form: FormState }) {
   const name = form.name.trim() || "Your name";
   const headline = form.headline.trim() || "Your headline";
-  const initials = useMemo(() => {
-    const parts = (form.name || "Your Name").trim().split(/\s+/);
-    return `${parts[0]?.[0] ?? "Y"}${parts[1]?.[0] ?? ""}`.toUpperCase();
-  }, [form.name]);
 
   return (
     // `lg:overflow-y-auto` - internal scroll if the preview card ever
@@ -1484,9 +1485,11 @@ function LivePreview({ form }: { form: FormState }) {
       </p>
       <div className="w-full max-w-[340px] bg-white rounded-2xl border border-border-base shadow-floating overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border-base">
-          <div className="size-10 rounded-full brand-blue-gradient grid place-items-center text-white font-display font-bold">
-            {initials}
-          </div>
+          <BotAvatarPreview
+            file={form.botImageFile}
+            sizeClass="size-10"
+            themeColor={form.themeColor}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold leading-tight truncate">{name}</p>
             <p className="text-[11px] text-muted truncate">{headline}</p>
@@ -1496,14 +1499,27 @@ function LivePreview({ form }: { form: FormState }) {
           <div className="px-3 py-2 text-xs rounded-2xl bg-neutral-100 w-fit max-w-[85%]">
             👋 Hi! Ask me anything.
           </div>
-          {form.suggestedQuestions[0] && (
-            <div className="px-3 py-2 text-xs rounded-2xl bg-brand text-white w-fit max-w-[85%] ml-auto">
-              {form.suggestedQuestions[0]}
+          {form.suggestedQuestions.length > 0 ? (
+            <div className="flex flex-wrap justify-end gap-1.5 pt-1">
+              {form.suggestedQuestions.map((q, i) => (
+                <span
+                  key={`${q}-${i}`}
+                  className="rounded-full border bg-white px-2.5 py-1 text-[11px] font-medium"
+                  style={{ borderColor: form.themeColor, color: form.themeColor }}
+                >
+                  {q}
+                </span>
+              ))}
             </div>
-          )}
+          ) : null}
         </div>
         <div className="px-4 py-3 border-t border-border-base flex items-center gap-2">
           <span className="text-xs text-muted flex-1">Ask anything…</span>
+          <span
+            className="size-7 shrink-0 rounded-lg"
+            style={{ background: form.themeColor }}
+            aria-hidden="true"
+          />
         </div>
       </div>
       <p className="text-xs text-muted mt-4 text-center max-w-[300px]">

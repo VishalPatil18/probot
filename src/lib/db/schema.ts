@@ -46,6 +46,16 @@ export const users = pgTable("users", {
     .notNull()
     .default("anthropic"),
   llmModel: varchar("llm_model", { length: 60 }),
+  // Opt-in: email the owner when a new lead is captured (off by default).
+  // Reuses the Resend transport already wired for auth emails.
+  notifyLeadsEmail: boolean("notify_leads_email").notNull().default(false),
+  // Last time the user acknowledged the legal effective date (Terms/Privacy).
+  // NULL = never acknowledged. The dashboard banner shows when
+  // LEGAL_EFFECTIVE_AT is newer than this; dismissing sets it to now().
+  lastLegalAckDate: timestamp("last_legal_ack_date", {
+    mode: "date",
+    withTimezone: false,
+  }),
   emailVerified: timestamp("email_verified", {
     mode: "date",
     withTimezone: false,

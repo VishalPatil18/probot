@@ -2,6 +2,7 @@ import type { AnchorHTMLAttributes } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { BotAvatarIcon } from "./BotAvatarIcon";
 import type { ChatMessage } from "./types";
 
 // MessageBubble renders the recruiter+assistant bubble variants only.
@@ -13,6 +14,9 @@ type BubbleMessage = Exclude<ChatMessage, { role: "system" }>;
 
 type Props = {
   message: BubbleMessage;
+  // The bot's avatar (uploaded image) shown on assistant replies; falls back to
+  // the ProBot icon. Optional so non-chat callers (e.g. transcript view) work.
+  botImage?: string | null;
 };
 
 function SafeLink({
@@ -27,11 +31,14 @@ function SafeLink({
   );
 }
 
-export function MessageBubble({ message }: Props) {
+export function MessageBubble({ message, botImage }: Props) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="bg-brand text-white rounded-2xl rounded-tr-md px-4 py-3 text-sm leading-relaxed max-w-[85%] shadow-soft whitespace-pre-wrap">
+        <div
+          style={{ backgroundColor: "var(--bot-accent, #0070dd)" }}
+          className="text-white rounded-2xl rounded-tr-md px-4 py-3 text-sm leading-relaxed max-w-[85%] shadow-soft whitespace-pre-wrap"
+        >
           {message.text}
         </div>
       </div>
@@ -41,7 +48,7 @@ export function MessageBubble({ message }: Props) {
   if ("rateLimitMessage" in message) {
     return (
       <div className="flex gap-3">
-        <BotAvatar />
+        <BotAvatarIcon image={botImage} name="Assistant" sizeClass="size-8" />
         <div
           role="alert"
           className="bg-white border border-rose-200 rounded-2xl rounded-tl-md px-4 py-3 text-sm leading-relaxed max-w-[85%] shadow-soft"
@@ -58,7 +65,7 @@ export function MessageBubble({ message }: Props) {
 
   return (
     <div className="flex gap-3">
-      <BotAvatar />
+      <BotAvatarIcon image={botImage} name="Assistant" sizeClass="size-8" />
       <div className="max-w-[85%]">
         <div className="bg-white border border-border-base rounded-2xl rounded-tl-md px-4 py-3 text-sm leading-relaxed shadow-soft prose prose-sm max-w-none">
           <ReactMarkdown
@@ -73,13 +80,3 @@ export function MessageBubble({ message }: Props) {
   );
 }
 
-function BotAvatar() {
-  return (
-    <div
-      aria-hidden
-      className="size-8 rounded-full brand-blue-gradient grid place-items-center text-white shrink-0 mt-0.5 text-xs font-bold"
-    >
-      AI
-    </div>
-  );
-}

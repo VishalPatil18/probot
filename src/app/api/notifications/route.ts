@@ -2,7 +2,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { requireSession } from "@/lib/auth/require-session";
-import { db, notifications } from "@/lib/db";
+import { db, notifications, users } from "@/lib/db";
 import { parsePagination } from "@/lib/pagination";
 
 // GET /api/notifications?unread=true&page=1&limit=20
@@ -34,7 +34,7 @@ export async function GET(request: Request): Promise<Response> {
     ? and(baseFilter, isNull(notifications.readAt))
     : baseFilter;
 
-  const [items, totalRows, unreadRows] = await Promise.all([
+  const [items, totalRows, unreadRows, userPref] = await Promise.all([
     db
       .select({
         id: notifications.id,
@@ -57,10 +57,15 @@ export async function GET(request: Request): Promise<Response> {
       .select({ unread: sql<number>`count(*)::int` })
       .from(notifications)
       .where(and(baseFilter, isNull(notifications.readAt))),
+    db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { notifyLeadsEmail: true },
+    }),
   ]);
 
   return NextResponse.json({
     items,
+    notifyLeadsEmail: userPref?.notifyLeadsEmail ?? false,
     total: totalRows[0]?.total ?? 0,
     page,
     limit,

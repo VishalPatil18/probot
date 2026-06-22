@@ -53,6 +53,37 @@ If you didn't sign up for ProBot, you can safely ignore this email.`,
   };
 }
 
+interface LeadCapturedArgs {
+  botName: string;
+  leadEmail: string;
+  dashboardUrl: string;
+}
+
+export function leadCapturedEmail({
+  botName,
+  leadEmail,
+  dashboardUrl,
+}: LeadCapturedArgs): Template {
+  return {
+    subject: `New lead from ${botName}`,
+    html: shell({
+      title: "You captured a new lead",
+      body: `${leadEmail} left their email after chatting with ${botName}. Open your dashboard to see the conversation and follow up.`,
+      ctaLabel: "View leads",
+      ctaUrl: dashboardUrl,
+      footer:
+        "You're receiving this because you enabled lead emails. Turn it off anytime from the notification bell in your dashboard.",
+    }),
+    text: `New lead from ${botName}
+
+${leadEmail} left their email after chatting with ${botName}.
+
+View your leads: ${dashboardUrl}
+
+You're receiving this because you enabled lead emails. Turn it off anytime from the notification bell in your dashboard.`,
+  };
+}
+
 interface DeletionInitiatedArgs extends TemplateLink {
   scheduledPurgeAt: Date;
 }

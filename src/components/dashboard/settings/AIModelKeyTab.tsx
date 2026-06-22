@@ -9,7 +9,10 @@ import { PROVIDER_NAMES } from "@/lib/ai/providers";
 import { setApiKey } from "@/lib/client/llm-key-store";
 
 type Props = {
-  botId: string;
+  // Null on the account-only /dashboard/settings route (no bot yet). The
+  // provider/model switcher (user-level) still works; the per-bot managed-key
+  // + audit sections are hidden until a bot exists.
+  botId: string | null;
   provider: string | null;
   model: string | null;
 };
@@ -74,6 +77,7 @@ export function AIModelKeyTab({
   const [auditError, setAuditError] = useState<string | null>(null);
 
   const fetchAudit = useCallback(async () => {
+    if (!botId) return;
     try {
       const res = await fetch(`/api/bots/${botId}/llm-key/audit`);
       if (!res.ok) {
@@ -306,7 +310,9 @@ export function AIModelKeyTab({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
+      {botId ? (
+        <>
+          <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <div className="mb-1 flex items-center justify-between gap-3">
           <h3 className="font-bold">Managed key storage</h3>
           <ManagedKeyStatusPill audit={audit} />
@@ -424,6 +430,13 @@ export function AIModelKeyTab({
           </ul>
         )}
       </section>
+        </>
+      ) : (
+        <section className="rounded-2xl border border-border-base bg-white p-6 text-sm text-muted shadow-soft">
+          Create a bot to store a managed key and view its decrypt audit log.
+          Your provider &amp; model preference above applies to all your bots.
+        </section>
+      )}
     </div>
   );
 }

@@ -18,14 +18,28 @@ describe("SidebarAccountFooter", () => {
   });
 
   it("shows the profile row and no confirm dialog initially", () => {
-    render(<SidebarAccountFooter llmProvider={null} llmModel={null} user={USER} />);
+    render(
+      <SidebarAccountFooter
+        llmProvider={null}
+        llmModel={null}
+        user={USER}
+        settingsHref="/dashboard/settings"
+      />,
+    );
     expect(screen.getByText("Jane Doe")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("opens an inline confirm panel and cancels back", async () => {
     const user = userEvent.setup();
-    render(<SidebarAccountFooter llmProvider={null} llmModel={null} user={USER} />);
+    render(
+      <SidebarAccountFooter
+        llmProvider={null}
+        llmModel={null}
+        user={USER}
+        settingsHref="/dashboard/settings"
+      />,
+    );
 
     await user.click(screen.getByRole("button", { name: /sign out/i }));
     const dialog = screen.getByRole("dialog", { name: /confirm sign out/i });
@@ -38,7 +52,14 @@ describe("SidebarAccountFooter", () => {
 
   it("calls signOut with the login callback on confirm", async () => {
     const user = userEvent.setup();
-    render(<SidebarAccountFooter llmProvider={null} llmModel={null} user={USER} />);
+    render(
+      <SidebarAccountFooter
+        llmProvider={null}
+        llmModel={null}
+        user={USER}
+        settingsHref="/dashboard/settings"
+      />,
+    );
 
     await user.click(screen.getByRole("button", { name: /sign out/i }));
     const dialog = screen.getByRole("dialog", { name: /confirm sign out/i });

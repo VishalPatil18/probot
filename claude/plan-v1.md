@@ -14,7 +14,7 @@
 | **2** | ✅ Auth UX & Bug-fix Sprint                 | P0       | yes         | 3–4 days         |
 | **3** | ✅ Account & Settings Hardening             | P0       | yes         | 4–5 days         |
 | **4** | ✅ Bot Factory & Dashboard Polish           | P1       | yes         | 3–4 days         |
-| **5** | Sidebar, Notifications & Empty-State Polish | P1       | yes         | 2–3 days         |
+| **5** | ✅ Sidebar, Notifications & Empty-State Polish | P1     | yes         | 2–3 days         |
 | **6** | Marketing & Trust Pages                     | P1       | yes         | 5–7 days         |
 | **7** | SEO, Docs & Discoverability                 | P2       | yes         | 3–4 days         |
 | **8** | Performance, Scale & Operational Polish     | P0 perf  | yes         | 1–2 weeks        |
@@ -143,6 +143,8 @@ Stage 3 (profile photo storage path).
 ---
 
 ## Stage 5 - Sidebar, Notifications & Empty-State Polish
+
+**Status:** ✅ Shipped 2026-06-22. Zero-bot sidebar empty-state + clickable profile row, docs link by the bell, embed-share URL, new bot-independent `/dashboard/settings` route (SettingsTabs subset + optional-botId AIModelKeyTab), lead-capture email opt-in (`notify_leads_email` + `/api/users/me/notification-prefs` + dropdown toggle + best-effort owner email via `sendLeadCapturedEmail`), and a dismissible ToS banner (`last_legal_ack_date` + `LEGAL_EFFECTIVE_AT` + `LegalBanner` + `/api/users/me/legal-ack`). Per-item/mark-all notifications already existed. **Requires `npx drizzle-kit push`** for the 2 new columns. typecheck + key-leak green; full test/build run natively. See `context.md` 2026-06-22 Stage 5 entry.
 
 **Priority:** P1
 **Deployable artifact:** Sidebar adapts to zero-bot users; notifications grow beyond in-app polling; ToS-change banner exists for the first material legal revision.

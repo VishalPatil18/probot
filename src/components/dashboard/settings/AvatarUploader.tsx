@@ -89,10 +89,6 @@ export function AvatarUploader({
           )}
         </span>
       </button>
-      <p className="mt-2 text-center text-[11px] leading-tight text-muted">
-        JPG · PNG · WebP
-        <br />2 MB max
-      </p>
       {error ? (
         <p className="mt-1 text-center text-[11px] text-red-600" role="alert">
           {error}

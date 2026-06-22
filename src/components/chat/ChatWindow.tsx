@@ -14,6 +14,7 @@ import { getOrCreateSessionId } from "@/lib/client/session-id-store";
 
 import { LeadCaptureCard } from "./LeadCaptureCard";
 import { LoadingAnimation } from "./LoadingAnimation";
+import { BotAvatarIcon } from "./BotAvatarIcon";
 import { MessageBubble } from "./MessageBubble";
 import type { ChatMessage } from "./types";
 
@@ -67,6 +68,9 @@ type Props = {
   botName: string;
   botHeadline: string | null;
   botImage?: string | null;
+  // Per-bot accent color (#RRGGBB). Applied via the `--bot-accent` CSS variable
+  // so the header avatar, send button, and user bubbles match the bot's theme.
+  themeColor?: string;
   suggestedQuestions: string[];
   loadingMessages: string[];
   llmProvider: ProviderName;
@@ -82,6 +86,7 @@ export function ChatWindow({
   botName,
   botHeadline,
   botImage,
+  themeColor = "#0070dd",
   suggestedQuestions,
   loadingMessages,
   llmProvider,
@@ -260,7 +265,10 @@ export function ChatWindow({
     messages.length === 0 && suggestedQuestions.length > 0;
 
   return (
-    <div className="h-screen flex flex-col bg-bg-app">
+    <div
+      className="h-screen flex flex-col bg-bg-app"
+      style={{ "--bot-accent": themeColor } as React.CSSProperties}
+    >
       <ChatHeader
         botName={botName}
         botHeadline={botHeadline}
@@ -271,6 +279,7 @@ export function ChatWindow({
         <div className="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-4">
           {messages.length === 0 && (
             <MessageBubble
+              botImage={botImage}
               message={{
                 id: "intro",
                 role: "assistant",
@@ -320,10 +329,15 @@ export function ChatWindow({
               void _exhaustive;
               return null;
             }
-            return <MessageBubble key={m.id} message={m} />;
+            return <MessageBubble key={m.id} botImage={botImage} message={m} />;
           })}
 
-          {loading && <LoadingAnimation messages={loadingMessages} />}
+          {loading && (
+            <LoadingAnimation
+              messages={loadingMessages}
+              botImage={botImage}
+            />
+          )}
         </div>
       </div>
 
@@ -363,7 +377,8 @@ export function ChatWindow({
               type="submit"
               disabled={loading || input.trim().length === 0}
               aria-label="Send message"
-              className="size-9 grid place-items-center rounded-xl brand-blue-gradient text-white shrink-0 disabled:opacity-40"
+              style={{ background: "var(--bot-accent, #0070dd)" }}
+              className="size-9 grid place-items-center rounded-xl text-white shrink-0 disabled:opacity-40"
             >
               ↑
             </button>
@@ -387,29 +402,10 @@ function ChatHeader({
   botHeadline: string | null;
   botImage?: string | null;
 }) {
-  const initials =
-    botName
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((s) => s[0] ?? "")
-      .join("")
-      .toUpperCase() || "AI";
-
   return (
     <header className="bg-white border-b border-border-base shrink-0">
       <div className="mx-auto max-w-3xl px-5 py-4 flex items-center gap-4">
-        {botImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={botImage}
-            alt={`${botName} avatar`}
-            className="size-12 rounded-full object-cover shrink-0"
-          />
-        ) : (
-          <div className="size-12 rounded-full brand-blue-gradient grid place-items-center text-white font-display font-extrabold text-lg shrink-0">
-            {initials}
-          </div>
-        )}
+        <BotAvatarIcon image={botImage} name={botName} sizeClass="size-12" />
         <div className="flex-1 min-w-0">
           <h1 className="font-display text-lg font-bold leading-tight truncate">
             {botName}{" "}
