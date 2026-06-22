@@ -93,9 +93,10 @@ export default async function BotSettingsPage({
       <SettingsTabs>
         <SettingsTabPanel tab="account">
           <AccountTab
-            name={accountName}
+            name={session.user.name ?? ""}
             email={accountEmail}
             username={session.user.username}
+            image={session.user.image ?? null}
             initials={accountInitials}
           />
         </SettingsTabPanel>

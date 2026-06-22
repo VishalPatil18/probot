@@ -176,9 +176,14 @@ export const authOptions: NextAuthOptions = {
       if (token.id) {
         const row = await db.query.users.findFirst({
           where: eq(users.id, token.id),
-          columns: { username: true },
+          columns: { username: true, name: true, image: true },
         });
         token.username = row?.username ?? "user";
+        // Re-read name + image too so Settings → Account edits (profile update,
+        // photo upload) are reflected on the very next request without a
+        // sign-out/sign-in cycle - same rationale as the username refresh.
+        token.name = row?.name ?? null;
+        token.picture = row?.image ?? null;
       }
       return token;
     },
@@ -186,6 +191,8 @@ export const authOptions: NextAuthOptions = {
       if (token && session.user) {
         session.user.id = token.id;
         session.user.username = token.username;
+        session.user.name = token.name ?? null;
+        session.user.image = token.picture ?? null;
       }
       return session;
     },

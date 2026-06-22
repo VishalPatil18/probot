@@ -12,7 +12,7 @@
 | ----- | ------------------------------------------- | -------- | ----------- | ---------------- |
 | **1** | ✅ Branding & Copy Cleanup                  | P0       | yes         | 1–2 days         |
 | **2** | ✅ Auth UX & Bug-fix Sprint                 | P0       | yes         | 3–4 days         |
-| **3** | Account & Settings Hardening                | P0       | yes         | 4–5 days         |
+| **3** | ✅ Account & Settings Hardening             | P0       | yes         | 4–5 days         |
 | **4** | Bot Factory & Dashboard Polish              | P1       | yes         | 3–4 days         |
 | **5** | Sidebar, Notifications & Empty-State Polish | P1       | yes         | 2–3 days         |
 | **6** | Marketing & Trust Pages                     | P1       | yes         | 5–7 days         |
@@ -85,6 +85,8 @@ None. All work is in `src/app/(auth)`, `src/components/auth`, and one new `/api/
 ---
 
 ## Stage 3 - Account & Settings Hardening
+
+**Status:** ✅ Shipped 2026-06-21. Editable name + username (debounced uniqueness via the Stage 2 `check-availability` endpoint), password change (`POST /api/users/me/password`), profile-photo upload to Postgres bytea (`user_avatars` + `POST /api/users/me/avatar` + `GET /api/avatar/[userId]`), `auth.ts` jwt/session refresh of name+image, and a redesigned theme picker (`ThemeColorField`). Items 4/6/7 (personality/custom-instructions, export/delete, AI model & key) were verified already-shipped. **Requires `npx drizzle-kit push` to create the `user_avatars` table.** typecheck + key-leak green; full test/build run natively. See `context.md` 2026-06-21 Stage 3 entry.
 
 **Priority:** P0 (every user-facing surface in settings → Account is currently read-only or stubbed)
 **Deployable artifact:** Users can edit their name, username, password, profile photo; the Security & Privacy tab is fully wired; the AI Model & API Key panel is the post-Beta managed-key surface.

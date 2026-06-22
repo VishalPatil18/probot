@@ -17,6 +17,8 @@ import {
   PER_MINUTE_DEFAULT,
 } from "@/lib/ai/rate-limit";
 
+import { ThemeColorField } from "./ThemeColorField";
+
 import { DeleteBotModal } from "../DeleteBotModal";
 import { SuggestedQuestionsEditor } from "../SuggestedQuestionsEditor";
 
@@ -62,8 +64,6 @@ const PERSONALITY_CARDS: Record<
     icon: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
   },
 };
-
-const THEME_PRESETS = ["#7c5cff", "#10a37f", "#9b5cff", "#404040"];
 
 // Bot Configuration tab. Single PATCH per save, diffed against
 // initial values so only changed fields are sent. A future change enables the
@@ -451,31 +451,7 @@ export function BotConfigTab({
           <label className="mb-2 block text-xs font-semibold">
             Theme color
           </label>
-          <div className="flex items-center gap-2">
-            {THEME_PRESETS.map((hex) => {
-              const on = themeColor.toLowerCase() === hex.toLowerCase();
-              return (
-                <button
-                  key={hex}
-                  type="button"
-                  onClick={() => setThemeColor(hex)}
-                  aria-label={`Theme color ${hex}`}
-                  aria-pressed={on}
-                  className={`size-8 rounded-full transition-shadow ${
-                    on ? "ring-2 ring-brand ring-offset-2" : ""
-                  }`}
-                  style={{ background: hex }}
-                />
-              );
-            })}
-            <input
-              type="color"
-              value={themeColor}
-              onChange={(e) => setThemeColor(e.target.value)}
-              aria-label="Custom theme color"
-              className="ml-2 size-8 cursor-pointer rounded-full border-0 bg-transparent"
-            />
-          </div>
+          <ThemeColorField value={themeColor} onChange={setThemeColor} />
         </div>
       </section>
 

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  customType,
   index,
   integer,
   jsonb,
@@ -14,6 +15,15 @@ import {
   varchar,
   vector,
 } from "drizzle-orm/pg-core";
+
+// Postgres `bytea` column mapped to a Node Buffer. Drizzle has no first-class
+// bytea helper, so this minimal customType bridges it - used by user_avatars to
+// store uploaded profile photos in the database (zero external storage).
+const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 // users
 // The LLM API key is intentionally NOT stored here - it lives only in the
@@ -545,6 +555,24 @@ export const notifications = pgTable(
   }),
 ).enableRLS();
 
+// user_avatars
+// One row per user who uploads a custom profile photo. Stores the raw image
+// bytes (2 MB cap enforced in the route) plus its MIME type so the serve route
+// can set the right Content-Type. One avatar per user, so `user_id` is the PK.
+// When set, `users.image` points at GET /api/avatar/<userId>, which reads here.
+// Default (animal-icon / OAuth) avatars stay as plain URLs on `users.image` and
+// never create a row here.
+export const userAvatars = pgTable("user_avatars", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  data: bytea("data").notNull(),
+  contentType: varchar("content_type", { length: 40 }).notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: false })
+    .notNull()
+    .defaultNow(),
+}).enableRLS();
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Bot = typeof bots.$inferSelect;
@@ -575,3 +603,5 @@ export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+export type UserAvatar = typeof userAvatars.$inferSelect;
+export type NewUserAvatar = typeof userAvatars.$inferInsert;
