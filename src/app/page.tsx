@@ -3,6 +3,7 @@ import Link from "next/link";
 import { DemoVideoModal } from "@/components/marketing/DemoVideoModal";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { SiteHeader } from "@/components/marketing/SiteHeader";
+import { Icon, type IconName } from "@/components/ui/Icon";
 import {
   organizationJsonLd,
   softwareApplicationJsonLd,
@@ -12,20 +13,6 @@ const DOCS_URL = "https://pro-bot.dev/docs";
 
 const EMBED_SNIPPET =
   '<script src="pro-bot.dev/widget.js" data-bot-id="…"></script>';
-
-function MaterialIcon({
-  name,
-  className = "",
-}: {
-  name: string;
-  className?: string;
-}) {
-  return (
-    <span className={`material-symbols-outlined ${className}`} aria-hidden>
-      {name}
-    </span>
-  );
-}
 
 export default function HomePage() {
   return (
@@ -75,20 +62,20 @@ export default function HomePage() {
                   className="btn btn-primary !px-6 !py-3 !text-base"
                 >
                   Create your bot in 2 min
-                  <MaterialIcon name="arrow_forward" className="!text-lg" />
+                  <Icon name="arrow_forward" className="!text-lg" />
                 </Link>
                 <DemoVideoModal />
               </div>
               <div className="flex items-center gap-6 pt-2 text-sm text-muted">
                 <span className="flex items-center gap-1.5">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success"
                   />
                   100% Free to Use
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success"
                   />
@@ -103,7 +90,7 @@ export default function HomePage() {
               <div className="relative bg-white rounded-2xl border border-border-base shadow-floating overflow-hidden">
                 <div className="flex items-center gap-3 px-5 py-4 border-b border-border-base">
                   <div className="size-10 rounded-full brand-blue-gradient grid place-items-center text-white shrink-0">
-                    <MaterialIcon name="smart_toy" className="!text-xl" />
+                    <Icon name="smart_toy" className="!text-xl" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold leading-tight">
@@ -151,7 +138,7 @@ export default function HomePage() {
                       type="button"
                       className="size-7 grid place-items-center rounded-lg brand-blue-gradient text-white"
                     >
-                      <MaterialIcon
+                      <Icon
                         name="arrow_upward"
                         className="!text-base"
                       />
@@ -665,7 +652,7 @@ export default function HomePage() {
                 >
                   <div className="flex items-center justify-between mb-5">
                     <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand">
-                      <MaterialIcon name={s.icon} />
+                      <Icon name={s.icon as IconName} />
                     </div>
                     <span className="font-display text-5xl font-extrabold text-border-base">
                       {s.num}
@@ -700,7 +687,7 @@ export default function HomePage() {
               <div className="md:col-span-7 bg-white rounded-2xl border border-border-base overflow-hidden shadow-soft flex flex-col">
                 <div className="p-8 pb-0">
                   <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
-                    <MaterialIcon name="manage_search" />
+                    <Icon name="manage_search" />
                   </div>
                   <h3 className="font-display text-2xl font-bold mb-2">
                     RAG-powered, never made-up
@@ -729,7 +716,7 @@ export default function HomePage() {
               {/* Security */}
               <div className="md:col-span-5 brand-deep-gradient dot-pattern-light rounded-2xl border border-brand-deep/30 overflow-hidden text-white p-8 flex flex-col">
                 <div className="size-11 rounded-xl bg-white/10 grid place-items-center mb-4 border border-white/10">
-                  <MaterialIcon name="shield_lock" />
+                  <Icon name="shield_lock" />
                 </div>
                 <h3 className="font-display text-2xl font-bold mb-2">
                   Security-hardened by default
@@ -759,7 +746,7 @@ export default function HomePage() {
               {/* Widget */}
               <div className="md:col-span-4 bg-white rounded-2xl border border-border-base p-8 shadow-soft">
                 <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
-                  <MaterialIcon name="code" />
+                  <Icon name="code" />
                 </div>
                 <h3 className="font-display text-xl font-bold mb-2">
                   One-line embed widget
@@ -775,7 +762,7 @@ export default function HomePage() {
               {/* Leads */}
               <div className="md:col-span-4 bg-white rounded-2xl border border-border-base p-8 shadow-soft">
                 <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
-                  <MaterialIcon name="contact_mail" />
+                  <Icon name="contact_mail" />
                 </div>
                 <h3 className="font-display text-xl font-bold mb-2">
                   Automatic lead capture
@@ -788,7 +775,7 @@ export default function HomePage() {
               {/* BYO model */}
               <div className="md:col-span-4 bg-white rounded-2xl border border-border-base p-8 shadow-soft">
                 <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
-                  <MaterialIcon name="hub" />
+                  <Icon name="hub" />
                 </div>
                 <h3 className="font-display text-xl font-bold mb-2">
                   Bring your own model
@@ -835,7 +822,7 @@ export default function HomePage() {
                 </p>
                 <ul className="space-y-3 mb-8">
                   <li className="flex gap-3 text-sm">
-                    <MaterialIcon
+                    <Icon
                       name="check_circle"
                       className="!text-xl text-success"
                     />
@@ -848,7 +835,7 @@ export default function HomePage() {
                     </span>
                   </li>
                   <li className="flex gap-3 text-sm">
-                    <MaterialIcon
+                    <Icon
                       name="check_circle"
                       className="!text-xl text-success"
                     />
@@ -859,7 +846,7 @@ export default function HomePage() {
                     </span>
                   </li>
                   <li className="flex gap-3 text-sm">
-                    <MaterialIcon
+                    <Icon
                       name="check_circle"
                       className="!text-xl text-success"
                     />
@@ -876,7 +863,7 @@ export default function HomePage() {
                     href="/dashboard/bots/new"
                     className="btn btn-primary !px-6 !py-3 !text-base"
                   >
-                    <MaterialIcon name="rocket_launch" className="!text-lg" />
+                    <Icon name="rocket_launch" className="!text-lg" />
                     Create your bot for free
                   </Link>
                   <a
@@ -959,7 +946,7 @@ export default function HomePage() {
                   className="btn bg-white text-brand !px-7 !py-3.5 !text-base font-bold w-full lg:w-auto"
                 >
                   Open the docs
-                  <MaterialIcon name="arrow_forward" className="!text-lg" />
+                  <Icon name="arrow_forward" className="!text-lg" />
                 </a>
               </div>
             </div>

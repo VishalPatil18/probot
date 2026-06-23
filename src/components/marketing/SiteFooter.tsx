@@ -1,24 +1,12 @@
 import Link from "next/link";
 
+import { Icon } from "@/components/ui/Icon";
+
 const DOCS_URL = "https://pro-bot.dev/docs";
 const CHANGELOG_URL = "https://pro-bot.dev/docs/changelog";
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
 const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
-
-function MaterialIcon({
-  name,
-  className = "",
-}: {
-  name: string;
-  className?: string;
-}) {
-  return (
-    <span className={`material-symbols-outlined ${className}`} aria-hidden>
-      {name}
-    </span>
-  );
-}
 
 export function SiteFooter() {
   return (
@@ -172,7 +160,7 @@ export function SiteFooter() {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 hover:text-ink"
             >
-              <MaterialIcon name="code" className="!text-base" />
+              <Icon name="code" className="!text-base" />
               GitHub
             </a>
             <a
@@ -181,7 +169,7 @@ export function SiteFooter() {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 hover:text-ink"
             >
-              <MaterialIcon name="public" className="!text-base" />
+              <Icon name="public" className="!text-base" />
               Portfolio
             </a>
             <a
@@ -190,7 +178,7 @@ export function SiteFooter() {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 hover:text-ink"
             >
-              <MaterialIcon name="badge" className="!text-base" />
+              <Icon name="badge" className="!text-base" />
               LinkedIn
             </a>
           </div>

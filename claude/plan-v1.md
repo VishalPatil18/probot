@@ -17,8 +17,10 @@
 | **5** | ✅ Sidebar, Notifications & Empty-State Polish | P1     | yes         | 2–3 days         |
 | **6** | ✅ Marketing & Trust Pages                  | P1       | yes         | 5–7 days         |
 | **7** | ✅ SEO, Docs & Discoverability              | P2       | yes         | 3–4 days         |
-| **8** | Performance, Scale & Operational Polish     | P0 perf  | yes         | 1–2 weeks        |
+| **8** | 🟡 Performance, Scale & Operational Polish  | P0 perf  | yes         | 1–2 weeks        |
 | **9** | Self-Hosted Bot Repo Architecture           | P0 arch  | yes         | 2–3 weeks        |
+
+**Legend:** ✅ shipped · 🟡 partial (code slices shipped; some acceptance is operational/native). Stage 8 is 🟡: the shared-state rate limiter + circuit breaker (Upstash, in-memory fallback), the `circuit_open` alerting seam, and the export-bundling perf fix shipped in-repo. Still operational/native or deferred: the SRS §6.1 perf-measurement NFRs (P01–P06), the k6 load test, the live Sentry breadcrumb, and the smaller Beta-Stage-7 hardening items (resend-deletion-email, session revocation on delete, dashboard breaker indicator, provider-mismatch prompt, ClamAV sidecar).
 
 **Execution order:** strictly Stage 1 → Stage 9. Each stage is mergeable to `main` and deployable on its own. Stage 8 (perf + scale) is sequenced before Stage 9 (architectural rewrite) so the baseline measurements happen against the stable shipping product; Stage 9 then has a clean before/after comparison to validate the rewrite didn't regress latency. Stage 9 is sequenced last because it's an architectural rewrite that touches authentication, deployment, and the API contract; doing it before the polish stages would mean re-doing the polish on a moving target.
 

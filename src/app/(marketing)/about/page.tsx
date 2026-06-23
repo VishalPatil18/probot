@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Icon, type IconName } from "@/components/ui/Icon";
 import {
   CONTACT_EMAIL,
   OPERATOR_DESCRIPTION,
@@ -18,21 +19,7 @@ export const metadata = buildMetadata({
   path: "/about",
 });
 
-function MaterialIcon({
-  name,
-  className = "",
-}: {
-  name: string;
-  className?: string;
-}) {
-  return (
-    <span className={`material-symbols-outlined ${className}`} aria-hidden>
-      {name}
-    </span>
-  );
-}
-
-const PRINCIPLES = [
+const PRINCIPLES: Array<{ icon: IconName; title: string; body: string }> = [
   {
     icon: "key",
     title: "You own the keys",
@@ -157,7 +144,7 @@ export default function AboutPage() {
                 className="bg-white rounded-2xl border border-border-base p-7 shadow-soft"
               >
                 <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
-                  <MaterialIcon name={p.icon} />
+                  <Icon name={p.icon} />
                 </div>
                 <h3 className="font-display text-xl font-bold mb-2">
                   {p.title}
@@ -207,14 +194,14 @@ export default function AboutPage() {
               </p>
               <ul className="space-y-2 text-sm text-muted">
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
                   <span>Your bot keeps replying when you&apos;re offline.</span>
                 </li>
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
@@ -224,7 +211,7 @@ export default function AboutPage() {
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
@@ -248,21 +235,21 @@ export default function AboutPage() {
               </p>
               <ul className="space-y-2 text-sm text-muted">
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
                   <span>Zero key material on pro-bot.dev infra.</span>
                 </li>
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
                   <span>Full source, MIT licensed - audit every byte.</span>
                 </li>
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
@@ -276,7 +263,7 @@ export default function AboutPage() {
                 className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline"
               >
                 Self-hosting guide
-                <MaterialIcon name="arrow_forward" className="!text-base" />
+                <Icon name="arrow_forward" className="!text-base" />
               </Link>
             </div>
           </div>
@@ -338,7 +325,7 @@ export default function AboutPage() {
                   rel="noopener noreferrer"
                   className="btn btn-secondary"
                 >
-                  <MaterialIcon name="public" className="!text-base" />
+                  <Icon name="public" className="!text-base" />
                   Portfolio
                 </a>
                 <a
@@ -347,7 +334,7 @@ export default function AboutPage() {
                   rel="noopener noreferrer"
                   className="btn btn-secondary"
                 >
-                  <MaterialIcon name="code" className="!text-base" />
+                  <Icon name="code" className="!text-base" />
                   GitHub
                 </a>
                 <a
@@ -356,7 +343,7 @@ export default function AboutPage() {
                   rel="noopener noreferrer"
                   className="btn btn-secondary"
                 >
-                  <MaterialIcon name="badge" className="!text-base" />
+                  <Icon name="badge" className="!text-base" />
                   LinkedIn
                 </a>
               </div>
@@ -384,7 +371,7 @@ export default function AboutPage() {
                 className="btn bg-white text-brand !px-7 !py-3.5 !text-base font-bold w-full lg:w-auto"
               >
                 Create your bot for free
-                <MaterialIcon name="arrow_forward" className="!text-lg" />
+                <Icon name="arrow_forward" className="!text-lg" />
               </Link>
             </div>
           </div>

@@ -3,21 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 
-const DOCS_URL = "https://pro-bot.dev/docs";
+import { Icon } from "@/components/ui/Icon";
 
-function MaterialIcon({
-  name,
-  className = "",
-}: {
-  name: string;
-  className?: string;
-}) {
-  return (
-    <span className={`material-symbols-outlined ${className}`} aria-hidden>
-      {name}
-    </span>
-  );
-}
+const DOCS_URL = "https://pro-bot.dev/docs";
 
 export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -103,7 +91,7 @@ export function SiteHeader() {
           aria-label="Toggle navigation"
           className="md:hidden ml-auto size-9 grid place-items-center rounded-lg border border-border-base"
         >
-          <MaterialIcon name="menu" className="!text-xl" />
+          <Icon name="menu" className="!text-xl" />
         </button>
       </div>
       {mobileOpen && (

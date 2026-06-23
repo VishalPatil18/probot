@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { Icon } from "@/components/ui/Icon";
+
 // Landing-page "Watch demo" button + borderless video modal. The video URL is
 // build-time injected via NEXT_PUBLIC_DEMO_VIDEO_URL (e.g. a YouTube embed
 // URL). Until that's set, the modal shows a "coming soon" poster instead of a
@@ -28,9 +30,7 @@ export function DemoVideoModal() {
         onClick={() => setOpen(true)}
         className="btn btn-secondary !px-6 !py-3 !text-base"
       >
-        <span className="material-symbols-outlined !text-lg" aria-hidden>
-          play_circle
-        </span>
+        <Icon name="play_circle" className="!text-lg" />
         See a live demo
       </button>
 

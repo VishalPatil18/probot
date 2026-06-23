@@ -24,6 +24,7 @@ import { ProviderError, getProvider, isProviderName } from "@/lib/ai/providers";
 import { checkRateLimit, resolveMaxChars } from "@/lib/ai/rate-limit";
 import { sanitizeInput } from "@/lib/ai/sanitize-input";
 import { sanitizeOutput } from "@/lib/ai/sanitize-output";
+import { alertCircuitOpen } from "@/lib/server/alert";
 import { verifyPreviewToken } from "@/lib/bots/preview-token";
 import type { Personality } from "@/lib/bots/schemas";
 import {
@@ -158,7 +159,7 @@ export async function POST(
   // 8. Rate limit (per-bot, with per-bot overrides from the Stage-7 columns).
   // The limiter clamps unreasonable values internally; the Zod schema on the
   // PATCH endpoint also bounds what can be stored.
-  const rl = checkRateLimit(botRow.id, {
+  const rl = await checkRateLimit(botRow.id, {
     perMinute: botRow.rateLimitPerMinute,
     perDay: botRow.rateLimitPerDay,
   });
@@ -338,14 +339,17 @@ export async function POST(
   // bury the queue with cascading 401s.
   let providerReply: string;
   try {
-    const result = await callWithBreaker(ownerRow.llmProvider, () =>
-      provider.complete({
-        system,
-        userMessage: sanitized.message,
-        apiKey,
-        model: ownerRow.llmModel ?? undefined,
-        extras,
-      }),
+    const result = await callWithBreaker(
+      ownerRow.llmProvider,
+      () =>
+        provider.complete({
+          system,
+          userMessage: sanitized.message,
+          apiKey,
+          model: ownerRow.llmModel ?? undefined,
+          extras,
+        }),
+      { onOpen: alertCircuitOpen },
     );
     providerReply = result.reply;
   } catch (err) {

@@ -208,6 +208,15 @@ Detailed stage breakdowns will land in [the changelog](.) as each stage ships.
 - Architecture page gains diagrams for the managed-vs-self-hosted key flow, envelope encryption, and the deletion lifecycle
 - New Architecture Decision Records (ADRs) for the hybrid key model, the deletion grace window, and the circuit-breaker design
 
+### Stage 8 - Performance, Scale & Operational Polish 🟡 (2026-06-22)
+
+- Rate limiter and provider circuit breaker can now share state via Upstash Redis, so several simultaneously-warm serverless instances enforce one accurate limit and an outage that trips one instance protects them all
+- Zero-config by default: when Upstash isn't configured, both fall back to fast per-process in-memory state (unchanged behavior, no new cost)
+- Operational alerting seam: a structured `circuit_open` event fires at the start of a provider outage, with a Sentry-ready hook (redacted log sink by default)
+- Faster account-data export: child rows are bucketed by bot in a single pass instead of a repeated scan
+- Much lighter pages: replaced the ~3.86 MB Material Symbols icon font (loaded via a render-blocking stylesheet) with inline SVG icons, and dropped legacy-browser JS polyfills - faster first paint and far less data on the landing page, the public chat, and the dashboard
+- Partial stage: production performance measurement, load testing, and live error-alerting wiring are operational/native; some smaller hardening items remain planned
+
 ---
 
 ## Version 2.0 - Backlog
