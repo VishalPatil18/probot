@@ -5,6 +5,10 @@ import { notFound } from "next/navigation";
 import { AccountTab } from "@/components/dashboard/settings/AccountTab";
 import { AIModelKeyTab } from "@/components/dashboard/settings/AIModelKeyTab";
 import { BotConfigTab } from "@/components/dashboard/settings/BotConfigTab";
+import {
+  DeployTab,
+  type DeploymentMode,
+} from "@/components/dashboard/settings/DeployTab";
 import { KnowledgeTab } from "@/components/dashboard/settings/KnowledgeTab";
 import { SecurityTab } from "@/components/dashboard/settings/SecurityTab";
 import {
@@ -71,6 +75,7 @@ export default async function BotSettingsPage({
         rateLimitPerDay: true,
         rateLimitMaxChars: true,
         previewToken: true,
+        deploymentMode: true,
       },
     }),
     db.query.users.findFirst({
@@ -144,6 +149,14 @@ export default async function BotSettingsPage({
             botId={bot.id}
             provider={userRow?.llmProvider ?? null}
             model={userRow?.llmModel ?? null}
+          />
+        </SettingsTabPanel>
+
+        <SettingsTabPanel tab="deploy">
+          <DeployTab
+            botId={bot.id}
+            ownerUsername={session.user.username}
+            initialMode={(bot.deploymentMode as DeploymentMode) ?? "managed"}
           />
         </SettingsTabPanel>
       </SettingsTabs>

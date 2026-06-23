@@ -1,0 +1,96 @@
+import { and, eq } from "drizzle-orm";
+
+import { conversations, db, leads, notifications } from "@/lib/db";
+
+// Shared lead-capture core: insert the lead, stamp the conversation's
+// recruiter email, and raise the dashboard notification - all in one
+// transaction so a partial commit can't leave a lead with no notification (or
+// a badge with no lead). Mirrors the managed POST /api/bots/[botId]/leads
+// transaction; the Stage 9 /api/v1/bot/leads endpoint reuses it so the
+// self-hosted runtime captures leads identically.
+//
+// Dedupe is idempotent on (botId, conversationId, lowercased email): a
+// double-submit for the same conversation returns the existing row without a
+// second notification. (The managed route additionally has a conversation-less
+// 24h window for the anonymous widget; the self-hosted runtime always supplies
+// a conversationId, so that fallback isn't needed here.)
+
+export interface CaptureLeadArgs {
+  botId: string;
+  ownerUserId: string;
+  botName: string;
+  email: string;
+  conversationId?: string | null;
+  contextSummary?: string | null;
+}
+
+export interface CapturedLead {
+  id: string;
+  email: string;
+  contextSummary: string | null;
+  conversationId: string | null;
+  capturedAt: Date;
+}
+
+export async function captureLead(
+  args: CaptureLeadArgs,
+): Promise<{ lead: CapturedLead; deduped: boolean }> {
+  const { botId, ownerUserId, botName, email } = args;
+  const conversationId = args.conversationId ?? null;
+  const contextSummary = args.contextSummary ?? null;
+
+  if (conversationId) {
+    const existing = await db.query.leads.findFirst({
+      columns: {
+        id: true,
+        email: true,
+        contextSummary: true,
+        conversationId: true,
+        capturedAt: true,
+      },
+      where: and(
+        eq(leads.botId, botId),
+        eq(leads.conversationId, conversationId),
+        eq(leads.email, email),
+      ),
+    });
+    if (existing) return { lead: existing, deduped: true };
+  }
+
+  const lead = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(leads)
+      .values({ botId, conversationId, email, contextSummary })
+      .returning({
+        id: leads.id,
+        email: leads.email,
+        contextSummary: leads.contextSummary,
+        conversationId: leads.conversationId,
+        capturedAt: leads.capturedAt,
+      });
+    if (!inserted) throw new Error("lead_insert_failed");
+
+    if (conversationId) {
+      await tx
+        .update(conversations)
+        .set({ recruiterEmail: email })
+        .where(
+          and(
+            eq(conversations.id, conversationId),
+            eq(conversations.botId, botId),
+          ),
+        );
+    }
+
+    await tx.insert(notifications).values({
+      userId: ownerUserId,
+      botId,
+      kind: "lead_captured",
+      payload: { leadId: inserted.id, email, botId, botName, contextSummary },
+    });
+
+    return inserted;
+  });
+
+  return { lead, deduped: false };
+}

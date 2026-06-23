@@ -217,6 +217,14 @@ Detailed stage breakdowns will land in [the changelog](.) as each stage ships.
 - Much lighter pages: replaced the ~3.86 MB Material Symbols icon font (loaded via a render-blocking stylesheet) with inline SVG icons, and dropped legacy-browser JS polyfills - faster first paint and far less data on the landing page, the public chat, and the dashboard
 - Partial stage: production performance measurement, load testing, and live error-alerting wiring are operational/native; some smaller hardening items remain planned
 
+### Stage 9 - Self-Hosted Bot Architecture 🟡 (2026-06-22)
+
+- Run your bot's chat on your own infrastructure: a new **Deployment** tab lets you switch a bot to "self-hosted" and mint an API token (shown once) for the tiny `probot-bot` runtime
+- New versioned platform API (`/api/v1/bot/*`) the runtime uses for knowledge retrieval, conversation logging, and lead capture - so self-hosted bots show up in your dashboard exactly like managed ones
+- Bot tokens are stored hashed and revocable instantly from the dashboard; a leaked token only ever grants read-only knowledge for that one bot
+- Ships with the `probot-bot` runtime scaffold, an architecture decision record (ADR 0004), and a full self-hosting guide
+- Partial stage: the schema migration and deploying the separate runtime repo are native steps
+
 ---
 
 ## Version 2.0 - Backlog

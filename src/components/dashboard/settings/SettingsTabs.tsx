@@ -8,7 +8,8 @@ export type SettingsTabKey =
   | "bot"
   | "kb"
   | "security"
-  | "model";
+  | "model"
+  | "deploy";
 
 type Tab = {
   key: SettingsTabKey;
@@ -21,6 +22,7 @@ const TABS: Tab[] = [
   { key: "kb", label: "Knowledge base" },
   { key: "security", label: "Security & privacy" },
   { key: "model", label: "AI model & API key" },
+  { key: "deploy", label: "Deployment" },
 ];
 
 const SettingsTabsContext = createContext<{ active: SettingsTabKey } | null>(

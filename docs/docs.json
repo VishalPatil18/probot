@@ -45,7 +45,10 @@
           {
             "group": "Self-hosting",
             "pages": [
-              "guides/self-host"
+              "guides/self-host",
+              "self-hosted-bot/index",
+              "self-hosted-bot/quickstart",
+              "self-hosted-bot/api-reference"
             ]
           },
           {
@@ -54,7 +57,8 @@
               "decisions/overview",
               "decisions/0001-hybrid-key-model",
               "decisions/0002-deletion-grace-window",
-              "decisions/0003-circuit-breaker-store"
+              "decisions/0003-circuit-breaker-store",
+              "decisions/0004-self-hosted-bot"
             ]
           },
           {

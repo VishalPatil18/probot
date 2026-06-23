@@ -131,6 +131,14 @@ export const bots = pgTable(
     // this migration backfill to `true` via the migration so existing
     // published bots are unaffected.
     isActive: boolean("is_active").notNull().default(false),
+    // Stage 9: where the bot's chat runtime lives. 'managed' = served by this
+    // platform (public /u/<username>/chat + embed widget). 'self_hosted' = the
+    // owner runs the `probot-bot` runtime on their own infra and talks to the
+    // platform over /api/v1/bot/* with a bot token. Default keeps every
+    // existing bot on the managed path.
+    deploymentMode: varchar("deployment_mode", { length: 16 })
+      .notNull()
+      .default("managed"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
       .notNull()
       .defaultNow(),
@@ -604,6 +612,36 @@ export const botAvatars = pgTable("bot_avatars", {
     .defaultNow(),
 }).enableRLS();
 
+// bot_tokens
+// Stage 9: API tokens a self-hosted `probot-bot` runtime uses to authenticate
+// to /api/v1/bot/*. The raw token (`pbt_<hex>`) is shown to the owner exactly
+// once at mint time; only its SHA-256 hash is persisted, so a DB dump cannot be
+// replayed. `revoked_at` is a soft-delete: revoking flips it so the auth path
+// rejects instantly without losing the audit row. `last_seen_at` is bumped on
+// each authenticated call so the dashboard can show liveness.
+export const botTokens = pgTable(
+  "bot_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
+    name: varchar("name", { length: 80 }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", {
+      mode: "date",
+      withTimezone: false,
+    }),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: false }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    botIdIdx: index("bot_tokens_bot_id_idx").on(table.botId),
+  }),
+).enableRLS();
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Bot = typeof bots.$inferSelect;
@@ -638,3 +676,5 @@ export type UserAvatar = typeof userAvatars.$inferSelect;
 export type NewUserAvatar = typeof userAvatars.$inferInsert;
 export type BotAvatar = typeof botAvatars.$inferSelect;
 export type NewBotAvatar = typeof botAvatars.$inferInsert;
+export type BotToken = typeof botTokens.$inferSelect;
+export type NewBotToken = typeof botTokens.$inferInsert;

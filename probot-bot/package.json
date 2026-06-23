@@ -1,0 +1,22 @@
+{
+  "name": "probot-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted ProBot runtime that talks to the ProBot platform API.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "@types/react": "18.3.11",
+    "@types/react-dom": "18.3.0",
+    "typescript": "^5.6.3"
+  }
+}

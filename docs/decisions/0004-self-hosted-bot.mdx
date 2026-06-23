@@ -1,0 +1,70 @@
+---
+title: "ADR 0004: Self-hosted bot runtime"
+description: "Why self-hosting is a tiny runtime that talks to the platform API, authenticated by a per-bot token, rather than cloning the whole platform."
+---
+
+**Status:** Accepted (Stage 9 - V1.0 capstone)
+
+## Context
+
+The Beta self-hosting story was "clone the entire `probot` repo and run it
+yourself." That works but hands the operator every API route, admin tool, and
+secret-handling surface - a large audit cost - and forces them to run their own
+Postgres, email, cron, and to track upstream platform updates. That's "deploy a
+SaaS for yourself," not "deploy a bot."
+
+We want a self-host story that is a single-purpose deployment surface: a small
+runtime the owner deploys, while the platform keeps doing the heavy lifting
+(knowledge base, conversations, leads).
+
+## Decision
+
+Ship a separate **`probot-bot`** runtime that authenticates to the platform over
+a versioned, narrow API.
+
+**Auth model: an API token per bot.** The dashboard mints a token (`pbt_<hex>`)
+shown exactly once; only its SHA-256 hash is stored (same model as the
+password-reset tokens). Revocation is a soft-delete that the auth path checks on
+every call, so revoking is instant. We rejected OAuth-style rotating refresh
+tokens (more moving parts than v1 needs - revisit in v1.1) and mutual TLS
+(overkill).
+
+**API surface: 4 endpoints under `/api/v1/bot/*`**, all authed by the bot token:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/v1/bot/config` | Public bot config (name, persona, theme, suggested questions). |
+| `POST /api/v1/bot/knowledge` | Vector retrieval as a service - returns top chunks for a query. Read-only. |
+| `POST /api/v1/bot/conversations` | Persist a chat turn's transcript for the owner's dashboard analytics. |
+| `POST /api/v1/bot/leads` | Capture a recruiter lead (reuses the managed lead-capture core). |
+
+**The LLM call stays on the runtime's own infra.** The platform is *not* in the
+chat critical path; the owner's LLM key lives in the runtime, never on the
+platform. The runtime pulls knowledge + persona, calls its own provider, and
+posts results back.
+
+## Threat model
+
+If a bot token leaks, the worst case is **read-only knowledge access for that
+one bot**, plus the ability to write conversations/leads for that bot. No
+cross-tenant exposure: the token resolves to exactly one `bot_id`, and every
+endpoint scopes its reads/writes to that bot. Mitigation is instant revoke from
+the dashboard. The token is never exposed to a browser (runtime is server-side).
+
+## Versioning
+
+The contract is pinned under `/api/v1`. Breaking changes ship as `/api/v2` with
+a deprecation window announced before `/api/v1` is retired, so a deployed
+runtime can pin to a stable contract.
+
+## Consequences
+
+- Self-host operators get a tiny, auditable surface; the platform codebase and
+  secrets stay out of their hands.
+- The platform gains a public, versioned API it must keep stable - the main
+  long-term cost.
+- Conversations/leads from self-hosted bots flow into the same dashboard as
+  managed ones, because the runtime posts them back through the shared cores.
+
+See the [self-hosted bot guide](/self-hosted-bot/index) and the
+[API reference](/self-hosted-bot/api-reference).
