@@ -24,6 +24,7 @@ describe("SidebarAccountFooter", () => {
         llmModel={null}
         user={USER}
         settingsHref="/dashboard/settings"
+        modelHref="/dashboard/settings?tab=model"
       />,
     );
     expect(screen.getByText("Jane Doe")).toBeInTheDocument();
@@ -38,6 +39,7 @@ describe("SidebarAccountFooter", () => {
         llmModel={null}
         user={USER}
         settingsHref="/dashboard/settings"
+        modelHref="/dashboard/settings?tab=model"
       />,
     );
 
@@ -58,6 +60,7 @@ describe("SidebarAccountFooter", () => {
         llmModel={null}
         user={USER}
         settingsHref="/dashboard/settings"
+        modelHref="/dashboard/settings?tab=model"
       />,
     );
 

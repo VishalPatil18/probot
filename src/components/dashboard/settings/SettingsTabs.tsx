@@ -17,12 +17,12 @@ type Tab = {
 };
 
 const TABS: Tab[] = [
-  { key: "account", label: "Account" },
   { key: "bot", label: "Bot configuration" },
   { key: "kb", label: "Knowledge base" },
-  { key: "security", label: "Security & privacy" },
   { key: "model", label: "AI model & API key" },
   { key: "deploy", label: "Deployment" },
+  { key: "account", label: "Account" },
+  { key: "security", label: "Security & privacy" },
 ];
 
 const SettingsTabsContext = createContext<{ active: SettingsTabKey } | null>(

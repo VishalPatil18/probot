@@ -1,0 +1,18 @@
+---
+title: v1.0
+description: "What shipped in ProBot v1.0 - refinement, trust, performance, and self-hosting."
+---
+
+Version 1.0 builds on the Beta with UX polish, trust pages, SEO, performance, a self-hostable bot runtime, and a richer lead/analytics surface.
+
+## Highlights
+
+- **Branding & auth UX** - consistent naming, show-password, remember-me, signup availability checks, forgot-password modal.
+- **Account & settings hardening** - editable profile, password change, profile photo, theme picker.
+- **Bot Factory & dashboard polish** - bot avatars, per-file PDF handling, in-wizard theme, dark embed snippets.
+- **Sidebar, notifications & empty-states** - clean empty state, lead-email opt-in, Terms-change banner, bot switcher.
+- **Marketing & trust pages** - Why ProBot, Hire-me, and a landing demo modal.
+- **SEO & docs** - site-wide metadata, OG images, structured data, robots + sitemap, reorganized docs.
+- **Performance & scale** - shared-state rate limiter + circuit breaker (Upstash, in-memory fallback), `circuit_open` alerting; removed a multi-MB icon font for far lighter pages.
+- **Self-hosted bot architecture** - a tiny `probot-bot` runtime + versioned `/api/v1/bot/*` API + per-bot tokens.
+- **Richer leads** - the lead form now collects name, email, company, and LinkedIn.

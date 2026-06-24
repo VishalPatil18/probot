@@ -13,6 +13,14 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
+  /* App-wide typographic policy: justify paragraph text. Only wrapped
+     (multi-line) paragraphs are affected; a paragraph's last line and any
+     single-line paragraph stay naturally aligned, so short UI text is
+     unaffected. `inter-word` keeps spacing even without hyphenation. */
+  p {
+    text-align: justify;
+    text-justify: inter-word;
+  }
 }
 
 @layer components {
@@ -205,6 +213,60 @@
   50% {
     transform: translateY(-7px);
   }
+}
+
+/* Gentle continuous float for marketing imagery (e.g. the CNBC feature on
+   /about). Disabled under prefers-reduced-motion via the global guard. */
+.float-y {
+  animation: float-y 4.5s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Soft "cloud" edge-fade: feathers all four sides of an image into the page
+   background instead of a hard border. Two crossed linear gradients composited
+   to an intersection so every edge fades evenly. */
+.cloud-fade {
+  -webkit-mask-image:
+    linear-gradient(
+      to right,
+      transparent 0%,
+      #000 11%,
+      #000 89%,
+      transparent 100%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      #000 11%,
+      #000 89%,
+      transparent 100%
+    );
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(
+      to right,
+      transparent 0%,
+      #000 11%,
+      #000 89%,
+      transparent 100%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      #000 11%,
+      #000 89%,
+      transparent 100%
+    );
+  mask-composite: intersect;
 }
 .il-wire {
   fill: none;

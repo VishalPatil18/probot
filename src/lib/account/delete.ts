@@ -86,7 +86,7 @@ export type UndoDeletionResult =
 // scheduled purge.
 export async function undoAccountDeletion(
   rawToken: string,
-  typedUsername: string,
+  identifier: string,
 ): Promise<UndoDeletionResult> {
   const undoTokenHash = hashToken(rawToken);
   const row = await db.query.deletionRequests.findFirst({
@@ -100,7 +100,14 @@ export async function undoAccountDeletion(
     // Undo cannot recover from this - the user data is gone.
     return { ok: false, reason: "already_purged" };
   }
-  if (typedUsername !== row.usernameSnapshot) {
+  // Accept EITHER the username or the email (case-insensitive) as the
+  // defence-in-depth confirmation - the user reading the undo email may recall
+  // one more readily than the other.
+  const typed = identifier.trim();
+  const matches =
+    typed === row.usernameSnapshot ||
+    typed.toLowerCase() === row.emailSnapshot.toLowerCase();
+  if (!matches) {
     return { ok: false, reason: "username_mismatch" };
   }
 

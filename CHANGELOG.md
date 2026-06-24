@@ -4,6 +4,22 @@ All notable changes to **ProBot** are documented in this file.
 
 ---
 
+## 2026-06-24 - Self-host scope, privacy copy & 404 page
+
+- **Self-hosting scoped to the chatbot only.** Removed the "self-host the whole platform/website" story across docs and marketing; self-hosting now consistently means running the tiny `probot-bot` runtime on your own domain while the managed platform keeps the dashboard, knowledge, and leads. Deleted the full-platform deploy guide (`docs/guides/self-host.mdx`) and its nav entry; rewrote `docs/hosting/self-hosting.mdx`, `docs/concepts/managed-vs-self-hosted.mdx`, and the marketing `/self-hosting` page; reframed copy on the About, Why-ProBot, landing, and several docs pages.
+- **Removed recruiter-IP mentions** from user-facing docs, the dashboard decrypt-audit copy, and the video tutorial script - kept the positive "conversations are logged anonymously" framing. (IP-hashing behavior is unchanged; only the wording was removed.)
+- **Animated 404 page** (`src/app/not-found.tsx`) - a floating chatbot illustration with blinking eyes, pulsing halo rings, and typing dots (reusing the shared `il-*` animation classes, `prefers-reduced-motion`-safe), the not-found message, and a "Return to homepage" button. Added a `home` glyph to the inline `Icon` set.
+
+## 2026-06-24 - OSS packaging, docs & polish
+
+- **`probot-chatbot` npm package** - the embeddable widget is now a publishable package (`packages/probot-chatbot`) reusing the platform's widget source; install via `npm install probot-chatbot` or a one-line unpkg `<script>`. See [PUBLISHING.md](PUBLISHING.md).
+- **Open source, front and center** - "free & open source (MIT)" called out on the landing page, footer, and docs.
+- **README slimmed down** - minimal README linking the website + docs, with details split into [QUICKSTART.md](QUICKSTART.md), [ARCHITECTURE.md](ARCHITECTURE.md), [BYO-KEY.md](BYO-KEY.md), [KEY-STORAGE.md](KEY-STORAGE.md); roadmap section removed; Spec-Driven Development noted.
+- **Justified body text** app-wide via a single base-layer rule.
+- **Removed internal "Stage N" labels** from the website, docs, and source comments.
+- **Contributor guardrails** - [`.github/CODEOWNERS`](.github/CODEOWNERS) + a step-by-step [branch-protection guide](GITHUB-BRANCH-PROTECTION.md) for `main`/`dev`.
+- **Video tutorial script** ([BOT-TUTORIAL-SCRIPT.md](BOT-TUTORIAL-SCRIPT.md)) for an AI video generator.
+
 ## v0.1.0 - 2026-06-18 - Stage 1 close-out
 
 The first pre-release of ProBot. End-to-end Stage 1 loop works: register → log in → build a bot

@@ -233,7 +233,10 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
 
   it("returns 404 when the bot is missing or inactive", async () => {
     findBotMock.mockResolvedValueOnce(undefined);
-    const res = await POST(makePost({ email: "a@b.com" }), PARAMS);
+    const res = await POST(
+      makePost({ name: "Rec", email: "a@b.com", company: "Acme" }),
+      PARAMS,
+    );
     expect(res.status).toBe(404);
   });
 
@@ -247,7 +250,9 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
 
     const res = await POST(
       makePost({
+        name: "Rec Ruiter",
         email: "rec@example.com",
+        company: "Acme Inc",
         conversationId: CONV_ID,
         contextSummary: "asked about ML",
       }),
@@ -297,7 +302,7 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
       notifyLeadsEmail: true,
     });
 
-    const res = await POST(makePost({ email: "rec@example.com" }), PARAMS);
+    const res = await POST(makePost({ name: "Rec", email: "rec@example.com", company: "Acme" }), PARAMS);
     expect(res.status).toBe(201);
     expect(sendLeadEmailMock).toHaveBeenCalledTimes(1);
     expect(sendLeadEmailMock).toHaveBeenCalledWith(
@@ -313,7 +318,7 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
     });
     findLeadMock.mockResolvedValueOnce(undefined);
 
-    const res = await POST(makePost({ email: "rec@example.com" }), PARAMS);
+    const res = await POST(makePost({ name: "Rec", email: "rec@example.com", company: "Acme" }), PARAMS);
     expect(res.status).toBe(201);
     expect(sendLeadEmailMock).not.toHaveBeenCalled();
   });
@@ -333,7 +338,12 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
     });
 
     const res = await POST(
-      makePost({ email: "rec@example.com", conversationId: CONV_ID }),
+      makePost({
+        name: "Rec",
+        email: "rec@example.com",
+        company: "Acme",
+        conversationId: CONV_ID,
+      }),
       PARAMS,
     );
 
@@ -357,7 +367,12 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
     findLeadMock.mockResolvedValueOnce(undefined);
 
     await POST(
-      makePost({ email: "Rec@Example.COM", conversationId: CONV_ID }),
+      makePost({
+        name: "Rec",
+        email: "Rec@Example.COM",
+        company: "Acme",
+        conversationId: CONV_ID,
+      }),
       PARAMS,
     );
 
@@ -418,7 +433,7 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
       ]),
     );
 
-    const res = await POST(makePost({ email: "rec@example.com" }), PARAMS);
+    const res = await POST(makePost({ name: "Rec", email: "rec@example.com", company: "Acme" }), PARAMS);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { deduped: boolean };
     expect(body.deduped).toBe(true);

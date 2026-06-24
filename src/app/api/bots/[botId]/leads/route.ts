@@ -87,7 +87,8 @@ export async function POST(
       400,
     );
   }
-  const { email, conversationId, contextSummary } = parsed.data;
+  const { name, email, company, linkedinUrl, conversationId, contextSummary } =
+    parsed.data;
 
   // 4. Resolve bot (anonymous endpoint - we need bot.user_id for the
   // notification row + bot.name for the notification payload).
@@ -121,11 +122,17 @@ export async function POST(
           botId: bot.id,
           conversationId: conversationId ?? null,
           email,
+          name: name?.trim() || null,
+          company: company?.trim() || null,
+          linkedinUrl: linkedinUrl?.trim() || null,
           contextSummary: contextSummary ?? null,
         })
         .returning({
           id: leads.id,
           email: leads.email,
+          name: leads.name,
+          company: leads.company,
+          linkedinUrl: leads.linkedinUrl,
           contextSummary: leads.contextSummary,
           conversationId: leads.conversationId,
           capturedAt: leads.capturedAt,
@@ -151,6 +158,8 @@ export async function POST(
         payload: {
           leadId: lead.id,
           email,
+          name: name?.trim() || null,
+          company: company?.trim() || null,
           botId: bot.id,
           botName: bot.name,
           contextSummary: contextSummary ?? null,

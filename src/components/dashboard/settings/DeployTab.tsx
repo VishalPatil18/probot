@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-// Stage 9 "Deployment" settings tab. Lets an owner switch a bot between the
+// "Deployment" settings tab. Lets an owner switch a bot between the
 // managed runtime (served by this platform) and self-hosted (their own
 // `probot-bot` runtime), and manage the API tokens that runtime uses. Minting
 // a token shows the raw secret exactly once; the list afterwards shows only
@@ -165,7 +165,7 @@ export function DeployTab({
             Your self-hosted runtime authenticates with one of these. Drop it
             into the runtime&apos;s <code>PROBOT_BOT_TOKEN</code> env var. See the{" "}
             <a
-              href="https://pro-bot.dev/docs/self-hosted-bot/quickstart"
+              href="https://pro-bot.dev/docs/self-hosted-bot/index"
               target="_blank"
               rel="noopener noreferrer"
               className="text-brand font-semibold hover:underline"

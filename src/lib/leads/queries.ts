@@ -15,6 +15,9 @@ import { bots, db, leads } from "@/lib/db";
 export type LeadListItem = {
   id: string;
   email: string;
+  name: string | null;
+  company: string | null;
+  linkedinUrl: string | null;
   contextSummary: string | null;
   conversationId: string | null;
   capturedAt: Date;
@@ -39,6 +42,9 @@ export async function listLeads(args: ListLeadsArgs): Promise<LeadListResult> {
       .select({
         id: leads.id,
         email: leads.email,
+        name: leads.name,
+        company: leads.company,
+        linkedinUrl: leads.linkedinUrl,
         contextSummary: leads.contextSummary,
         conversationId: leads.conversationId,
         capturedAt: leads.capturedAt,
@@ -65,7 +71,10 @@ export const MAX_EXPORT_ROWS = 50_000;
 
 export type LeadExportRow = {
   capturedAt: Date;
+  name: string | null;
   email: string;
+  company: string | null;
+  linkedinUrl: string | null;
   contextSummary: string | null;
   conversationId: string | null;
 };
@@ -76,7 +85,10 @@ export async function listAllLeadsForExport(args: {
   return db
     .select({
       capturedAt: leads.capturedAt,
+      name: leads.name,
       email: leads.email,
+      company: leads.company,
+      linkedinUrl: leads.linkedinUrl,
       contextSummary: leads.contextSummary,
       conversationId: leads.conversationId,
     })

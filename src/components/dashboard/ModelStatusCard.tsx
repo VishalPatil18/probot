@@ -5,6 +5,7 @@ import { describeProvider } from "@/lib/ai/provider-labels";
 type Props = {
   provider: string | null;
   model: string | null;
+  manageHref: string;
 };
 
 // Sidebar widget showing the user's BYO LLM selection. The active dot
@@ -12,7 +13,7 @@ type Props = {
 // the browser, so the server cannot truly verify "active" beyond
 // "they set a provider preference"). Links to the AI model & key tab
 // (Coming Soon - wires up later).
-export function ModelStatusCard({ provider, model }: Props) {
+export function ModelStatusCard({ provider, model, manageHref }: Props) {
   const { name, model: modelLabel } = describeProvider(provider, model);
   return (
     <div className="brand-deep-gradient rounded-xl p-4 text-white">
@@ -38,7 +39,7 @@ export function ModelStatusCard({ provider, model }: Props) {
         {name} · key stored locally
       </p>
       <Link
-        href="/dashboard/bots/new"
+        href={manageHref}
         className="block rounded-lg bg-white py-2 text-center text-xs font-bold text-brand-deep"
       >
         Manage model &amp; key

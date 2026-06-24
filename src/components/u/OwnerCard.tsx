@@ -4,7 +4,7 @@
 // The photo is either the OAuth-provided users.image (Google /
 // GitHub avatar) or a Cloudinary-hosted animal icon auto-assigned at signup.
 // No fallback `<img>` element is needed because users.image is always
-// populated post-Stage-4 (assigned in the NextAuth adapter + register route).
+// populated by the NextAuth adapter + register route.
 
 type Props = {
   name: string;

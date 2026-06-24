@@ -32,7 +32,7 @@ type Props = {
   llmModel: string | null;
 };
 
-const EMBED_GUIDE_URL = "https://docs.pro-bot.dev/embed-share";
+const EMBED_GUIDE_URL = "https://pro-bot.dev/docs/embed-share";
 
 // Sidebar - server component used by every (dashboard) page. Active
 // nav highlight is computed inside SidebarNavLink via usePathname(),
@@ -59,6 +59,10 @@ export function Sidebar({
   const settingsHref = selectedBotId
     ? `/dashboard/bots/${selectedBotId}/settings`
     : "/dashboard/settings";
+  // "Manage model & key" opens the AI Model & Key settings tab directly.
+  const modelHref = selectedBotId
+    ? `/dashboard/bots/${selectedBotId}/settings?tab=model`
+    : "/dashboard/settings?tab=model";
   return (
     <aside className="flex h-full flex-col">
       {/* Fixed `h-16` matches the topbar height so the sidebar's brand
@@ -140,7 +144,6 @@ export function Sidebar({
 
         <SidebarSection title="Account" />
         <SidebarNavLink href={settingsHref} icon="settings" label="Settings" />
-        <SidebarNavDisabled icon="hub" label="AI model & key" />
       </nav>
 
       <SidebarAccountFooter
@@ -148,6 +151,7 @@ export function Sidebar({
         llmModel={llmModel}
         user={user}
         settingsHref={settingsHref}
+        modelHref={modelHref}
       />
     </aside>
   );

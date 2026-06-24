@@ -9,6 +9,7 @@ import { RecentConversationsList } from "@/components/dashboard/RecentConversati
 import { RecentLeadsTable } from "@/components/dashboard/RecentLeadsTable";
 import { TopTopicsPlaceholder } from "@/components/dashboard/TopTopicsPlaceholder";
 import {
+  formatGrowth,
   getAnalyticsForUser,
   getDailyConversationCounts,
 } from "@/lib/analytics/queries";
@@ -19,7 +20,7 @@ import { listRecentLeadsForUser } from "@/lib/leads/queries";
 import { resolveSelectedBotId } from "@/lib/server/selected-bot";
 import { getOrigin } from "@/lib/server/origin";
 
-const EMBED_GUIDE_URL = "https://docs.pro-bot.dev/guides/embed-widget";
+const EMBED_GUIDE_URL = "https://pro-bot.dev/docs/embed-share";
 
 // Dashboard home - ported from design/dashboard.html.
 //
@@ -129,19 +130,32 @@ export default async function DashboardPage() {
           label="Total conversations"
           value={analytics.totalConversations}
           icon="forum"
-          fadedGrowth="+18%"
+          fadedGrowth={
+            formatGrowth(
+              analytics.conversationsThisWeek,
+              analytics.conversationsPrevWeek,
+            ) ?? undefined
+          }
         />
         <MetricTile
           label="Total messages"
           value={analytics.totalMessages}
           icon="chat"
-          fadedGrowth="+24%"
+          fadedGrowth={
+            formatGrowth(
+              analytics.messagesThisWeek,
+              analytics.messagesPrevWeek,
+            ) ?? undefined
+          }
         />
         <MetricTile
           label="Leads captured"
           value={analytics.totalLeads}
           icon="contact_mail"
-          fadedGrowth="+3 new"
+          fadedGrowth={
+            formatGrowth(analytics.leadsThisMonth, analytics.leadsPrevMonth) ??
+            undefined
+          }
         />
         <MetricTile label="Response time" value="1.4s" icon="bolt" comingSoon />
       </div>

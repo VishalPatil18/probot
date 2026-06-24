@@ -33,15 +33,31 @@ export function LeadCaptureCard({
   onDismiss,
   onCaptured,
 }: Props) {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [company, setCompany] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
   const [status, setStatus] = useState<Status>("prompt");
   const [error, setError] = useState<string | null>(null);
 
+  const requiredFilled =
+    name.trim().length > 0 &&
+    email.trim().length > 0 &&
+    company.trim().length > 0;
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const trimmed = email.trim();
-    if (!SAFE_EMAIL.test(trimmed)) {
+    const trimmedEmail = email.trim();
+    if (name.trim().length === 0) {
+      setError("Please enter your name.");
+      return;
+    }
+    if (!SAFE_EMAIL.test(trimmedEmail)) {
       setError("Please enter a valid email address.");
+      return;
+    }
+    if (company.trim().length === 0) {
+      setError("Please enter your company.");
       return;
     }
     setError(null);
@@ -51,7 +67,10 @@ export function LeadCaptureCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: trimmed,
+          name: name.trim(),
+          email: trimmedEmail,
+          company: company.trim(),
+          linkedinUrl: linkedinUrl.trim() || undefined,
           conversationId: conversationId ?? undefined,
           contextSummary,
         }),
@@ -89,17 +108,46 @@ export function LeadCaptureCard({
         Want {botName} to get back to you?
       </p>
       <p className="mt-1 text-xs text-muted">
-        Leave your email and {botName} will follow up.
+        Share your details and {botName} will follow up.
       </p>
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@example.com"
-        aria-label="Email address"
-        disabled={status === "submitting"}
-        className="mt-3 w-full rounded-xl border border-border-base px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:opacity-60"
-      />
+      <div className="mt-3 space-y-2">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Your name"
+          aria-label="Your name"
+          disabled={status === "submitting"}
+          className="w-full rounded-xl border border-border-base px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:opacity-60"
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@company.com"
+          aria-label="Email address"
+          disabled={status === "submitting"}
+          className="w-full rounded-xl border border-border-base px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:opacity-60"
+        />
+        <input
+          type="text"
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+          placeholder="Company"
+          aria-label="Company"
+          disabled={status === "submitting"}
+          className="w-full rounded-xl border border-border-base px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:opacity-60"
+        />
+        <input
+          type="url"
+          value={linkedinUrl}
+          onChange={(e) => setLinkedinUrl(e.target.value)}
+          placeholder="LinkedIn URL (optional)"
+          aria-label="LinkedIn URL (optional)"
+          disabled={status === "submitting"}
+          className="w-full rounded-xl border border-border-base px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:opacity-60"
+        />
+      </div>
       {error ? (
         <p role="alert" className="mt-2 text-xs text-rose-600">
           {error}
@@ -116,7 +164,7 @@ export function LeadCaptureCard({
         </button>
         <button
           type="submit"
-          disabled={status === "submitting" || email.trim().length === 0}
+          disabled={status === "submitting" || !requiredFilled}
           className="rounded-xl bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand/90 disabled:opacity-60"
         >
           {status === "submitting" ? "Sending…" : "Submit"}

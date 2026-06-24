@@ -156,7 +156,7 @@ export async function POST(
     return NextResponse.json({ error: "bot_not_found" }, { status: 404 });
   }
 
-  // 8. Rate limit (per-bot, with per-bot overrides from the Stage-7 columns).
+  // 8. Rate limit (per-bot, with per-bot overrides from the bot row).
   // The limiter clamps unreasonable values internally; the Zod schema on the
   // PATCH endpoint also bounds what can be stored.
   const rl = await checkRateLimit(botRow.id, {

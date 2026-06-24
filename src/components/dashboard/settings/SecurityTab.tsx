@@ -12,8 +12,6 @@ import { SecurityActions } from "./SecurityActions";
 // the conversation-retention row is still a display-only value (operator
 // configures via env when self-hosting).
 
-const RETENTION_DAYS = 90;
-
 interface Props {
   username: string;
   pendingDeletion: { scheduledPurgeAt: string } | null;
@@ -22,30 +20,6 @@ interface Props {
 export function SecurityTab({ username, pendingDeletion }: Props) {
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
-        <h3 className="mb-1 font-bold">Rate limits</h3>
-        <p className="mb-5 text-xs text-muted">
-          Server-default limits. Each bot can override via its settings tab.
-        </p>
-        <div className="grid gap-4 text-center sm:grid-cols-3">
-          <LimitCard
-            value={PER_MINUTE_DEFAULT}
-            suffix="/min"
-            label="Per recruiter"
-          />
-          <LimitCard
-            value={PER_DAY_DEFAULT}
-            suffix="/day"
-            label="Per bot"
-          />
-          <LimitCard
-            value={`${Math.round(MAX_CHARS_DEFAULT / 1000)}k`}
-            suffix="/msg"
-            label="Max chars"
-          />
-        </div>
-      </section>
-
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <div className="mb-1 flex items-center justify-between">
           <h3 className="font-bold">Data &amp; privacy</h3>
@@ -59,8 +33,8 @@ export function SecurityTab({ username, pendingDeletion }: Props) {
             <div>
               <p className="text-sm font-medium">Export my data</p>
               <p className="text-xs text-muted">
-                Download a JSON of every row associated with your account
-                (bots, knowledge, conversations, leads).
+                Download a JSON of every row associated with your account (bots,
+                knowledge, conversations, leads).
               </p>
             </div>
             <a
@@ -75,21 +49,20 @@ export function SecurityTab({ username, pendingDeletion }: Props) {
             <div>
               <p className="text-sm font-medium">Conversation retention</p>
               <p className="text-xs text-muted">
-                Keep {RETENTION_DAYS} days of logs (configurable when
-                self-hosting).
+                Conversations and leads are kept until you delete the bot or
+                your account - there&apos;s no automatic time-based purge today.
+                Deleting your account removes everything after the 7-day grace
+                window.
               </p>
             </div>
             <span className="text-sm font-semibold text-muted">
-              {RETENTION_DAYS} days
+              Until deleted
             </span>
           </div>
         </div>
       </section>
 
-      <SecurityActions
-        username={username}
-        pendingDeletion={pendingDeletion}
-      />
+      <SecurityActions username={username} pendingDeletion={pendingDeletion} />
     </div>
   );
 }

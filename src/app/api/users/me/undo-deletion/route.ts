@@ -14,7 +14,8 @@ import { undoAccountDeletion } from "@/lib/account/delete";
 
 const undoInput = z.object({
   token: z.string().min(32).max(128),
-  username: z.string().min(1).max(30),
+  // Either the username or the account email confirms the undo.
+  identifier: z.string().trim().min(1).max(255),
 });
 
 export async function POST(request: Request): Promise<Response> {
@@ -35,7 +36,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const result = await undoAccountDeletion(
     parsed.data.token,
-    parsed.data.username,
+    parsed.data.identifier,
   );
   if (!result.ok) {
     if (result.reason === "username_mismatch") {

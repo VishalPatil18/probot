@@ -68,7 +68,7 @@ Even if a model emitted `<img src=x onerror=alert(1)>`, the user sees the litera
 - Short window - burst control (a few requests per few seconds)
 - Long window - sustained-traffic control (a couple dozen per hour)
 
-A 429 response includes the `scope` (which tier tripped) and `resetAt` (epoch ms). The limiter is in-process - fine for Vercel single-region; for multi-region production you would switch to Redis (Upstash) per Stage 7 of the [roadmap](/concepts/stages).
+A 429 response includes the `scope` (which tier tripped) and `resetAt` (epoch ms). The limiter is in-process by default - fine for a single region; setting the Upstash Redis env vars switches it to shared state for multi-instance deployments.
 
 ## Error responses never leak credentials
 
@@ -82,14 +82,15 @@ Where `<code>` is one of: `missing_llm_key`, `invalid_llm_key`, `invalid_json`, 
 
 The key is **never** present in the envelope, even when the cause is the key itself (`invalid_llm_key`).
 
-## What's planned
+## Already shipped
 
-- **Redis-backed rate limit** (Upstash) - Stage 7.
-- **OAuth + email verification** - Stage 7.
-- **Sentry error reporting with PII scrubbing** - Stage 7.
-- **GDPR data-export and account deletion** - Stage 7.
+- **Redis-backed rate limit + circuit breaker** (Upstash, with in-memory fallback).
+- **OAuth (Google, GitHub) + email verification.**
+- **GDPR data-export and account deletion.** See [Export & delete](/guides/account-deletion).
 
-See [Roadmap & stages](/concepts/stages).
+Error reporting with PII scrubbing (e.g. Sentry) is on the [Roadmap](/release-notes/roadmap).
+
+See the [Roadmap](/release-notes/roadmap).
 
 ## Reporting a vulnerability
 

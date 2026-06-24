@@ -32,7 +32,8 @@ export async function POST(request: Request): Promise<Response> {
       { status: 400 },
     );
   }
-  const { email, conversationId, contextSummary } = parsed.data;
+  const { name, email, company, linkedinUrl, conversationId, contextSummary } =
+    parsed.data;
 
   try {
     const { lead, deduped } = await captureLead({
@@ -40,6 +41,9 @@ export async function POST(request: Request): Promise<Response> {
       ownerUserId: bot.userId,
       botName: bot.name,
       email,
+      name,
+      company,
+      linkedinUrl,
       conversationId,
       contextSummary,
     });

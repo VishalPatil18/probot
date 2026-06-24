@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { ChatWindow } from "@/components/chat/ChatWindow";
-import { OwnerCard } from "@/components/u/OwnerCard";
 import { isProviderName, type ProviderName } from "@/lib/ai/providers";
 import { verifyPreviewToken } from "@/lib/bots/preview-token";
 import { bots, db, users } from "@/lib/db";
@@ -142,35 +141,31 @@ export default async function PublicChatPage({
     : "anthropic";
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:py-10">
-        {!bot.isActive ? (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <span className="font-semibold">Private preview.</span> This bot is
-            still a draft - recruiters can&apos;t reach this URL without your
-            token. Publish from the settings page to make it public.
-          </div>
-        ) : null}
-        <OwnerCard
-          name={owner.name ?? owner.username}
-          headline={bot.headline}
-          image={owner.image}
-        />
-        <div className="mt-6">
-          <ChatWindow
-            botId={bot.id}
-            botName={bot.name}
-            botHeadline={bot.headline}
-            botImage={bot.image}
-            themeColor={bot.themeColor}
-            suggestedQuestions={bot.suggestedQuestions ?? []}
-            loadingMessages={bot.loadingMessages}
-            llmProvider={llmProvider}
-            previewToken={
-              previewAuthorised ? (searchParams.preview ?? null) : null
-            }
-          />
+    // Own the full (dynamic) viewport as a flex column: an optional compact
+    // preview strip on top, then the chat fills the rest. Nothing scrolls at
+    // the page level - only ChatWindow's inner message region scrolls.
+    <div className="flex h-dvh flex-col bg-bg-app">
+      {!bot.isActive ? (
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-900">
+          <span className="font-semibold">Private preview.</span> This draft
+          isn&apos;t reachable without your token. Publish from settings to make
+          it public.
         </div>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        <ChatWindow
+          botId={bot.id}
+          botName={bot.name}
+          botHeadline={bot.headline}
+          botImage={bot.image}
+          themeColor={bot.themeColor}
+          suggestedQuestions={bot.suggestedQuestions ?? []}
+          loadingMessages={bot.loadingMessages}
+          llmProvider={llmProvider}
+          previewToken={
+            previewAuthorised ? (searchParams.preview ?? null) : null
+          }
+        />
       </div>
     </div>
   );

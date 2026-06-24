@@ -5,7 +5,7 @@
 ## How this file relates to the others
 
 - [`beta.md`](./beta.md) - frozen Beta build plan + the complete shipped-features checklist.
-- [`plan-v1.md`](./plan-v1.md) - the 9-stage v1.0 plan currently in flight.
+- [`plan-v1.md`](./plan-v1.md) - frozen v1.0 build plan + the complete shipped-features checklist.
 - **This file (`plan-v2.md`)** - v2.0 items. No commitment to dates or sequencing beyond the priority bands below.
 
 ---
@@ -29,12 +29,28 @@
 
 **v2.0 scope:**
 
-- Lift the one-bot-per-user assumption. Each user can create N bots; the dashboard's bot switcher (currently a placeholder) becomes load-bearing.
+- Lift the one-bot-per-user assumption. Each user can create N bots.
+- **Bot switcher + management (UI already stubbed in v1.0):** clicking the current bot name in the top-left sidebar opens a dropdown listing all the user's bots; below the list a **"Create New Bot"** button (shipped in v1.0 with a "coming soon" chip) opens the bot-creation modal. v2.0 wires that button to a real create flow and lets the user manage (rename/duplicate/delete/switch) every bot from this list.
+- **Create from preset:** the v1.0 "Save bot settings" feature stores reusable presets (`bot_presets` table). The Create-New-Bot modal should offer "Start from a saved preset" so a user can spin up a new bot pre-filled with a previous bot's configuration.
 - Per-bot pricing: still free per ProBot, but the user's BYO LLM key now amortises across multiple bots - make that explicit in copy.
 - Per-bot domains: each bot keeps its `/u/[username]/[botSlug]/chat` URL (today the URL is `/u/[username]/chat`).
 - Migration: existing single-bot users get a default `botSlug` of `default` so their URL stays meaningful (`/u/jane/default/chat`).
 
 **Risks:** dashboard analytics queries (`conversations_bot_started_idx`, lead lists, audit logs) all assume one-bot scope. Each needs a `[botId]` filter parameter and a `selectedBotId` cookie / dashboard URL state.
+
+---
+
+### Dynamic "thinking" / generating messages
+
+**Today:** each bot stores a small `loading_messages` array (JSONB) and the chat UI cycles through them while the LLM responds. They're static per bot.
+
+**v2.0 scope:**
+
+- Let owners author richer, context-aware "thinking" messages - e.g. a Claude-style "Thinking…", "Searching your resume…", "Drafting a reply…" sequence that reflects the actual stage of generation (retrieval vs. completion), making the wait feel responsive and engaging.
+- Optionally surface a live status string driven by the pipeline phase (embedding lookup → retrieval → LLM call) rather than a fixed cycle, so the message tracks what the bot is really doing.
+- A small editor in Bot configuration to add/reorder these messages, with sensible defaults seeded for new bots.
+
+**Why post-v1.0:** the static `loading_messages` already covers the baseline UX; phase-aware streaming status depends on the realtime-transport decision below (SSE/WebSockets).
 
 **Why post-v1.0:** rewrites every dashboard query. Doing it during v1.0 would slow down the polish stages that are higher-value-per-day.
 

@@ -50,12 +50,6 @@ export function SiteHeader() {
             Why ProBot
           </Link>
           <Link
-            href="/roadmap"
-            className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
-          >
-            Roadmap
-          </Link>
-          <Link
             href="/about"
             className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
           >
@@ -69,12 +63,6 @@ export function SiteHeader() {
           >
             Docs
           </a>
-          <Link
-            href="/u/vishal/chat"
-            className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
-          >
-            Live demo
-          </Link>
         </nav>
         <div className="hidden md:flex items-center gap-2 ml-auto">
           <Link href="/login" className="btn btn-secondary">
@@ -105,9 +93,6 @@ export function SiteHeader() {
           <Link href="/why-pro-bot" className="py-2 font-medium">
             Why ProBot
           </Link>
-          <Link href="/roadmap" className="py-2 font-medium">
-            Roadmap
-          </Link>
           <Link href="/about" className="py-2 font-medium">
             About
           </Link>
@@ -126,10 +111,7 @@ export function SiteHeader() {
             <Link href="/login" className="btn btn-secondary flex-1">
               Log in
             </Link>
-            <Link
-              href="/dashboard/bots/new"
-              className="btn btn-primary flex-1"
-            >
+            <Link href="/dashboard/bots/new" className="btn btn-primary flex-1">
               Create bot
             </Link>
           </div>

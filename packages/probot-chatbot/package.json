@@ -1,0 +1,47 @@
+{
+  "name": "probot-chatbot",
+  "version": "0.1.0",
+  "description": "Embed a ProBot AI chatbot on any website with a single script tag. BYO-key chatbot widget for job seekers.",
+  "keywords": [
+    "probot",
+    "chatbot",
+    "widget",
+    "embed",
+    "ai",
+    "recruiter",
+    "resume"
+  ],
+  "homepage": "https://pro-bot.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vishalpatil18/probot.git",
+    "directory": "packages/probot-chatbot"
+  },
+  "bugs": {
+    "url": "https://github.com/vishalpatil18/probot/issues"
+  },
+  "license": "MIT",
+  "author": "Vishal Patil",
+  "type": "module",
+  "main": "dist/probot-chatbot.js",
+  "module": "dist/probot-chatbot.js",
+  "unpkg": "dist/probot-chatbot.js",
+  "jsdelivr": "dist/probot-chatbot.js",
+  "exports": {
+    ".": "./dist/probot-chatbot.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -18,53 +18,61 @@
             "group": "Get started",
             "pages": [
               "introduction",
-              "quickstart"
-            ]
-          },
-          {
-            "group": "Concepts",
-            "pages": [
-              "concepts/architecture",
-              "concepts/managed-vs-self-hosted",
-              "concepts/byo-key",
-              "concepts/security",
-              "concepts/stages"
+              "quickstart",
+              "guides/build-your-bot",
+              "guides/how-to-use"
             ]
           },
           {
             "group": "Guides",
             "pages": [
-              "guides/build-your-bot",
+              "guides/bot-management",
+              "guides/personality",
               "guides/custom-instructions",
-              "embed-share",
-              "guides/embed-widget",
-              "guides/managed-key-storage",
-              "guides/account-deletion"
+              "guides/themes-and-avatar",
+              "guides/analytics-and-leads",
+              "guides/notifications",
+              "embed-share"
             ]
           },
           {
-            "group": "Self-hosting",
+            "group": "Models & keys",
             "pages": [
-              "guides/self-host",
+              "guides/models-and-keys",
+              "concepts/byo-key",
+              "guides/managed-key-storage"
+            ]
+          },
+          {
+            "group": "Hosting & deployment",
+            "pages": [
+              "guides/deployment",
+              "hosting/managed",
               "self-hosted-bot/index",
-              "self-hosted-bot/quickstart",
               "self-hosted-bot/api-reference"
             ]
           },
           {
-            "group": "Decisions",
+            "group": "Trust & security",
             "pages": [
-              "decisions/overview",
-              "decisions/0001-hybrid-key-model",
-              "decisions/0002-deletion-grace-window",
-              "decisions/0003-circuit-breaker-store",
-              "decisions/0004-self-hosted-bot"
+              "concepts/security",
+              "concepts/managed-vs-self-hosted",
+              "guides/account-deletion"
             ]
           },
           {
-            "group": "Release notes",
+            "group": "Product",
             "pages": [
-              "changelog"
+              "why-pro-bot",
+              "about",
+              "features"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "faq",
+              "contact"
             ]
           }
         ]
@@ -87,19 +95,43 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Release notes",
+        "groups": [
+          {
+            "group": "Releases",
+            "pages": [
+              "release-notes/beta",
+              "release-notes/v1",
+              "release-notes/roadmap"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Blog",
+        "groups": [
+          {
+            "group": "Blog",
+            "pages": [
+              "blogs/welcome"
+            ]
+          }
+        ]
       }
     ],
     "global": {
       "anchors": [
         {
+          "anchor": "ProBot",
+          "href": "https://pro-bot.dev",
+          "icon": "/logo/icon.svg"
+        },
+        {
           "anchor": "GitHub",
           "href": "https://github.com/vishalpatil18/probot",
           "icon": "github"
-        },
-        {
-          "anchor": "Live app",
-          "href": "https://probot.vercel.app",
-          "icon": "rocket"
         }
       ]
     }
@@ -107,19 +139,13 @@
   "logo": {
     "light": "/logo/icon.svg",
     "dark": "/logo/icon.svg",
-    "href": "https://docs.pro-bot.dev"
+    "href": "https://pro-bot.dev/docs"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Live app",
-        "href": "https://probot.vercel.app"
-      }
-    ],
     "primary": {
       "type": "button",
       "label": "Get started",
-      "href": "https://probot.vercel.app/register"
+      "href": "https://pro-bot.dev/register"
     }
   },
   "footer": {

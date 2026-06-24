@@ -1,127 +1,47 @@
 ---
 title: Build your bot
-description: "Walk through the 5-step bot factory and ship a working recruiter-facing chatbot."
+description: "Step-by-step: create your AI career bot in the Bot Factory wizard."
 ---
 
-This guide walks the **Bot Factory** at `/dashboard/bots/new` end-to-end. It assumes you have a running ProBot (see [Quickstart](/quickstart)) and you've registered + logged in.
+The **Bot Factory** is a short guided wizard. In a few minutes you'll have a working bot grounded in your real career data.
+
+## Before you start
+
+- A resume PDF and/or text about yourself (bio, LinkedIn summary, project notes).
+- An LLM API key from your provider of choice. See [Models & keys](/guides/models-and-keys). (You can also add this later.)
 
 ## Step 1 - Identity
 
-| Field        | Constraint            |
-| ------------ | --------------------- |
-| **Name**     | 1–100 chars, trimmed  |
-| **Headline** | optional, ≤ 120 chars |
-
-The name is what recruiters see at the top of the chat. The headline is a one-liner like `"Senior platform engineer · Open to staff roles"`.
-
-<Tip>
-  Use your real name + role. Generic names like "AI Assistant" perform worse -
-  recruiters want to know whose bot they're talking to.
-</Tip>
+Give your bot a **name**, a short **headline** (e.g. "Ask me about my backend experience"), and upload an optional **avatar**. Pick a **theme color** - a live preview updates as you choose. See [Themes & avatar](/guides/themes-and-avatar).
 
 ## Step 2 - Knowledge
 
-Paste **everything you'd want the bot to know about you**:
+Add what the bot should know:
 
-- Your resume text (paste the body - bullets, dates, companies)
-- A short bio
-- Talking points you wish recruiters asked about
-- Links to projects, GitHub, portfolio
-- Your contact preference (email vs. LinkedIn, response window)
+- **Upload PDFs** - drop in your resume (up to 5 files / 10 MB total). ProBot extracts the text, chunks it, and indexes it.
+- **Paste text** - bio, project descriptions, FAQs.
 
-| Field       | Constraint              |
-| ----------- | ----------------------- |
-| **Context** | 1–50,000 chars, trimmed |
-
-Stage 1 is **paste-only** - no PDF upload yet. PDF and URL ingestion ship in Stage 2 (see [Roadmap](/concepts/stages)).
-
-<Warning>
-  Don't paste secrets (API keys, private contact info you don't want shared).
-  The bot will treat everything in this field as fair game to mention. The
-  output sanitizer strips obvious key patterns, but it's not a substitute for a
-  clean knowledge base.
-</Warning>
+If a single PDF fails to parse, the rest still save and you can retry just that file. The bot answers **only** from this knowledge - if it's not here, the bot says it doesn't know rather than inventing.
 
 ## Step 3 - Personality
 
-Pick one of three presets:
+Choose a **tone preset** and optionally add **custom instructions** to steer behavior. See [Personality](/guides/personality) and [Custom instructions](/guides/custom-instructions).
 
-| Preset           | When to use                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------- |
-| **professional** | Default. Concise, formal, recruiter-friendly. Recommended for most engineering roles. |
-| **creative**     | More playful. Good for design / product / brand roles.                                |
-| **enthusiastic** | High-energy, exclamation-friendly. Good for sales / community / DevRel.               |
+## Step 4 - AI model & key
 
-The preset injects a tone hint into the system prompt - it does not change the model or the knowledge base.
+Pick your **provider and model** and paste your **API key**. It's stored in your browser (encrypted) and never logged. Providers: Anthropic, OpenAI, Azure OpenAI, Google Gemini. See [Models & keys](/guides/models-and-keys).
 
-## Step 4 - AI model + key
+## Step 5 - Deploy
 
-This is where BYO-key happens. Pick a provider, paste your key, optionally pick a model.
+Review and create. You'll get:
 
-### Anthropic
+- A **public chat URL**: `pro-bot.dev/u/<username>/chat`
+- A one-line **embed snippet** for your site. See [Embed & share](/embed-share).
 
-- Provider: `anthropic`
-- Default model: `claude-sonnet-4-5` (recommended)
-- Get a key: <https://console.anthropic.com/>
+New bots start as a **draft** with a private preview URL - test it, then flip the status to **live** (saves instantly). See [Managing your bot](/guides/bot-management).
 
-### OpenAI
+## After you build
 
-- Provider: `openai`
-- Default model: `gpt-4o-mini` (cheap) or `gpt-4o` (better)
-- Get a key: <https://platform.openai.com/api-keys>
-
-### Azure OpenAI
-
-- Provider: `azure`
-- Requires **endpoint** (e.g. `https://my-resource.openai.azure.com`)
-- Requires **deployment name** (this is `llmModel` for Azure)
-- Optionally **apiVersion** (e.g. `2024-02-15-preview`)
-- Stored as `probot.llm.azure.v1` alongside the main key
-
-### Google
-
-- Provider: `google` - registered as a stub today. Implementation tracked in the [Roadmap](/concepts/stages).
-
-<Note>
-  Your key is saved to your browser's `localStorage` only. It's sent with each
-  chat request as the `x-llm-api-key` header and never persisted server-side.
-  See [BYO-key flow](/concepts/byo-key) for the full path.
-</Note>
-
-## Step 5 - Suggested questions
-
-Pre-seed up to **6 questions** recruiters can one-tap into the chat. Each ≤ 200 chars.
-
-Good examples:
-
-- "What stack do you work in?"
-- "What kind of role are you looking for?"
-- "Tell me about your most recent project."
-- "Are you open to remote? Hybrid? On-site?"
-
-Skip generic ones like "Hello" - they waste a slot.
-
-## Submit and preview
-
-Click **Save bot**. The form sends a `POST /api/bots` with the input payload (see [API reference](/api-reference/bots-upsert)).
-
-A first save returns `201 Created` with the new bot row. Subsequent saves are **upserts** by `user_id` - Stage 1 supports one bot per user.
-
-The response includes the bot's UUID. Click **Preview bot** to open `ChatWindow` against `/api/chat/[botId]`. Your saved key is read from `localStorage` and sent with every send.
-
-## Iterate
-
-Things you'll typically tune after a few real conversations:
-
-- **Add edge cases** to the knowledge text (e.g. "I'm currently on parental leave and back in April").
-- **Soften the personality** if recruiters say it feels robotic - switch from `professional` to `enthusiastic`.
-- **Add suggested questions** that mirror what recruiters actually asked.
-- **Switch model** if you want better quality (`gpt-4o`) or faster/cheaper (`gpt-4o-mini`, `claude-haiku-4-5`).
-
-The chat endpoint always rebuilds the system prompt from the freshly-fetched bot row - there's no caching to invalidate.
-
-## What's next
-
-- **Public URL** - Stage 4 will expose `/u/[username]/chat` for unauthenticated chat.
-- **Embed widget** - Stage 5 will ship a one-line `<script>` embed (see [Embed widget](/guides/embed-widget) for the planned shape).
-- **Analytics + lead capture** - Stage 6.
+- Tune knowledge, personality, suggested questions, and rate limits any time.
+- Watch conversations and capture leads in your [dashboard](/guides/analytics-and-leads).
+- Save your configuration as a reusable [preset](/guides/bot-management).

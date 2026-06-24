@@ -3,7 +3,7 @@ title: POST /api/bots
 description: "Upsert the authenticated user's bot. Requires a session cookie."
 ---
 
-Creates or updates the current user's bot. Stage 1 supports **one bot per user** - the route is an upsert keyed on the session's `userId`.
+Creates or updates the current user's bot. The platform supports **one bot per user** today - the route is an upsert keyed on the session's `userId`.
 
 ## Request
 
@@ -137,6 +137,6 @@ curl -X POST https://probot.vercel.app/api/bots \
 
 ## Notes
 
-- `loadingMessages` is set server-side at `INSERT` time from a default JSON literal. It is **not** part of the request body in Stage 1.
-- `isActive` defaults to `true` and is not exposed for client updates yet - bot disable/enable is part of Stage 6.
-- Multi-bot support is planned (Stage 6+).
+- `loadingMessages` is set server-side at `INSERT` time from a default JSON literal. It is **not** part of the request body.
+- `isActive` defaults to `true`; bot enable/disable is managed from the dashboard.
+- Multi-bot support is planned (see the [Roadmap](/release-notes/roadmap)).

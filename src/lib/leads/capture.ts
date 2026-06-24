@@ -6,7 +6,7 @@ import { conversations, db, leads, notifications } from "@/lib/db";
 // recruiter email, and raise the dashboard notification - all in one
 // transaction so a partial commit can't leave a lead with no notification (or
 // a badge with no lead). Mirrors the managed POST /api/bots/[botId]/leads
-// transaction; the Stage 9 /api/v1/bot/leads endpoint reuses it so the
+// transaction; the /api/v1/bot/leads endpoint reuses it so the
 // self-hosted runtime captures leads identically.
 //
 // Dedupe is idempotent on (botId, conversationId, lowercased email): a
@@ -20,6 +20,9 @@ export interface CaptureLeadArgs {
   ownerUserId: string;
   botName: string;
   email: string;
+  name?: string | null;
+  company?: string | null;
+  linkedinUrl?: string | null;
   conversationId?: string | null;
   contextSummary?: string | null;
 }
@@ -27,6 +30,9 @@ export interface CaptureLeadArgs {
 export interface CapturedLead {
   id: string;
   email: string;
+  name: string | null;
+  company: string | null;
+  linkedinUrl: string | null;
   contextSummary: string | null;
   conversationId: string | null;
   capturedAt: Date;
@@ -38,12 +44,29 @@ export async function captureLead(
   const { botId, ownerUserId, botName, email } = args;
   const conversationId = args.conversationId ?? null;
   const contextSummary = args.contextSummary ?? null;
+  const name = args.name?.trim() || null;
+  const company = args.company?.trim() || null;
+  const linkedinUrl = args.linkedinUrl?.trim() || null;
+
+  const projection = {
+    id: leads.id,
+    email: leads.email,
+    name: leads.name,
+    company: leads.company,
+    linkedinUrl: leads.linkedinUrl,
+    contextSummary: leads.contextSummary,
+    conversationId: leads.conversationId,
+    capturedAt: leads.capturedAt,
+  } as const;
 
   if (conversationId) {
     const existing = await db.query.leads.findFirst({
       columns: {
         id: true,
         email: true,
+        name: true,
+        company: true,
+        linkedinUrl: true,
         contextSummary: true,
         conversationId: true,
         capturedAt: true,
@@ -60,14 +83,16 @@ export async function captureLead(
   const lead = await db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(leads)
-      .values({ botId, conversationId, email, contextSummary })
-      .returning({
-        id: leads.id,
-        email: leads.email,
-        contextSummary: leads.contextSummary,
-        conversationId: leads.conversationId,
-        capturedAt: leads.capturedAt,
-      });
+      .values({
+        botId,
+        conversationId,
+        email,
+        name,
+        company,
+        linkedinUrl,
+        contextSummary,
+      })
+      .returning(projection);
     if (!inserted) throw new Error("lead_insert_failed");
 
     if (conversationId) {
@@ -86,7 +111,15 @@ export async function captureLead(
       userId: ownerUserId,
       botId,
       kind: "lead_captured",
-      payload: { leadId: inserted.id, email, botId, botName, contextSummary },
+      payload: {
+        leadId: inserted.id,
+        email,
+        name,
+        company,
+        botId,
+        botName,
+        contextSummary,
+      },
     });
 
     return inserted;

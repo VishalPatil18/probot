@@ -62,14 +62,28 @@ export type UserAnalytics = {
   totalMessages: number;
   totalLeads: number;
   leadsThisMonth: number;
+  // Period-over-period counts powering the live "% change" stats on the
+  // dashboard. Conversations compare the last 7 days vs the prior 7;
+  // leads compare the last 30 days vs the prior 30.
+  conversationsThisWeek: number;
+  conversationsPrevWeek: number;
+  messagesThisWeek: number;
+  messagesPrevWeek: number;
+  leadsPrevMonth: number;
 };
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Aggregates across every bot owned by `userId`. Used by the dashboard
 // home stat row.
 export async function getAnalyticsForUser(
   userId: string,
 ): Promise<UserAnalytics> {
-  const since = new Date(Date.now() - THIRTY_DAYS_MS);
+  const now = Date.now();
+  const since = new Date(now - THIRTY_DAYS_MS);
+  const sinceTwoMonths = new Date(now - 2 * THIRTY_DAYS_MS);
+  const sinceWeek = new Date(now - SEVEN_DAYS_MS);
+  const sinceTwoWeeks = new Date(now - 2 * SEVEN_DAYS_MS);
 
   const [botTotals, convoTotals, msgTotals, leadTotals] = await Promise.all([
     db
@@ -77,12 +91,20 @@ export async function getAnalyticsForUser(
       .from(bots)
       .where(eq(bots.userId, userId)),
     db
-      .select({ total: sql<number>`count(*)::int` })
+      .select({
+        total: sql<number>`count(*)::int`,
+        thisWeek: sql<number>`count(*) filter (where ${conversations.startedAt} >= ${sinceWeek})::int`,
+        prevWeek: sql<number>`count(*) filter (where ${conversations.startedAt} >= ${sinceTwoWeeks} and ${conversations.startedAt} < ${sinceWeek})::int`,
+      })
       .from(conversations)
       .innerJoin(bots, eq(conversations.botId, bots.id))
       .where(eq(bots.userId, userId)),
     db
-      .select({ total: sql<number>`count(*)::int` })
+      .select({
+        total: sql<number>`count(*)::int`,
+        thisWeek: sql<number>`count(*) filter (where ${messages.createdAt} >= ${sinceWeek})::int`,
+        prevWeek: sql<number>`count(*) filter (where ${messages.createdAt} >= ${sinceTwoWeeks} and ${messages.createdAt} < ${sinceWeek})::int`,
+      })
       .from(messages)
       .innerJoin(conversations, eq(messages.conversationId, conversations.id))
       .innerJoin(bots, eq(conversations.botId, bots.id))
@@ -91,6 +113,7 @@ export async function getAnalyticsForUser(
       .select({
         total: sql<number>`count(*)::int`,
         thisMonth: sql<number>`count(*) filter (where ${leads.capturedAt} >= ${since})::int`,
+        prevMonth: sql<number>`count(*) filter (where ${leads.capturedAt} >= ${sinceTwoMonths} and ${leads.capturedAt} < ${since})::int`,
       })
       .from(leads)
       .innerJoin(bots, eq(leads.botId, bots.id))
@@ -103,7 +126,24 @@ export async function getAnalyticsForUser(
     totalMessages: msgTotals[0]?.total ?? 0,
     totalLeads: leadTotals[0]?.total ?? 0,
     leadsThisMonth: leadTotals[0]?.thisMonth ?? 0,
+    conversationsThisWeek: convoTotals[0]?.thisWeek ?? 0,
+    conversationsPrevWeek: convoTotals[0]?.prevWeek ?? 0,
+    messagesThisWeek: msgTotals[0]?.thisWeek ?? 0,
+    messagesPrevWeek: msgTotals[0]?.prevWeek ?? 0,
+    leadsPrevMonth: leadTotals[0]?.prevMonth ?? 0,
   };
+}
+
+// Format a period-over-period change as a signed percentage string for the
+// dashboard stat cards. Returns null when there's no prior-period baseline (so
+// the card can hide the chip instead of showing a misleading "+100%").
+export function formatGrowth(
+  current: number,
+  previous: number,
+): string | null {
+  if (previous <= 0) return current > 0 ? "New" : null;
+  const pct = Math.round(((current - previous) / previous) * 100);
+  return `${pct >= 0 ? "+" : ""}${pct}%`;
 }
 
 // Daily conversation counts for the last N days, scoped to a user.

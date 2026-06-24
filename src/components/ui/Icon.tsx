@@ -17,14 +17,18 @@ export type IconName =
   | "check_circle"
   | "code"
   | "contact_mail"
+  | "github"
+  | "home"
   | "hub"
   | "key"
+  | "linkedin"
   | "lock"
   | "manage_search"
   | "menu"
   | "network_intelligence"
   | "payments"
   | "play_circle"
+  | "portfolio"
   | "public"
   | "rocket_launch"
   | "share"
@@ -69,6 +73,21 @@ const ICONS: Record<IconName, ReactNode> = {
       <path d="m22 7-10 5L2 7" />
     </>
   ),
+  // Brand marks render filled (own fill/stroke override the stroke-based
+  // wrapper) so they look like the official logos.
+  github: (
+    <path
+      fill="currentColor"
+      stroke="none"
+      d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-1.7c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.6 18 4.9 18 4.9c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"
+    />
+  ),
+  home: (
+    <>
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </>
+  ),
   hub: (
     <>
       <circle cx="18" cy="5" r="3" />
@@ -77,6 +96,13 @@ const ICONS: Record<IconName, ReactNode> = {
       <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
       <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
     </>
+  ),
+  linkedin: (
+    <path
+      fill="currentColor"
+      stroke="none"
+      d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14zM8.34 9.5H5.67V18h2.67V9.5zM7 5.7a1.55 1.55 0 1 0 0 3.1 1.55 1.55 0 0 0 0-3.1zM18.34 18v-4.67c0-2.5-1.34-3.66-3.13-3.66-1.44 0-2.09.79-2.45 1.35V9.5h-2.67V18h2.67v-4.2c0-1.1.21-2.17 1.58-2.17 1.34 0 1.36 1.26 1.36 2.24V18h2.64z"
+    />
   ),
   key: (
     <>
@@ -128,6 +154,13 @@ const ICONS: Record<IconName, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="10" />
       <polygon points="10 8 16 12 10 16 10 8" />
+    </>
+  ),
+  portfolio: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
     </>
   ),
   public: (

@@ -8,7 +8,7 @@ ProBot exposes three first-party HTTP endpoints under `/api/*`, plus the NextAut
 ## Base URL
 
 - **Hosted:** `https://probot.vercel.app`
-- **Self-hosted:** wherever you deployed (see [Self-host](/guides/self-host))
+- **Self-hosted bot:** your `probot-bot` runtime's domain (see [Self-hosting your bot](/self-hosted-bot/index))
 
 All requests below are relative to that base.
 
@@ -126,4 +126,4 @@ The pages under **Endpoints** document the **public, currently-shipped** routes 
 - [`POST /api/bots`](/api-reference/bots-upsert)
 - [`POST /api/chat/[botId]`](/api-reference/chat)
 
-NextAuth's `/api/auth/[...nextauth]` is **not** documented here - its surface is owned by NextAuth and changes per their docs. See <https://next-auth.js.org/getting-started/rest-api>.
+NextAuth's `/api/auth/[...nextauth]` is **not** documented here - its surface is owned by NextAuth and changes per their docs. See [the NextAuth REST API docs](https://next-auth.js.org/getting-started/rest-api).

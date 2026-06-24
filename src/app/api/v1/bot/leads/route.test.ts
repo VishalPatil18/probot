@@ -32,18 +32,28 @@ beforeEach(() => {
 });
 
 describe("POST /api/v1/bot/leads", () => {
+  const validLead = { name: "Rec", email: "r@e.com", company: "Acme" };
+
   it("rejects an invalid token via the guard", async () => {
     requireBotTokenMock.mockResolvedValue({
       ok: false,
       response: NextResponse.json({ error: "invalid_bot_token" }, { status: 401 }),
     });
-    const res = await POST(leadRequest({ email: "r@e.com" }));
+    const res = await POST(leadRequest(validLead));
     expect(res.status).toBe(401);
     expect(captureLeadMock).not.toHaveBeenCalled();
   });
 
   it("400s on an invalid email", async () => {
-    const res = await POST(leadRequest({ email: "not-an-email" }));
+    const res = await POST(
+      leadRequest({ ...validLead, email: "not-an-email" }),
+    );
+    expect(res.status).toBe(400);
+    expect(captureLeadMock).not.toHaveBeenCalled();
+  });
+
+  it("400s when required name/company are missing", async () => {
+    const res = await POST(leadRequest({ email: "r@e.com" }));
     expect(res.status).toBe(400);
     expect(captureLeadMock).not.toHaveBeenCalled();
   });
@@ -53,12 +63,15 @@ describe("POST /api/v1/bot/leads", () => {
       lead: { id: "lead-1", email: "r@e.com" },
       deduped: false,
     });
-    const res = await POST(
-      leadRequest({ email: "r@e.com", contextSummary: "hi" }),
-    );
+    const res = await POST(leadRequest({ ...validLead, contextSummary: "hi" }));
     expect(res.status).toBe(201);
     expect(captureLeadMock).toHaveBeenCalledWith(
-      expect.objectContaining({ botId: "bot-1", ownerUserId: "user-1" }),
+      expect.objectContaining({
+        botId: "bot-1",
+        ownerUserId: "user-1",
+        name: "Rec",
+        company: "Acme",
+      }),
     );
   });
 
@@ -67,7 +80,7 @@ describe("POST /api/v1/bot/leads", () => {
       lead: { id: "lead-1", email: "r@e.com" },
       deduped: true,
     });
-    const res = await POST(leadRequest({ email: "r@e.com" }));
+    const res = await POST(leadRequest(validLead));
     expect(res.status).toBe(200);
   });
 });

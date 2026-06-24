@@ -37,8 +37,8 @@ export default function HomePage() {
           <div className="mx-auto max-w-[1180px] px-6 py-16 lg:py-24 grid lg:grid-cols-2 gap-12 items-center">
             <div className="flex flex-col gap-6 rise">
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-brand text-xs font-bold w-fit border border-blue-100">
-                <span className="size-1.5 rounded-full bg-brand" /> Free to Use
-                · Bring your own API key
+                <span className="size-1.5 rounded-full bg-brand" /> Free &amp;
+                open source · Bring your own API key
               </span>
               <h1 className="font-display text-5xl lg:text-[64px] font-extrabold tracking-tight leading-[1.02] text-balance">
                 Don&apos;t just send a resume. Send a representative.
@@ -816,9 +816,8 @@ export default function HomePage() {
                 </h2>
                 <p className="text-muted leading-relaxed mb-6 max-w-md">
                   ProBot is fully free to use. Use the hosted version for free,
-                  or self-host the whole stack on your own infrastructure. No
-                  paywalls, no usage meters - you bring the LLM key, you stay in
-                  control.
+                  or self-host your bot on your own infrastructure. No paywalls,
+                  no usage meters - you bring the LLM key, you stay in control.
                 </p>
                 <ul className="space-y-3 mb-8">
                   <li className="flex gap-3 text-sm">

@@ -1,0 +1,32 @@
+---
+title: Deployment modes
+description: "Run your bot the easy way (managed) or on your own infrastructure (self-hosted)."
+---
+
+Each bot has a **deployment mode**, set in **Settings → Deployment**. It decides where the chat runtime lives.
+
+## Managed (default)
+
+The bot is served entirely by pro-bot.dev:
+
+- Public chat at `pro-bot.dev/u/<username>/chat`
+- One-line [embed widget](/embed-share)
+- Nothing to deploy or maintain
+
+This is the right choice for almost everyone. See [Managed hosting](/hosting/managed).
+
+## Self-hosted
+
+You run the tiny [`probot-bot`](/self-hosted-bot/index) runtime on your own infrastructure; it talks to the ProBot platform over a versioned API using a **bot token** you mint in the dashboard. Your LLM key lives in your runtime and never touches the platform.
+
+Switching to self-hosted:
+
+1. Set the mode to **Self-hosted**.
+2. **Generate a token** (shown once - copy it).
+3. Deploy `probot-bot` with that token. See [Self-hosting your bot](/self-hosted-bot/index).
+
+Revoke the token any time to instantly cut the runtime off.
+
+## Comparison
+
+See [Managed vs self-hosted](/concepts/managed-vs-self-hosted) for the full trade-offs, and [Self-hosting your bot](/self-hosted-bot/index) for the `probot-bot` runtime details.

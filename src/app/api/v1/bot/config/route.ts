@@ -4,7 +4,7 @@ import { requireBotToken } from "@/lib/bot-tokens/service";
 
 // GET /api/v1/bot/config
 //
-// Stage 9 self-hosted runtime API. Returns the public-safe configuration a
+// Self-hosted runtime API. Returns the public-safe configuration a
 // `probot-bot` runtime needs to render its chat UI. Authenticated by the bot
 // token (`Authorization: Bearer pbt_…`); the token resolves to exactly one bot,
 // so no botId is taken from the request. Nothing secret is returned (no keys,

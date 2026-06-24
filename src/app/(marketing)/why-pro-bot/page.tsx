@@ -41,7 +41,7 @@ const ROWS: Row[] = [
   },
   {
     feature: "Self-hostable",
-    detail: "Run the whole thing on your own infrastructure if you want.",
+    detail: "Run your bot on your own infrastructure if you want.",
     probot: true,
     generic: false,
   },

@@ -34,7 +34,10 @@ export async function GET(
 
   const csv = toCsv(rows, [
     { header: "captured_at", cell: (r) => isoDate(r.capturedAt) },
+    { header: "name", cell: (r) => r.name ?? "" },
     { header: "email", cell: (r) => r.email },
+    { header: "company", cell: (r) => r.company ?? "" },
+    { header: "linkedin_url", cell: (r) => r.linkedinUrl ?? "" },
     { header: "bot_name", cell: () => bot.name },
     { header: "context_summary", cell: (r) => r.contextSummary ?? "" },
     { header: "conversation_id", cell: (r) => r.conversationId ?? "" },

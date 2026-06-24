@@ -401,8 +401,8 @@ export function AIModelKeyTab({
         <h3 className="mb-1 font-bold">Decrypt audit log</h3>
         <p className="mb-5 text-xs text-muted">
           Every time your managed key is used to serve a recruiter, a row lands
-          here (timestamp + a short hash suffix of the recruiter IP). Retained
-          for 30 days. No raw IPs, no key material is ever stored.
+          here (timestamp + a short non-reversible hash). Retained for 30 days.
+          No raw identifiers, no key material is ever stored.
         </p>
         {auditError ? (
           <p className="text-xs text-rose-700">{auditError}</p>

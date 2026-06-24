@@ -131,7 +131,7 @@ export const bots = pgTable(
     // this migration backfill to `true` via the migration so existing
     // published bots are unaffected.
     isActive: boolean("is_active").notNull().default(false),
-    // Stage 9: where the bot's chat runtime lives. 'managed' = served by this
+    // Where the bot's chat runtime lives. 'managed' = served by this
     // platform (public /u/<username>/chat + embed widget). 'self_hosted' = the
     // owner runs the `probot-bot` runtime on their own infra and talks to the
     // platform over /api/v1/bot/* with a bot token. Default keeps every
@@ -529,6 +529,12 @@ export const leads = pgTable(
       onDelete: "set null",
     }),
     email: varchar("email", { length: 255 }).notNull(),
+    // Recruiter-supplied contact details (form capture). `name` + `company` are
+    // required when a recruiter submits the form; `linkedin_url` is optional.
+    // Nullable at the column level so historical email-only leads remain valid.
+    name: varchar("name", { length: 120 }),
+    company: varchar("company", { length: 160 }),
+    linkedinUrl: varchar("linkedin_url", { length: 255 }),
     contextSummary: text("context_summary"),
     capturedAt: timestamp("captured_at", {
       mode: "date",
@@ -613,7 +619,7 @@ export const botAvatars = pgTable("bot_avatars", {
 }).enableRLS();
 
 // bot_tokens
-// Stage 9: API tokens a self-hosted `probot-bot` runtime uses to authenticate
+// API tokens a self-hosted `probot-bot` runtime uses to authenticate
 // to /api/v1/bot/*. The raw token (`pbt_<hex>`) is shown to the owner exactly
 // once at mint time; only its SHA-256 hash is persisted, so a DB dump cannot be
 // replayed. `revoked_at` is a soft-delete: revoking flips it so the auth path
@@ -639,6 +645,31 @@ export const botTokens = pgTable(
   },
   (table) => ({
     botIdIdx: index("bot_tokens_bot_id_idx").on(table.botId),
+  }),
+).enableRLS();
+
+// bot_presets
+// A saved snapshot of a bot's configuration (name, headline, personality,
+// theme, suggested questions, custom instructions, etc.) that the owner can
+// reuse when creating a future bot. Stored as opaque JSON so the preset shape
+// can evolve without a migration. Belongs to a user (not a bot) so it survives
+// the bot it was captured from. Powers the "Save as preset" action and the
+// future multi-bot "Create from preset" flow.
+export const botPresets = pgTable(
+  "bot_presets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 80 }).notNull(),
+    settings: jsonb("settings").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: false })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index("bot_presets_user_id_idx").on(table.userId),
   }),
 ).enableRLS();
 
@@ -678,3 +709,5 @@ export type BotAvatar = typeof botAvatars.$inferSelect;
 export type NewBotAvatar = typeof botAvatars.$inferInsert;
 export type BotToken = typeof botTokens.$inferSelect;
 export type NewBotToken = typeof botTokens.$inferInsert;
+export type BotPreset = typeof botPresets.$inferSelect;
+export type NewBotPreset = typeof botPresets.$inferInsert;

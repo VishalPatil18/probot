@@ -9,7 +9,6 @@ const BASE_URL = siteUrl();
 const ROUTES = [
   "/",
   "/why-pro-bot",
-  "/roadmap",
   "/hire-me",
   "/about",
   "/self-hosting",

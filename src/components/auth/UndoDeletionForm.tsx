@@ -31,7 +31,7 @@ export function UndoDeletionForm({ token }: Props) {
       const res = await fetch("/api/users/me/undo-deletion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, username: typedUsername }),
+        body: JSON.stringify({ token, identifier: typedUsername }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as {
@@ -40,7 +40,7 @@ export function UndoDeletionForm({ token }: Props) {
         setStatus("error");
         setError(
           body.error === "username_mismatch"
-            ? "Username didn't match. Type it exactly as you registered."
+            ? "That didn't match your username or email. Type one exactly as you registered."
             : body.error === "already_purged"
               ? "Too late - the 7-day grace period has elapsed and your account is gone. We're sorry."
               : body.error === "not_found"
@@ -97,9 +97,9 @@ export function UndoDeletionForm({ token }: Props) {
         Restore your account?
       </h1>
       <p className="text-muted text-sm mb-6">
-        Type your username to confirm you want to cancel the scheduled
-        deletion. This brings your account, bots, and data back to normal
-        immediately.
+        Type your username or email to confirm you want to cancel the
+        scheduled deletion. This brings your account, bots, and data back to
+        normal immediately.
       </p>
 
       <form className="space-y-4" onSubmit={handleSubmit} noValidate>
@@ -108,13 +108,14 @@ export function UndoDeletionForm({ token }: Props) {
             htmlFor="undo-username"
             className="block text-xs font-semibold mb-1.5"
           >
-            Username
+            Username or email
           </label>
           <input
             id="undo-username"
             type="text"
             value={typedUsername}
             onChange={(e) => setTypedUsername(e.target.value)}
+            placeholder="your-username or you@example.com"
             autoComplete="off"
             autoFocus
             required

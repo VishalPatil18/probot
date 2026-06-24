@@ -39,7 +39,7 @@ type Bot = {
   // Optional free-form additions to the system prompt.
   // Length is capped at the Zod layer (max 2000). When null/empty/whitespace,
   // the block is omitted entirely so a non-customising bot's prompt is byte-
-  // identical to its pre-Stage-7 shape.
+  // identical to its earlier shape.
   customInstructions?: string | null;
 };
 

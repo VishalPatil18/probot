@@ -11,6 +11,7 @@ interface SidebarAccountFooterProps {
   llmModel: string | null;
   user: { name: string; email: string; initials: string };
   settingsHref: string;
+  modelHref: string;
 }
 
 // Sidebar footer: the AI-model status card plus the profile row + sign-out
@@ -22,6 +23,7 @@ export function SidebarAccountFooter({
   llmModel,
   user,
   settingsHref,
+  modelHref,
 }: SidebarAccountFooterProps) {
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
@@ -66,7 +68,11 @@ export function SidebarAccountFooter({
             </div>
           </div>
         ) : (
-          <ModelStatusCard provider={llmProvider} model={llmModel} />
+          <ModelStatusCard
+            provider={llmProvider}
+            model={llmModel}
+            manageHref={modelHref}
+          />
         )}
       </div>
 

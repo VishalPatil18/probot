@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { generateRawToken, hashToken } from "@/lib/auth/tokens";
 import { type Bot, botTokens, bots, db } from "@/lib/db";
 
-// Stage 9 bot-token service. A self-hosted `probot-bot` runtime authenticates
+// Bot-token service. A self-hosted `probot-bot` runtime authenticates
 // to /api/v1/bot/* with one of these tokens. The raw token is shown to the
 // owner exactly once at mint time; only its SHA-256 hash is stored (same model
 // as the password-reset / email-verification tokens), so a DB dump can't be

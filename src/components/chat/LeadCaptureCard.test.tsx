@@ -23,6 +23,16 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+// Fill the three required fields (name, email, company).
+async function fillRequired(
+  user: ReturnType<typeof userEvent.setup>,
+  email = "rec@example.com",
+) {
+  await user.type(screen.getByLabelText(/your name/i), "Rec Ruiter");
+  await user.type(screen.getByLabelText(/email address/i), email);
+  await user.type(screen.getByLabelText(/^company$/i), "Acme Inc");
+}
+
 describe("LeadCaptureCard", () => {
   beforeEach(() => {
     baseProps.onDismiss = vi.fn();
@@ -42,10 +52,11 @@ describe("LeadCaptureCard", () => {
   });
 
   it("shows an inline error on invalid email and does not POST", async () => {
+    const user = userEvent.setup();
     const { container } = render(<LeadCaptureCard {...baseProps} />);
-    fireEvent.change(screen.getByLabelText(/email/i), {
-      target: { value: "not-an-email" },
-    });
+    await user.type(screen.getByLabelText(/your name/i), "Rec Ruiter");
+    await user.type(screen.getByLabelText(/email address/i), "not-an-email");
+    await user.type(screen.getByLabelText(/^company$/i), "Acme Inc");
     const form = container.querySelector("form");
     if (!form) throw new Error("form not found");
     fireEvent.submit(form);
@@ -55,13 +66,13 @@ describe("LeadCaptureCard", () => {
     ).toHaveLength(0);
   });
 
-  it("POSTs to /api/bots/:botId/leads with email + conversationId + contextSummary on valid submit", async () => {
+  it("POSTs name + email + company + conversationId + contextSummary on valid submit", async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       jsonResponse(201, { lead: { id: "lead-1" }, deduped: false }),
     );
     const user = userEvent.setup();
     render(<LeadCaptureCard {...baseProps} />);
-    await user.type(screen.getByLabelText(/email/i), "rec@example.com");
+    await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit/i }));
 
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
@@ -69,7 +80,9 @@ describe("LeadCaptureCard", () => {
       .calls[0] as [string, RequestInit];
     expect(url).toBe(`/api/bots/${BOT_ID}/leads`);
     const body = JSON.parse(init.body as string) as Record<string, string>;
+    expect(body.name).toBe("Rec Ruiter");
     expect(body.email).toBe("rec@example.com");
+    expect(body.company).toBe("Acme Inc");
     expect(body.conversationId).toBe(CONV_ID);
     expect(body.contextSummary).toBe("asked about ML");
   });
@@ -81,7 +94,7 @@ describe("LeadCaptureCard", () => {
     const onCaptured = vi.fn();
     const user = userEvent.setup();
     render(<LeadCaptureCard {...baseProps} onCaptured={onCaptured} />);
-    await user.type(screen.getByLabelText(/email/i), "rec@example.com");
+    await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit/i }));
     expect(
       await screen.findByText(/thanks! jane doe will be in touch/i),
@@ -102,12 +115,11 @@ describe("LeadCaptureCard", () => {
     );
     const user = userEvent.setup();
     render(<LeadCaptureCard {...baseProps} />);
-    await user.type(screen.getByLabelText(/email/i), "rec@example.com");
+    await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /something went wrong/i,
     );
-    // Form stays in 'prompt' state - Submit is enabled again
     expect(screen.getByRole("button", { name: /submit/i })).not.toBeDisabled();
   });
 
@@ -117,7 +129,7 @@ describe("LeadCaptureCard", () => {
     );
     const user = userEvent.setup();
     render(<LeadCaptureCard {...baseProps} conversationId={null} />);
-    await user.type(screen.getByLabelText(/email/i), "rec@example.com");
+    await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit/i }));
     const init = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[1] as RequestInit;

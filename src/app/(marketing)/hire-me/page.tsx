@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { Icon } from "@/components/ui/Icon";
 import { buildMetadata } from "@/lib/seo/site";
 
 export const metadata = buildMetadata({
@@ -13,9 +12,8 @@ const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
 const EMAIL = "vishalpatil.imp@gmail.com";
-// Set this to the CNBC article URL once available; until then the mention
-// renders as plain text (no link) so we never ship a broken/placeholder link.
-const CNBC_ARTICLE_URL = "#";
+const CNBC_ARTICLE_URL =
+  "https://www.cnbc.com/2026/04/30/these-2-job-seekers-built-ai-chatbots-to-talk-to-recruiters-for-them.html";
 
 const SKILLS = [
   "Spec-Driven Development",
@@ -27,7 +25,6 @@ const SKILLS = [
 ];
 
 export default function HireMePage() {
-  const hasCnbcLink = CNBC_ARTICLE_URL !== "#";
   return (
     <section className="dot-pattern border-b border-border-base">
       <div className="mx-auto max-w-[920px] px-6 py-16 lg:py-24">
@@ -36,18 +33,47 @@ export default function HireMePage() {
           &amp; Europe
         </span>
         <h1 className="font-display mt-5 text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.05]">
-          Hi, I&apos;m Vishal Patil - the engineer behind ProBot.
+          Hi, I&apos;m Vishal Patil
         </h1>
-        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-muted">
-          I build product-grade software with a{" "}
-          <strong className="text-ink">Spec-Driven Development</strong> approach:
-          write the spec, derive the plan, then ship in small, verifiable slices.
-          ProBot itself was built this way - multi-provider LLMs, RAG, envelope
-          encryption, GDPR flows, and a documented build log behind every stage.
+        <h3 className="font-display mt-5 text-2xl font-bold tracking-tight leading-[1.05]">
+          I build AI products people actually use.
+        </h3>
+        <p className="mt-5 max-w-3xl text-lg leading-relaxed text-muted text-justify">
+          I&apos;m a AI engineer and researcher who ships end-to-end{" "}
+          <a
+            href="https://vishalpatil.vercel.app/build"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand font-semibold hover:underline"
+          >
+            products
+          </a>{" "}
+          from specifications to production. My last project,{" "}
+          <a
+            href="https://vishalpatil.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand font-semibold hover:underline"
+          >
+            VAi
+          </a>{" "}
+          an AI assistant that talks to recruiters on a job seeker&apos;s
+          behalf, went viral and was{" "}
+          <a
+            href={CNBC_ARTICLE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand font-semibold hover:underline"
+          >
+            featured by CNBC
+          </a>
+          . So many people asked for their own that I turned the idea into{" "}
+          <strong className="text-ink">ProBot</strong> a free, open-source
+          platform anyone can use.
         </p>
 
-        <div className="mt-8 rounded-2xl border border-border-base bg-white p-6 shadow-soft">
-          <p className="text-sm font-semibold">What I bring</p>
+        <div className="mt-8 max-w-3xl rounded-2xl border border-border-base bg-white p-6 shadow-soft">
+          <p className="text-sm font-semibold">What I bring to the table</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {SKILLS.map((skill) => (
               <span
@@ -60,41 +86,34 @@ export default function HireMePage() {
           </div>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-6">
+        <div className="mt-6 max-w-3xl rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <p className="text-sm font-semibold text-amber-900">
-            Featured by CNBC
+            As featured by CNBC
           </p>
           <p className="mt-1 text-sm leading-relaxed text-amber-900/90">
-            My earlier project <strong>VAi</strong> - a personal portfolio AI
-            assistant - was featured by CNBC. VAi is the engine ProBot grew out
-            of. {hasCnbcLink ? (
-              <a
-                href={CNBC_ARTICLE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold underline"
-              >
-                Read the feature
-              </a>
-            ) : (
-              <span className="font-medium">Ask me for the details.</span>
-            )}
+            CNBC covered <strong>VAi</strong> - my AI assistant that chats with
+            recruiters for job seekers - and the engineer behind it. That
+            attention, and the flood of people wanting their own, is exactly why
+            ProBot exists.{" "}
+            <a
+              href={CNBC_ARTICLE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold underline"
+            >
+              Read the CNBC Article
+            </a>
           </p>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <a
-            href={`mailto:${EMAIL}`}
-            className="btn btn-primary !px-6 !py-3 !text-base"
-          >
-            Get in touch
-          </a>
+        <div className="mt-8 max-w-3xl flex flex-wrap items-center gap-3">
           <a
             href={PORTFOLIO_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary !px-6 !py-3 !text-base"
           >
+            <Icon name="portfolio" className="text-red-600" />
             Portfolio
           </a>
           <a
@@ -103,6 +122,7 @@ export default function HireMePage() {
             rel="noopener noreferrer"
             className="btn btn-secondary !px-6 !py-3 !text-base"
           >
+            <Icon name="github" className="text-gray-900" />
             GitHub
           </a>
           <a
@@ -111,17 +131,16 @@ export default function HireMePage() {
             rel="noopener noreferrer"
             className="btn btn-secondary !px-6 !py-3 !text-base"
           >
+            <Icon name="linkedin" className="text-brand" />
             LinkedIn
           </a>
+          <a
+            href={`mailto:${EMAIL}`}
+            className="btn btn-primary !px-6 !py-3 !text-base"
+          >
+            Get in touch
+          </a>
         </div>
-
-        <p className="mt-8 text-sm text-muted">
-          Curious how I work? Every stage of ProBot ships with a written plan and
-          build log.{" "}
-          <Link href="/roadmap" className="text-brand font-semibold hover:underline">
-            See the roadmap →
-          </Link>
-        </p>
       </div>
     </section>
   );
