@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: "ProBot is a BYO-key chatbot platform that turns your resume into a recruiter-facing AI bot."
+description: "ProBot is a chatbot platform that turns your resume into a recruiter-facing AI bot."
 ---
 
 ## What ProBot is
@@ -8,6 +8,12 @@ description: "ProBot is a BYO-key chatbot platform that turns your resume into a
 ProBot is a multi-tenant, open-source platform for job seekers. You paste your resume and bio, pick an LLM provider (Anthropic, OpenAI, Azure OpenAI, or Google), and paste **your own API key**. ProBot keeps the key only in your browser's `localStorage` and forwards it on each chat request - the server never sees, logs, or persists it.
 
 Recruiters then chat with your bot at a public URL or via an embeddable `<script>` widget.
+
+<Info>
+  **ProBot is free and open source (MIT).** Read every line, fork it, audit the
+  security yourself, or self-host it. Source:
+  [github.com/vishalpatil18/probot](https://github.com/vishalpatil18/probot).
+</Info>
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
@@ -20,12 +26,8 @@ Recruiters then chat with your bot at a public URL or via an embeddable `<script
   >
     Walk through the 5-step bot factory.
   </Card>
-  <Card
-    title="Architecture"
-    icon="diagram-project"
-    href="/concepts/architecture"
-  >
-    How the Next.js app, Postgres, and LLM clients fit together.
+  <Card title="How to use ProBot" icon="compass" href="/guides/how-to-use">
+    A tour of every feature, from building to sharing to analytics.
   </Card>
   <Card title="BYO-key model" icon="key" href="/concepts/byo-key">
     Why your API key never touches the server.
@@ -47,7 +49,7 @@ Most "AI chatbot for your resume" products either ask you to upload your resume 
 - **Pick a provider** you already use: Anthropic Claude, OpenAI GPT, Azure OpenAI, or Google Gemini (stub).
 - **Trust defense-in-depth security.** ~35 prompt-injection patterns, 4 output-leakage checks, Unicode normalization before pattern matching, markdown rendered safely.
 
-The public chat URL, embeddable widget, lead capture, and analytics are on the [roadmap](/concepts/stages).
+The public chat URL, embeddable widget, lead capture, and analytics are on the [roadmap](/release-notes/roadmap).
 
 ## How this documentation is organized
 

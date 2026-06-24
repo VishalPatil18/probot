@@ -7,7 +7,7 @@ import { authOptions } from "@/lib/auth/auth";
 import { db, users } from "@/lib/db";
 import { isPlaceholderUsername } from "@/lib/users/placeholder";
 
-// Stage 4 plan.md §4: OAuth/magic-link users land here on first sign-in to
+// OAuth/magic-link users land here on first sign-in to
 // (a) pick a real username (replacing the `user-<8hex>` placeholder) and
 // (b) optionally pick a different animal-icon avatar. Already-onboarded
 // users (real username) bounce straight to /dashboard.

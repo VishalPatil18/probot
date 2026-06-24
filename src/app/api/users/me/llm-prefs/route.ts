@@ -9,7 +9,7 @@ import { db, users } from "@/lib/db";
 
 // PATCH /api/users/me/llm-prefs
 //
-// Stage 7 Phase 3 - backs the dashboard's provider/model switcher. Only
+// Backs the dashboard's provider/model switcher. Only
 // non-sensitive preference columns (llmProvider, llmModel) are touched.
 // The actual API key never goes through this endpoint; it lives either in
 // the user's browser (self-host) or in encrypted_llm_keys per bot (managed).

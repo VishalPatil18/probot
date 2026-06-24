@@ -14,11 +14,11 @@ describe("BotSwitcher", () => {
         bots={[{ id: "b-1", name: "Jane Doe" }]}
         selectedBotId="b-1"
         selectedBotName="Jane Doe"
-        publicUrl="probot.com/u/jane"
+        publicUrl="pro-bot.dev/u/jane"
       />,
     );
     expect(screen.getByText("Jane Doe")).toBeInTheDocument();
-    expect(screen.getByText("probot.com/u/jane")).toBeInTheDocument();
+    expect(screen.getByText("pro-bot.dev/u/jane")).toBeInTheDocument();
   });
 
   it("disables the toggle (no caret, no expand) when the user has a single bot", () => {
@@ -27,7 +27,7 @@ describe("BotSwitcher", () => {
         bots={[{ id: "b-1", name: "Jane Doe" }]}
         selectedBotId="b-1"
         selectedBotName="Jane Doe"
-        publicUrl="probot.com/u/jane"
+        publicUrl="pro-bot.dev/u/jane"
       />,
     );
     const button = screen.getByRole("button");
@@ -45,7 +45,7 @@ describe("BotSwitcher", () => {
         ]}
         selectedBotId="b-1"
         selectedBotName="Jane Doe"
-        publicUrl="probot.com/u/jane"
+        publicUrl="pro-bot.dev/u/jane"
       />,
     );
     fireEvent.click(screen.getByRole("button", { expanded: false }));
@@ -63,7 +63,7 @@ describe("BotSwitcher", () => {
         ]}
         selectedBotId="b-1"
         selectedBotName="Jane"
-        publicUrl="probot.com/u/jane"
+        publicUrl="pro-bot.dev/u/jane"
       />,
     );
     fireEvent.click(screen.getByRole("button", { expanded: false }));
@@ -81,7 +81,7 @@ describe("BotSwitcher", () => {
         ]}
         selectedBotId="b-1"
         selectedBotName="Jane"
-        publicUrl="probot.com/u/jane"
+        publicUrl="pro-bot.dev/u/jane"
       />,
     );
     fireEvent.click(screen.getByRole("button", { expanded: false }));

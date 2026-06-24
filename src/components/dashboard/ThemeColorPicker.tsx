@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { isValidThemeColor } from "@/lib/bots/theme-color";
 
-// Stage 5: theme color editor for the bot detail page.
+// Theme color editor for the bot detail page.
 // Uses the native <input type="color"> which gives the user a real picker
 // on every modern browser at zero implementation cost. Submits via
 // PATCH /api/bots/[botId] - that route accepts a single field at a time,

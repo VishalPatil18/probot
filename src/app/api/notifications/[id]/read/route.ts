@@ -6,7 +6,7 @@ import { db, notifications } from "@/lib/db";
 
 // POST /api/notifications/[id]/read
 //
-// Stage 6 §6.6: mark a single notification as read. Ownership check is
+// Mark a single notification as read. Ownership check is
 // embedded in the WHERE clause (`AND user_id = session.user.id`) - one
 // statement, no separate SELECT. A 0-row update means either the
 // notification doesn't exist OR it belongs to another user; both are

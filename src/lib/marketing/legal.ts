@@ -17,6 +17,10 @@ export const MINIMUM_AGE = 16;
 export const DELETION_GRACE_DAYS = 7;
 export const DELETION_FINAL_DAYS = 30;
 export const LEGAL_EFFECTIVE_DATE = "June 21, 2026";
+// Parsed form of LEGAL_EFFECTIVE_DATE for comparison against a user's
+// last_legal_ack_date. The dashboard ToS banner shows when this is newer than
+// the user's acknowledgement (or they've never acknowledged).
+export const LEGAL_EFFECTIVE_AT = new Date(LEGAL_EFFECTIVE_DATE);
 
 export const GOOGLE_USER_DATA_POLICY_URL =
   "https://developers.google.com/terms/api-services-user-data-policy";

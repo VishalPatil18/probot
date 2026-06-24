@@ -5,6 +5,10 @@ import { notFound } from "next/navigation";
 import { AccountTab } from "@/components/dashboard/settings/AccountTab";
 import { AIModelKeyTab } from "@/components/dashboard/settings/AIModelKeyTab";
 import { BotConfigTab } from "@/components/dashboard/settings/BotConfigTab";
+import {
+  DeployTab,
+  type DeploymentMode,
+} from "@/components/dashboard/settings/DeployTab";
 import { KnowledgeTab } from "@/components/dashboard/settings/KnowledgeTab";
 import { SecurityTab } from "@/components/dashboard/settings/SecurityTab";
 import {
@@ -17,17 +21,17 @@ import { bots, db, users } from "@/lib/db";
 import type { Personality } from "@/lib/bots/schemas";
 import { PERSONALITY_PRESETS } from "@/lib/bots/schemas";
 
-// Slice B settings page - 5 tabs ported from design/settings.html.
+// Settings page - 5 tabs ported from design/settings.html.
 // URL state lives in `?tab=` so deep links into a specific tab work
 // (e.g. /dashboard/bots/<id>/settings?tab=kb).
 //
 // Tabs:
-//   Account            - read-only user display (write endpoints Stage 7)
+//   Account            - read-only user display (write endpoints are a future addition)
 //   Bot configuration  - status toggle + name/headline/personality/theme
 //                         + suggested questions; PATCHes /api/bots/[botId]
 //   Knowledge base     - list + delete + upload + re-index (slice-2 endpoints)
 //   Security & privacy - rate-limit display + Coming Soon panels
-//   AI model & key     - entire tab Coming Soon (Stage 7 editor)
+//   AI model & key     - entire tab Coming Soon (future editor)
 
 function isPersonality(value: string): value is Personality {
   return (PERSONALITY_PRESETS as readonly string[]).includes(value);
@@ -61,6 +65,7 @@ export default async function BotSettingsPage({
         id: true,
         name: true,
         headline: true,
+        image: true,
         personality: true,
         suggestedQuestions: true,
         isActive: true,
@@ -70,6 +75,7 @@ export default async function BotSettingsPage({
         rateLimitPerDay: true,
         rateLimitMaxChars: true,
         previewToken: true,
+        deploymentMode: true,
       },
     }),
     db.query.users.findFirst({
@@ -93,9 +99,10 @@ export default async function BotSettingsPage({
       <SettingsTabs>
         <SettingsTabPanel tab="account">
           <AccountTab
-            name={accountName}
+            name={session.user.name ?? ""}
             email={accountEmail}
             username={session.user.username}
+            image={session.user.image ?? null}
             initials={accountInitials}
           />
         </SettingsTabPanel>
@@ -104,6 +111,7 @@ export default async function BotSettingsPage({
           <BotConfigTab
             botId={bot.id}
             ownerUsername={session.user.username}
+            initialImage={bot.image}
             initialName={bot.name}
             initialHeadline={bot.headline ?? ""}
             initialPersonality={personality}
@@ -141,6 +149,14 @@ export default async function BotSettingsPage({
             botId={bot.id}
             provider={userRow?.llmProvider ?? null}
             model={userRow?.llmModel ?? null}
+          />
+        </SettingsTabPanel>
+
+        <SettingsTabPanel tab="deploy">
+          <DeployTab
+            botId={bot.id}
+            ownerUsername={session.user.username}
+            initialMode={(bot.deploymentMode as DeploymentMode) ?? "managed"}
           />
         </SettingsTabPanel>
       </SettingsTabs>

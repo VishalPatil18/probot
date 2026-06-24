@@ -10,7 +10,7 @@ describe("MetricTile", () => {
     expect(screen.getByText("128")).toBeInTheDocument();
   });
 
-  it("renders a faded growth pill when fadedGrowth is supplied", () => {
+  it("renders a positive growth pill in the success colour", () => {
     render(
       <MetricTile
         label="Total messages"
@@ -21,7 +21,19 @@ describe("MetricTile", () => {
     );
     const pill = screen.getByText("+24%");
     expect(pill).toBeInTheDocument();
-    expect(pill.className).toContain("opacity");
+    expect(pill.className).toContain("text-success");
+  });
+
+  it("renders a negative growth pill in the rose colour", () => {
+    render(
+      <MetricTile
+        label="Total messages"
+        value={612}
+        icon="chat"
+        fadedGrowth="-8%"
+      />,
+    );
+    expect(screen.getByText("-8%").className).toContain("text-rose-600");
   });
 
   it("renders a Coming Soon pill + fades the value when comingSoon=true", () => {

@@ -9,7 +9,7 @@ const MAX_ROWS = 200; // cap response payload regardless of retention window
 
 // GET /api/bots/[botId]/llm-key/audit
 //
-// Stage 7 Phase 3 - decrypt audit log for the dashboard.
+// Decrypt audit log for the dashboard.
 //
 // Returns:
 //   {

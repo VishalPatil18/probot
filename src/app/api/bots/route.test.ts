@@ -99,7 +99,7 @@ describe("POST /api/bots", () => {
     txInsertReturningMock.mockReset();
     txUpdateBotsSetMock.mockReset();
     txUpdateBotsWhereMock.mockReset();
-    // Stage 7: the create path also UPDATEs the just-inserted row with the
+    // The create path also UPDATEs the just-inserted row with the
     // minted previewToken. Default the mock so the destructure doesn't blow
     // up; individual tests can override.
     txUpdateBotsReturningMock
@@ -177,9 +177,9 @@ describe("POST /api/bots", () => {
     expect(inserted.contextText).toBe(
       "I am an ML engineer with 5 years experience.",
     );
-    // Stage 7 §FR-002.10: new bots are created as drafts.
+    // New bots are created as drafts.
     expect(inserted.isActive).toBe(false);
-    // Stage 7: the route follows the INSERT with an UPDATE that sets the
+    // The route follows the INSERT with an UPDATE that sets the
     // previewToken on the newly-created bot row.
     expect(txUpdateBotsSetMock).toHaveBeenCalledTimes(1);
     const updatedSet = txUpdateBotsSetMock.mock.calls[0]?.[0] as Record<

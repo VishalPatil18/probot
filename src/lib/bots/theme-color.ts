@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Stage 5: per-bot theme color used by the embeddable widget (and the
+// Per-bot theme color used by the embeddable widget (and the
 // signature badge). Stored as `#RRGGBB` so it fits a `varchar(7)` column
 // exactly. Single source of truth for the validator + default - used by the
 // bot Zod schema, the PATCH route, and the widget's fallback path.

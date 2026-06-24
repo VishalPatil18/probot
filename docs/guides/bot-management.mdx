@@ -1,0 +1,44 @@
+---
+title: Managing your bot
+description: "Everything in Bot configuration: status, identity, knowledge, rate limits, presets, deployment, and deletion."
+---
+
+Open your bot's **Settings → Bot configuration** to manage it. This page covers each control.
+
+## Bot status (live / off)
+
+The status toggle publishes or hides your bot. **It saves instantly** - flip it off and the public chat URL immediately returns a private-preview page; flip it on and it's live. No "Save" needed.
+
+A brand-new bot starts as a draft with a private preview URL so you can test it before publishing.
+
+## Identity
+
+Set the **name**, **headline**, **personality**, and **theme color**. These shape how the bot introduces itself and how the chat looks. See [Personality](/guides/personality) and [Themes & avatar](/guides/themes-and-avatar).
+
+## Knowledge base
+
+Add or remove the resume PDFs and text that ground your bot's answers. The bot only answers from this knowledge - if it isn't in there, the bot won't make it up. See [Build your bot](/guides/build-your-bot).
+
+## Custom instructions
+
+Free-form guidance layered on top of the personality (e.g. "always mention I'm open to relocation"). See [Custom instructions](/guides/custom-instructions).
+
+## Suggested questions
+
+The starter chips shown under the chat intro to help recruiters begin.
+
+## Rate limits
+
+Per-bot caps (per-minute, per-day, max characters per message) protect your LLM credits. Blank = use the server default. Limits apply per bot, not per recruiter.
+
+## Deployment mode
+
+Choose **managed** (served by pro-bot.dev) or **self-hosted** (run the `probot-bot` runtime yourself). See [Deployment](/guides/deployment).
+
+## Save settings as a preset
+
+Below the danger zone, **Save bot settings** stores the current configuration as a reusable **preset** (no keys or secrets are saved). Presets are kept on your account so you can reuse them when multi-bot creation arrives.
+
+## Deleting a bot
+
+The **Danger zone** permanently deletes the bot, its knowledge, conversations, leads, and any stored encrypted key. This can't be undone (it's distinct from deleting your whole account).

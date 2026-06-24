@@ -2,7 +2,7 @@ import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 
 import { bots, conversations, db, messages } from "@/lib/db";
 
-// Stage 6 shared conversation queries. Called by both the slice-6.2 API
+// Shared conversation queries. Called by both the API
 // routes and the slice-6.3 RSC dashboard pages.
 //
 // **Caller contract - tenancy is the caller's responsibility.** These
@@ -146,7 +146,7 @@ export async function getConversationWithMessages(args: {
   };
 }
 
-// Cross-bot conversation feed for the dashboard home (Slice A redesign).
+// Cross-bot conversation feed for the dashboard home.
 // Includes a first-user-message preview just like `listConversations`,
 // plus the bot id/name so the dashboard can label each row with which
 // bot the conversation belongs to.

@@ -22,6 +22,7 @@ type NotificationItem = {
 
 type ListResponse = {
   items: NotificationItem[];
+  notifyLeadsEmail?: boolean;
   total: number;
   unreadCount: number;
 };
@@ -44,7 +45,7 @@ function relTime(iso: string): string {
   return `${day}d ago`;
 }
 
-// Stage 6 §6.6: dropdown panel that mounts inside <NotificationBell>. Fetches
+// Dropdown panel that mounts inside <NotificationBell>. Fetches
 // the most recent 10 notifications on open, supports per-item mark-read +
 // navigate, and a "Mark all read" footer. Items are rendered with a
 // pre-denormalized payload (botName, email, contextSummary, etc.) so no
@@ -58,12 +59,22 @@ export function NotificationDropdown({
   const [items, setItems] = useState<NotificationItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // null until loaded so the toggle stays hidden rather than flashing a
+  // possibly-wrong default.
+  const [emailLeads, setEmailLeads] = useState<boolean | null>(null);
+
   useEffect(() => {
     let alive = true;
     fetch("/api/notifications?limit=10")
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
       .then((body: ListResponse) => {
-        if (alive) setItems(body.items);
+        if (!alive) return;
+        setItems(body.items);
+        // The lead-email pref rides the same response; keep it null (toggle
+        // hidden) when absent rather than flashing a wrong default.
+        if (typeof body.notifyLeadsEmail === "boolean") {
+          setEmailLeads(body.notifyLeadsEmail);
+        }
       })
       .catch(() => {
         if (alive) setError("Couldn't load notifications.");
@@ -72,6 +83,20 @@ export function NotificationDropdown({
       alive = false;
     };
   }, []);
+
+  async function toggleEmailLeads(next: boolean) {
+    setEmailLeads(next); // optimistic
+    try {
+      const res = await fetch("/api/users/me/notification-prefs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifyLeadsEmail: next }),
+      });
+      if (!res.ok) setEmailLeads(!next);
+    } catch {
+      setEmailLeads(!next);
+    }
+  }
 
   async function handleItemClick(item: NotificationItem) {
     // Mark read first; the navigation can fire in parallel since the
@@ -184,6 +209,18 @@ export function NotificationDropdown({
           </ul>
         )}
       </div>
+
+      {emailLeads !== null ? (
+        <label className="flex items-center justify-between gap-3 border-t border-border-base px-4 py-3 text-xs">
+          <span className="font-medium text-ink">Email me new leads</span>
+          <input
+            type="checkbox"
+            checked={emailLeads}
+            onChange={(e) => void toggleEmailLeads(e.target.checked)}
+            className="h-4 w-4 rounded border-border-base text-brand focus:ring-brand"
+          />
+        </label>
+      ) : null}
     </div>
   );
 }

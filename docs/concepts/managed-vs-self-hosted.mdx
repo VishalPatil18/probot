@@ -1,0 +1,31 @@
+---
+title: Managed vs self-hosted
+description: "Two ways to run your bot's chat - served by pro-bot.dev or by your own probot-bot runtime - and how your LLM key is handled in each."
+---
+
+Every bot has a **deployment mode** that decides where its chat runtime lives. The dashboard, knowledge base, conversations, and leads always live on the managed platform; the only thing that moves is where the chat itself runs and where your LLM key lives.
+
+## At a glance
+
+| | **Managed (pro-bot.dev)** | **Self-hosted bot** |
+| --- | --- | --- |
+| Where the chat runs | pro-bot.dev | Your `probot-bot` runtime |
+| Public chat URL | `pro-bot.dev/u/<username>/chat` | Your own domain |
+| Where your LLM key lives | Your browser (encrypted) | Your runtime's env |
+| Dashboard, knowledge, leads | Managed platform | Managed platform |
+| Cost | Free | Free (you pay only your own infra + LLM provider) |
+| Setup | None - sign up and build | Mint a token + deploy `probot-bot` |
+
+## How your LLM key is handled
+
+In **managed** mode your LLM API key never leaves your browser as plaintext by default. It's held in a hardened browser store (IndexedDB + a non-extractable Web Crypto key) and sent per-request in the `x-llm-api-key` header, used once server-side, and discarded. It is never written to the database and never logged. (You can optionally opt in to [managed key storage](/guides/managed-key-storage), where the key is envelope-encrypted at rest.)
+
+In **self-hosted** mode the chat runs in your own [`probot-bot`](/self-hosted-bot/index) runtime, so your LLM key lives in *your* runtime's environment and never touches pro-bot.dev at all.
+
+## When to self-host the bot
+
+Choose a self-hosted bot when you want the chat served from your own domain, want zero trust in any operator for the chat path, or want a tiny, auditable runtime you control. Everything you need is in [Self-hosting your bot](/self-hosted-bot/index).
+
+## When managed is enough
+
+For most job seekers the managed mode is the fastest path: there's nothing to deploy, the key stays in your browser by default, and you can [export](/guides/account-deletion#export-your-data) or [delete](/guides/account-deletion) everything at any time.

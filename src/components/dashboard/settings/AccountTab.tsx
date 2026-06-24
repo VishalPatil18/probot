@@ -1,110 +1,313 @@
-import { ComingSoonPill } from "../ComingSoonPill";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
+import { PasswordInput } from "@/components/auth/PasswordInput";
+import { useDebouncedValue } from "@/lib/client/use-debounced-value";
+
+import { AvatarUploader } from "./AvatarUploader";
 
 type Props = {
   name: string;
   email: string;
   username: string;
+  image: string | null;
   initials: string;
 };
 
-// Slice B - Account tab. Slice 6.5 only edits bot-scoped fields; user-
-// scoped account editing (name / email / username / password / photo
-// upload) lands in Stage 7 when we wire the corresponding endpoints.
-// Inputs render as read-only displays of the current values with
-// Coming Soon pills on each section header so users see what's coming
-// without being misled into thinking the form already works.
-export function AccountTab({ name, email, username, initials }: Props) {
+interface FieldAvailability {
+  available: boolean;
+  reason?: string;
+}
+
+const PASSWORD_ERRORS: Record<string, string> = {
+  invalid_current_password: "Your current password is incorrect.",
+  no_password_set:
+    "Your account uses social sign-in, so there's no password to change.",
+  validation_failed: "New password must be at least 8 characters.",
+};
+
+// Settings → Account. Editable profile (photo upload, full name, username with a
+// debounced availability check) and a password-change form. Each section saves
+// independently to its own endpoint; the page is refreshed after a successful
+// save so the server-rendered session values re-read.
+export function AccountTab({ name, email, username, image, initials }: Props) {
+  const router = useRouter();
+
+  const [fullName, setFullName] = useState(name);
+  const [usernameValue, setUsernameValue] = useState(username);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSaved, setPwSaved] = useState(false);
+
+  // Debounced username availability. The user's own current username is always
+  // "available" to them, so only changed values are checked.
+  const debouncedUsername = useDebouncedValue(usernameValue, 400);
+  const [usernameStatus, setUsernameStatus] =
+    useState<FieldAvailability | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+
+  useEffect(() => {
+    if (debouncedUsername === username || debouncedUsername.length < 3) {
+      setUsernameStatus(null);
+      return;
+    }
+    let cancelled = false;
+    setCheckingUsername(true);
+    fetch(
+      `/api/auth/check-availability?username=${encodeURIComponent(debouncedUsername)}`,
+    )
+      .then((response) => (response.ok ? response.json() : {}))
+      .then((data: { username?: FieldAvailability }) => {
+        if (!cancelled) setUsernameStatus(data.username ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setUsernameStatus(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingUsername(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedUsername, username]);
+
+  const usernameTaken = usernameStatus?.available === false;
+  const profileDirty = fullName !== name || usernameValue !== username;
+  const profileDisabled =
+    profileSaving || checkingUsername || usernameTaken || !profileDirty;
+
+  async function handleProfileSave() {
+    setProfileError(null);
+    setProfileSaved(false);
+    setProfileSaving(true);
+    try {
+      const res = await fetch("/api/users/me/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: fullName, username: usernameValue }),
+      });
+      if (res.status === 409) {
+        setProfileError("That username is taken. Pick another.");
+        return;
+      }
+      if (!res.ok) {
+        setProfileError(
+          "Username must be 3–30 lowercase letters, numbers, or hyphens.",
+        );
+        return;
+      }
+      setProfileSaved(true);
+      router.refresh();
+    } catch {
+      setProfileError("Network error. Please try again.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function handlePasswordSave(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPwError(null);
+    setPwSaved(false);
+    setPwSaving(true);
+    try {
+      const res = await fetch("/api/users/me/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setPwError(
+          PASSWORD_ERRORS[payload.error ?? ""] ??
+            "Could not update password. Please try again.",
+        );
+        return;
+      }
+      setPwSaved(true);
+      setCurrentPassword("");
+      setNewPassword("");
+    } catch {
+      setPwError("Network error. Please try again.");
+    } finally {
+      setPwSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="font-bold">Profile</h3>
-          <ComingSoonPill />
-        </div>
+        <h3 className="mb-5 font-bold">Profile</h3>
 
-        <div className="mb-6 flex items-center gap-4">
-          <div className="brand-blue-gradient font-display grid size-16 place-items-center rounded-full text-xl font-extrabold text-white">
-            {initials}
-          </div>
-          <button
-            type="button"
-            disabled
-            className="btn btn-secondary !py-2 cursor-not-allowed text-xs opacity-60"
-          >
-            Change photo
-          </button>
-        </div>
+        <div className="flex flex-col gap-6 sm:flex-row">
+          <AvatarUploader
+            initialImage={image}
+            uploadUrl="/api/users/me/avatar"
+            ariaLabel="Change profile photo"
+            fallback={
+              <div className="brand-blue-gradient font-display grid size-full place-items-center text-xl font-extrabold text-white">
+                {initials}
+              </div>
+            }
+          />
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <ReadOnlyField label="Full name" value={name || "-"} />
-          <ReadOnlyField label="Email" value={email || "-"} />
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-xs font-semibold">
-              Username
-            </label>
-            <div className="flex items-center overflow-hidden rounded-xl border border-border-base bg-neutral-50">
-              <span className="pl-3 pr-1 text-sm text-muted">
-                probot.com/u/
-              </span>
-              <span className="flex-1 py-2.5 pr-3 text-sm text-ink">
-                {username}
-              </span>
+          <div className="flex-1 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="account-name"
+                  className="mb-1.5 block text-xs font-semibold"
+                >
+                  Full name
+                </label>
+                <input
+                  id="account-name"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  maxLength={100}
+                  autoComplete="name"
+                  className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm outline-none focus:border-brand transition-colors"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold">
+                  Email
+                </label>
+                <div className="w-full rounded-xl border border-border-base bg-neutral-50 px-3 py-2.5 text-sm text-muted">
+                  {email || "-"}
+                </div>
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor="account-username"
+                className="mb-1.5 block text-xs font-semibold"
+              >
+                Username
+              </label>
+              <div className="flex items-center overflow-hidden rounded-xl border border-border-base bg-white focus-within:border-brand transition-colors">
+                <span className="pl-3 pr-1 text-sm text-muted">
+                  pro-bot.dev/u/
+                </span>
+                <input
+                  id="account-username"
+                  type="text"
+                  value={usernameValue}
+                  onChange={(e) =>
+                    setUsernameValue(
+                      e.target.value.toLowerCase().replace(/\s+/g, "-"),
+                    )
+                  }
+                  minLength={3}
+                  maxLength={30}
+                  autoComplete="username"
+                  aria-invalid={usernameTaken}
+                  className="flex-1 bg-transparent py-2.5 pr-3 text-sm outline-none"
+                />
+              </div>
+              {usernameTaken ? (
+                <p className="mt-1 text-[11px] text-red-600" role="alert">
+                  {usernameStatus?.reason}
+                </p>
+              ) : (
+                <p className="mt-1 text-[11px] text-muted">
+                  3–30 chars · lowercase, numbers, hyphens.
+                </p>
+              )}
             </div>
           </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          {profileSaved ? (
+            <span className="text-xs font-semibold text-emerald-600">
+              Saved
+            </span>
+          ) : null}
+          {profileError ? (
+            <span className="text-xs text-red-600" role="alert">
+              {profileError}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleProfileSave}
+            disabled={profileDisabled}
+            className="btn btn-primary disabled:opacity-60"
+          >
+            {profileSaving ? "Saving…" : "Save changes"}
+          </button>
         </div>
       </section>
 
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="font-bold">Password</h3>
-          <ComingSoonPill />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <DisabledField label="Current password" type="password" />
-          <DisabledField label="New password" type="password" />
-        </div>
+        <h3 className="mb-5 font-bold">Password</h3>
+        <form className="space-y-4" onSubmit={handlePasswordSave} noValidate>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="current-password"
+                className="mb-1.5 block text-xs font-semibold"
+              >
+                Current password
+              </label>
+              <PasswordInput
+                id="current-password"
+                value={currentPassword}
+                onChange={setCurrentPassword}
+                autoComplete="current-password"
+                placeholder="••••••••"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="new-password"
+                className="mb-1.5 block text-xs font-semibold"
+              >
+                New password
+              </label>
+              <PasswordInput
+                id="new-password"
+                value={newPassword}
+                onChange={setNewPassword}
+                autoComplete="new-password"
+                minLength={8}
+                placeholder="At least 8 characters"
+              />
+            </div>
+          </div>
+          {pwError ? (
+            <p className="text-xs text-red-600" role="alert">
+              {pwError}
+            </p>
+          ) : null}
+          <div className="flex items-center justify-end gap-3">
+            {pwSaved ? (
+              <span className="text-xs font-semibold text-emerald-600">
+                Password updated
+              </span>
+            ) : null}
+            <button
+              type="submit"
+              disabled={pwSaving || !currentPassword || newPassword.length < 8}
+              className="btn btn-primary disabled:opacity-60"
+            >
+              {pwSaving ? "Updating…" : "Update password"}
+            </button>
+          </div>
+        </form>
       </section>
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          disabled
-          className="btn btn-primary cursor-not-allowed opacity-60"
-        >
-          Save changes
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-xs font-semibold">{label}</label>
-      <div className="w-full rounded-xl border border-border-base bg-neutral-50 px-3 py-2.5 text-sm text-ink">
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function DisabledField({
-  label,
-  type,
-}: {
-  label: string;
-  type: "password" | "text";
-}) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-xs font-semibold">{label}</label>
-      <input
-        type={type}
-        disabled
-        placeholder="••••••••"
-        className="w-full cursor-not-allowed rounded-xl border border-border-base bg-neutral-50 px-3 py-2.5 text-sm opacity-60"
-      />
     </div>
   );
 }

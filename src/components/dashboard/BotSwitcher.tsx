@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { selectBotAction } from "@/app/(dashboard)/actions";
 
+import { ComingSoonPill } from "./ComingSoonPill";
+
 type Bot = {
   id: string;
   name: string;
@@ -45,7 +47,6 @@ export function BotSwitcher({
 }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const hasMultiple = bots.length > 1;
 
   useEffect(() => {
     if (!open) return;
@@ -69,11 +70,10 @@ export function BotSwitcher({
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => hasMultiple && setOpen((v) => !v)}
-        disabled={!hasMultiple}
+        onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-haspopup={hasMultiple ? "menu" : undefined}
-        className="flex w-full items-center gap-3 rounded-xl border border-border-base bg-white p-2.5 text-left transition-colors hover:bg-neutral-50 disabled:cursor-default disabled:hover:bg-white"
+        aria-haspopup="menu"
+        className="flex w-full items-center gap-3 rounded-xl border border-border-base bg-white p-2.5 text-left transition-colors hover:bg-neutral-50"
       >
         <div className="brand-blue-gradient font-display grid size-9 shrink-0 place-items-center rounded-lg text-sm font-bold text-white">
           {initials(selectedBotName)}
@@ -82,25 +82,23 @@ export function BotSwitcher({
           <p className="truncate text-sm font-bold">{selectedBotName}</p>
           <p className="truncate text-[11px] text-muted">{publicUrl}</p>
         </div>
-        {hasMultiple ? (
-          <svg
-            aria-hidden
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="shrink-0 text-muted"
-          >
-            <path d="M7 15l5 5 5-5M7 9l5-5 5 5" />
-          </svg>
-        ) : null}
+        <svg
+          aria-hidden
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0 text-muted"
+        >
+          <path d="M7 15l5 5 5-5M7 9l5-5 5 5" />
+        </svg>
       </button>
 
-      {open && hasMultiple ? (
+      {open ? (
         <div
           role="menu"
           aria-label="Switch bot"
@@ -144,6 +142,31 @@ export function BotSwitcher({
               </li>
             ))}
           </ul>
+          <div className="border-t border-border-base p-1.5">
+            <div
+              aria-disabled
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-muted"
+              title="Multi-bot creation is coming soon"
+            >
+              <svg
+                aria-hidden
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span className="flex-1">Create New Bot</span>
+              <ComingSoonPill />
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

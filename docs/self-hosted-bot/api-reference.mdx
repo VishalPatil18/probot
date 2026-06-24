@@ -1,0 +1,89 @@
+---
+title: Bot runtime API (v1)
+description: "The versioned /api/v1/bot/* contract a self-hosted runtime uses, authenticated by a bot token."
+---
+
+The self-hosted runtime talks to the platform over four endpoints under
+`/api/v1/bot/*`. All are authenticated with the bot token:
+
+```
+Authorization: Bearer pbt_<64 hex>
+```
+
+A missing or malformed header returns `401 missing_bot_token`; an unknown or
+revoked token returns `401 invalid_bot_token`. The token resolves to exactly one
+bot, so no `botId` is ever passed in the request.
+
+<Info>
+  This contract is pinned to **v1**. Breaking changes will ship as `/api/v2`
+  with a deprecation window, so a deployed runtime can rely on a stable shape.
+</Info>
+
+## GET /api/v1/bot/config
+
+Returns the public-safe configuration for rendering the chat UI.
+
+```json
+{
+  "id": "…",
+  "name": "Vishal's bot",
+  "headline": "Ask me about my career",
+  "personality": "professional",
+  "themeColor": "#0070dd",
+  "image": "/api/bot-avatar/…",
+  "suggestedQuestions": ["What's your stack?"],
+  "loadingMessages": ["Thinking…"],
+  "isActive": true,
+  "deploymentMode": "self_hosted"
+}
+```
+
+## POST /api/v1/bot/knowledge
+
+Vector retrieval as a service. Send the visitor's message; get back the top
+knowledge chunks to inject into your LLM prompt. Read-only. Rate-limited per bot.
+
+```json
+// request
+{ "query": "tell me about their AWS experience", "embeddingApiKey": "sk-… (optional)" }
+
+// response
+{ "mode": "retrieval", "chunks": ["…", "…"] }
+```
+
+With no `embeddingApiKey`, the platform returns the bot's full assembled context
+(`"mode": "full_context"`). On rate-limit it returns `429` with `scope` +
+`resetAt`.
+
+## POST /api/v1/bot/conversations
+
+Persist a chat turn's transcript so it appears in the owner's dashboard. UPSERTs
+on `(bot, sessionId)`, so resending the same session coalesces.
+
+```json
+// request
+{
+  "sessionId": "uuid",
+  "messages": [
+    { "role": "user", "content": "…" },
+    { "role": "assistant", "content": "…" }
+  ]
+}
+
+// response
+{ "conversationId": "uuid" }
+```
+
+## POST /api/v1/bot/leads
+
+Capture a recruiter lead. Idempotent on `(bot, conversationId, email)`.
+
+```json
+// request
+{ "email": "recruiter@acme.com", "conversationId": "uuid (optional)", "contextSummary": "… (optional)" }
+
+// response
+{ "lead": { "id": "…", "email": "…", "capturedAt": "…" }, "deduped": false }
+```
+
+A duplicate returns `200` with `"deduped": true`; a fresh capture returns `201`.

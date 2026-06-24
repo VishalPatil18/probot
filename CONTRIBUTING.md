@@ -78,9 +78,27 @@ We expect every PR to land with `npm test` green and `npm run typecheck` clean. 
 
 ## Branching
 
-- `main` is always shippable. Current development happens on `development`.
-- Work in topic branches off `development`: `feat/<thing>`, `fix/<thing>`, `docs/<thing>`, `refactor/<thing>`.
-- Rebase your branch on top of the latest `development` before requesting review. We squash on merge, so commit hygiene inside the branch matters less than the squashed message.
+- `main` is always shippable and **release-only**. Active development happens on the **`development`** branch.
+- **Always branch off `development`** before you start working on anything - never branch from `main`.
+- Use **one branch and one PR per change**, named with this convention:
+  - `feat/<feature title>` - a new feature
+  - `fix/<fix title>` - a bug fix
+  - `docs/<documentation update title>` - a documentation change
+  - `refactor/<title>` - a non-behavioural refactor
+- **Before opening a PR**, pull the latest `development` into your branch and **resolve all merge conflicts locally**. Open the PR only once your branch merges cleanly into `development`.
+- **Open every PR into `development`** (never into `main`).
+- **Never commit or push directly to `main` or `development`.** GitHub branch protection will reject it - every change lands through a reviewed PR.
+- We squash on merge, so commit hygiene inside the branch matters less than the squashed message.
+
+## Recommended day-to-day flow
+
+```
+feature branch ──PR──► development (requires approval) ──PR──► main (requires approval) ──► deploy
+```
+
+- Contributors branch off `development`, open PRs into `development`.
+- A PR is reviewed and approved before merging into `development`.
+- When `development` is stable, open a PR from `development` → `main` (approved) to cut a release.
 
 ## Commit messages
 
@@ -103,7 +121,10 @@ Examples:
 
 ## Pull requests
 
-1. Open the PR - the template will prefill itself.
+- **One PR per feature/change**, from a single correctly-named branch (`feat/…`, `fix/…`, `docs/…`) opened **into `development`**.
+- Write a **detailed description** of what changed and why - and **follow the PR template**; don't delete its sections.
+
+1. Open the PR - the template will prefill itself. Fill it out completely.
 2. Fill the **Summary**, **Linked issue**, and **Test plan** sections. None of these are optional.
 3. Attach a screenshot or recording for any UI change.
 4. Wait for CI to go green.

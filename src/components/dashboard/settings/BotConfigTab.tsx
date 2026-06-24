@@ -17,12 +17,16 @@ import {
   PER_MINUTE_DEFAULT,
 } from "@/lib/ai/rate-limit";
 
+import { AvatarUploader } from "./AvatarUploader";
+import { ThemeColorField } from "./ThemeColorField";
+
 import { DeleteBotModal } from "../DeleteBotModal";
 import { SuggestedQuestionsEditor } from "../SuggestedQuestionsEditor";
 
 type Props = {
   botId: string;
   ownerUsername: string;
+  initialImage: string | null;
   initialName: string;
   initialHeadline: string;
   initialPersonality: Personality;
@@ -36,7 +40,8 @@ type Props = {
   previewToken: string | null;
 };
 
-type Status = "idle" | "saving" | "saved" | "error";
+// Each editable card saves on its own; this keys the per-section save state.
+type SectionKey = "identity" | "personality" | "limits" | "questions";
 
 const PERSONALITY_CARDS: Record<
   Personality,
@@ -63,16 +68,25 @@ const PERSONALITY_CARDS: Record<
   },
 };
 
-const THEME_PRESETS = ["#7c5cff", "#10a37f", "#9b5cff", "#404040"];
+// Default bot mark shown when no custom picture is set (the two-dot ProBot eye).
+function ProBotMark() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <circle cx="14" cy="20" r="3.4" fill="#fff" />
+      <circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65" />
+    </svg>
+  );
+}
 
-// Slice B - Bot Configuration tab. Single PATCH per save, diffed against
-// initial values so only changed fields are sent. Stage 7 enables the
+// Bot Configuration tab. Single PATCH per save, diffed against
+// initial values so only changed fields are sent. A future change enables the
 // previously-disabled custom-instructions textarea, adds a per-bot rate-
 // limit panel, and (for draft bots) surfaces a Publish button alongside
 // the preview link.
 export function BotConfigTab({
   botId,
   ownerUsername,
+  initialImage,
   initialName,
   initialHeadline,
   initialPersonality,
@@ -89,6 +103,11 @@ export function BotConfigTab({
   // State seeded from props once; subsequent prop changes do NOT clobber
   // user edits (same pattern as slice-6.5 BotSettingsForm).
   const [isActive, setIsActive] = useState(initialIsActive);
+  // The status toggle auto-saves on click (independent of "Save bot settings"),
+  // so we track its own committed baseline. The main dirty/patch diff uses this
+  // baseline, so a status flip never leaves the Save button stuck "dirty".
+  const [activeBaseline, setActiveBaseline] = useState(initialIsActive);
+  const [statusSaving, setStatusSaving] = useState(false);
   const [name, setName] = useState(initialName);
   const [headline, setHeadline] = useState(initialHeadline);
   const [personality, setPersonality] =
@@ -109,26 +128,69 @@ export function BotConfigTab({
   const [rateLimitMaxChars, setRateLimitMaxChars] = useState<string>(
     initialRateLimitMaxChars === null ? "" : String(initialRateLimitMaxChars),
   );
-  const [status, setStatus] = useState<Status>("idle");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [savingSection, setSavingSection] = useState<SectionKey | null>(null);
+  const [savedSection, setSavedSection] = useState<SectionKey | null>(null);
+  const [sectionError, setSectionError] = useState<{
+    key: SectionKey;
+    msg: string;
+  } | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [presetName, setPresetName] = useState(initialName);
+  const [presetStatus, setPresetStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
 
   useEffect(() => {
-    if (status !== "saved") return;
-    const t = setTimeout(() => setStatus("idle"), 1500);
+    if (savedSection === null) return;
+    const t = setTimeout(() => setSavedSection(null), 1500);
     return () => clearTimeout(t);
-  }, [status]);
+  }, [savedSection]);
 
-  const dirty =
-    name !== initialName ||
-    headline !== initialHeadline ||
+  // Snapshot the current configuration into a reusable preset (no secrets).
+  async function handleSaveAsPreset() {
+    const trimmed = presetName.trim();
+    if (trimmed.length === 0 || presetStatus === "saving") return;
+    setPresetStatus("saving");
+    try {
+      const res = await fetch("/api/bot-presets", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: trimmed,
+          settings: {
+            name,
+            headline,
+            personality,
+            suggestedQuestions,
+            themeColor,
+            customInstructions,
+            rateLimitPerMinute,
+            rateLimitPerDay,
+            rateLimitMaxChars,
+          },
+        }),
+      });
+      setPresetStatus(res.ok ? "saved" : "error");
+    } catch {
+      setPresetStatus("error");
+    }
+  }
+
+  // Each card tracks its own unsaved-changes state so its Save button only
+  // enables for edits in that section. The status toggle auto-saves and is
+  // excluded here.
+  const identityDirty =
+    name !== initialName || headline !== initialHeadline;
+  const personalityDirty =
     personality !== initialPersonality ||
-    isActive !== initialIsActive ||
-    themeColor !== initialThemeColor ||
     customInstructions !== initialCustomInstructions ||
+    themeColor !== initialThemeColor;
+  const limitsDirty =
     rateLimitPerMinute !==
       (initialRateLimitPerMinute === null
         ? ""
@@ -140,8 +202,11 @@ export function BotConfigTab({
     rateLimitMaxChars !==
       (initialRateLimitMaxChars === null
         ? ""
-        : String(initialRateLimitMaxChars)) ||
-    !arraysEqual(suggestedQuestions, initialSuggestedQuestions);
+        : String(initialRateLimitMaxChars));
+  const questionsDirty = !arraysEqual(
+    suggestedQuestions,
+    initialSuggestedQuestions,
+  );
 
   function parseLimitField(
     raw: string,
@@ -165,22 +230,75 @@ export function BotConfigTab({
     return { ok: true, value: n };
   }
 
-  async function handleSave() {
-    if (!dirty || status === "saving") return;
+  // Shared PATCH for one section. Sends only the fields that changed; the
+  // endpoint is the same per-bot PATCH used by every section. An empty patch
+  // (e.g. only whitespace changed) is treated as an immediate no-op success.
+  async function commit(
+    key: SectionKey,
+    patch: Record<string, unknown>,
+  ): Promise<void> {
+    if (Object.keys(patch).length === 0) {
+      setSectionError(null);
+      setSavedSection(key);
+      return;
+    }
+    setSavingSection(key);
+    setSectionError(null);
+    try {
+      const res = await fetch(`/api/bots/${botId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        setSectionError({
+          key,
+          msg: "Couldn't save changes. Please try again.",
+        });
+        return;
+      }
+      setSavedSection(key);
+      router.refresh();
+    } catch {
+      setSectionError({ key, msg: "Network error. Please try again." });
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
+  function saveIdentity() {
+    if (!identityDirty || savingSection) return;
     const trimmedName = name.trim();
     if (trimmedName.length === 0) {
-      setStatus("error");
-      setErrorMsg("Bot name is required.");
+      setSectionError({ key: "identity", msg: "Bot name is required." });
       return;
     }
-    if (customInstructions.length > CUSTOM_INSTRUCTIONS_MAX) {
-      setStatus("error");
-      setErrorMsg(
-        `Custom instructions must be ≤ ${CUSTOM_INSTRUCTIONS_MAX} chars.`,
-      );
-      return;
-    }
+    const patch: Record<string, unknown> = {};
+    if (trimmedName !== initialName) patch.name = trimmedName;
+    if (headline !== initialHeadline) patch.headline = headline;
+    void commit("identity", patch);
+  }
 
+  function savePersonality() {
+    if (!personalityDirty || savingSection) return;
+    if (customInstructions.length > CUSTOM_INSTRUCTIONS_MAX) {
+      setSectionError({
+        key: "personality",
+        msg: `Custom instructions must be ≤ ${CUSTOM_INSTRUCTIONS_MAX} chars.`,
+      });
+      return;
+    }
+    const patch: Record<string, unknown> = {};
+    if (personality !== initialPersonality) patch.personality = personality;
+    if (customInstructions !== initialCustomInstructions) {
+      patch.customInstructions = customInstructions;
+    }
+    if (themeColor !== initialThemeColor) patch.themeColor = themeColor;
+    void commit("personality", patch);
+  }
+
+  function saveLimits() {
+    if (!limitsDirty || savingSection) return;
     const perMinute = parseLimitField(
       rateLimitPerMinute,
       RATE_LIMIT_PER_MINUTE_MAX,
@@ -191,33 +309,18 @@ export function BotConfigTab({
       RATE_LIMIT_MAX_CHARS_MAX,
     );
     if (!perMinute.ok) {
-      setStatus("error");
-      setErrorMsg(perMinute.reason);
+      setSectionError({ key: "limits", msg: perMinute.reason });
       return;
     }
     if (!perDay.ok) {
-      setStatus("error");
-      setErrorMsg(perDay.reason);
+      setSectionError({ key: "limits", msg: perDay.reason });
       return;
     }
     if (!maxChars.ok) {
-      setStatus("error");
-      setErrorMsg(maxChars.reason);
+      setSectionError({ key: "limits", msg: maxChars.reason });
       return;
     }
-
-    setStatus("saving");
-    setErrorMsg(null);
-
     const patch: Record<string, unknown> = {};
-    if (trimmedName !== initialName) patch.name = trimmedName;
-    if (headline !== initialHeadline) patch.headline = headline;
-    if (personality !== initialPersonality) patch.personality = personality;
-    if (isActive !== initialIsActive) patch.isActive = isActive;
-    if (themeColor !== initialThemeColor) patch.themeColor = themeColor;
-    if (customInstructions !== initialCustomInstructions) {
-      patch.customInstructions = customInstructions;
-    }
     if (perMinute.value !== initialRateLimitPerMinute) {
       patch.rateLimitPerMinute = perMinute.value;
     }
@@ -227,27 +330,12 @@ export function BotConfigTab({
     if (maxChars.value !== initialRateLimitMaxChars) {
       patch.rateLimitMaxChars = maxChars.value;
     }
-    if (!arraysEqual(suggestedQuestions, initialSuggestedQuestions)) {
-      patch.suggestedQuestions = suggestedQuestions;
-    }
+    void commit("limits", patch);
+  }
 
-    try {
-      const res = await fetch(`/api/bots/${botId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      if (!res.ok) {
-        setStatus("error");
-        setErrorMsg("Couldn't save changes. Please try again.");
-        return;
-      }
-      setStatus("saved");
-      router.refresh();
-    } catch {
-      setStatus("error");
-      setErrorMsg("Network error. Please try again.");
-    }
+  function saveQuestions() {
+    if (!questionsDirty || savingSection) return;
+    void commit("questions", { suggestedQuestions });
   }
 
   async function handleDeleteBot() {
@@ -270,22 +358,51 @@ export function BotConfigTab({
     }
   }
 
+  // Auto-save the live/off status immediately on toggle - no "Save" needed.
+  async function handleToggleStatus(next: boolean) {
+    if (statusSaving) return;
+    const prev = isActive;
+    setIsActive(next); // optimistic
+    setStatusSaving(true);
+    setStatusError(null);
+    try {
+      const res = await fetch(`/api/bots/${botId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ isActive: next }),
+      });
+      if (!res.ok) {
+        setIsActive(prev); // revert
+        setStatusError("Couldn't update status. Please try again.");
+        return;
+      }
+      setActiveBaseline(next);
+      router.refresh();
+    } catch {
+      setIsActive(prev);
+      setStatusError("Network error. Please try again.");
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
   async function handlePublish() {
     if (publishing) return;
     setPublishing(true);
-    setErrorMsg(null);
+    setPublishError(null);
     try {
       const res = await fetch(`/api/bots/${botId}/publish`, {
         method: "POST",
       });
       if (!res.ok) {
-        setErrorMsg("Couldn't publish. Please try again.");
+        setPublishError("Couldn't publish. Please try again.");
         return;
       }
       setIsActive(true);
+      setActiveBaseline(true);
       router.refresh();
     } catch {
-      setErrorMsg("Network error. Please try again.");
+      setPublishError("Network error. Please try again.");
     } finally {
       setPublishing(false);
     }
@@ -332,6 +449,11 @@ export function BotConfigTab({
                   {publishing ? "Publishing…" : "Publish bot"}
                 </button>
               </div>
+              {publishError ? (
+                <p role="alert" className="mt-2 text-sm text-rose-700">
+                  {publishError}
+                </p>
+              ) : null}
             </div>
           </div>
         </section>
@@ -350,26 +472,53 @@ export function BotConfigTab({
             </span>
             <Toggle
               checked={isActive}
-              onChange={setIsActive}
+              onChange={handleToggleStatus}
               ariaLabel="Bot status"
             />
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <LabeledInput
-            label="Bot name"
-            value={name}
-            onChange={setName}
-            maxLength={100}
-          />
-          <LabeledInput
-            label="Headline"
-            value={headline}
-            onChange={setHeadline}
-            maxLength={120}
-            placeholder="e.g. ML Engineer · San Francisco"
-          />
+        <div className="flex flex-col gap-6 sm:flex-row">
+          <div>
+            <p className="mb-1.5 text-xs font-semibold">Bot picture</p>
+            <AvatarUploader
+              initialImage={initialImage}
+              uploadUrl={`/api/bots/${botId}/avatar`}
+              ariaLabel="Change bot picture"
+              fallback={
+                <div className="brand-blue-gradient grid size-full place-items-center rounded-full">
+                  <ProBotMark />
+                </div>
+              }
+            />
+          </div>
+          <div className="grid flex-1 content-start gap-4 sm:grid-cols-2">
+            <LabeledInput
+              label="Bot name"
+              value={name}
+              onChange={setName}
+              maxLength={100}
+            />
+            <LabeledInput
+              label="Headline"
+              value={headline}
+              onChange={setHeadline}
+              maxLength={120}
+              placeholder="e.g. ML Engineer · San Francisco"
+            />
+          </div>
         </div>
+        {statusError ? (
+          <p role="alert" className="mt-3 text-xs text-rose-700">
+            {statusError}
+          </p>
+        ) : null}
+        <SaveButton
+          dirty={identityDirty}
+          saving={savingSection === "identity"}
+          saved={savedSection === "identity"}
+          error={sectionError?.key === "identity" ? sectionError.msg : null}
+          onClick={saveIdentity}
+        />
       </section>
 
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
@@ -451,32 +600,15 @@ export function BotConfigTab({
           <label className="mb-2 block text-xs font-semibold">
             Theme color
           </label>
-          <div className="flex items-center gap-2">
-            {THEME_PRESETS.map((hex) => {
-              const on = themeColor.toLowerCase() === hex.toLowerCase();
-              return (
-                <button
-                  key={hex}
-                  type="button"
-                  onClick={() => setThemeColor(hex)}
-                  aria-label={`Theme color ${hex}`}
-                  aria-pressed={on}
-                  className={`size-8 rounded-full transition-shadow ${
-                    on ? "ring-2 ring-brand ring-offset-2" : ""
-                  }`}
-                  style={{ background: hex }}
-                />
-              );
-            })}
-            <input
-              type="color"
-              value={themeColor}
-              onChange={(e) => setThemeColor(e.target.value)}
-              aria-label="Custom theme color"
-              className="ml-2 size-8 cursor-pointer rounded-full border-0 bg-transparent"
-            />
-          </div>
+          <ThemeColorField value={themeColor} onChange={setThemeColor} />
         </div>
+        <SaveButton
+          dirty={personalityDirty}
+          saving={savingSection === "personality"}
+          saved={savedSection === "personality"}
+          error={sectionError?.key === "personality" ? sectionError.msg : null}
+          onClick={savePersonality}
+        />
       </section>
 
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
@@ -508,6 +640,13 @@ export function BotConfigTab({
             max={RATE_LIMIT_MAX_CHARS_MAX}
           />
         </div>
+        <SaveButton
+          dirty={limitsDirty}
+          saving={savingSection === "limits"}
+          saved={savedSection === "limits"}
+          error={sectionError?.key === "limits" ? sectionError.msg : null}
+          onClick={saveLimits}
+        />
       </section>
 
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
@@ -519,27 +658,50 @@ export function BotConfigTab({
           value={suggestedQuestions}
           onChange={setSuggestedQuestions}
         />
+        <SaveButton
+          dirty={questionsDirty}
+          saving={savingSection === "questions"}
+          saved={savedSection === "questions"}
+          error={sectionError?.key === "questions" ? sectionError.msg : null}
+          onClick={saveQuestions}
+        />
       </section>
 
-      {status === "error" && errorMsg ? (
-        <p role="alert" className="text-sm text-rose-700">
-          {errorMsg}
+      <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
+        <h3 className="mb-1 font-bold">Save as a preset</h3>
+        <p className="mb-4 text-xs text-muted">
+          Save this bot&apos;s configuration as a reusable preset (no keys or
+          secrets are stored). Reuse it when creating a new bot.
         </p>
-      ) : null}
-
-      <div className="flex items-center justify-end gap-3">
-        {status === "saved" ? (
-          <span className="text-sm font-medium text-emerald-700">Saved!</span>
-        ) : null}
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!dirty || status === "saving"}
-          className="btn btn-primary disabled:opacity-60"
-        >
-          {status === "saving" ? "Saving…" : "Save bot settings"}
-        </button>
-      </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            value={presetName}
+            onChange={(e) => {
+              setPresetName(e.target.value);
+              setPresetStatus("idle");
+            }}
+            maxLength={80}
+            placeholder="Preset name"
+            className="min-w-[200px] flex-1 rounded-lg border border-border-base px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={handleSaveAsPreset}
+            disabled={presetStatus === "saving" || presetName.trim().length === 0}
+            className="btn btn-secondary disabled:opacity-60"
+          >
+            {presetStatus === "saving" ? "Saving…" : "Save as preset"}
+          </button>
+          {presetStatus === "saved" ? (
+            <span className="text-sm font-medium text-emerald-700">Saved!</span>
+          ) : null}
+          {presetStatus === "error" ? (
+            <span className="text-sm font-medium text-rose-700">
+              Couldn&apos;t save
+            </span>
+          ) : null}
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-rose-200 bg-white p-6 shadow-soft">
         <h3 className="mb-1 font-bold text-rose-600">Danger zone</h3>
@@ -568,6 +730,46 @@ export function BotConfigTab({
         }}
         onConfirm={handleDeleteBot}
       />
+    </div>
+  );
+}
+
+// Subtle, per-section save control. Right-aligned below a section's fields,
+// enabled only when that section has unsaved edits. Shows a brief "Saved"
+// confirmation and an inline error for its own section.
+function SaveButton({
+  dirty,
+  saving,
+  saved,
+  error,
+  onClick,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  saved: boolean;
+  error: string | null;
+  onClick: () => void;
+}) {
+  return (
+    <div className="mt-5 border-t border-border-base pt-4">
+      {error ? (
+        <p role="alert" className="mb-2 text-right text-xs text-rose-700">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex items-center justify-end gap-2">
+        {saved ? (
+          <span className="text-xs font-medium text-emerald-700">Saved</span>
+        ) : null}
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={!dirty || saving}
+          className="rounded-lg border border-border-base px-4 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Save
+        </button>
+      </div>
     </div>
   );
 }

@@ -69,7 +69,27 @@ describe("CredentialsProvider.authorize()", () => {
       id: "user-id-1",
       username: "jane-doe",
       email: "jane@example.com",
+      remember: false,
     });
+  });
+
+  it("flags remember=true when the credential is passed", async () => {
+    const hashed = await hashPassword("hunter2hunter");
+    findFirstMock.mockResolvedValueOnce({
+      id: "user-id-1",
+      username: "jane-doe",
+      email: "jane@example.com",
+      hashedPassword: hashed,
+      emailVerified: new Date(),
+    });
+
+    const result = await getAuthorize()({
+      email: "jane@example.com",
+      password: "hunter2hunter",
+      remember: "true",
+    });
+
+    expect(result).toMatchObject({ remember: true });
   });
 
   it("throws email_not_verified when credentials are valid but email is unverified", async () => {

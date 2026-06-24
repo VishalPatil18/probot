@@ -1,10 +1,10 @@
 // Server component - renders the bot owner's avatar, name, and headline
 // above the chat window on the public /u/[username]/chat page.
 //
-// Stage 4: the photo is either the OAuth-provided users.image (Google /
+// The photo is either the OAuth-provided users.image (Google /
 // GitHub avatar) or a Cloudinary-hosted animal icon auto-assigned at signup.
 // No fallback `<img>` element is needed because users.image is always
-// populated post-Stage-4 (assigned in the NextAuth adapter + register route).
+// populated by the NextAuth adapter + register route.
 
 type Props = {
   name: string;

@@ -109,12 +109,12 @@ describe("Topbar - URL pill + View live bot", () => {
     pathname = "/dashboard";
     render(
       <Topbar
-        publicUrl="https://probot.com/u/jane/chat"
-        liveBotUrl="https://probot.com/u/jane/chat"
+        publicUrl="https://pro-bot.dev/u/jane/chat"
+        liveBotUrl="https://pro-bot.dev/u/jane/chat"
       />,
     );
     // Scheme stripped for display
-    expect(screen.getByText("probot.com/u/jane/chat")).toBeInTheDocument();
+    expect(screen.getByText("pro-bot.dev/u/jane/chat")).toBeInTheDocument();
   });
 
   it("hides the URL pill when publicUrl is null", () => {
@@ -125,7 +125,7 @@ describe("Topbar - URL pill + View live bot", () => {
 
   it("hides the View live bot CTA when liveBotUrl is null", () => {
     pathname = "/dashboard";
-    render(<Topbar publicUrl="https://probot.com/u/jane" liveBotUrl={null} />);
+    render(<Topbar publicUrl="https://pro-bot.dev/u/jane" liveBotUrl={null} />);
     expect(screen.queryByRole("link", { name: /view live bot/i })).toBeNull();
   });
 
@@ -133,12 +133,12 @@ describe("Topbar - URL pill + View live bot", () => {
     pathname = "/dashboard";
     render(
       <Topbar
-        publicUrl="https://probot.com/u/jane"
-        liveBotUrl="https://probot.com/u/jane/chat"
+        publicUrl="https://pro-bot.dev/u/jane"
+        liveBotUrl="https://pro-bot.dev/u/jane/chat"
       />,
     );
     const link = screen.getByRole("link", { name: /view live bot/i });
-    expect(link.getAttribute("href")).toBe("https://probot.com/u/jane/chat");
+    expect(link.getAttribute("href")).toBe("https://pro-bot.dev/u/jane/chat");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
   });

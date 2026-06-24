@@ -5,7 +5,7 @@ import { getConversationWithMessages } from "@/lib/conversations/queries";
 
 // GET /api/bots/[botId]/conversations/[convId]
 //
-// Stage 6 §6.4: full transcript viewer. Returns the conversation row with
+// Full transcript viewer. Returns the conversation row with
 // its messages embedded in chronological order. Delegates to
 // `getConversationWithMessages` (shared with the slice-6.3 RSC page).
 //

@@ -1,6 +1,6 @@
-// Browser-only store for the user's OpenAI embedding API key (Stage 3 RAG).
+// Browser-only store for the user's OpenAI embedding API key (used for RAG).
 //
-// Stage 7 Phase 6: same IndexedDB + Web Crypto upgrade as the chat-key
+// Same IndexedDB + Web Crypto upgrade as the chat-key
 // store. Public API is async; localStorage is consulted as a one-time
 // migration so creators don't have to re-enter the key after the
 // upgrade. Attached to upload + chat requests via the

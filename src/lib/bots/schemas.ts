@@ -16,19 +16,19 @@ const nonEmptyTrimmed = z
   .transform((v) => v.trim())
   .refine((v) => v.length > 0, "Must not be empty");
 
-// contextText is optional/empty in Stage 2: the bot's knowledge can now come
+// contextText is optional/empty: the bot's knowledge can now come
 // from `knowledge_base` chunks (PDFs + text), reassembled into context_text
-// server-side. Stage 1 text-only path still works (textarea content goes here).
+// server-side. The text-only path still works (textarea content goes here).
 export const CONTEXT_TOKEN_CAP_MIN = 1_000;
 export const CONTEXT_TOKEN_CAP_MAX = 100_000;
 export const CONTEXT_TOKEN_CAP_DEFAULT = 12_000;
 
-// Stage 7 §FR-002.7: custom instructions cap. Aligned with the architecture
+// Custom instructions cap. Aligned with the architecture
 // blueprint; tighter caps can land later without a migration since the column
 // is `text` (no DB-level length constraint).
 export const CUSTOM_INSTRUCTIONS_MAX = 2000;
 
-// Stage 7 §FR-010.9: per-bot rate-limit ceilings. Hard caps prevent a creator
+// Per-bot rate-limit ceilings. Hard caps prevent a creator
 // from setting absurd values that would effectively disable abuse protection.
 // The rate-limit module enforces these too (defence in depth).
 export const RATE_LIMIT_PER_MINUTE_MAX = 100;
@@ -57,10 +57,10 @@ export const botInput = z.object({
     .string()
     .max(60, "Model identifier must be ≤ 60 chars")
     .optional(),
-  // Stage 5: per-bot widget/badge color. Optional on create so existing
+  // Per-bot widget/badge color. Optional on create so existing
   // forms don't break; the DB default '#7c5cff' takes over when absent.
   themeColor: themeColorSchema.optional(),
-  // Stage 7 §FR-002.7: optional free-form additions to the system prompt.
+  // Optional free-form additions to the system prompt.
   customInstructions: z
     .string()
     .max(
@@ -72,12 +72,12 @@ export const botInput = z.object({
 
 export type BotInput = z.infer<typeof botInput>;
 
-// Stage 5: partial-update schema for the PATCH endpoint behind the bot
+// Partial-update schema for the PATCH endpoint behind the bot
 // detail page. Limited to fields the detail page + settings page actually
 // edit so we don't accidentally widen the surface (and let an attacker
 // mass-assign e.g. `userId`, `isActive`, or `contextText`).
 //
-// Stage 6 slice 6.5 widened from `themeColor` only to also include the
+// The current flow widened from `themeColor` only to also include the
 // bot identity fields the settings page edits. Each field is independently
 // optional so callers can PATCH any subset; the `.refine()` rejects the
 // fully-empty body so an SQL `UPDATE … SET WHERE …` with no SET clause
@@ -104,14 +104,14 @@ export const botPatchInput = z
       .array(z.string().max(200, "Each question must be ≤ 200 chars"))
       .max(6, "At most 6 suggested questions")
       .optional(),
-    // Slice B: Bot configuration tab includes a live/off status toggle.
-    // Inactive bots reject chat requests (Stage 1 chat route already
+    // Bot configuration tab includes a live/off status toggle.
+    // Inactive bots reject chat requests (the chat route already
     // gates on `bots.is_active`) and don't accept lead capture (slice
     // 6.2 endpoint also gates on it). Adding here so the settings page
     // can flip the bit.
     isActive: z.boolean().optional(),
     themeColor: themeColorSchema.optional(),
-    // Stage 7 §FR-002.7: dashboard editor for the prompt addendum. The
+    // Dashboard editor for the prompt addendum. The
     // empty string is a legitimate "clear it" signal; we transform to
     // `null` at the route layer so the DB column flips back to NULL
     // rather than storing an empty string.
@@ -122,7 +122,7 @@ export const botPatchInput = z
         `Custom instructions must be ≤ ${CUSTOM_INSTRUCTIONS_MAX} chars`,
       )
       .optional(),
-    // Stage 7 §FR-010.9: per-bot rate-limit overrides. `null` clears the
+    // Per-bot rate-limit overrides. `null` clears the
     // column (revert to env default); a positive integer takes precedence.
     rateLimitPerMinute: z
       .number()

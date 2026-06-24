@@ -4,7 +4,7 @@ type Props = {
   data: Point[];
 };
 
-// Slice A dashboard chart. Renders a smooth (Catmull-Rom → cubic Bézier)
+// Dashboard chart. Renders a smooth (Catmull-Rom → cubic Bézier)
 // line over the daily conversation counts. SVG uses a viewBox so it
 // scales to whatever width the parent allocates. Empty data (no
 // conversations yet) renders a faded baseline so the panel doesn't

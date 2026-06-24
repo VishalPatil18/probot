@@ -1,129 +1,89 @@
 ---
 title: Quickstart
-description: "Clone, install, migrate the database, and run ProBot locally in under 5 minutes."
+description: "From zero to a live AI career bot in about five minutes."
 ---
 
-This page gets ProBot running on your laptop. For production self-hosting, see [Self-host](/guides/self-host).
+This is the fastest path to a working bot you can share with recruiters. No coding, no setup - just sign up and build.
 
-## Prerequisites
+<Note>
+  Want the chat served from your own domain instead? You can self-host your bot
+  with the tiny `probot-bot` runtime - see [Self-hosting your
+  bot](/self-hosted-bot/index).
+</Note>
+
+## What you'll need
 
 <AccordionGroup>
-  <Accordion title="Node.js 20 or later" icon="node-js">
-    `node --version` should print `v20.x` or higher. Older versions miss APIs Next.js 14 relies on.
-  </Accordion>
-  <Accordion title="Postgres with `gen_random_uuid()`" icon="database">
-    Any of the following works:
-    - **Supabase** free tier (recommended for production)
-    - **Neon** free tier
-    - **Local Docker:** `docker run -p 5432:5432 -e POSTGRES_PASSWORD=probot postgres:16`
-
-    Postgres 13+ ships `gen_random_uuid()` in the `pgcrypto` extension. Drizzle migrations enable it automatically.
-
+  <Accordion title="A few minutes and your resume" icon="file-lines">
+    A resume PDF works best. You can also paste your bio, LinkedIn summary, or
+    project notes as text.
   </Accordion>
   <Accordion title="An LLM API key" icon="key">
-    From at least one supported provider:
-    - [Anthropic](https://console.anthropic.com/) - `sk-ant-…`
-    - [OpenAI](https://platform.openai.com/api-keys) - `sk-…`
-    - [Azure OpenAI](https://portal.azure.com/) - requires endpoint + deployment + key
-    - Google AI Studio (Gemini) - provider currently registered as a stub
+    ProBot is bring-your-own-key. Grab a key from one provider:
+    [Anthropic (Claude)](https://console.anthropic.com),
+    [OpenAI](https://platform.openai.com/api-keys),
+    [Azure OpenAI](https://portal.azure.com), or
+    [Google Gemini](https://aistudio.google.com/app/apikey). A "mini" or a "flash"
+    model is plenty and costs pennies. See [Models & keys](/guides/models-and-keys).
 
-    The key is **never** stored in `.env`; you paste it into the bot factory at runtime.
+    Your key stays encrypted and is never logged.
 
   </Accordion>
 </AccordionGroup>
 
-## 1. Clone and install
-
-```bash
-git clone https://github.com/vishalpatil18/probot.git
-cd probot
-npm install
-```
-
-## 2. Configure environment
-
-```bash
-cp .env.example .env.local
-```
-
-Fill in:
-
-```bash .env.local
-DATABASE_URL="postgresql://user:pass@host:5432/probot"
-NEXTAUTH_SECRET="<output of: openssl rand -base64 32>"
-NEXTAUTH_URL="http://localhost:3000"
-```
-
-<Warning>
-  Do **not** put any LLM API keys in `.env.local`. Keys are entered in the bot
-  factory UI and stored only in your browser's `localStorage`. Putting them in
-  env vars is the wrong shape - they would be available server-side, which is
-  exactly what BYO-key prevents.
-</Warning>
-
-## 3. Run database migrations
-
-```bash
-npm run db:migrate
-```
-
-This applies both Drizzle migrations:
-
-- `0000_*.sql` - `users` and `bots` tables
-- `0001_*.sql` - `users.llm_provider` and `users.llm_model` columns
-
-## 4. Start the dev server
-
-```bash
-npm run dev
-```
-
-Open <http://localhost:3000>.
-
-## 5. Create your first bot
+## Build your bot
 
 <Steps>
-  <Step title="Register an account">
-    Go to `/register`, pick a username, email, and password (≥ 8 chars).
+  <Step title="Create an account">
+    Sign up at [pro-bot.dev/register](https://pro-bot.dev/register) with a
+    username, email, and password (or use Google / GitHub).
   </Step>
-  <Step title="Open the bot factory">Navigate to `/dashboard/bots/new`.</Step>
-  <Step title="Walk the 5 steps">
-    1. **Identity** - bot name and optional headline. 2. **Knowledge** - paste
-    your resume text (≤ 50,000 chars). 3. **Personality** - `professional`,
-    `creative`, or `enthusiastic`. 4. **AI model + key** - pick a provider,
-    paste your API key. The key is saved to `localStorage` only. 5. **Suggested
-    questions** - up to 6 prompts recruiters see.
+  <Step title="Open the Bot Factory">
+    From your dashboard, start a new bot. The wizard walks you through five
+    short steps.
   </Step>
-  <Step title="Preview the bot">
-    Click **Preview bot** to chat with your bot using your own key.
+  <Step title="Add your knowledge">
+    Upload your resume PDF and/or paste text. ProBot indexes it so the bot
+    answers **only** from what you provide - no made-up jobs.
+  </Step>
+  <Step title="Pick a personality and theme">
+    Choose a tone, a theme color, and (optionally) an avatar. A live preview
+    updates as you go.
+  </Step>
+  <Step title="Connect your model and key">
+    Pick your provider + model and paste your API key. Then create the bot.
   </Step>
 </Steps>
 
-## Verify
+For a detailed tour of each step, see [Build your bot](/guides/build-your-bot).
 
-```bash
-npm run test
-```
+## Go live and share
 
-You should see **260 tests passing** across 24 files. If anything fails, see [Self-host → Troubleshooting](/guides/self-host#troubleshooting).
+Your new bot starts as a **draft** with a private preview URL so you can test it. When you're happy:
 
-## Next steps
+1. Open the bot and flip its **status to live** (it saves instantly).
+2. Share your public chat link: `pro-bot.dev/u/<your-username>/chat`.
+3. Or drop the one-line **embed widget** onto your portfolio. See [Embed & share](/embed-share).
+
+## Then what?
+
+As recruiters chat, ProBot captures their details (name, email, company) and shows your conversations, leads, and live analytics in the dashboard.
 
 <CardGroup cols={2}>
-  <Card title="BYO-key flow" icon="key" href="/concepts/byo-key">
-    Trace exactly where your API key goes (and doesn't).
+  <Card title="How to use ProBot" icon="compass" href="/guides/how-to-use">
+    A tour of every feature.
+  </Card>
+  <Card title="Models & keys" icon="key" href="/guides/models-and-keys">
+    Providers, costs, and key setup.
   </Card>
   <Card
-    title="Build your bot"
-    icon="wand-magic-sparkles"
-    href="/guides/build-your-bot"
+    title="Analytics & leads"
+    icon="chart-line"
+    href="/guides/analytics-and-leads"
   >
-    Detailed walkthrough of each factory step.
+    Read your metrics and manage captured leads.
   </Card>
-  <Card title="API reference" icon="code" href="/api-reference/introduction">
-    Endpoint shapes, status codes, error envelopes.
-  </Card>
-  <Card title="Self-host" icon="server" href="/guides/self-host">
-    Vercel, Docker, Fly.io, Render, Railway, AWS Lightsail.
+  <Card title="Managing your bot" icon="sliders" href="/guides/bot-management">
+    Status, knowledge, rate limits, presets, deletion.
   </Card>
 </CardGroup>

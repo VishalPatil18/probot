@@ -2,7 +2,7 @@ import { lt } from "drizzle-orm";
 
 import { db, decryptAuditLog } from "@/lib/db";
 
-// Stage 7 Phase 5 cleanup: the decrypt audit log is documented as 30-day
+// Cleanup: the decrypt audit log is documented as 30-day
 // retention. Read queries already enforce the window so the dashboard
 // payload size is bounded; this delete keeps the DB itself from growing
 // unboundedly.

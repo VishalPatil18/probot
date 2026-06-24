@@ -6,7 +6,7 @@ import { parsePagination } from "@/lib/pagination";
 
 // GET /api/bots/[botId]/conversations?page=1&limit=20&q=<search>
 //
-// Stage 6 §6.4: paginated conversation list for the dashboard. Each row
+// Paginated conversation list for the dashboard. Each row
 // includes a 200-char preview of the first user message so the dashboard
 // can render "list with preview" without a second round-trip. Search via
 // optional `?q=` is case-insensitive on email + preview.

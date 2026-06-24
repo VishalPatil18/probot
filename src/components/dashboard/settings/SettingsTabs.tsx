@@ -8,7 +8,8 @@ export type SettingsTabKey =
   | "bot"
   | "kb"
   | "security"
-  | "model";
+  | "model"
+  | "deploy";
 
 type Tab = {
   key: SettingsTabKey;
@@ -16,14 +17,13 @@ type Tab = {
 };
 
 const TABS: Tab[] = [
-  { key: "account", label: "Account" },
   { key: "bot", label: "Bot configuration" },
   { key: "kb", label: "Knowledge base" },
-  { key: "security", label: "Security & privacy" },
   { key: "model", label: "AI model & API key" },
+  { key: "deploy", label: "Deployment" },
+  { key: "account", label: "Account" },
+  { key: "security", label: "Security & privacy" },
 ];
-
-const DEFAULT_TAB: SettingsTabKey = "account";
 
 const SettingsTabsContext = createContext<{ active: SettingsTabKey } | null>(
   null,
@@ -39,9 +39,12 @@ function tabId(tab: SettingsTabKey): string {
 
 type Props = {
   children: ReactNode;
+  // Optional subset (and order) of tabs to show. Defaults to the full set.
+  // The account-only /dashboard/settings route passes the bot-independent tabs.
+  tabs?: SettingsTabKey[];
 };
 
-// Slice B settings page tab strip. Tab state lives in the URL via
+// Settings page tab strip. Tab state lives in the URL via
 // `?tab=` so deep links + browser back work without extra JS plumbing.
 // Click flips the param via `router.replace` (not `push`) so back
 // doesn't fill with tab-changes the user didn't really commit to.
@@ -50,19 +53,22 @@ type Props = {
 // matching the active key renders. Tab buttons + panels are wired with
 // ARIA `aria-controls` / `aria-labelledby` per the WAI-ARIA tabs
 // pattern so screen readers announce the relationship.
-export function SettingsTabs({ children }: Props) {
+export function SettingsTabs({ children, tabs }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const visibleTabs = tabs ? TABS.filter((t) => tabs.includes(t.key)) : TABS;
+  const defaultTab: SettingsTabKey = visibleTabs[0]?.key ?? "account";
+
   const requested = searchParams.get("tab") ?? "";
-  const active: SettingsTabKey = TABS.some((t) => t.key === requested)
+  const active: SettingsTabKey = visibleTabs.some((t) => t.key === requested)
     ? (requested as SettingsTabKey)
-    : DEFAULT_TAB;
+    : defaultTab;
 
   function setActive(next: SettingsTabKey) {
     if (next === active) return;
     const params = new URLSearchParams(searchParams?.toString() ?? "");
-    if (next === DEFAULT_TAB) params.delete("tab");
+    if (next === defaultTab) params.delete("tab");
     else params.set("tab", next);
     const qs = params.toString();
     router.replace(qs.length > 0 ? `?${qs}` : "?", { scroll: false });
@@ -75,7 +81,7 @@ export function SettingsTabs({ children }: Props) {
         aria-label="Settings tabs"
         className="thin-scroll mb-8 flex gap-1 overflow-x-auto border-b border-border-base"
       >
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const on = tab.key === active;
           return (
             <button

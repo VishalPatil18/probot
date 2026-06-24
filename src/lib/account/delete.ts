@@ -21,7 +21,7 @@ export type InitDeletionResult =
       reason: "username_mismatch" | "already_requested" | "user_not_found";
     };
 
-// Stage 7 Phase 5: kick off the 7-day grace period. The user has clicked
+// Kick off the 7-day grace period. The user has clicked
 // "Delete account" + typed their username in the GitHub-style modal; the
 // route hands the typed value here so we can re-verify against the live
 // users row (defence in depth - the dashboard's own confirmation is the
@@ -86,7 +86,7 @@ export type UndoDeletionResult =
 // scheduled purge.
 export async function undoAccountDeletion(
   rawToken: string,
-  typedUsername: string,
+  identifier: string,
 ): Promise<UndoDeletionResult> {
   const undoTokenHash = hashToken(rawToken);
   const row = await db.query.deletionRequests.findFirst({
@@ -100,7 +100,14 @@ export async function undoAccountDeletion(
     // Undo cannot recover from this - the user data is gone.
     return { ok: false, reason: "already_purged" };
   }
-  if (typedUsername !== row.usernameSnapshot) {
+  // Accept EITHER the username or the email (case-insensitive) as the
+  // defence-in-depth confirmation - the user reading the undo email may recall
+  // one more readily than the other.
+  const typed = identifier.trim();
+  const matches =
+    typed === row.usernameSnapshot ||
+    typed.toLowerCase() === row.emailSnapshot.toLowerCase();
+  if (!matches) {
     return { ok: false, reason: "username_mismatch" };
   }
 
@@ -225,7 +232,7 @@ export async function runPurgeJob(
     .returning({ id: deletionRequests.id });
   rowsCleanedUp = cleaned.length;
 
-  // Pass 3: prune ancillary expired data (Stage 7 audit log keeps 30
+  // Pass 3: prune ancillary expired data (audit log keeps 30
   // days; the cron is the right place for the actual DELETE since reads
   // already enforce the window).
   try {

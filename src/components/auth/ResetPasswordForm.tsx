@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { PasswordInput } from "./PasswordInput";
+
 interface ResetPasswordFormProps {
   token: string;
 }
@@ -71,16 +73,14 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
           >
             New password
           </label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={setPassword}
             required
             minLength={8}
             autoComplete="new-password"
             placeholder="At least 8 characters"
-            className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand transition-colors"
           />
         </div>
         <div>
@@ -90,16 +90,14 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
           >
             Confirm password
           </label>
-          <input
+          <PasswordInput
             id="confirmPassword"
-            type="password"
             value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
+            onChange={setConfirmPassword}
             required
             minLength={8}
             autoComplete="new-password"
             placeholder="Re-enter your new password"
-            className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand transition-colors"
           />
         </div>
 

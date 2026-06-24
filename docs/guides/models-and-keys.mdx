@@ -1,0 +1,43 @@
+---
+title: Models & keys
+description: "The LLM providers ProBot supports, how to get a key, and how to set it up - your key, your bill, never ours."
+---
+
+ProBot is **bring-your-own-key (BYO key)**: you connect your own LLM provider account, and ProBot uses it to power your bot's replies. We never resell tokens or mark up usage - you pay your provider directly (often pennies per conversation, or nothing on free tiers).
+
+## Supported providers
+
+| Provider | Example models | Get a key |
+| --- | --- | --- |
+| **Anthropic (Claude)** | Claude 3.5 Sonnet, Haiku | [console.anthropic.com](https://console.anthropic.com) |
+| **OpenAI** | GPT-4o, GPT-4o-mini | [platform.openai.com](https://platform.openai.com/api-keys) |
+| **Azure OpenAI** | Your deployed GPT models | Azure portal → your OpenAI resource |
+| **Google Gemini** | Gemini 1.5 Flash / Pro | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+
+<Tip>
+  For the cheapest good results, a "mini"/"flash" tier model (GPT-4o-mini,
+  Claude Haiku, Gemini Flash) is plenty for resume Q&A.
+</Tip>
+
+## Setup
+
+1. Create an API key in your provider's console (links above).
+2. In ProBot, open **AI model & key** (sidebar → *Manage model & key*, or Settings → AI model & key).
+3. Pick the provider + model and paste your key.
+4. The key is stored **in your browser** (encrypted IndexedDB) and sent per request in the `x-llm-api-key` header - it never lands in our database or logs.
+
+### Azure specifics
+
+Azure also needs your **endpoint** and (optionally) an **API version**; these ride in their own headers alongside the key. Use your deployed model's deployment name as the model.
+
+## Where your key lives
+
+By default the key stays in your browser. If you'd rather not re-enter it on every device, you can opt in to **managed key storage**, where it's stored server-side with [envelope encryption](/guides/managed-key-storage) - the operator's key-encryption key (or yours, when self-hosting) is required to decrypt, so a database leak is useless.
+
+## Optional: embeddings key
+
+For vector retrieval (RAG), ProBot can use an OpenAI embeddings key. Without one, your bot falls back to using its full assembled context - still accurate, just less surgical for large knowledge bases. See [Bring your own key](/concepts/byo-key).
+
+## Costs
+
+You only ever pay your LLM provider. ProBot itself is free and MIT-licensed. A typical resume chat is a few thousand tokens; on a mini/flash model that's a fraction of a cent.

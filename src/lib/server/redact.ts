@@ -9,7 +9,7 @@
 //   import { redactSensitive } from "@/lib/server/redact";
 //   console.warn("[chat] something happened", redactSensitive({ headers, err }));
 //
-// The Stage 7 Phase 7 CI guard greps for raw `x-llm-api-key` substrings in
+// The CI guard greps for raw `x-llm-api-key` substrings in
 // logger calls; this helper is the codified opposite of that grep.
 
 const REDACTED_HEADER_NAMES: ReadonlySet<string> = new Set([

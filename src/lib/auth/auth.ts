@@ -4,6 +4,7 @@ import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { eq } from "drizzle-orm";
 import type { NextAuthOptions } from "next-auth";
 import type { Adapter, AdapterUser } from "next-auth/adapters";
+import { decode, encode } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/email";
 import GitHubProvider from "next-auth/providers/github";
@@ -19,6 +20,15 @@ import { loginInput } from "./schemas";
 // Cast tables because our `.enableRLS()` chain on the Drizzle schema strips
 // the `enableRLS` method that the adapter's generic still expects. Runtime
 // behaviour is unaffected - the adapter just does plain INSERTs/SELECTs.
+// Session lifetimes for the "Remember me" toggle. NextAuth v4 applies
+// session.maxAge globally, so the per-login choice is realised by overriding
+// the JWT `encode` maxAge from the token's `remember` flag (see jwt.encode
+// below): remembered logins persist for 30 days, un-remembered ones expire
+// after a day of inactivity. OAuth/magic-link tokens carry no `remember` flag
+// and fall through to the long window.
+const REMEMBER_MAX_AGE = 30 * 24 * 60 * 60;
+const SESSION_MAX_AGE = 24 * 60 * 60;
+
 const baseAdapter = DrizzleAdapter(db, {
   usersTable: users as never,
   accountsTable: accounts as never,
@@ -44,7 +54,7 @@ const adapter: Adapter = {
   ...baseAdapter,
   async createUser(data: AdapterUser) {
     const username = await generateUniqueUsername();
-    // Stage 4: OAuth/magic-link users without a provider-supplied image get
+    // OAuth/magic-link users without a provider-supplied image get
     // a deterministic animal icon. Seeded by the new username so the same
     // account always gets the same default if the field is ever cleared.
     const image = data.image ?? pickDefaultAvatar(username);
@@ -73,7 +83,20 @@ const adapter: Adapter = {
 
 export const authOptions: NextAuthOptions = {
   adapter,
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: REMEMBER_MAX_AGE },
+  jwt: {
+    // Token lifetime follows the credentials "Remember me" choice. A `false`
+    // flag shortens the encoded maxAge so the session lapses sooner; any other
+    // value (including undefined, for OAuth/magic-link) keeps the long window.
+    async encode(params) {
+      const remembered = params.token?.remember !== false;
+      return encode({
+        ...params,
+        maxAge: remembered ? REMEMBER_MAX_AGE : SESSION_MAX_AGE,
+      });
+    },
+    decode,
+  },
   pages: {
     signIn: "/login",
     verifyRequest: "/auth/verify-request",
@@ -85,6 +108,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        remember: { label: "Remember me", type: "text" },
       },
       async authorize(credentials) {
         const parsed = loginInput.safeParse(credentials);
@@ -102,7 +126,7 @@ export const authOptions: NextAuthOptions = {
         const ok = await verifyPassword(password, user.hashedPassword);
         if (!ok) return null;
 
-        // Stage 7 §FR-001.5: block credentials login until the user has
+        // Block credentials login until the user has
         // clicked the verification link. Throwing a sentinel string here is
         // the documented NextAuth way to surface a custom error code to the
         // sign-in page (`?error=email_not_verified`).
@@ -114,6 +138,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           username: user.username,
           email: user.email,
+          remember: credentials?.remember === "true",
         };
       },
     }),
@@ -136,6 +161,10 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        // Persist the remember choice so token rotations keep the same
+        // lifetime. OAuth/magic-link users have no `remember` field; leaving
+        // it undefined falls through to the long (remembered) window.
+        token.remember = (user as { remember?: boolean }).remember;
       }
       // Re-read username from the DB on every JWT mint so the
       // /onboarding PATCH (which updates users.username) is reflected on the
@@ -147,9 +176,14 @@ export const authOptions: NextAuthOptions = {
       if (token.id) {
         const row = await db.query.users.findFirst({
           where: eq(users.id, token.id),
-          columns: { username: true },
+          columns: { username: true, name: true, image: true },
         });
         token.username = row?.username ?? "user";
+        // Re-read name + image too so Settings → Account edits (profile update,
+        // photo upload) are reflected on the very next request without a
+        // sign-out/sign-in cycle - same rationale as the username refresh.
+        token.name = row?.name ?? null;
+        token.picture = row?.image ?? null;
       }
       return token;
     },
@@ -157,6 +191,8 @@ export const authOptions: NextAuthOptions = {
       if (token && session.user) {
         session.user.id = token.id;
         session.user.username = token.username;
+        session.user.name = token.name ?? null;
+        session.user.image = token.picture ?? null;
       }
       return session;
     },

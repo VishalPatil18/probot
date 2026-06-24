@@ -14,13 +14,14 @@ import { getOrCreateSessionId } from "@/lib/client/session-id-store";
 
 import { LeadCaptureCard } from "./LeadCaptureCard";
 import { LoadingAnimation } from "./LoadingAnimation";
+import { BotAvatarIcon } from "./BotAvatarIcon";
 import { MessageBubble } from "./MessageBubble";
 import type { ChatMessage } from "./types";
 
 const LEAD_CAPTURE_THRESHOLD = 3;
 const CONTEXT_SUMMARY_MAX = 300;
 
-// Stage 6 §6.2: lead-capture card eligibility. Returns true when the user
+// Lead-capture card eligibility. Returns true when the user
 // has seen at least N assistant replies and the sessionStorage status is
 // still "pending" (i.e. the card hasn't been shown/dismissed/captured).
 function shouldShowLeadCard(
@@ -66,10 +67,14 @@ type Props = {
   botId: string;
   botName: string;
   botHeadline: string | null;
+  botImage?: string | null;
+  // Per-bot accent color (#RRGGBB). Applied via the `--bot-accent` CSS variable
+  // so the header avatar, send button, and user bubbles match the bot's theme.
+  themeColor?: string;
   suggestedQuestions: string[];
   loadingMessages: string[];
   llmProvider: ProviderName;
-  // Stage 7 §FR-002.10: when present, the chat is talking to a draft bot;
+  // When present, the chat is talking to a draft bot;
   // we forward the token to the API so it can bypass the is_active gate
   // server-side. Public visitors never see this prop - only the wizard's
   // Step 5 / dashboard "open private preview" path supplies it.
@@ -80,6 +85,8 @@ export function ChatWindow({
   botId,
   botName,
   botHeadline,
+  botImage,
+  themeColor = "#0070dd",
   suggestedQuestions,
   loadingMessages,
   llmProvider,
@@ -89,7 +96,10 @@ export function ChatWindow({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [missingKey, setMissingKey] = useState(false);
-  // Stage 6 §6.2: conversationId comes back in the chat response after the
+  // Toggles the suggested-questions list popover (only available once the
+  // conversation has started; before that the questions show as chips).
+  const [showSuggestionList, setShowSuggestionList] = useState(false);
+  // ConversationId comes back in the chat response after the
   // first successful turn. The lead-capture card sends it on POST /leads
   // for idempotent (botId, conversationId, email) dedupe.
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -102,6 +112,7 @@ export function ChatWindow({
     typeof window !== "undefined" ? getOrCreateSessionId() : null,
   );
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -109,9 +120,19 @@ export function ChatWindow({
     }
   }, [messages, loading]);
 
+  // Auto-grow the input up to 4 rows (the CSS max-height caps it there and
+  // turns on internal scroll); resets to a single row after send clears it.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
+
   async function send(text: string) {
     const trimmed = text.trim();
     if (trimmed.length === 0 || loading) return;
+    setShowSuggestionList(false);
 
     const apiKey = await getApiKey();
     if (!apiKey) {
@@ -146,21 +167,21 @@ export function ChatWindow({
       headers["x-llm-azure-endpoint"] = azureCreds.endpoint;
       headers["x-llm-azure-api-version"] = azureCreds.apiVersion;
     }
-    // Stage 3 RAG: include the optional OpenAI embedding key. Absent →
+    // RAG: include the optional OpenAI embedding key. Absent →
     // server skips retrieval and falls back to full-context. Same security
     // model as the chat key (localStorage only, never persisted server-side).
     const embeddingKey = await getEmbeddingApiKey();
     if (embeddingKey) {
       headers["x-embedding-api-key"] = embeddingKey;
     }
-    // Stage 7 §FR-002.10: forward the draft preview token when present so
+    // Forward the draft preview token when present so
     // the chat API allows the inactive bot. The route also accepts a
     // `?preview=` query param as a fallback for hand-pasted URLs.
     if (previewToken) {
       headers["x-preview-token"] = previewToken;
     }
 
-    // Stage 6 §6.1: per-tab session ID lets the server UPSERT a
+    // Per-tab session ID lets the server UPSERT a
     // `conversations` row and coalesce multiple turns from the same tab
     // into a single conversation for dashboard analytics. The mount-
     // stable state value (lazy-init in useState) keeps the send path
@@ -254,29 +275,30 @@ export function ChatWindow({
     }
   }
 
-  const showSuggestions =
-    messages.length === 0 && suggestedQuestions.length > 0;
+  const hasSuggestions = suggestedQuestions.length > 0;
+  const conversationStarted = messages.length > 0;
 
   return (
-    <div className="h-screen flex flex-col bg-bg-app">
-      <ChatHeader botName={botName} botHeadline={botHeadline} />
+    <div
+      className="flex h-full min-h-0 flex-col bg-gradient-to-b from-white to-neutral-50"
+      style={{ "--bot-accent": themeColor } as React.CSSProperties}
+    >
+      <ChatHeader
+        botName={botName}
+        botHeadline={botHeadline}
+        botImage={botImage}
+      />
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-5 py-6 flex flex-col gap-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-3xl flex-col gap-4 px-5 py-6">
           {messages.length === 0 && (
             <MessageBubble
+              botImage={botImage}
               message={{
                 id: "intro",
                 role: "assistant",
                 text: `👋 Hi! I'm ${botName}'s AI assistant. Ask me anything about their experience, skills, or availability.`,
               }}
-            />
-          )}
-
-          {showSuggestions && (
-            <SuggestedQuestions
-              questions={suggestedQuestions}
-              onSelect={send}
             />
           )}
 
@@ -314,14 +336,19 @@ export function ChatWindow({
               void _exhaustive;
               return null;
             }
-            return <MessageBubble key={m.id} message={m} />;
+            return <MessageBubble key={m.id} botImage={botImage} message={m} />;
           })}
 
-          {loading && <LoadingAnimation messages={loadingMessages} />}
+          {loading && (
+            <LoadingAnimation
+              messages={loadingMessages}
+              botImage={botImage}
+            />
+          )}
         </div>
       </div>
 
-      <div className="bg-white border-t border-border-base shrink-0">
+      <div className="shrink-0 border-t border-border-base bg-white/90 backdrop-blur">
         <div className="mx-auto max-w-3xl px-5 py-4">
           {missingKey && (
             <div
@@ -338,11 +365,65 @@ export function ChatWindow({
               to start chatting.
             </div>
           )}
+          {hasSuggestions && !conversationStarted && (
+            <SuggestedQuestions questions={suggestedQuestions} onSelect={send} />
+          )}
+
+          {hasSuggestions && showSuggestionList && (
+            <div className="mb-3 overflow-hidden rounded-2xl border border-border-base bg-white shadow-soft">
+              <p className="border-b border-border-base px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Suggested questions
+              </p>
+              <ul className="thin-scroll max-h-48 overflow-y-auto">
+                {suggestedQuestions.map((q) => (
+                  <li key={q}>
+                    <button
+                      type="button"
+                      onClick={() => void send(q)}
+                      className="block w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-neutral-50 hover:text-[color:var(--bot-accent)]"
+                    >
+                      {q}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <form
             onSubmit={handleSubmit}
-            className="flex items-end gap-2 border border-border-base rounded-2xl px-3 py-2 focus-within:border-brand transition-colors bg-white"
+            className="flex items-end gap-2 rounded-2xl border border-border-base bg-white px-3 py-2 shadow-soft transition-all focus-within:border-[color:var(--bot-accent)] focus-within:shadow-md"
           >
+            {hasSuggestions && conversationStarted && (
+              <button
+                type="button"
+                onClick={() => setShowSuggestionList((v) => !v)}
+                aria-label="Suggested questions"
+                aria-expanded={showSuggestionList}
+                className={`grid size-9 shrink-0 place-items-center rounded-full border transition-colors ${
+                  showSuggestionList
+                    ? "border-[color:var(--bot-accent)] text-[color:var(--bot-accent)]"
+                    : "border-border-base text-muted hover:border-[color:var(--bot-accent)] hover:text-[color:var(--bot-accent)]"
+                }`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-5"
+                  aria-hidden="true"
+                >
+                  <path d="M9 18h6" />
+                  <path d="M10 22h4" />
+                  <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.76.76 1.23 1.52 1.41 2.5" />
+                </svg>
+              </button>
+            )}
             <textarea
+              ref={textareaRef}
               aria-label="Message"
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -351,13 +432,14 @@ export function ChatWindow({
               maxLength={INPUT_MAX}
               placeholder={`Ask anything about ${botName}…`}
               disabled={loading}
-              className="flex-1 resize-none bg-transparent outline-none text-sm py-2 max-h-[120px] disabled:opacity-60"
+              className="thin-scroll max-h-24 flex-1 resize-none bg-transparent py-2 text-sm leading-5 outline-none disabled:opacity-60"
             />
             <button
               type="submit"
               disabled={loading || input.trim().length === 0}
               aria-label="Send message"
-              className="size-9 grid place-items-center rounded-xl brand-blue-gradient text-white shrink-0 disabled:opacity-40"
+              style={{ background: "var(--bot-accent, #0070dd)" }}
+              className="grid size-9 shrink-0 place-items-center rounded-xl text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               ↑
             </button>
@@ -375,33 +457,35 @@ export function ChatWindow({
 function ChatHeader({
   botName,
   botHeadline,
+  botImage,
 }: {
   botName: string;
   botHeadline: string | null;
+  botImage?: string | null;
 }) {
-  const initials =
-    botName
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((s) => s[0] ?? "")
-      .join("")
-      .toUpperCase() || "AI";
-
   return (
-    <header className="bg-white border-b border-border-base shrink-0">
-      <div className="mx-auto max-w-3xl px-5 py-4 flex items-center gap-4">
-        <div className="size-12 rounded-full brand-blue-gradient grid place-items-center text-white font-display font-extrabold text-lg shrink-0">
-          {initials}
+    <header className="shrink-0 border-b border-border-base bg-white/90 backdrop-blur">
+      <div className="mx-auto flex max-w-3xl items-center gap-4 px-5 py-3.5">
+        <div className="relative shrink-0">
+          <span className="block rounded-full ring-2 ring-[color:var(--bot-accent)] ring-offset-2 ring-offset-white">
+            <BotAvatarIcon image={botImage} name={botName} sizeClass="size-11" />
+          </span>
+          <span
+            aria-hidden
+            className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white bg-emerald-500"
+          />
         </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="font-display text-lg font-bold leading-tight truncate">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-display text-lg font-bold leading-tight">
             {botName}{" "}
-            <span className="text-muted font-sans font-normal text-sm">
-              · AI Recruiter
+            <span className="font-sans text-sm font-normal text-muted">
+              · AI Assistant
             </span>
           </h1>
-          {botHeadline && (
-            <p className="text-xs text-muted truncate">{botHeadline}</p>
+          {botHeadline ? (
+            <p className="truncate text-xs text-muted">{botHeadline}</p>
+          ) : (
+            <p className="text-xs font-medium text-emerald-600">Online now</p>
           )}
         </div>
       </div>
@@ -417,13 +501,13 @@ function SuggestedQuestions({
   onSelect: (q: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-2 pl-11">
+    <div className="mb-3 flex flex-wrap gap-2">
       {questions.map((q) => (
         <button
           key={q}
           type="button"
           onClick={() => onSelect(q)}
-          className="px-3.5 py-2 rounded-full bg-white border border-border-base text-sm font-medium hover:border-brand hover:text-brand transition-colors shadow-soft"
+          className="rounded-full border border-border-base bg-white px-3.5 py-2 text-sm font-medium shadow-soft transition-colors hover:border-[color:var(--bot-accent)] hover:text-[color:var(--bot-accent)]"
         >
           {q}
         </button>

@@ -6,7 +6,7 @@ import { bots, db } from "@/lib/db";
 
 // POST /api/bots/[botId]/publish
 //
-// Stage 7 §FR-002.10: flips a draft bot to live. Clears the preview_token so
+// Flips a draft bot to live. Clears the preview_token so
 // the now-public bot can't also be reached via the (no-longer-relevant)
 // preview URL. The reverse direction (publish → unpublish) is the existing
 // PATCH endpoint's `isActive: false` path; we deliberately do NOT remint a
@@ -14,7 +14,7 @@ import { bots, db } from "@/lib/db";
 // session cookie, so previewing your own paused bot is allowed at the
 // public URL with no token shenanigans needed (the chat route's preview
 // path is for tokens; the dashboard test chat path uses the creator session
-// directly when added in Phase 6).
+// directly when added later).
 export async function POST(
   _request: Request,
   { params }: { params: { botId: string } },

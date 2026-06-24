@@ -9,12 +9,15 @@ import { PROVIDER_NAMES } from "@/lib/ai/providers";
 import { setApiKey } from "@/lib/client/llm-key-store";
 
 type Props = {
-  botId: string;
+  // Null on the account-only /dashboard/settings route (no bot yet). The
+  // provider/model switcher (user-level) still works; the per-bot managed-key
+  // + audit sections are hidden until a bot exists.
+  botId: string | null;
   provider: string | null;
   model: string | null;
 };
 
-// Stage 7 Phase 3 - the AI model & key tab is live.
+// The AI model & key tab is live.
 //
 // Three controls:
 //   1. Provider + model switcher (writes to users.llm_provider /
@@ -74,6 +77,7 @@ export function AIModelKeyTab({
   const [auditError, setAuditError] = useState<string | null>(null);
 
   const fetchAudit = useCallback(async () => {
+    if (!botId) return;
     try {
       const res = await fetch(`/api/bots/${botId}/llm-key/audit`);
       if (!res.ok) {
@@ -157,7 +161,7 @@ export function AIModelKeyTab({
         );
         return;
       }
-      // Mirror the key into the (Phase 6) encrypted IndexedDB store too so
+      // Mirror the key into the encrypted IndexedDB store too so
       // the creator's own dashboard test chat keeps working without
       // re-entry.
       await setApiKey(trimmed);
@@ -306,7 +310,9 @@ export function AIModelKeyTab({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
+      {botId ? (
+        <>
+          <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <div className="mb-1 flex items-center justify-between gap-3">
           <h3 className="font-bold">Managed key storage</h3>
           <ManagedKeyStatusPill audit={audit} />
@@ -395,8 +401,8 @@ export function AIModelKeyTab({
         <h3 className="mb-1 font-bold">Decrypt audit log</h3>
         <p className="mb-5 text-xs text-muted">
           Every time your managed key is used to serve a recruiter, a row lands
-          here (timestamp + a short hash suffix of the recruiter IP). Retained
-          for 30 days. No raw IPs, no key material is ever stored.
+          here (timestamp + a short non-reversible hash). Retained for 30 days.
+          No raw identifiers, no key material is ever stored.
         </p>
         {auditError ? (
           <p className="text-xs text-rose-700">{auditError}</p>
@@ -424,6 +430,13 @@ export function AIModelKeyTab({
           </ul>
         )}
       </section>
+        </>
+      ) : (
+        <section className="rounded-2xl border border-border-base bg-white p-6 text-sm text-muted shadow-soft">
+          Create a bot to store a managed key and view its decrypt audit log.
+          Your provider &amp; model preference above applies to all your bots.
+        </section>
+      )}
     </div>
   );
 }

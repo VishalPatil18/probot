@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { ChatWindow } from "@/components/chat/ChatWindow";
-import { OwnerCard } from "@/components/u/OwnerCard";
 import { isProviderName, type ProviderName } from "@/lib/ai/providers";
 import { verifyPreviewToken } from "@/lib/bots/preview-token";
 import { bots, db, users } from "@/lib/db";
@@ -26,6 +25,8 @@ type ResolvedBot = {
   id: string;
   name: string;
   headline: string | null;
+  image: string | null;
+  themeColor: string;
   suggestedQuestions: string[] | null;
   loadingMessages: string[];
   isActive: boolean;
@@ -36,7 +37,7 @@ type ResolvedBot = {
 // share a single set of DB queries per request - avoids the 2x lookup
 // (users + bots) running 4 times total per page load.
 //
-// Stage 7 §FR-002.10: lookup no longer hard-filters on isActive. We pull
+// Lookup no longer hard-filters on isActive. We pull
 // the user's bot regardless; the caller decides whether the request is
 // authorised to see a draft (i.e. presented a valid preview token).
 const resolve = cache(async function resolve(
@@ -60,6 +61,8 @@ const resolve = cache(async function resolve(
       id: true,
       name: true,
       headline: true,
+      image: true,
+      themeColor: true,
       suggestedQuestions: true,
       loadingMessages: true,
       isActive: true,
@@ -124,8 +127,8 @@ export default async function PublicChatPage({
   params,
   searchParams,
 }: PageProps) {
-  // Stage 4: PUBLIC - no auth required for published bots.
-  // Stage 7: draft bots require a valid signed preview token in `?preview=`.
+  // PUBLIC - no auth required for published bots.
+  // Draft bots require a valid signed preview token in `?preview=`.
   const resolved = await resolve(params.username);
   if (!resolved) notFound();
   const { owner, bot } = resolved;
@@ -138,33 +141,31 @@ export default async function PublicChatPage({
     : "anthropic";
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:py-10">
-        {!bot.isActive ? (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <span className="font-semibold">Private preview.</span> This bot is
-            still a draft - recruiters can&apos;t reach this URL without your
-            token. Publish from the settings page to make it public.
-          </div>
-        ) : null}
-        <OwnerCard
-          name={owner.name ?? owner.username}
-          headline={bot.headline}
-          image={owner.image}
-        />
-        <div className="mt-6">
-          <ChatWindow
-            botId={bot.id}
-            botName={bot.name}
-            botHeadline={bot.headline}
-            suggestedQuestions={bot.suggestedQuestions ?? []}
-            loadingMessages={bot.loadingMessages}
-            llmProvider={llmProvider}
-            previewToken={
-              previewAuthorised ? (searchParams.preview ?? null) : null
-            }
-          />
+    // Own the full (dynamic) viewport as a flex column: an optional compact
+    // preview strip on top, then the chat fills the rest. Nothing scrolls at
+    // the page level - only ChatWindow's inner message region scrolls.
+    <div className="flex h-dvh flex-col bg-bg-app">
+      {!bot.isActive ? (
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-900">
+          <span className="font-semibold">Private preview.</span> This draft
+          isn&apos;t reachable without your token. Publish from settings to make
+          it public.
         </div>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        <ChatWindow
+          botId={bot.id}
+          botName={bot.name}
+          botHeadline={bot.headline}
+          botImage={bot.image}
+          themeColor={bot.themeColor}
+          suggestedQuestions={bot.suggestedQuestions ?? []}
+          loadingMessages={bot.loadingMessages}
+          llmProvider={llmProvider}
+          previewToken={
+            previewAuthorised ? (searchParams.preview ?? null) : null
+          }
+        />
       </div>
     </div>
   );

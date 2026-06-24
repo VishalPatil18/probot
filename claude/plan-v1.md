@@ -10,15 +10,17 @@
 
 | Stage | Title                                       | Priority | Deployable? | Estimated effort |
 | ----- | ------------------------------------------- | -------- | ----------- | ---------------- |
-| **1** | Branding & Copy Cleanup                     | P0       | yes         | 1–2 days         |
-| **2** | Auth UX & Bug-fix Sprint                    | P0       | yes         | 3–4 days         |
-| **3** | Account & Settings Hardening                | P0       | yes         | 4–5 days         |
-| **4** | Bot Factory & Dashboard Polish              | P1       | yes         | 3–4 days         |
-| **5** | Sidebar, Notifications & Empty-State Polish | P1       | yes         | 2–3 days         |
-| **6** | Marketing & Trust Pages                     | P1       | yes         | 5–7 days         |
-| **7** | SEO, Docs & Discoverability                 | P2       | yes         | 3–4 days         |
-| **8** | Performance, Scale & Operational Polish     | P0 perf  | yes         | 1–2 weeks        |
-| **9** | Self-Hosted Bot Repo Architecture           | P0 arch  | yes         | 2–3 weeks        |
+| **1** | ✅ Branding & Copy Cleanup                  | P0       | yes         | 1–2 days         |
+| **2** | ✅ Auth UX & Bug-fix Sprint                 | P0       | yes         | 3–4 days         |
+| **3** | ✅ Account & Settings Hardening             | P0       | yes         | 4–5 days         |
+| **4** | ✅ Bot Factory & Dashboard Polish           | P1       | yes         | 3–4 days         |
+| **5** | ✅ Sidebar, Notifications & Empty-State Polish | P1     | yes         | 2–3 days         |
+| **6** | ✅ Marketing & Trust Pages                  | P1       | yes         | 5–7 days         |
+| **7** | ✅ SEO, Docs & Discoverability              | P2       | yes         | 3–4 days         |
+| **8** | 🟡 Performance, Scale & Operational Polish  | P0 perf  | yes         | 1–2 weeks        |
+| **9** | 🟡 Self-Hosted Bot Repo Architecture        | P0 arch  | yes         | 2–3 weeks        |
+
+**Legend:** ✅ shipped · 🟡 partial (code slices shipped; some acceptance is operational/native). Stage 8 is 🟡: the shared-state rate limiter + circuit breaker (Upstash, in-memory fallback), the `circuit_open` alerting seam, and the export-bundling perf fix shipped in-repo. Still operational/native or deferred: the SRS §6.1 perf-measurement NFRs (P01–P06), the k6 load test, the live Sentry breadcrumb, and the smaller Beta-Stage-7 hardening items (resend-deletion-email, session revocation on delete, dashboard breaker indicator, provider-mismatch prompt, ClamAV sidecar). Stage 9 is 🟡: the locked design (ADR 0004), the `bot_tokens` schema + per-bot-token service, the versioned `/api/v1/bot/*` surface, the dashboard Deployment tab, the `probot-bot` runtime scaffold, and the docs all shipped in-repo. Native follow-ups: run `npx drizzle-kit push` for `bot_tokens` + `bots.deployment_mode`, and extract `probot-bot/` into its own repository to deploy.
 
 **Execution order:** strictly Stage 1 → Stage 9. Each stage is mergeable to `main` and deployable on its own. Stage 8 (perf + scale) is sequenced before Stage 9 (architectural rewrite) so the baseline measurements happen against the stable shipping product; Stage 9 then has a clean before/after comparison to validate the rewrite didn't regress latency. Stage 9 is sequenced last because it's an architectural rewrite that touches authentication, deployment, and the API contract; doing it before the polish stages would mean re-doing the polish on a moving target.
 
@@ -27,6 +29,8 @@
 ---
 
 ## Stage 1 - Branding & Copy Cleanup
+
+**Status:** ✅ Shipped 2026-06-21. "AI Recruiter"→"AI Assistant", `probot.com`→`pro-bot.dev`, post-Beta auth hero copy, Beta-vocab comment sweep across ~95 source files. typecheck + key-leak guard green; `design/*.html` mockups and the self-referential `docs/changelog.mdx` line intentionally left. Full `npm test`/`npm run build` to be re-run natively (sandbox platform mismatch). See `context.md` 2026-06-21 entry.
 
 **Priority:** P0 (no engineering risk, immediate user-visible improvement)
 **Deployable artifact:** Every page / component reads "AI Assistant" instead of "AI Recruiter"; every reference to `probot.com` becomes `pro-bot.dev`; code comments stop mentioning internal Beta stage names.
@@ -51,6 +55,8 @@ Cheap, broad, and removes the noise that the rest of v1.0 would otherwise inheri
 ---
 
 ## Stage 2 - Auth UX & Bug-fix Sprint
+
+**Status:** ✅ Shipped 2026-06-21. Show-password toggles, "remember me" (JWT-encode maxAge: 30d vs 1d), debounced signup availability check (`GET /api/auth/check-availability`), forgot-password modal, OAuth-row alignment, inline sidebar sign-out (`SidebarAccountFooter`). Magic-link delivery bug was already resolved by the user (dropped); onboarding parity verified already-shipped (no code change). typecheck + key-leak guard green; full `npm test`/`npm run build` to be re-run natively (sandbox platform mismatch). See `context.md` 2026-06-21 Stage 2 entry.
 
 **Priority:** P0 (auth blocking issues + UX wins)
 **Deployable artifact:** Auth flows feel professional; the magic-link bug from Beta is fixed; signup catches collisions before the API call.
@@ -82,6 +88,8 @@ None. All work is in `src/app/(auth)`, `src/components/auth`, and one new `/api/
 
 ## Stage 3 - Account & Settings Hardening
 
+**Status:** ✅ Shipped 2026-06-21. Editable name + username (debounced uniqueness via the Stage 2 `check-availability` endpoint), password change (`POST /api/users/me/password`), profile-photo upload to Postgres bytea (`user_avatars` + `POST /api/users/me/avatar` + `GET /api/avatar/[userId]`), `auth.ts` jwt/session refresh of name+image, and a redesigned theme picker (`ThemeColorField`). Items 4/6/7 (personality/custom-instructions, export/delete, AI model & key) were verified already-shipped. **Requires `npx drizzle-kit push` to create the `user_avatars` table.** typecheck + key-leak green; full test/build run natively. See `context.md` 2026-06-21 Stage 3 entry.
+
 **Priority:** P0 (every user-facing surface in settings → Account is currently read-only or stubbed)
 **Deployable artifact:** Users can edit their name, username, password, profile photo; the Security & Privacy tab is fully wired; the AI Model & API Key panel is the post-Beta managed-key surface.
 
@@ -110,6 +118,8 @@ Stage 2 (show-password toggle, availability endpoint).
 
 ## Stage 4 - Bot Factory & Dashboard Polish
 
+**Status:** ✅ Shipped 2026-06-22. Bot profile picture (Postgres bytea `bot_avatars` + `bots.image`, Bot Factory Step 1, rendered on chat header + widget, default ProBot icon), PDF dustbin icon, per-file ingestion fix (knowledge route returns `files[]`; wizard Step 5 shows retriable failures), theme picker in wizard Step 3, dark code-block embed snippets, shared `image-upload.ts` helper. **Requires `npx drizzle-kit push`** for `bot_avatars`/`bots.image`. typecheck + key-leak green; full test/build run natively. See `context.md` 2026-06-22 Stage 4 entry.
+
 **Priority:** P1 (highest UX-impact wizard pass since Beta Phase 2)
 **Deployable artifact:** Wizard step 1 has a bot avatar picker; PDF removal uses a dustbin icon; the dashboard's "Share your bot" section shows embed snippets as code blocks; PDF-ingestion failure no longer surfaces as a generic error.
 
@@ -135,6 +145,8 @@ Stage 3 (profile photo storage path).
 ---
 
 ## Stage 5 - Sidebar, Notifications & Empty-State Polish
+
+**Status:** ✅ Shipped 2026-06-22. Zero-bot sidebar empty-state + clickable profile row, docs link by the bell, embed-share URL, new bot-independent `/dashboard/settings` route (SettingsTabs subset + optional-botId AIModelKeyTab), lead-capture email opt-in (`notify_leads_email` + `/api/users/me/notification-prefs` + dropdown toggle + best-effort owner email via `sendLeadCapturedEmail`), and a dismissible ToS banner (`last_legal_ack_date` + `LEGAL_EFFECTIVE_AT` + `LegalBanner` + `/api/users/me/legal-ack`). Per-item/mark-all notifications already existed. **Requires `npx drizzle-kit push`** for the 2 new columns. typecheck + key-leak green; full test/build run natively. See `context.md` 2026-06-22 Stage 5 entry.
 
 **Priority:** P1
 **Deployable artifact:** Sidebar adapts to zero-bot users; notifications grow beyond in-app polling; ToS-change banner exists for the first material legal revision.
@@ -180,7 +192,7 @@ Stage 3 (settings refactor for the no-bot path).
     7. (0:54–0:58) "Two minutes to live. No credit card."
     8. (0:58–1:00) "ProBot - pro-bot.dev. Create yours today."
 - **"Why ProBot" comparison page** at `/why-pro-bot`: honest side-by-side vs "generic chatbot platforms." Green checks for ProBot strengths (BYO key, free tier, open source, GDPR built in), red X for what others lack. Keep it factually defensible.
-- **Hire Me page** at `/hire-me`: about the creator Vishal Patil, his Spec-Driven Development skills, open to work across US + Europe, link to portfolio, mention CNBC feature on the VAi chatbot that motivated ProBot.
+- **Hire Me page** at `/hire-me`: about the creator Vishal Patil, his Spec-Driven Development skills, open to work across US + Europe, link to portfolio, mention he got featured in CNBC for developing the VAi chatbot that motivated ProBot (Ask him details for more information).
 - **Roadmap page** at `/roadmap`: auto-generated render of `plan-v1.md` stages + completion status, with a "Suggest a feature" CTA pointing at GitHub Discussions.
 - **Changelog page** linked in the footer (Stage 7-Phase-7 already wired to `https://docs.pro-bot.dev/changelog`; verify the route lives at the right domain).
 

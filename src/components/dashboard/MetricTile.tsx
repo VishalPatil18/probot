@@ -4,7 +4,7 @@ type Props = {
   label: string;
   value: string | number;
   icon: "forum" | "chat" | "contact_mail" | "bolt";
-  /** Faded right-corner pill text (e.g. "+18%"). */
+  /** Right-corner change pill (e.g. "+18%", "-4%", "New"). Coloured by sign. */
   fadedGrowth?: string;
   /** When true, the entire content is faded and a Coming Soon pill is rendered. */
   comingSoon?: boolean;
@@ -55,7 +55,11 @@ export function MetricTile({
           </svg>
         </span>
         {fadedGrowth ? (
-          <span className="text-[11px] font-bold text-success opacity-30">
+          <span
+            className={`text-[11px] font-bold ${
+              fadedGrowth.startsWith("-") ? "text-rose-600" : "text-success"
+            }`}
+          >
             {fadedGrowth}
           </span>
         ) : null}

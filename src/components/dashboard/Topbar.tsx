@@ -17,7 +17,7 @@ type Props = {
 // URL pill with copy button (when a bot is selected), and the
 // notification bell + "View live bot" CTA on the right.
 //
-// NotificationBell relocated from the old single-row header in slice 6.4.
+// NotificationBell relocated from the old single-row header.
 // Topbar is a client component so it can derive the page title from
 // `usePathname()` without the server layout having to know which page
 // is rendering.
@@ -41,7 +41,6 @@ export function Topbar({ publicUrl, liveBotUrl }: Props) {
           </div>
         ) : null}
         <div className="ml-auto flex items-center gap-2">
-          <NotificationBell />
           {liveBotUrl ? (
             <a
               href={liveBotUrl}
@@ -67,6 +66,29 @@ export function Topbar({ publicUrl, liveBotUrl }: Props) {
               View live bot
             </a>
           ) : null}
+          <a
+            href="https://pro-bot.dev/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-secondary !py-2 text-xs inline-flex"
+          >
+            <svg
+              aria-hidden
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+            </svg>
+            Docs
+          </a>
+          <NotificationBell />
         </div>
       </div>
     </header>

@@ -6,7 +6,7 @@ import { NotificationDropdown } from "./NotificationDropdown";
 
 const POLL_INTERVAL_MS = 30_000;
 
-// Stage 6 §6.6: dashboard notification bell. Polls the unread-count
+// Dashboard notification bell. Polls the unread-count
 // endpoint every 30s while the tab is visible (pauses on Page Visibility
 // API hidden, resumes + immediate refresh on visible). Click opens the
 // dropdown panel. The badge caps at "9+" so it stays readable.

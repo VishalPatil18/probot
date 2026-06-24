@@ -33,7 +33,7 @@ function formatTime(d: Date): string {
   });
 }
 
-// Stage 6 §6.4: read-only message bubble for the dashboard transcript
+// Read-only message bubble for the dashboard transcript
 // viewer. Renders user turns right-aligned in brand color, assistant
 // turns left-aligned in white. Both go through react-markdown so the
 // transcript matches what the recruiter saw at the time.

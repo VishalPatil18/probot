@@ -8,7 +8,7 @@ import { usernameSchema } from "@/lib/auth/schemas";
 import { isAllowedAvatar } from "@/lib/avatars";
 import { db, users } from "@/lib/db";
 
-// Stage 4 plan.md §4: PATCH /api/onboarding/profile
+// PATCH /api/onboarding/profile
 //
 // Single-shot endpoint that finalises a user's identity. Used by the
 // /onboarding page to (a) replace a `user-<8hex>` placeholder username with

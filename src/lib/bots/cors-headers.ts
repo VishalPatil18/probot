@@ -1,4 +1,4 @@
-// Stage 5: CORS headers shared by the two public endpoints the embeddable
+// CORS headers shared by the two public endpoints the embeddable
 // widget calls cross-origin: POST /api/chat/[botId] and
 // GET /api/bots/[botId]/config. The widget runs on any host (janedoe.com,
 // portfolio.dev, etc.) so Allow-Origin is `*` - safe because both endpoints

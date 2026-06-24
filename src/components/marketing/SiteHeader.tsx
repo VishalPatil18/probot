@@ -3,21 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 
-const DOCS_URL = "https://pro-bot-ai.vercel.app/docs";
+import { Icon } from "@/components/ui/Icon";
 
-function MaterialIcon({
-  name,
-  className = "",
-}: {
-  name: string;
-  className?: string;
-}) {
-  return (
-    <span className={`material-symbols-outlined ${className}`} aria-hidden>
-      {name}
-    </span>
-  );
-}
+const DOCS_URL = "https://pro-bot.dev/docs";
 
 export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -56,6 +44,12 @@ export function SiteHeader() {
             Features
           </Link>
           <Link
+            href="/why-pro-bot"
+            className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
+          >
+            Why ProBot
+          </Link>
+          <Link
             href="/about"
             className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
           >
@@ -69,12 +63,6 @@ export function SiteHeader() {
           >
             Docs
           </a>
-          <Link
-            href="/u/vishal/chat"
-            className="px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors"
-          >
-            Live demo
-          </Link>
         </nav>
         <div className="hidden md:flex items-center gap-2 ml-auto">
           <Link href="/login" className="btn btn-secondary">
@@ -91,7 +79,7 @@ export function SiteHeader() {
           aria-label="Toggle navigation"
           className="md:hidden ml-auto size-9 grid place-items-center rounded-lg border border-border-base"
         >
-          <MaterialIcon name="menu" className="!text-xl" />
+          <Icon name="menu" className="!text-xl" />
         </button>
       </div>
       {mobileOpen && (
@@ -101,6 +89,9 @@ export function SiteHeader() {
           </Link>
           <Link href="/#features" className="py-2 font-medium">
             Features
+          </Link>
+          <Link href="/why-pro-bot" className="py-2 font-medium">
+            Why ProBot
           </Link>
           <Link href="/about" className="py-2 font-medium">
             About
@@ -120,10 +111,7 @@ export function SiteHeader() {
             <Link href="/login" className="btn btn-secondary flex-1">
               Log in
             </Link>
-            <Link
-              href="/dashboard/bots/new"
-              className="btn btn-primary flex-1"
-            >
+            <Link href="/dashboard/bots/new" className="btn btn-primary flex-1">
               Create bot
             </Link>
           </div>

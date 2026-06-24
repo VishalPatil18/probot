@@ -3,13 +3,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireSessionMock = vi.fn();
 const selectMock = vi.fn();
+const findUserMock = vi.fn();
 
 vi.mock("@/lib/auth/require-session", () => ({
   requireSession: (...args: unknown[]) => requireSessionMock(...args),
 }));
 
 vi.mock("@/lib/db", () => ({
-  db: { select: (...args: unknown[]) => selectMock(...args) },
+  db: {
+    select: (...args: unknown[]) => selectMock(...args),
+    query: {
+      users: { findFirst: (...args: unknown[]) => findUserMock(...args) },
+    },
+  },
   notifications: {
     id: "n.id",
     userId: "n.user_id",
@@ -19,6 +25,7 @@ vi.mock("@/lib/db", () => ({
     createdAt: "n.created_at",
     botId: "n.bot_id",
   },
+  users: { id: "u.id" } as Record<string, unknown>,
 }));
 
 import { GET } from "./route";
@@ -43,6 +50,7 @@ describe("GET /api/notifications", () => {
   beforeEach(() => {
     requireSessionMock.mockReset();
     selectMock.mockReset();
+    findUserMock.mockReset().mockResolvedValue({ notifyLeadsEmail: false });
   });
 
   it("returns 401 when no session", async () => {

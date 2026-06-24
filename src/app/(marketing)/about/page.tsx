@@ -1,37 +1,25 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Icon, type IconName } from "@/components/ui/Icon";
 import {
   CONTACT_EMAIL,
   OPERATOR_DESCRIPTION,
   OPERATOR_NAME,
 } from "@/lib/marketing/legal";
+import { buildMetadata } from "@/lib/seo/site";
 
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
 const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
 
-export const metadata: Metadata = {
-  title: "About · ProBot",
+export const metadata = buildMetadata({
+  title: "About",
   description:
     "ProBot is a free, open-source AI representative for job seekers. Built by an individual maintainer with a bring-your-own-key philosophy.",
-};
+  path: "/about",
+});
 
-function MaterialIcon({
-  name,
-  className = "",
-}: {
-  name: string;
-  className?: string;
-}) {
-  return (
-    <span className={`material-symbols-outlined ${className}`} aria-hidden>
-      {name}
-    </span>
-  );
-}
-
-const PRINCIPLES = [
+const PRINCIPLES: Array<{ icon: IconName; title: string; body: string }> = [
   {
     icon: "key",
     title: "You own the keys",
@@ -45,7 +33,7 @@ const PRINCIPLES = [
   {
     icon: "code",
     title: "MIT-licensed, end to end",
-    body: "Every line of ProBot is open source. Fork it, audit it, self-host it on your own infrastructure. No hidden modules, no upsell tier.",
+    body: "Every line of ProBot is open source. Fork it, audit it, and self-host your bot on your own infrastructure. No hidden modules, no upsell tier.",
   },
   {
     icon: "payments",
@@ -60,19 +48,71 @@ export default function AboutPage() {
       {/* HERO */}
       <section className="dot-pattern border-b border-border-base">
         <div className="mx-auto max-w-[1180px] px-6 py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-brand text-xs font-bold border border-blue-100 mb-6">
-              <span className="size-1.5 rounded-full bg-brand" /> About ProBot
-            </span>
-            <h1 className="font-display text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.05] text-balance mb-6">
-              A free AI representative for every job seeker.
-            </h1>
-            <p className="text-lg text-muted leading-relaxed max-w-2xl">
-              Recruiters skim a resume in six seconds. ProBot turns that resume
-              into a chatbot that answers their questions instead - accurately,
-              in your voice, 24/7. No paywall. No vendor lock-in. Your data and
-              your model keys, always.
-            </p>
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+            <div>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-brand text-xs font-bold border border-blue-100 mb-6">
+                <span className="size-1.5 rounded-full bg-brand" /> About ProBot
+              </span>
+              <h1 className="font-display text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.05] text-balance mb-6">
+                A free AI representative for every job seeker.
+              </h1>
+              <p className="text-lg text-muted leading-relaxed max-w-2xl text-justify">
+                Recruiters skim a resume in six seconds. ProBot turns that
+                resume into a chatbot that answers their questions instead -
+                accurately, in your voice, 24/7. No paywall. No vendor lock-in.
+                Your data and your model keys, always.
+              </p>
+              <p className="mt-4 text-lg text-muted leading-relaxed max-w-2xl text-justify">
+                ProBot was born from{" "}
+                <a
+                  href="https://vishalpatil.vercel.app/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brand font-semibold hover:underline"
+                >
+                  VAi
+                </a>{" "}
+                an AI assistant{" "}
+                <a
+                  href="https://www.linkedin.com/in/vishalrameshpatil/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brand font-semibold hover:underline"
+                >
+                  Vishal
+                </a>{" "}
+                built to talk to recruiters on a job seeker&apos;s behalf. After
+                VAi went viral and{" "}
+                <a
+                  href="https://www.cnbc.com/2026/04/30/these-2-job-seekers-built-ai-chatbots-to-talk-to-recruiters-for-them.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brand font-semibold hover:underline"
+                >
+                  Vishal was featured by CNBC
+                </a>
+                , dozens of non-developers reached out asking how they could
+                have their own bot. ProBot is the answer - the same idea,
+                rebuilt as a free, open-source platform anyone can use.
+              </p>
+            </div>
+
+            {/* CNBC feature - click to read the article */}
+            <a
+              href="https://www.cnbc.com/2026/04/30/these-2-job-seekers-built-ai-chatbots-to-talk-to-recruiters-for-them.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Read the CNBC article featuring Vishal Patil's VAi chatbot"
+              className="float-y block w-full lg:ml-auto lg:max-w-md"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://res.cloudinary.com/dbjdu0hvl/image/upload/v1778085212/Portfolio4.0/cnbcArticle_qjihe2.webp"
+                alt="Vishal Patil's VAi chatbot featured in a CNBC article"
+                loading="lazy"
+                className="cloud-fade h-auto w-full object-cover"
+              />
+            </a>
           </div>
         </div>
       </section>
@@ -156,7 +196,7 @@ export default function AboutPage() {
                 className="bg-white rounded-2xl border border-border-base p-7 shadow-soft"
               >
                 <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
-                  <MaterialIcon name={p.icon} />
+                  <Icon name={p.icon} />
                 </div>
                 <h3 className="font-display text-xl font-bold mb-2">
                   {p.title}
@@ -206,14 +246,14 @@ export default function AboutPage() {
               </p>
               <ul className="space-y-2 text-sm text-muted">
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
                   <span>Your bot keeps replying when you&apos;re offline.</span>
                 </li>
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
@@ -223,7 +263,7 @@ export default function AboutPage() {
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
@@ -239,34 +279,36 @@ export default function AboutPage() {
                 Never leaves your server.
               </h3>
               <p className="text-sm text-muted leading-relaxed mb-4">
-                Clone the open-source repo and deploy it under your own domain.
-                Your LLM key goes into your own environment as a config value.
-                ProBot never sees it - your bot calls the LLM provider directly
-                from your infra. The right pick if you can&apos;t trust any
-                operator (including us) with the key, ever.
+                Run the tiny <code>probot-bot</code> runtime under your own
+                domain. Your LLM key goes into your runtime&apos;s environment as
+                a config value. ProBot never sees it - your bot calls the LLM
+                provider directly from your infra, while the dashboard,
+                knowledge, and leads stay on the managed platform. The right pick
+                if you can&apos;t trust any operator (including us) with the key,
+                ever.
               </p>
               <ul className="space-y-2 text-sm text-muted">
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
                   <span>Zero key material on pro-bot.dev infra.</span>
                 </li>
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
                   <span>Full source, MIT licensed - audit every byte.</span>
                 </li>
                 <li className="flex gap-2">
-                  <MaterialIcon
+                  <Icon
                     name="check_circle"
                     className="!text-base text-success shrink-0 mt-0.5"
                   />
                   <span>
-                    You own deploy, scaling, and uptime - small ops cost.
+                    Tiny, auditable runtime - revoke its token any time.
                   </span>
                 </li>
               </ul>
@@ -275,7 +317,7 @@ export default function AboutPage() {
                 className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline"
               >
                 Self-hosting guide
-                <MaterialIcon name="arrow_forward" className="!text-base" />
+                <Icon name="arrow_forward" className="!text-base" />
               </Link>
             </div>
           </div>
@@ -283,8 +325,8 @@ export default function AboutPage() {
             Honest caveat: managed mode protects against database leaks and code
             leaks, but NOT against full infrastructure compromise of pro-bot.dev
             (anyone with deploy access can read the KEK). If that&apos;s the
-            threat you&apos;re defending against, self-host is the right answer
-            - that&apos;s exactly why both paths exist.
+            threat you&apos;re defending against, self-hosting your bot is the
+            right answer - that&apos;s exactly why the option exists.
           </p>
         </div>
       </section>
@@ -337,7 +379,7 @@ export default function AboutPage() {
                   rel="noopener noreferrer"
                   className="btn btn-secondary"
                 >
-                  <MaterialIcon name="public" className="!text-base" />
+                  <Icon name="portfolio" className="!text-base text-brand" />
                   Portfolio
                 </a>
                 <a
@@ -346,7 +388,7 @@ export default function AboutPage() {
                   rel="noopener noreferrer"
                   className="btn btn-secondary"
                 >
-                  <MaterialIcon name="code" className="!text-base" />
+                  <Icon name="github" className="!text-base text-brand" />
                   GitHub
                 </a>
                 <a
@@ -355,7 +397,7 @@ export default function AboutPage() {
                   rel="noopener noreferrer"
                   className="btn btn-secondary"
                 >
-                  <MaterialIcon name="badge" className="!text-base" />
+                  <Icon name="linkedin" className="!text-base text-brand" />
                   LinkedIn
                 </a>
               </div>
@@ -383,7 +425,7 @@ export default function AboutPage() {
                 className="btn bg-white text-brand !px-7 !py-3.5 !text-base font-bold w-full lg:w-auto"
               >
                 Create your bot for free
-                <MaterialIcon name="arrow_forward" className="!text-lg" />
+                <Icon name="arrow_forward" className="!text-lg" />
               </Link>
             </div>
           </div>

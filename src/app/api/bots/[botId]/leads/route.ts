@@ -1,34 +1,36 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+import { sendLeadCapturedEmail } from "@/lib/auth/email";
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { corsPreflight, PUBLIC_CORS_HEADERS } from "@/lib/bots/cors-headers";
-import { bots, conversations, db, leads, notifications } from "@/lib/db";
+import { bots, conversations, db, leads, notifications, users } from "@/lib/db";
 import { listLeads } from "@/lib/leads/queries";
 import { leadCaptureInput } from "@/lib/leads/schemas";
 import { parsePagination } from "@/lib/pagination";
+import { appBaseUrl } from "@/lib/uploads/image-upload";
 
 // /api/bots/[botId]/leads
 //
 // GET  (owner-gated, same-origin) - paginated lead list for the dashboard.
 // POST (public, CORS allow-list)   - chat-UI lead capture call.
 //
-// The POST handler is the only Stage 6 write surface that is anonymous +
+// The POST handler is the only write surface that is anonymous +
 // cross-origin (the embeddable widget on a third-party site). It is
 // idempotent on (conversationId, lowercased email) so a double-submit
 // from the UI produces a single lead row + a single notification row.
 //
-// **No rate limiting in slice 6.2** - explicit deferral to Stage 7's
-// Redis layer (per the slice-6.2 design Q2 lock). The 4 KB body cap, Zod
+// **No rate limiting yet** - explicit deferral to a later
+// Redis layer (per the original design Q2 lock). The 4 KB body cap, Zod
 // schema, idempotent dedupe, and 24h email-only window combine to make
 // raw brute-force noise expensive without rate-limit middleware. A spam
 // attack that cycles emails to defeat the dedupe still bounds at one DB
-// transaction per unique email per 24h window per bot - acceptable for
-// slice 6.2 scope; revisit if observed in practice.
+// transaction per unique email per 24h window per bot - acceptable
+// for now; revisit if observed in practice.
 
 const MAX_BODY_BYTES = 4096;
 
-// Stage 5 widget: CORS preflight. Returns 204 with the public allow-list.
+// Widget: CORS preflight. Returns 204 with the public allow-list.
 export function OPTIONS(): Response {
   return corsPreflight();
 }
@@ -85,7 +87,8 @@ export async function POST(
       400,
     );
   }
-  const { email, conversationId, contextSummary } = parsed.data;
+  const { name, email, company, linkedinUrl, conversationId, contextSummary } =
+    parsed.data;
 
   // 4. Resolve bot (anonymous endpoint - we need bot.user_id for the
   // notification row + bot.name for the notification payload).
@@ -119,11 +122,17 @@ export async function POST(
           botId: bot.id,
           conversationId: conversationId ?? null,
           email,
+          name: name?.trim() || null,
+          company: company?.trim() || null,
+          linkedinUrl: linkedinUrl?.trim() || null,
           contextSummary: contextSummary ?? null,
         })
         .returning({
           id: leads.id,
           email: leads.email,
+          name: leads.name,
+          company: leads.company,
+          linkedinUrl: leads.linkedinUrl,
           contextSummary: leads.contextSummary,
           conversationId: leads.conversationId,
           capturedAt: leads.capturedAt,
@@ -149,6 +158,8 @@ export async function POST(
         payload: {
           leadId: lead.id,
           email,
+          name: name?.trim() || null,
+          company: company?.trim() || null,
           botId: bot.id,
           botName: bot.name,
           contextSummary: contextSummary ?? null,
@@ -157,6 +168,25 @@ export async function POST(
 
       return lead;
     });
+
+    // Best-effort owner email if opted in. Never blocks or fails the public
+    // lead-capture response on a Resend hiccup or missing config.
+    try {
+      const owner = await db.query.users.findFirst({
+        where: eq(users.id, bot.userId),
+        columns: { email: true, notifyLeadsEmail: true },
+      });
+      if (owner?.notifyLeadsEmail && owner.email) {
+        await sendLeadCapturedEmail({
+          to: owner.email,
+          botName: bot.name,
+          leadEmail: email,
+          dashboardUrl: `${appBaseUrl()}/dashboard/bots/${bot.id}/leads`,
+        });
+      }
+    } catch (err) {
+      console.warn("[leads] notify email failed", err);
+    }
 
     return jsonWithCors({ lead: result, deduped: false }, 201);
   } catch (err) {

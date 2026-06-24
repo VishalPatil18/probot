@@ -1,31 +1,18 @@
 import Link from "next/link";
 
-const DOCS_URL = "https://pro-bot-ai.vercel.app/docs";
-const CHANGELOG_URL = "https://pro-bot-ai.vercel.app/docs/changelog";
-const GITHUB_URL = "https://github.com/VishalPatil18";
-const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
-const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
+import { Icon } from "@/components/ui/Icon";
 
-function MaterialIcon({
-  name,
-  className = "",
-}: {
-  name: string;
-  className?: string;
-}) {
-  return (
-    <span className={`material-symbols-outlined ${className}`} aria-hidden>
-      {name}
-    </span>
-  );
-}
+const DOCS_URL = "https://pro-bot.dev/docs";
+const MODELS_URL = "https://pro-bot.dev/docs/guides/models-and-keys";
+const EMBED_URL = "https://pro-bot.dev/docs/embed-share";
+const CHANGELOG_URL = "https://pro-bot.dev/docs/release-notes/beta";
 
 export function SiteFooter() {
   return (
     <footer className="border-t border-border-base bg-white">
       <div className="mx-auto max-w-[1180px] px-6 pt-14 pb-8">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
-          <div className="col-span-2 md:col-span-1">
+          <div className="col-span-2">
             <Link href="/" className="flex items-center gap-2.5 mb-3">
               <svg width="26" height="26" viewBox="0 0 40 40" fill="none">
                 <circle
@@ -42,7 +29,9 @@ export function SiteFooter() {
               </span>
             </Link>
             <p className="text-xs text-muted leading-relaxed">
-              Your AI digital recruiter. Available 24/7.
+              Your AI Representative. Available 24/7.
+              <br />
+              Free &amp; open source (MIT).
             </p>
           </div>
           <div>
@@ -54,18 +43,8 @@ export function SiteFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/#free-to-use" className="hover:text-ink">
-                  Free to Use
-                </Link>
-              </li>
-              <li>
-                <Link href="/u/vishal/chat" className="hover:text-ink">
-                  Live demo
-                </Link>
-              </li>
-              <li>
-                <Link href="/dashboard/bots/new" className="hover:text-ink">
-                  Create a bot
+                <Link href="/why-pro-bot" className="hover:text-ink">
+                  Why ProBot
                 </Link>
               </li>
               <li>
@@ -95,7 +74,7 @@ export function SiteFooter() {
               </li>
               <li>
                 <a
-                  href={DOCS_URL}
+                  href={MODELS_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-ink"
@@ -105,43 +84,13 @@ export function SiteFooter() {
               </li>
               <li>
                 <a
-                  href={DOCS_URL}
+                  href={EMBED_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-ink"
                 >
                   Embed widget
                 </a>
-              </li>
-              <li>
-                <a
-                  href={GITHUB_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-ink"
-                >
-                  GitHub
-                </a>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <p className="text-sm font-bold mb-3">Account</p>
-            <ul className="space-y-2 text-sm text-muted">
-              <li>
-                <Link href="/login" className="hover:text-ink">
-                  Log in
-                </Link>
-              </li>
-              <li>
-                <Link href="/dashboard" className="hover:text-ink">
-                  Dashboard
-                </Link>
-              </li>
-              <li>
-                <Link href="/dashboard" className="hover:text-ink">
-                  Settings
-                </Link>
               </li>
             </ul>
           </div>
@@ -171,33 +120,9 @@ export function SiteFooter() {
             © 2026 ProBot · Free to use, MIT licensed. Built on the VAi engine.
           </p>
           <div className="flex gap-4 text-muted text-sm">
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:text-ink"
-            >
-              <MaterialIcon name="code" className="!text-base" />
-              GitHub
-            </a>
-            <a
-              href={PORTFOLIO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:text-ink"
-            >
-              <MaterialIcon name="public" className="!text-base" />
-              Portfolio
-            </a>
-            <a
-              href={LINKEDIN_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:text-ink"
-            >
-              <MaterialIcon name="badge" className="!text-base" />
-              LinkedIn
-            </a>
+            <Link href="/hire-me" className="hover:text-ink">
+              Hire the developer (Vishal Patil)
+            </Link>
           </div>
         </div>
       </div>

@@ -11,7 +11,7 @@ import {
 } from "@/lib/ai/key-transport";
 import { corsPreflight } from "@/lib/bots/cors-headers";
 
-// Stage 5: CORS preflight for the embeddable widget. The widget POSTs from
+// CORS preflight for the embeddable widget. The widget POSTs from
 // arbitrary origins (janedoe.com, etc.) so the browser fires OPTIONS first.
 // next.config.js sets CORS headers on the POST response; this handler
 // answers the preflight before the POST fires.
@@ -24,6 +24,7 @@ import { ProviderError, getProvider, isProviderName } from "@/lib/ai/providers";
 import { checkRateLimit, resolveMaxChars } from "@/lib/ai/rate-limit";
 import { sanitizeInput } from "@/lib/ai/sanitize-input";
 import { sanitizeOutput } from "@/lib/ai/sanitize-output";
+import { alertCircuitOpen } from "@/lib/server/alert";
 import { verifyPreviewToken } from "@/lib/bots/preview-token";
 import type { Personality } from "@/lib/bots/schemas";
 import {
@@ -49,7 +50,7 @@ const MAX_BODY_BYTES = 16_384;
 // override clamps further down at request time (see step 5b).
 const chatInput = z.object({
   message: z.string().min(1).max(RATE_LIMIT_MAX_CHARS_MAX),
-  // Stage 6: client-generated per-tab UUID from sessionStorage. Required
+  // Client-generated per-tab UUID from sessionStorage. Required
   // so the chat orchestrator can UPSERT a `conversations` row and persist
   // the user/assistant turn into `messages` for the dashboard analytics
   // surface. See claude/plan.md §6.
@@ -75,7 +76,7 @@ export async function POST(
     );
   }
 
-  // 2. BYO key header is OPTIONAL now (Stage 7 Phase 3). The chat route
+  // 2. BYO key header is OPTIONAL now. The chat route
   // tries the header first, then falls back to the managed-key decrypt
   // path against `encrypted_llm_keys`. Whichever source resolves wins.
   // Header-supplied key always wins so a creator testing locally can
@@ -118,7 +119,7 @@ export async function POST(
   }
 
   // 6. Bot lookup. We pull the bot regardless of `is_active` so we can
-  // separately authorize draft bots via a preview token (Stage 7 §FR-002.10).
+  // separately authorize draft bots via a preview token.
   const botRow = await db.query.bots.findFirst({
     where: eq(bots.id, params.botId),
   });
@@ -155,10 +156,10 @@ export async function POST(
     return NextResponse.json({ error: "bot_not_found" }, { status: 404 });
   }
 
-  // 8. Rate limit (per-bot, with per-bot overrides from the Stage-7 columns).
+  // 8. Rate limit (per-bot, with per-bot overrides from the bot row).
   // The limiter clamps unreasonable values internally; the Zod schema on the
   // PATCH endpoint also bounds what can be stored.
-  const rl = checkRateLimit(botRow.id, {
+  const rl = await checkRateLimit(botRow.id, {
     perMinute: botRow.rateLimitPerMinute,
     perDay: botRow.rateLimitPerDay,
   });
@@ -192,7 +193,7 @@ export async function POST(
     );
   }
 
-  // 9b. Stage 3 RAG retrieval. Embedding key is optional - when absent OR
+  // 9b. RAG retrieval. Embedding key is optional - when absent OR
   // when no chunks pass the similarity floor, we fall through to the legacy
   // full-context path. Retrieval failures (bad key, OpenAI down, etc.) also
   // fall back silently rather than 5xx the chat request.
@@ -248,7 +249,7 @@ export async function POST(
   // 10b. Resolve the LLM API key. Priority: header (self-host / creator
   // local test) > managed encrypted key (DB) > fail. Azure is the one
   // exception: its multi-secret credential (key + endpoint + apiVersion)
-  // isn't stored managed-side in Phase 3, so Azure bots must use the
+  // isn't stored managed-side, so Azure bots must use the
   // header path. Managed support for Azure can be added later by stuffing
   // the extras into the encrypted payload.
   let apiKey: string;
@@ -338,14 +339,17 @@ export async function POST(
   // bury the queue with cascading 401s.
   let providerReply: string;
   try {
-    const result = await callWithBreaker(ownerRow.llmProvider, () =>
-      provider.complete({
-        system,
-        userMessage: sanitized.message,
-        apiKey,
-        model: ownerRow.llmModel ?? undefined,
-        extras,
-      }),
+    const result = await callWithBreaker(
+      ownerRow.llmProvider,
+      () =>
+        provider.complete({
+          system,
+          userMessage: sanitized.message,
+          apiKey,
+          model: ownerRow.llmModel ?? undefined,
+          extras,
+        }),
+      { onOpen: alertCircuitOpen },
     );
     providerReply = result.reply;
   } catch (err) {
@@ -390,7 +394,7 @@ export async function POST(
   // 11. Output sanitize
   const reply = sanitizeOutput(providerReply);
 
-  // 11b. Stage 7 Phase 3 - record a decrypt-audit-log row when the managed
+  // 11b. Record a decrypt-audit-log row when the managed
   // key was actually used. Skipped when the header path served the request
   // (the creator's own browser doesn't need to audit itself). Wrapped in
   // try/catch so a logging failure cannot block the user-facing chat reply
@@ -407,12 +411,12 @@ export async function POST(
     }
   }
 
-  // 12. Persist conversation + messages (Stage 6 analytics).
+  // 12. Persist conversation + messages (analytics).
   // UPSERT on (bot_id, session_id) - concurrent tabs on the same bot for
   // the same recruiter coalesce into one conversation. Both message inserts
   // happen in the same transaction so partial writes can't skew metrics.
   // Wrapped in try/catch so analytics persistence MUST NOT break the
-  // user-facing chat reply (the primary value). Logged via Stage 7 once a
+  // user-facing chat reply (the primary value). Logged later once a
   // structured logger lands. On success, capture the conversation id so we
   // can return it to the client - the in-chat lead-capture card (slice
   // 6.4) sends it on POST /api/bots/[botId]/leads to enable the idempotent
@@ -445,7 +449,7 @@ export async function POST(
   } catch (err) {
     // Swallow - analytics persistence never blocks chat. Log so operators
     // can still spot pool exhaustion / missing migrations / etc. before
-    // Stage 7 wires a structured logger. Matches the [rag] warn pattern
+    // A future change wires a structured logger. Matches the [rag] warn pattern
     // used above for the analogous "fallback path on retrieval failure"
     // case. `conversationId` stays undefined in this branch; the
     // lead-capture client then falls back to the 24h (botId, email)

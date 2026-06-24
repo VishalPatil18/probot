@@ -88,25 +88,49 @@ export async function buildExportBundle(userId: string): Promise<ExportBundle> {
         })
       : [];
 
+  // Bucket every child row by its owning bot once (O(n)) instead of re-scanning
+  // the full arrays for each bot - the old join was O(bots × rows) and, for
+  // messages, re-scanned every conversation per message. `conversationToBot`
+  // routes a message to its bot via its conversation in one hop.
+  const conversationToBot = new Map(
+    allConversations.map((c) => [c.id, c.botId]),
+  );
+  const knowledgeByBot = groupBy(allKnowledge, (k) => k.botId);
+  const conversationsByBot = groupBy(allConversations, (c) => c.botId);
+  const leadsByBot = groupBy(allLeads, (l) => l.botId);
+  const messagesByBot = groupBy(allMessages, (m) =>
+    conversationToBot.get(m.conversationId),
+  );
+
   return {
     exportedAt: new Date().toISOString(),
     user,
     bots: userBots.map((bot) => ({
       bot: stripBotForExport(bot),
-      knowledge: allKnowledge
-        .filter((k) => k.botId === bot.id)
-        .map(stripKnowledgeForExport),
-      conversations: allConversations
-        .filter((c) => c.botId === bot.id)
-        .map((c) => c),
-      messages: allMessages.filter((m) =>
-        allConversations.some(
-          (c) => c.botId === bot.id && c.id === m.conversationId,
-        ),
-      ),
-      leads: allLeads.filter((l) => l.botId === bot.id),
+      knowledge: (knowledgeByBot.get(bot.id) ?? []).map(stripKnowledgeForExport),
+      conversations: conversationsByBot.get(bot.id) ?? [],
+      messages: messagesByBot.get(bot.id) ?? [],
+      leads: leadsByBot.get(bot.id) ?? [],
     })),
   };
+}
+
+// Group rows by a key derived from each row, skipping rows whose key is
+// undefined (e.g. a message whose conversation isn't in scope). Exported for
+// direct unit testing of the grouping/routing behavior.
+export function groupBy<T>(
+  rows: readonly T[],
+  keyOf: (row: T) => string | undefined,
+): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    if (key === undefined) continue;
+    const bucket = out.get(key);
+    if (bucket) bucket.push(row);
+    else out.set(key, [row]);
+  }
+  return out;
 }
 
 // `bots` rows hold `preview_token` which is a server-controlled credential

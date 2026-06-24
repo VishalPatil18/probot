@@ -1,0 +1,6 @@
+# Code owners for ProBot.
+# Every change requires review from @vishalpatil18.
+# When "Require review from Code Owners" is enabled in branch protection /
+# rulesets, any PR touching these paths must be approved by the owner.
+
+*       @vishalpatil18

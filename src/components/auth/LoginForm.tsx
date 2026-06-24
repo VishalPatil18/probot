@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
+import { ForgotPasswordModal } from "./ForgotPasswordModal";
 import { OAuthRow } from "./OAuthRow";
+import { PasswordInput } from "./PasswordInput";
 
 // Banner copy keyed by ?verify= and ?reset= query params set by the
 // verify-email API redirect and the reset-password success redirect. Kept
@@ -40,6 +42,8 @@ export function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [forgotOpen, setForgotOpen] = useState(false);
   const [error, setError] = useState<string | null>(
     initialError && NEXTAUTH_ERROR_MESSAGES[initialError]
       ? NEXTAUTH_ERROR_MESSAGES[initialError]!
@@ -60,6 +64,7 @@ export function LoginForm() {
     const result = await signIn("credentials", {
       email,
       password,
+      remember: remember ? "true" : "false",
       redirect: false,
     });
     setLoading(false);
@@ -133,24 +138,33 @@ export function LoginForm() {
             <label htmlFor="password" className="text-xs font-semibold">
               Password
             </label>
-            <Link
-              href="/forgot-password"
+            <button
+              type="button"
+              onClick={() => setForgotOpen(true)}
               className="text-xs text-brand font-semibold hover:underline"
             >
               Forgot?
-            </Link>
+            </button>
           </div>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={setPassword}
             required
             autoComplete="current-password"
             placeholder="••••••••"
-            className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand transition-colors"
           />
         </div>
+
+        <label className="flex items-center gap-2 text-xs text-muted select-none">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(event) => setRemember(event.target.checked)}
+            className="h-4 w-4 rounded border-border-base text-brand focus:ring-brand"
+          />
+          Keep me signed in
+        </label>
 
         {error ? (
           <p className="text-xs text-red-600" role="alert">
@@ -174,6 +188,12 @@ export function LoginForm() {
           Create an account
         </Link>
       </p>
+
+      <ForgotPasswordModal
+        open={forgotOpen}
+        onClose={() => setForgotOpen(false)}
+        initialEmail={email}
+      />
     </>
   );
 }

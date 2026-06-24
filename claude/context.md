@@ -26,7 +26,7 @@
 
 - **Name:** probot
 - **Location:** `/Users/vishalpatil/Study/Projects/probot`
-- **Status:** **STAGE 6 COMPLETE + Dashboard Redesign DONE** - Stages 1–6 shipped end-to-end. Full dashboard visual redesign (Slices A + B + C) ported from `design/dashboard.html` + `design/settings.html`. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints - type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon - Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Slice C closes out: bot detail page → redirect to settings, sub-page back-links + duplicate empty-state CTAs trimmed, 41-spec test backfill (BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar), `LabeledInput` gets `useId()` for proper label association, Stage 7 task block (§7.11) appended to plan.md tracking 10 deferred items. 689/689 tests, build green. Next: Stage 7 (OAuth, GDPR, hardening, launch). **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
+- **Status:** **v1.0 POST-STAGE-9 POLISH BATCH SHIPPED** (2026-06-23) - a large cross-cutting batch (~17 items): richer lead-capture form (name/email/company required + optional LinkedIn → new `leads.name/company/linkedin_url` columns; threaded through both lead endpoints, `captureLead`, dashboard list + CSV export); "Save bot settings" as a reusable **preset** (new `bot_presets` table + `src/lib/bot-presets/service.ts` + `POST/GET /api/bot-presets` + a button below the BotConfigTab danger zone); **live** dashboard %-change figures (analytics `getAnalyticsForUser` gains week/month prev-period counts + `formatGrowth`; `MetricTile` colours by sign); bot-status toggle **auto-saves** instantly (own PATCH + `activeBaseline`); account-restore accepts **username OR email** (`undoAccountDeletion` + route `identifier`); dashboard **Docs button** (labelled + book icon, between live-bot and bell); sidebar "Manage Model & Key" → `?tab=model` (threaded `modelHref` through ModelStatusCard/SidebarAccountFooter); **bot switcher** always opens with a coming-soon "Create New Bot"; public chat drops the owner heading (`OwnerCard` removed); Security retention copy fixed to real behavior; **brand icons** (github/linkedin/portfolio) in accent on hire-me + about; **roadmap page removed** from app (route + header link + sitemap + hire-me link) - lives only in docs now; docs link **consistency** `docs.pro-bot.dev` → `pro-bot.dev/docs` across app + docs; **docs overhaul** (full content): ~25 new pages (how-to-use, models-and-keys, bot-management, personality, themes-and-avatar, analytics-and-leads, notifications, deployment, hosting/managed + self-hosting, faq, contact, privacy, terms, contributing, license, why-pro-bot, about, features, release-notes/{beta,v1,roadmap,v2}, blogs/{index,welcome}), removed concepts/architecture + concepts/stages, Release-notes tab (Beta/v1/Roadmap/v2), Blog tab, `docs.json` restructured (50 nav pages, all resolve); plan-v2 gains multibot-management + dynamic-thinking-messages. **Run `npx drizzle-kit push`** for the `leads` columns + `bot_presets`. typecheck + key-leak green (335 files); vitest + build native. See latest Session History entry. **Prior:** **v1.0 STAGE 9 (Self-Hosted Bot Architecture) PARTIAL/SHIPPED** (2026-06-22) - the v1.0 capstone, in-repo portions: a per-bot **API token** model (`bot_tokens` table - hashed `pbt_<hex>`, soft-delete revoke, `last_seen_at`; reuses `generateRawToken`/`hashToken`) in `src/lib/bot-tokens/service.ts` (`mintBotToken`/`authenticateBotToken`/`listBotTokens`/`revokeBotToken`/`requireBotToken` guard); a versioned **`/api/v1/bot/*`** surface (`config` GET, `knowledge` POST via `retrieveRelevant`+full-context fallback+rate limit, `conversations` POST upsert, `leads` POST via a new shared `captureLead` core); dashboard **token + deployment** endpoints (`/api/bots/[botId]/tokens` POST/GET, `tokens/[tokenId]` DELETE, `deployment` PATCH) + a new **Deployment** settings tab (`DeployTab` - mode toggle, mint show-once modal, list/revoke; loads tokens client-side so existing settings tests are untouched); a `bots.deployment_mode` column; the **`probot-bot/` runtime scaffold** (excluded from root tsconfig); ADR `docs/decisions/0004-self-hosted-bot.mdx` + a `docs/self-hosted-bot/` guide. **Run `npx drizzle-kit push`** for `bot_tokens` + `bots.deployment_mode`; extract `probot-bot/` into its own repo to deploy. typecheck + key-leak green (334 files); vitest + push native. See latest Session History entry. **Prior:** **v1.0 STAGE 8 (Performance, Scale & Operational Polish) PARTIAL/SHIPPED** (2026-06-22) - selected code slices: the per-bot rate limiter (`src/lib/ai/rate-limit.ts`) and provider circuit breaker (`src/lib/ai/circuit-breaker.ts`) now back their state on a pluggable store - in-memory by default (unchanged behavior), Upstash Redis when `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` are set - via a single `src/lib/store/redis.ts` (the only file importing `@upstash/redis`, behind a `RedisLike` interface so the logic is unit-testable with a fake). `checkRateLimit` is now async; `getCircuitState`/`__resetCircuit` are async; the breaker gained an `onOpen` hook wired to a new operational-alert seam (`src/lib/server/alert.ts`, `alertCircuitOpen`, redacted `console.warn` sink, Sentry-ready). `buildExportBundle` grouping went O(n²)→O(n). **Run `npm install`** to add `@upstash/redis` (in-sandbox typecheck flags only `store/redis.ts` until then); no schema changes. Deferred to native/production: the SRS §6.1 perf NFRs (P01–P06), k6 load test, live Sentry breadcrumb, and the smaller Beta-Stage-7 hardening items (not in this batch's scope). The N+1→CTE item was reframed - the dashboard/analytics + export queries were already batched aggregates, so the real win was the export grouping fix. **Perf addendum (from Lighthouse):** replaced the render-blocking ~3.86 MB Material Symbols icon font with an inline-SVG `Icon` component (`src/components/ui/Icon.tsx`) across the 5 marketing files, removed the `<link>` from `layout.tsx` (benefits the chatbot + dashboard too), and added a modern `browserslist` to drop ~11 KiB legacy polyfills. typecheck + key-leak green; vitest + Lighthouse run natively. See latest Session History entries. **Prior:** **v1.0 STAGE 7 (SEO, Docs & Discoverability) SHIPPED** (2026-06-22) - site-wide SEO via a shared `src/lib/seo/` module (`site.ts` `buildMetadata` + `siteUrl`, `structured-data.ts`, `og.tsx`): root `layout.tsx` gains `metadataBase` + title template + default OG/Twitter (and the stale "AI Digital Recruiter" title is fixed to "AI Assistant"); every marketing page routes its metadata through `buildMetadata` (canonical + OG/Twitter); landing page emits `Organization` + `SoftwareApplication` JSON-LD; dynamic OG/Twitter cards via `next/og` (`src/app/opengraph-image.tsx` + `twitter-image.tsx`); native `src/app/robots.ts` + the existing `sitemap.ts` (refactored onto shared `siteUrl`). Mintlify docs reorganized (Concepts/Guides/Self-hosting/Decisions/Release notes) with new pages (`managed-vs-self-hosted`, `custom-instructions`, `managed-key-storage`, `account-deletion`, top-level `embed-share`), `stages.mdx` rewritten to current state, architecture diagrams added, and 3 ADRs under `docs/decisions/`. No schema changes. typecheck + key-leak green; `next build` / OG-image render / Lighthouse to be run natively. Chose native Next routes over `next-sitemap` (zero-dep, equal SEO). See latest Session History entry. **Prior:** **v1.0 STAGE 6 (Marketing & Trust Pages) SHIPPED** (2026-06-22) - three new public marketing pages (`/why-pro-bot` honest comparison vs generic chatbot platforms, `/hire-me` creator bio, `/roadmap` stage status from a hand-maintained array + Suggest-a-feature CTA), a landing-page "Watch demo" borderless video modal (env-driven `NEXT_PUBLIC_DEMO_VIDEO_URL`; "coming soon" poster until set), header/footer links to the new pages, docs links repointed to `pro-bot.dev/docs`, and a `src/app/sitemap.ts` covering the public routes. No schema changes. typecheck + key-leak green (run vitest natively for the new `DemoVideoModal.test.tsx`). See latest Session History entry. **Prior:** **v1.0 STAGE 5 (Sidebar, Notifications & Empty-State Polish) SHIPPED** (2026-06-22) - zero-bot sidebar empty-state, clickable profile row, docs link by the bell, embed-share URL, new bot-independent `/dashboard/settings` account route (SettingsTabs subset + optional-botId AIModelKeyTab), lead-capture email opt-in (`notify_leads_email` + `notification-prefs` endpoint + dropdown toggle + best-effort owner email), and a dismissible ToS-change banner (`last_legal_ack_date` + `LEGAL_EFFECTIVE_AT` + `LegalBanner` + `legal-ack` endpoint). **Run `npx drizzle-kit push`** for the 2 new columns. typecheck + key-leak green. See latest Session History entry. **Prior:** **v1.0 STAGE 4 (Bot Factory & Dashboard Polish) SHIPPED** (2026-06-22) - net-new bot profile picture (Postgres bytea `bot_avatars` + `bots.image`, uploaded in Bot Factory Step 1, rendered on the public chat header + embeddable widget, default ProBot icon), PDF dustbin icon, per-file PDF ingestion fix (knowledge route returns `files[]`; wizard shows retriable failures on Step 5 instead of a page-level error), theme picker in wizard Step 3, and dark code-block embed snippets. Shared `image-upload.ts` helper de-dupes avatar validation. **Run `npx drizzle-kit push`** to create `bot_avatars`/`bots.image` (and the pending Stage 3 `user_avatars`). typecheck + key-leak green. See latest Session History entry. **Prior:** **v1.0 STAGE 3 (Account & Settings Hardening) SHIPPED** (2026-06-21) - editable Settings → Account (full name + username w/ debounced uniqueness, password change, profile-photo upload to Postgres bytea via `user_avatars` + `/api/avatar/[userId]` serve route), `auth.ts` jwt/session refresh of name+image, and a redesigned theme picker (`ThemeColorField` circle + popover). Items 4/6/7 verified already-shipped. typecheck + key-leak green; **run `npx drizzle-kit push` to create `user_avatars`** before photo upload works. See latest Session History entry. **Prior:** **v1.0 STAGE 2 (Auth UX & Bug-fix Sprint) SHIPPED** (2026-06-21) - show-password toggles, "remember me" (JWT-encode maxAge override: 30d vs 1d), debounced signup availability check (`GET /api/auth/check-availability`), forgot-password modal, OAuth-row icon alignment, and an inline sidebar sign-out (`SidebarAccountFooter`, replacing `SignOutButton`). Magic-link bug was already resolved (dropped); onboarding parity verified already-shipped. typecheck + key-leak guard green; vitest deferred to native run (sandbox platform mismatch). See latest Session History entry. **Prior:** **v1.0 STAGE 1 (Branding & Copy Cleanup) SHIPPED** (2026-06-21) - on top of the Beta release. "AI Recruiter"→"AI Assistant", `probot.com`→`pro-bot.dev`, post-Beta auth hero copy, and a Beta-vocab comment sweep across ~95 source files. typecheck + key-leak guard green; full test/build to be re-run natively (sandbox platform mismatch). See the latest Session History entry. **Prior Beta status:** **STAGE 6 COMPLETE + Dashboard Redesign DONE** - Stages 1–6 shipped end-to-end. Full dashboard visual redesign (Slices A + B + C) ported from `design/dashboard.html` + `design/settings.html`. Settings tabs: Account (read-only display + Coming Soon), Bot configuration (status toggle via newly-widened `isActive` PATCH field + name/headline/personality cards + theme swatches + suggested questions + Coming Soon custom instructions), Knowledge base (visual re-skin of the slice-2/6.5 endpoints - type-iconed source rows, dashed "Add source" upload zone, "Re-index all" button), Security & privacy (live rate-limit display reading `PER_MINUTE`/`PER_DAY` from the rate limiter module + Coming Soon Export / Retention / Delete account), AI model & key (entirely Coming Soon - Stage 7 editor). Tab state in URL via `?tab=`. WAI-ARIA tabs pattern fully wired. Slice C closes out: bot detail page → redirect to settings, sub-page back-links + duplicate empty-state CTAs trimmed, 41-spec test backfill (BotConfigTab + KnowledgeTab + Topbar + SidebarNavLink + MobileSidebar), `LabeledInput` gets `useId()` for proper label association, Stage 7 task block (§7.11) appended to plan.md tracking 10 deferred items. 689/689 tests, build green. Next: Stage 7 (OAuth, GDPR, hardening, launch). **Earlier status note:** PDF + text ingestion pipeline shipped on top of Stage 1. End-to-end loop: register → log in → build a bot (drop PDFs in the Bot Factory dropzone, paste text, or both; optionally tweak the per-bot context token cap in Advanced) → chat with it via the user's own LLM key. Knowledge sources are extracted with `pdf-parse`, chunked with `tiktoken` (cl100k_base, 750/100), persisted to `knowledge_base`, and reassembled into `bots.context_text` server-side. 299/299 tests, build green.
 - **Planning docs:** [plan.md](plan.md), [srs.md](srs.md), [vai.md](vai.md) (all under `claude/`)
 - **Goal:** Open-source, BYO-key AI chatbots for job seekers - each user creates a bot from their resume/career data and shares a public URL or embeddable widget that recruiters can chat with.
 - **Target users:** Job seekers (bot owners) and recruiters (anonymous chat visitors).
@@ -2418,3 +2418,668 @@ _Tests + types:_
 - **No `noindex` on `/self-hosting`.** It's intentionally indexable - we want operators searching "self-host ProBot" to find it. Confirmed-not-an-oversight.
 - **Stage 8 section is documentation only; no code committed for it yet.** The performance NFRs need measurement first, and the Upstash migration needs Vercel Pro decisions. By design.
 - **README test-count badge will drift on every PR.** Acceptable; the alternative (a real CI badge) requires a CI provider hook we haven't wired and would be a more invasive piece of infra than a static markdown badge.
+
+---
+
+### 2026-06-21 21:32 - v1.0 Stage 1: Branding & Copy Cleanup
+
+**What was asked to do:** Ship Stage 1 of `claude/plan-v1.md` - the branding/copy cleanup: rename "AI Recruiter" → "AI Assistant" and the `probot.com` domain → `pro-bot.dev` across the app, refresh the login/signup hero with post-Beta product specs, and strip internal Beta-stage vocabulary (`Stage N` / `Phase N` / `Slice X`) out of source-code comments so new contributors don't have to learn the Beta build-plan shorthand.
+
+**What I did:**
+
+- Replaced `probot.com` → `pro-bot.dev` in all live app code, tests, and `.env.example` (the test assertions were updated in lockstep so they stay green). The domain was already partially migrated - `docs.pro-bot.dev` deep links and the `about` page already used the new domain.
+- Replaced `AI Recruiter`/`AI recruiter` → `AI Assistant`/`AI assistant` across the landing page, register page metadata + form copy, the auth `BrandPanel`, `RegisterForm`, and `ChatWindow`.
+- Refreshed the shared auth hero (`BrandPanel.tsx`): subhead now reads "Free & open source · four LLM providers · keys encrypted, never tracked." and the three footer chips became "Free & open source", "4 providers, BYO key", "Encrypted · no telemetry" - reflecting the post-Beta hybrid managed/self-host, four-provider, encrypted-key, no-telemetry positioning.
+- Swept Beta-stage vocabulary out of ~95 source files (210 comment rewrites). Each rewrite preserved meaning rather than blindly deleting the prefix: forward-looking references like `// Stage 7 wires a structured logger` became `// A future change wires a structured logger` (not `// Wires a structured logger`, which would have falsely claimed the work was done). Spec-section refs (`§FR-...`, `§NFR-...`, `§SEC-...`) were kept where they carry real meaning; only the `Stage N`/`Phase N`/`Slice X` build-plan tokens were removed.
+- Also cleaned 3 user-facing strings that leaked Beta vocab into the rendered UI: `BotFactoryForm` ("Slug comes from your username (Stage 1)." and "Embed code - Stage 5") and the `(marketing)/self-hosting` page ("...backed version (Stage 8).").
+
+**Files changed:**
+
+- 8 files for the domain swap: `.env.example`, `src/app/page.tsx`, `src/components/auth/RegisterForm.tsx`, `src/components/bot-factory/BotFactoryForm.tsx` (+ `.test.tsx`), `src/components/dashboard/BotSwitcher.test.tsx`, `src/components/dashboard/Topbar.test.tsx`, `src/components/dashboard/settings/AccountTab.tsx`.
+- 5 files for the "AI Recruiter" swap: `src/app/(auth)/register/page.tsx`, `src/app/page.tsx`, `src/components/auth/BrandPanel.tsx`, `src/components/auth/RegisterForm.tsx`, `src/components/chat/ChatWindow.tsx`.
+- `src/components/auth/BrandPanel.tsx` - update - hero subhead + footer chips rewritten to the post-Beta product specs.
+- ~95 source files (`src/**/*.ts`, `src/**/*.tsx`) - update - Beta-vocab comment sweep. Total diff: 104 files, 244 insertions / 244 deletions (line-for-line, no structural change).
+- `claude/context.md` - update - this Session History entry + Status line note.
+- `docs/changelog.mdx` - update - Version 1.0 "Stage 1 shipped" subsection.
+- `claude/plan-v1.md` - update - Stage 1 ticked in the matrix + status line under the Stage 1 section.
+
+**Decisions made:**
+
+- **Meaning-preserving comment rewrites, driven by a self-verifying script.** A blind regex strip of the leading `Stage N:` prefix would have corrupted future-tense comments (turning "Stage 8 may swap in Redis" into "May swap in Redis", asserting a plan as a present fact). Instead each of the 205 core replacements was an explicit (old → new) pair run through a script that asserts every target appears exactly once before replacing, so any transcription error surfaces loudly instead of silently mangling a file.
+- **Test-title strings left as-is.** 13 `describe()`/`it()` titles still contain `Stage N`/`Slice X` (e.g. `describe("Stage 3 RAG", ...)`). These are test-grouping labels, not source comments, and aren't covered by the acceptance greps; cleaning them is deferred to avoid scope creep. The user explicitly scoped the sweep to comments.
+- **`design/*.html` mockups left untouched** (user decision). They're the historical porting source, not shipped pages, so the acceptance greps still surface them - an accepted, documented exception.
+- **`docs/changelog.mdx` line 140 left intact.** That line literally documents this rename rule (`"AI Recruiter" → "AI Assistant", probot.com → pro-bot.dev`); rewriting it would mangle the changelog describing the change.
+- **No `learnings.md` entry.** This stage was mechanical branding work with no RAG/GenAI or architectural teaching moment, so per §10 the append is skipped.
+
+**Open questions / follow-ups:**
+
+- **Full `npm test` + `npm run build` not yet re-run after the sweep.** They couldn't execute in the Linux build sandbox (the repo's `node_modules` was installed on macOS, so vitest's rollup native binary is platform-mismatched and bus-errors). `npm run typecheck` and `npm run check:key-leaks` both pass; the suite should be re-run natively on macOS before the Stage 1 PR merges, per the stage close-out checklist.
+- **13 test-title strings + one `"legacy stage 1 text"` test fixture still contain stage vocabulary.** Intentionally out of scope; revisit only if a future convention wants test labels cleaned too.
+
+---
+
+### 2026-06-21 21:55 - v1.0 Stage 2: Auth UX & Bug-fix Sprint
+
+**What was asked to do:** Ship Stage 2 of `claude/plan-v1.md` - the auth UX polish: show-password toggles, a "remember me" option, a debounced signup username/email availability check, the forgot-password flow as a modal, magic-link button alignment, onboarding parity, and an inline sign-out confirmation. The magic-link delivery bug was confirmed already resolved by the user, so that item was dropped.
+
+**What I did:**
+
+- **Show-password toggle** - new reusable `PasswordInput` (eye/eye-slash button swapping the input `type`), wired into login, register, and reset-password forms (every password field on the site).
+- **Remember me** - login now has a "Keep me signed in" checkbox (default on) threaded into `signIn("credentials", { remember })`. Because NextAuth v4 applies `session.maxAge` globally, per-login expiry is implemented by overriding `jwt.encode` to pick the maxAge from the token's `remember` flag: remembered = 30 days, un-remembered = 1 day. OAuth/magic-link tokens have no flag and fall through to the long window.
+- **Signup availability check** - new `GET /api/auth/check-availability?username=&email=` returns per-field `{available, reason?}`; register form fetches it (debounced 400 ms via the new `useDebouncedValue` hook), shows inline red errors, and disables submit while a field is taken/invalid. Server-side register remains the source of truth.
+- **Forgot-password modal** - new `ForgotPasswordModal` opened from the login form's "Forgot?" button (now a button, not a route link); reuses the existing `/api/auth/forgot-password` POST; closes on backdrop/×/Escape. The `/forgot-password` page stays as a deep-link fallback.
+- **OAuth row alignment** - wrapped each provider glyph in a fixed 18 px `IconSlot` and bumped the GitHub mark 16→18 px so Google/GitHub/Magic Link sit on one baseline (kept the design's Google-full + GitHub/Magic 2-col layout).
+- **Inline sign-out** - new `SidebarAccountFooter` client component owns the model-status card + profile row + sign-out; clicking sign-out swaps the model card for an inline Cancel/Sign-out panel in the same slot (no centered modal). Replaced the footer block in `Sidebar.tsx`; deleted the now-orphaned `SignOutButton.tsx` (its `ConfirmDialog` is still used by `KnowledgeTab`).
+- **Onboarding parity** - investigation only: all OAuth/magic-link users already route through `/onboarding` (via the `(dashboard)/layout.tsx` placeholder-username redirect) and `OnboardingForm` already renders username + avatar picker. Parity was already shipped; no code change.
+
+**Files changed:**
+
+- `src/components/auth/PasswordInput.tsx` - create - reusable masked input + show/hide toggle.
+- `src/components/auth/PasswordInput.test.tsx` - create - toggle + onChange specs.
+- `src/components/auth/LoginForm.tsx` - update - PasswordInput, remember checkbox, forgot-modal trigger, `remember` in signIn.
+- `src/components/auth/RegisterForm.tsx` - update - PasswordInput, debounced availability check, inline errors, submit gating.
+- `src/components/auth/ResetPasswordForm.tsx` - update - PasswordInput for both password fields.
+- `src/components/auth/ForgotPasswordModal.tsx` - create - modal wrapping the reset-request flow.
+- `src/components/auth/OAuthRow.tsx` - update - IconSlot alignment + GitHub glyph size.
+- `src/lib/auth/auth.ts` - update - `remember` credential + authorize return, `session.maxAge`, custom `jwt.encode/decode`, jwt callback persists `remember`.
+- `src/types/next-auth.d.ts` - update - `remember?: boolean` on User + JWT.
+- `src/app/api/auth/check-availability/route.ts` - create - per-field availability GET.
+- `src/app/api/auth/check-availability/route.test.ts` - create - availability specs.
+- `src/lib/client/use-debounced-value.ts` - create - debounce hook.
+- `src/components/dashboard/SidebarAccountFooter.tsx` - create - inline sign-out footer.
+- `src/components/dashboard/SidebarAccountFooter.test.tsx` - create - inline-confirm specs.
+- `src/components/dashboard/Sidebar.tsx` - update - render SidebarAccountFooter; drop ModelStatusCard/SignOutButton imports.
+- `src/components/dashboard/SignOutButton.tsx` - delete - superseded by SidebarAccountFooter.
+- `src/components/auth/LoginForm.test.tsx`, `src/components/auth/RegisterForm.test.tsx`, `src/lib/auth/auth.test.ts` - update - new behaviour (password label, remember arg, URL-routed fetch for availability vs register, authorize `remember`).
+
+**Decisions made:**
+
+- **Remember-me via `jwt.encode` maxAge override, not a conditional cookie.** NextAuth v4 has no native per-login session length under the JWT strategy. Overriding `encode` to shorten the token's maxAge when `remember === false` makes the session lapse after a day of inactivity while leaving the cookie config untouched - the lowest-risk approach that actually works in v4. The cookie may physically linger, but it holds a short-lived token, so the user is effectively signed out.
+- **`schemas.ts` left unchanged.** The approved plan listed extending `loginInput` with `remember`, but reading `credentials?.remember === "true"` directly in `authorize` is simpler and needs no schema/zod change; `loginInput` ignores the extra field.
+- **Availability endpoint mirrors the register 409's existing enumeration surface.** It can reveal whether an email/username is registered, but the register endpoint already distinguishes taken email vs username in its 409, so this adds no new exposure - and the UX win (catch collisions before submit) is the whole point of the item.
+- **Onboarding item was verification-only.** The redirect + form already covered Google/email/GitHub equally; adding profile-name prefill would have been speculative scope (CLAUDE.md §2), so it was deferred.
+- **Deleted `SignOutButton.tsx` rather than repurposing it.** Folding its role into `SidebarAccountFooter` keeps the inline-confirm state in one place; the file became orphaned by the change, so per §3 it was removed (its `ConfirmDialog` dependency stays - still used by KnowledgeTab).
+
+**Open questions / follow-ups:**
+
+- **Vitest suite not run after Stage 2.** Same sandbox limit as Stage 1: `node_modules` is macOS-native, so vitest's rollup (4.62 native vs 4.61 JS, fixed) and vite-bundled esbuild binaries fault on linux-arm64 (bus error / EPIPE). `typecheck` + `check:key-leaks` pass; run `npm test` natively before the Stage 2 PR merges. The new/updated tests (PasswordInput, check-availability, SidebarAccountFooter, LoginForm, RegisterForm, auth) were written to existing patterns and are typecheck-clean but unexecuted here.
+- **Restored `@types/node`** (Stage 1's interrupted in-sandbox install had left it incomplete, which would break `tsc` on any machine). Native rollup/esbuild binaries in `node_modules` are still macOS builds; a clean `npm install` on macOS is the canonical reset.
+- **Remember-me "session-only cookie" is approximated as a 1-day inactivity window**, not a true browser-session cookie. If product wants the cookie cleared exactly on browser close, that needs a custom cookie handler - deferred unless requested.
+
+---
+
+### 2026-06-21 22:30 - Stage 2 follow-up: Magic-link modal + branded confirmation emails
+
+**What was asked to do:** Make the Magic Link button open a pop-up (like forgot-password) that collects an email and shows a confirmation that a sign-in link was sent, with the email address in blue primary. Apply the same blue-email treatment to the forgot-password modal confirmation. Keep the Gmail icon on the button.
+
+**What I did:**
+
+- New `MagicLinkModal` mirroring `ForgotPasswordModal`: collects an email and calls `signIn("email", { email, callbackUrl: "/dashboard", redirect: false })` so the NextAuth EmailProvider sends the link without navigating to `/auth/verify-request`. On success it shows an in-modal confirmation with the address in `text-brand`.
+- `OAuthRow`: the Magic Link button (Gmail icon kept) now opens `MagicLinkModal` seeded with any email already typed in the parent form, replacing the previous inline `signIn` + empty-email hint. Wrapped the return in a fragment to render the modal alongside the provider buttons.
+- `ForgotPasswordModal`: confirmation email recolored from `text-base` to `text-brand` (blue primary) to match.
+
+**Files changed:**
+
+- `src/components/auth/MagicLinkModal.tsx` - create - email-collecting magic-link modal with branded confirmation.
+- `src/components/auth/MagicLinkModal.test.tsx` - create - send + confirmation + invalid-email specs.
+- `src/components/auth/OAuthRow.tsx` - update - Magic Link opens the modal; removed inline send/loading/error state.
+- `src/components/auth/ForgotPasswordModal.tsx` - update - confirmation email in `text-brand`.
+- `src/components/auth/LoginForm.test.tsx` - update - the two magic-link specs now assert the modal opens and that submitting it calls `signIn("email", …, redirect:false)` and shows the confirmation.
+
+**Decisions made:**
+
+- **`redirect: false` on the magic-link signIn.** Keeps the user in the modal to show the confirmation instead of NextAuth bouncing to the verify-request page - consistent with the forgot-password modal UX. NextAuth still sends the email and does not reveal whether the address exists.
+- **Modal lives in `OAuthRow`, so it appears on both login and register** (the row is shared), matching the existing Magic Link placement.
+
+**Open questions / follow-ups:**
+
+- typecheck + check:key-leaks pass (273 files); vitest still unexecuted in-sandbox (same macOS-native `node_modules` limit). Run `npm test` natively to exercise the new MagicLinkModal + updated LoginForm specs.
+
+---
+
+### 2026-06-21 23:30 - v1.0 Stage 3: Account & Settings Hardening
+
+**What was asked to do:** Ship Stage 3 of `claude/plan-v1.md` - make Settings → Account fully editable (full name + username with a debounced uniqueness check, password change, profile-photo upload) and redesign the bot theme-color picker into a single colored circle that opens a swatch grid + native color input. Profile photos stored zero-cost in Postgres (bytea). Items already shipped in Beta (personality/custom-instructions repositioning, Security & Privacy export/delete, AI model & key panel) were verified, not rebuilt.
+
+**What I did:**
+
+- **Profile photo storage (Postgres bytea, zero external storage):** new `user_avatars` table (one row per user: `data` bytea, `content_type`, `updated_at`; `user_id` PK/FK cascade) plus a small `bytea` Drizzle `customType`. Upload route stores bytes; serve route streams them; `users.image` points at the serve URL.
+- **New endpoints:** `PATCH /api/users/me/profile` (name + username, uniqueness pre-check + 23505→409), `POST /api/users/me/password` (verifies current via bcrypt, rejects OAuth-only accounts with `no_password_set`), `POST /api/users/me/avatar` (multipart, jpg/png/webp ≤2 MB, magic-byte sniff, upsert into `user_avatars` + set `users.image` to `…/api/avatar/<id>?v=<ts>`), `GET /api/avatar/[userId]` (public serve of the stored bytes). Validation in `src/lib/users/profile-schemas.ts`.
+- **Session freshness:** `auth.ts` jwt callback now re-reads `name` + `image` alongside username, and the session callback exposes them, so account edits + photo uploads reflect on the next request (acceptance: "updates the JWT on next request").
+- **AccountTab rewrite:** from read-only stub to a real client form - avatar with Change-photo upload, editable full name, editable username (debounced `check-availability` from Stage 2, own-username treated as available, inline error), read-only email, and a password-change section using the Stage 2 `PasswordInput`. Each section saves to its own endpoint and `router.refresh()`es.
+- **Theme picker redesign:** new `ThemeColorField` (a colored circle showing the current color; click opens a popover with the preset swatch grid + native `<input type=color>`; closes on outside-click/Escape). Swapped into `BotConfigTab`, removing the always-visible swatch row + the local `THEME_PRESETS` const.
+- **Verify-only:** confirmed `BotConfigTab` already hosts personality + custom instructions, `SecurityTab`/`SecurityActions` wire export + delete, and `AIModelKeyTab` is live - no changes.
+
+**Files changed:**
+
+- `src/lib/db/schema.ts` - update - `bytea` customType + `user_avatars` table + row types.
+- `src/lib/users/profile-schemas.ts` - create - profile + password-change Zod schemas.
+- `src/app/api/users/me/profile/route.ts` - create - PATCH name + username.
+- `src/app/api/users/me/password/route.ts` - create - POST password change.
+- `src/app/api/users/me/avatar/route.ts` - create - POST photo upload to bytea.
+- `src/app/api/avatar/[userId]/route.ts` - create - GET serve avatar bytes.
+- `src/lib/auth/auth.ts` - update - jwt/session refresh of name + image.
+- `src/components/dashboard/settings/AccountTab.tsx` - update - read-only stub → editable form.
+- `src/components/dashboard/settings/ThemeColorField.tsx` - create - circle + popover color control.
+- `src/components/dashboard/settings/BotConfigTab.tsx` - update - use ThemeColorField; drop swatch row + THEME_PRESETS.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` - update - pass `image` + real `name` to AccountTab.
+- Tests: `…/users/me/profile/route.test.ts`, `…/users/me/password/route.test.ts`, `…/users/me/avatar/route.test.ts`, `…/avatar/[userId]/route.test.ts`, `ThemeColorField.test.tsx`, `AccountTab.test.tsx` (create); `BotConfigTab.test.tsx` (update - theme swatch now behind the popover).
+
+**Decisions made:**
+
+- **Postgres bytea over Cloudinary/Vercel Blob** (user choice): no new services, keys, or accounts; honors the strict zero-cost policy. The 2 MB cap keeps row sizes bounded. `users.image` carries a `?v=<timestamp>` so a new upload busts any cached copy.
+- **Magic-byte sniff on upload** (jpg/png/webp), rejecting a file whose bytes don't match its declared MIME - mirrors the existing PDF upload-safety posture rather than trusting Content-Type.
+- **Password change rejects OAuth-only accounts** (`no_password_set`) instead of silently setting a first password; a dedicated "set password" flow would be a separate feature.
+- **Theme presets moved into `ThemeColorField`** so the control is self-contained; `ThemeColorPicker.tsx` (the older standalone, now only referenced by its own test) was left as pre-existing dead code per §3 - not deleted.
+
+**Open questions / follow-ups:**
+
+- **`user_avatars` table must be created before photo upload works.** drizzle-kit can't generate the migration in the Linux sandbox (esbuild platform mismatch), so the table isn't in a versioned migration yet. Apply it natively with `npx drizzle-kit push` (push-managed dev DB) or `npm run db:generate` for a migrate-file. Until then, `POST /api/users/me/avatar` and the serve route will 500 (relation does not exist).
+- **Vitest unexecuted in-sandbox** (same macOS-native `node_modules` limit); typecheck + check:key-leaks pass (285 files). Run `npm test` + `npm run build` natively.
+- **bytea round-trip assumes node-postgres returns `bytea` as a Buffer** (its default); the serve route wraps it in `new Uint8Array(row.data)`. Worth a quick manual smoke test after the table exists.
+
+---
+
+### 2026-06-21 23:55 - Stage 3 follow-up: avatar hover-upload + inline theme picker
+
+**What was asked to do:** Two UI refinements to the Stage 3 settings work: (1) replace the separate "Change photo" button with a hover overlay on the avatar that triggers the upload on click, and move Full name / Username / Email beside the photo; (2) make the theme picker inline (no popover) - presets always visible with the active one highlighted, plus a custom-color button shaped as a color-picker icon filled with the current color.
+
+**What I did:**
+
+- **AccountTab profile section:** the avatar is now itself the upload trigger - a circular `button` (`aria-label="Change photo"`) with a `group-hover` dark overlay + camera icon (and an "Uploading…" state); clicking it opens the same hidden file input → `POST /api/users/me/avatar`. The standalone "Change photo" button was removed. Layout reflowed into a flex row: avatar on the left, a fields column on the right (Full name + Email as a 2-col grid, Username full-width below), stacking on mobile.
+- **ThemeColorField:** removed the popover (and its open/outside-click/Escape state). Presets render inline with the active color ringed; a trailing custom button is a swatch filled with `value`, overlaid with a color-picker (eyedropper) icon via `mix-blend-difference` for contrast, wrapping a transparent native `<input type="color">`. When `value` matches no preset, the custom button carries the active ring.
+
+**Files changed:**
+
+- `src/components/dashboard/settings/AccountTab.tsx` - update - avatar hover-upload + side-by-side layout + CameraIcon.
+- `src/components/dashboard/settings/ThemeColorField.tsx` - update - inline (no popover) presets + color-picker-icon custom button.
+- `src/components/dashboard/settings/ThemeColorField.test.tsx` - update - rewritten for inline behavior (no dialog).
+- `src/components/dashboard/settings/BotConfigTab.test.tsx` - update - reverted the "open popover" step; swatch is clicked directly again.
+
+**Decisions made:**
+
+- **Custom button uses `mix-blend-difference`** on the eyedropper icon so it stays legible against any chosen background color, light or dark.
+- **Avatar button keeps an `aria-label`** ("Change photo") since the visible label moved into a hover-only overlay - preserves the accessible name the old text button provided.
+
+**Open questions / follow-ups:**
+
+- typecheck + check:key-leaks pass (285 files); vitest unexecuted in-sandbox as always - run `npm test` natively.
+
+---
+
+### 2026-06-22 00:20 - Stage 3 follow-up: sniff-authoritative avatar upload (JPEG) + brand theme presets
+
+**What was asked to do:** Avatar upload should accept JPEG (`.jpg`/`.jpeg`) reliably, and the theme-color presets should be Blue (primary), Red, Green, Black. (Also surfaced: the avatar upload 500 was `relation "user_avatars" does not exist` - the Stage 3 migration not yet applied; fixed by running `npx drizzle-kit push`, not a code change.)
+
+**What I did:**
+
+- **Avatar upload made sniff-authoritative** (`src/app/api/users/me/avatar/route.ts`): removed the declared-MIME allowlist + the `sniffed !== file.type` strict-match check. The magic-byte sniff (JPEG `FF D8 FF`, PNG, WebP) is now the sole gate, and the *sniffed* type is stored as `content_type`. This fixes browsers/files that label JPEGs as the non-standard `image/jpg` (previously rejected with 415) and is stricter against spoofed Content-Types. File-size cap (2 MB) unchanged.
+- **Broadened the file input `accept`** (`AccountTab.tsx`) to `image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp` so the OS picker clearly offers `.jpeg` files.
+- **Theme presets** (`ThemeColorField.tsx`) changed from the old purples/teal to Blue `#0070dd` (the brand primary, converted from `tailwind.config.ts` `oklch(0.55 0.193 251.78)`), Red `#ef4444`, Green `#16a34a`, Black `#000000`.
+
+**Files changed:**
+
+- `src/app/api/users/me/avatar/route.ts` - update - sniff-authoritative validation.
+- `src/app/api/users/me/avatar/route.test.ts` - update - added a "JPEG labeled image/jpg succeeds" case.
+- `src/components/dashboard/settings/AccountTab.tsx` - update - broadened `accept`.
+- `src/components/dashboard/settings/ThemeColorField.tsx` - update - new preset palette.
+- `src/components/dashboard/settings/ThemeColorField.test.tsx` + `BotConfigTab.test.tsx` - update - swap the old `#10a37f` preset reference for the new green `#16a34a`.
+
+**Decisions made:**
+
+- **Sniff is authoritative, declared MIME is ignored.** `.jpg` and `.jpeg` are the same format (both `image/jpeg`); the only real failure mode was a browser declaring `image/jpg`. Trusting magic bytes fixes that and removes a spoofing vector instead of widening the allowlist string-by-string.
+
+**Open questions / follow-ups:**
+
+- **No bot-picture upload exists yet** (Stage 4 - Bot Factory avatar). When built, it should reuse this same magic-byte sniff rather than a declared-MIME allowlist.
+- typecheck + check:key-leaks pass (285 files); run `npm test` natively. And the `user_avatars` table must exist (`npx drizzle-kit push`) for upload to work at all.
+
+---
+
+### 2026-06-22 01:30 - v1.0 Stage 4: Bot Factory & Dashboard Polish
+
+**What was asked to do:** Ship Stage 4 of `claude/plan-v1.md`: a net-new bot profile picture (Bot Factory Step 1, defaulting to the ProBot icon, rendered on the public chat header + embeddable widget), a PDF dustbin icon, a per-file "PDF ingestion failed" fix (inline + retriable instead of a wizard-killer), the Stage 3 theme picker brought into wizard Step 3, and dark code blocks for the dashboard "Share your bot" snippets. One batch; bot avatar rendered on chat header + widget (user's choice).
+
+**What I did:**
+
+- **Bot avatar storage (Postgres bytea):** new `bots.image` column + `bot_avatars` table (bytea, mirrors `user_avatars`). `POST /api/bots/[botId]/avatar` (owner-gated) stores bytes + sets `bots.image`; `GET /api/bot-avatar/[botId]` serves them. Default (no upload) = NULL → ProBot icon fallback.
+- **Shared image-upload helper:** extracted `src/lib/uploads/image-upload.ts` (`sniffImageType`, `parseImageUpload`, `appBaseUrl`) and refactored the Stage 3 user-avatar route to use it - both avatar routes now share sniff-authoritative validation.
+- **Render bot avatar:** config endpoint exposes `bot.image`; chat page threads it to `ChatWindow` (header avatar slot, falls back to the gradient/initials); widget prefers `bot.image` over the owner photo. (The owner's personal photo from Stage 3 stays on `OwnerCard` - bot vs person are distinct identities.)
+- **Wizard (BotFactoryForm):** Step 1 bot-picture picker holding a `File` in form state, uploaded after `POST /api/bots` returns the id (like the knowledge upload); Step 2 "Remove" text → red `TrashIcon`; Step 3 `ThemeColorField` (sends `themeColor` in the create payload - new bots now default to blue `#0070dd` instead of the old purple).
+- **Per-file ingestion fix:** the knowledge route processes each PDF in its own try/catch and returns `200` with `files: [{ name, ok, error?, category? }]` instead of failing the whole batch on the first bad file. The wizard collects failures, advances to Step 5 anyway (the bot exists + good files are saved), and shows an `IngestFailuresPanel` with a per-file Retry that re-POSTs just that one file.
+- **Embed snippets:** `EmbedSnippet` `<pre><code>` restyled to a dark theme (no syntax-highlighter dependency); existing copy buttons kept.
+
+**Files changed:**
+
+- `src/lib/db/schema.ts` - update - `bots.image` + `bot_avatars` table + types.
+- `src/lib/uploads/image-upload.ts` - create - shared sniff/parse/base-url helper.
+- `src/app/api/users/me/avatar/route.ts` - update - use the shared helper.
+- `src/app/api/bots/[botId]/avatar/route.ts` - create - bot avatar upload (+ test).
+- `src/app/api/bot-avatar/[botId]/route.ts` - create - bot avatar serve (+ test).
+- `src/app/api/bots/[botId]/knowledge/route.ts` - update - per-file results (+ test updates).
+- `src/app/api/bots/[botId]/config/route.ts` - update - expose `bot.image`.
+- `src/app/u/[username]/chat/page.tsx` - update - pass `botImage`.
+- `src/components/chat/ChatWindow.tsx` - update - render bot avatar in header.
+- `src/widget/widget.ts` - update - prefer bot.image in the bubble (+ test fixture).
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - avatar picker, dustbin, theme field, per-file failure panel + retry (+ test).
+- `src/components/dashboard/EmbedSnippet.tsx` - update - dark code blocks.
+
+**Decisions made:**
+
+- **Bot avatar is distinct from the owner photo.** The chat header shows the bot's picture (its own identity, default ProBot icon); the owner's personal photo (Stage 3) stays on `OwnerCard`. The widget prefers `bot.image`, falling back to the owner image then a placeholder.
+- **Per-file results, not a 4xx batch.** The route now returns 200 even when some files fail; statuses like 413/422/415 for a single bad file are gone (the knowledge route tests were updated accordingly). Manual-text failures still fail loudly (not a retriable "file").
+- **Theme presets in the wizard mean new bots default to blue**, not the schema's legacy purple default - the picker always sends a value on create.
+- **Shared image-upload helper** removes the Stage 3 inline-sniff duplication so the bot route can't drift from the user route's validation.
+
+**Open questions / follow-ups:**
+
+- **`npx drizzle-kit push` required** to create `bot_avatars` + `bots.image` (alongside the still-pending Stage 3 `user_avatars`). Until then the bot-avatar upload/serve routes 500 with `relation "bot_avatars" does not exist`.
+- typecheck + check:key-leaks pass (290 files); vitest unexecuted in-sandbox - run `npm test` + `npm run build` natively.
+- **BotFactoryForm is now ~1340 lines.** If it grows further, the step components are good extraction candidates (e.g. pull `StepIdentity`/`StepKnowledge`/`StepPersonality` into their own files).
+
+---
+
+### 2026-06-22 02:00 - Stage 4 follow-up: bot picture in Bot configuration + shared AvatarUploader
+
+**What was asked to do:** Make the bot profile picture editable from Settings → Bot configuration with the same hover-icon UX as the account profile photo, and confirm the bot picture accepts JPEG like the account photo.
+
+**What I did:**
+
+- **Extracted a shared `AvatarUploader`** (`src/components/dashboard/settings/AvatarUploader.tsx`) from AccountTab's avatar block: a circular avatar that is its own upload control (hover camera overlay, "Uploading…" state, hidden file input, 2 MB cap, `accept` includes jpg/jpeg/png/webp), POSTs to a configurable `uploadUrl` returning `{ image }`, then `router.refresh()`es. Takes `initialImage`, `uploadUrl`, and a `fallback` node (initials vs ProBot icon).
+- **AccountTab** now uses `AvatarUploader` (uploadUrl `/api/users/me/avatar`, initials fallback) - removed its inline avatar state/handler/CameraIcon.
+- **BotConfigTab** gained a "Bot picture" `AvatarUploader` (uploadUrl `/api/bots/${botId}/avatar`, ProBot-icon fallback) at the top of the identity section, beside name/headline. New `initialImage` prop.
+- **Settings page** selects `bot.image` and passes it as `initialImage` to BotConfigTab.
+- **JPEG**: no change needed - the bot-avatar route already shares the sniff-authoritative `parseImageUpload` (jpg/jpeg/png/webp by magic bytes); the perceived gap was just the missing uploader in Bot configuration.
+
+**Files changed:**
+
+- `src/components/dashboard/settings/AvatarUploader.tsx` - create - shared hover-upload avatar (+ test).
+- `src/components/dashboard/settings/AccountTab.tsx` - update - use AvatarUploader.
+- `src/components/dashboard/settings/BotConfigTab.tsx` - update - bot-picture AvatarUploader + `initialImage` prop + ProBotMark.
+- `src/components/dashboard/settings/BotConfigTab.test.tsx` - update - `initialImage: null` in baseProps.
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` - update - select + pass `bot.image`.
+
+**Decisions made:**
+
+- **One shared `AvatarUploader`** for both account + bot pictures so the hover UX and validation can't drift; the only per-use difference is `uploadUrl` and the `fallback` node.
+- **Bot avatar uploads immediately** (separate endpoint), independent of BotConfigTab's diffed Save button - matches the account-photo behavior.
+
+**Open questions / follow-ups:**
+
+- typecheck + check:key-leaks pass (292 files); run `npm test` natively. `bot_avatars`/`bots.image` still need `npx drizzle-kit push` for any bot-picture upload to work.
+
+---
+
+### 2026-06-22 03:30 - v1.0 Stage 5: Sidebar, Notifications & Empty-State Polish
+
+**What was asked to do:** Ship Stage 5 of `claude/plan-v1.md`: zero-bot sidebar empty-state, account settings reachable without a bot, clickable sidebar profile, a docs link by the bell, the embed-share URL, a lead-capture email opt-in, and a dismissible ToS-change banner. One batch; account settings via a new bot-independent route.
+
+**What I did:**
+
+- **Schema:** `users.notify_leads_email` (boolean, default false) + `users.last_legal_ack_date` (timestamp, nullable). `LEGAL_EFFECTIVE_AT` (parsed Date) added to `legal.ts`.
+- **Sidebar empty-state (item 1/3/5):** `Sidebar` hides Workspace (Dashboard/Conversations/Leads) + Embed & share when `bots.length === 0`, relabels Bot Factory → "Create bot", and always shows Settings (→ `/dashboard/bots/[id]/settings` with a bot, else `/dashboard/settings`). The `SidebarAccountFooter` profile row is now a `<Link>` to that settings href. `EMBED_GUIDE_URL` → `https://docs.pro-bot.dev/embed-share`.
+- **Topbar docs link (item 4):** a "?" icon link to `https://docs.pro-bot.dev` beside the notification bell.
+- **Account settings without a bot (item 2):** new `/dashboard/settings` page reusing AccountTab / SecurityTab / AIModelKeyTab. `SettingsTabs` gained an optional `tabs` subset prop; `AIModelKeyTab` `botId` is now `string | null` - the provider/model switcher (user-level) always renders, the per-bot managed-key + audit sections hide when there's no bot.
+- **Lead-capture email opt-in (item 6):** new `GET/PATCH /api/users/me/notification-prefs`; the lead-email pref is folded into the existing `GET /api/notifications` response (single fetch) and toggled from a row in `NotificationDropdown`. New `leadCapturedEmail` template + `sendLeadCapturedEmail`; the public leads route best-effort emails the owner after a lead is saved if they opted in (never fails the response). Per-item mark-read + "mark all read" already existed.
+- **ToS banner (item 7):** new `LegalBanner` (dismissible) rendered by the dashboard layout when `LEGAL_EFFECTIVE_AT` is newer than the user's `last_legal_ack_date` (or null); dismiss POSTs `/api/users/me/legal-ack` (sets the date to now).
+
+**Files changed:**
+
+- `src/lib/db/schema.ts`, `src/lib/marketing/legal.ts` - update - columns + effective-date.
+- `src/components/dashboard/Sidebar.tsx` (+ new `Sidebar.test.tsx`), `SidebarAccountFooter.tsx` (+ test), `Topbar.tsx` - update - empty-state, profile link, docs link, embed URL.
+- `src/app/(dashboard)/dashboard/settings/page.tsx` - create - account settings route.
+- `src/components/dashboard/settings/SettingsTabs.tsx`, `AIModelKeyTab.tsx` - update - tab subset + optional botId.
+- `src/app/api/users/me/notification-prefs/route.ts` - create (+ test).
+- `src/components/dashboard/NotificationDropdown.tsx` - update - email-leads toggle (pref read from notifications response).
+- `src/app/api/notifications/route.ts` (+ test) - update - include `notifyLeadsEmail`.
+- `src/lib/auth/email-templates.ts`, `src/lib/auth/email.ts` - update - lead-captured template + send.
+- `src/app/api/bots/[botId]/leads/route.ts` (+ test) - update - best-effort owner email.
+- `src/components/dashboard/LegalBanner.tsx` - create (+ test); `src/app/api/users/me/legal-ack/route.ts` - create (+ test); `src/app/(dashboard)/layout.tsx` - update - render banner.
+
+**Decisions made:**
+
+- **Lead-email pref folded into `GET /api/notifications`** instead of a second mount fetch, so the dropdown makes one request and the existing dropdown tests' call-ordering isn't disturbed.
+- **New `/dashboard/settings` route** (user's choice) over making the bot-settings page bot-optional: the bot page keeps its botId-keyed URL/state; the account route reuses the same tab components with `tabs={["account","security","model"]}`.
+- **Owner email is best-effort** (try/catch, after the transaction) so a Resend hiccup never fails the public, anonymous lead-capture call. `appBaseUrl()` (from the image-upload helper) builds the absolute dashboard URL.
+- **ToS banner decision lives server-side** in the layout (date comparison) so the client component only handles dismissal; the `Date` parse of `LEGAL_EFFECTIVE_DATE` is centralised as `LEGAL_EFFECTIVE_AT`.
+
+**Open questions / follow-ups:**
+
+- **`npx drizzle-kit push` required** for `notify_leads_email` + `last_legal_ack_date` (and the still-pending `user_avatars`/`bot_avatars`/`bots.image`). Until then the prefs/legal-ack/leads-email paths error on the missing columns.
+- typecheck + check:key-leaks pass (300 files); vitest unexecuted in-sandbox - run `npm test` + `npm run build` natively.
+- `appBaseUrl` living in `src/lib/uploads/image-upload.ts` is now used by the leads route too; if a third caller appears it's worth moving to a neutral `src/lib/server/` module.
+
+---
+
+### 2026-06-22 04:00 - Bot Factory fixes: theme-driven chat, live preview, red PDF delete
+
+**What was asked to do:** Four Bot Factory bugs - (1) suggested questions not visible while creating a bot, (2) PDF delete button should be red, (3) the theme color should actually re-skin the chatbot, (4) the live preview should update as the user changes theme color / suggested questions.
+
+**What I did:**
+
+- **Theme color now drives the real chat (item 3).** The public chat page (`/u/[username]/chat`) didn't pass `themeColor` and `ChatWindow` hardcoded the brand. Now: the page selects `bot.themeColor` and passes it; `ChatWindow` sets a `--bot-accent` CSS variable on its root; the header avatar, send button, the user's message bubbles, and the reply avatar (`MessageBubble`) all read `var(--bot-accent, #0070dd)`. The embeddable widget already themed via `themeColor` (Stage 4), so the two surfaces are now consistent.
+- **Live preview reflects theme + questions (items 1, 4).** `LivePreview` in `BotFactoryForm` previously themed nothing and showed only the first suggested question as a bubble. Now the avatar + a send-accent swatch use `form.themeColor`, and all suggested questions render as themed chips - all reactive to `form`, so the preview updates live.
+- **Red PDF delete (item 2).** The Step 2 file-list trash button is now `text-red-600` (was muted with a red hover).
+
+**Files changed:**
+
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - LivePreview (themeColor + all suggested questions as chips), red trash button.
+- `src/app/u/[username]/chat/page.tsx` - update - select + pass `themeColor` (ResolvedBot gains `themeColor`).
+- `src/components/chat/ChatWindow.tsx` - update - `themeColor` prop → `--bot-accent` CSS var; send button + header avatar themed.
+- `src/components/chat/MessageBubble.tsx` - update - user bubble + reply avatar use `var(--bot-accent)`.
+
+**Decisions made:**
+
+- **CSS variable (`--bot-accent`) over prop-drilling.** Setting it once on the `ChatWindow` root lets `MessageBubble` (a child) pick up the accent without threading `themeColor` through every bubble; `var(--bot-accent, #0070dd)` keeps a brand fallback if a bubble ever renders outside a themed root.
+
+**Open questions / follow-ups:**
+
+- The suggested-question chips in the *real* chat (`SuggestedQuestions`) still use the brand hover accent, not the bot theme - minor; left untouched to keep the change focused on the primary accent surfaces.
+- typecheck + check:key-leaks pass (300 files); run `npm test` natively (no existing tests asserted the old brand classes).
+
+---
+
+### 2026-06-22 04:20 - Chat bot avatar: uploaded image or ProBot icon (not initials/"AI")
+
+**What was asked to do:** The chat header showed placeholder initials and assistant replies showed an "AI" text avatar. Both should show the bot's uploaded picture, or the ProBot icon as the default.
+
+**What I did:**
+
+- New shared `src/components/chat/BotAvatarIcon.tsx`: renders the uploaded image when set, else the ProBot mark (two dots) on a circle tinted with `--bot-accent`. Sized via a `sizeClass` prop.
+- `ChatWindow` header uses it (`size-12`) - removed the initials fallback/computation - and passes `botImage` into both `MessageBubble` renders (intro + each message).
+- `MessageBubble` accepts an optional `botImage` and its reply avatar uses `BotAvatarIcon` (`size-8`) instead of the old "AI" text `BotAvatar` (removed).
+
+**Files changed:**
+
+- `src/components/chat/BotAvatarIcon.tsx` - create - shared image/ProBot-icon avatar.
+- `src/components/chat/ChatWindow.tsx` - update - header + thread `botImage` to MessageBubble.
+- `src/components/chat/MessageBubble.tsx` - update - reply avatar via BotAvatarIcon; optional `botImage` prop.
+
+**Decisions made:**
+
+- **Default is the ProBot icon, not initials/"AI".** The bot is an entity with its own identity; the two-dot ProBot mark (themed via `--bot-accent`) matches the wizard's default bot picture and the widget. `MessageBubble`'s `botImage` is optional so the dashboard transcript view keeps working (shows the ProBot default there).
+
+**Open questions / follow-ups:**
+
+- typecheck + check:key-leaks pass (301 files). The uploaded bot image only renders after `npx drizzle-kit push` creates `bot_avatars`/`bots.image` and a picture is uploaded; otherwise the ProBot icon shows.
+
+---
+
+### 2026-06-22 - Stage 6: Marketing & Trust Pages
+
+**What was asked to do:** Ship Stage 6 of `plan-v1.md` in one batch - a "Why ProBot" comparison page, a "Hire me" page, a "Roadmap" page, a landing-page demo-video modal, header/footer link updates, and a sitemap. Decisions: roadmap from a hand-maintained data array (not parsed from `plan-v1.md`), demo video as a placeholder for now (env-driven URL with a "coming soon" poster), docs links repointed to `pro-bot.dev/docs`.
+
+**What I did:**
+
+- **`/why-pro-bot`** - server component with a `ROWS: Row[]` comparison (ProBot vs a generic closed platform). Each row is a property a job-seeker cares about (BYO key, free, MIT, self-hostable, keys-never-logged, GDPR export/delete, no telemetry, embeddable). `<Mark on>` renders an emerald check or a rose X. No named competitors; a footnote keeps it defensible. CTAs to `/dashboard/bots/new` and `/about`.
+- **`/hire-me`** - creator bio for Vishal Patil: Spec-Driven Development framing, a skills chip list, an amber "Featured by CNBC" callout for the earlier VAi project, and mailto/portfolio/GitHub/LinkedIn buttons. `CNBC_ARTICLE_URL` is a `"#"` sentinel - while unset the mention renders as plain text ("Ask me for the details.") so we never ship a broken link. Links to `/roadmap`.
+- **`/roadmap`** - a hand-maintained `STAGES: Stage[]` array (1-5 shipped, 6 in-progress at author time, 7-9 planned) with `STATUS_META` badge styles and a "Suggest a feature" CTA to GitHub Discussions. Deliberately decoupled from `plan-v1.md`'s markdown so the public page never breaks when the internal planning doc's format changes.
+- **Demo video modal** - new client component `DemoVideoModal.tsx`: a "Watch demo" button opens a borderless overlay (`fixed inset-0`, backdrop + Esc + × to close, no navigation so scroll position is preserved). `VIDEO_URL = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? ""`; when set it renders a YouTube-style iframe, otherwise a "Demo coming soon" poster with a "See a live bot" CTA. Rendered in the landing-page hero button row.
+- **Header/footer + sitemap** - `SiteHeader` gains "Why ProBot" + "Roadmap" nav links (desktop + mobile); `SiteFooter` gains "Why ProBot"/"Roadmap" (Product) and "Hire me" (Company) links. All three docs constants (`SiteHeader`, `SiteFooter`, `page.tsx`) repointed from `pro-bot-ai.vercel.app/docs` to `pro-bot.dev/docs` (changelog → `pro-bot.dev/docs/changelog`). New `src/app/sitemap.ts` lists the public marketing routes using the existing `NEXTAUTH_URL → APP_URL → localhost` base-URL convention.
+
+**Files changed:**
+
+- `src/app/(marketing)/why-pro-bot/page.tsx` - create - comparison page.
+- `src/app/(marketing)/hire-me/page.tsx` - create - creator bio page.
+- `src/app/(marketing)/roadmap/page.tsx` - create - roadmap page (maintained stage array).
+- `src/components/marketing/DemoVideoModal.tsx` - create - "Watch demo" button + borderless video modal.
+- `src/components/marketing/DemoVideoModal.test.tsx` - create - open/close + poster behavior (poster path, env unset).
+- `src/app/page.tsx` - update - import + render `<DemoVideoModal />` in the hero; docs URL → `pro-bot.dev/docs`.
+- `src/components/marketing/SiteHeader.tsx` - update - Why ProBot + Roadmap nav (desktop + mobile); docs URL → `pro-bot.dev/docs`.
+- `src/components/marketing/SiteFooter.tsx` - update - Why ProBot/Roadmap/Hire me links; docs + changelog URLs → `pro-bot.dev/docs`.
+- `src/app/sitemap.ts` - create - static sitemap of public marketing routes.
+- `.env.example` - update - document optional `NEXT_PUBLIC_DEMO_VIDEO_URL`.
+- `claude/plan-v1.md` - update - tick Stage 6 in the matrix.
+- `docs/changelog.mdx` - update - add the Stage 6 subsection under Version 1.0.
+
+**Decisions made:**
+
+- **Roadmap from a maintained array, not parsed from `plan-v1.md`.** Coupling a public marketing page to an internal doc's markdown format is brittle; a small typed array is honest enough and updated by hand when a stage ships.
+- **Demo video is a placeholder, env-gated.** `NEXT_PUBLIC_DEMO_VIDEO_URL` is build-time/public; until it's set the modal shows a "coming soon" poster instead of a broken embed, so the button ships now without waiting on the video.
+- **`CNBC_ARTICLE_URL = "#"` sentinel** renders the CNBC mention as plain text rather than a placeholder link, avoiding a broken/`href="#"` link in production.
+
+**Open questions / follow-ups:**
+
+- No schema changes this stage - no `drizzle-kit push` needed.
+- typecheck + check:key-leaks pass. Run vitest natively for `DemoVideoModal.test.tsx` (sandbox can't run vitest). The iframe branch isn't covered by the test (env is read at module load); the poster branch is.
+- When the demo video is published, set `NEXT_PUBLIC_DEMO_VIDEO_URL` (e.g. a YouTube embed URL); when the CNBC article URL is available, set `CNBC_ARTICLE_URL` in `hire-me/page.tsx`.
+
+---
+
+### 2026-06-22 - Stage 7: SEO, Docs & Discoverability
+
+**What was asked to do:** Ship Stage 7 of `plan-v1.md` in one batch - best-in-class SEO (metadata, OG/Twitter, JSON-LD, robots, sitemap, OG images), Mintlify docs reorganization for SaaS with new pages, architecture diagrams, and ADRs. Decisions: native Next routes for sitemap/robots over `next-sitemap` (zero-dep, equal SEO), dynamic OG images via `next/og`, everything in one batch.
+
+**What I did:**
+
+- **Shared SEO module (`src/lib/seo/`).** `site.ts` exposes `siteUrl()` (same `NEXTAUTH_URL → APP_URL → localhost` convention as the auth links), the canonical `SITE_NAME/SITE_TITLE/SITE_DESCRIPTION`, and `buildMetadata({title, description, path, index})` which emits a bare title (the root template appends "· ProBot"), a canonical URL, and OG/Twitter blocks - intentionally omitting images so the root image routes apply site-wide. `structured-data.ts` builds `Organization` + `SoftwareApplication` JSON-LD. `og.tsx` renders a shared 1200x630 `next/og` `ImageResponse` (system fonts, zero deps).
+- **Root metadata.** `layout.tsx` now sets `metadataBase`, a `title` template (`%s · ProBot`), the corrected default title ("AI Assistant", not the stale "AI Digital Recruiter"), and default `openGraph`/`twitter`/`robots`.
+- **Image + crawl routes.** `src/app/opengraph-image.tsx` and `twitter-image.tsx` both call `renderOgImage()`; `src/app/robots.ts` allows public pages, disallows `/dashboard`,`/api`,`/login`,`/register`,`/reset-password`,`/onboarding`, and points at `${siteUrl()}/sitemap.xml`; `sitemap.ts` refactored onto the shared `siteUrl()`.
+- **Per-page metadata.** The 7 marketing pages (`why-pro-bot`, `hire-me`, `roadmap`, `about`, `self-hosting`, `privacy`, `terms`) now route their `metadata` through `buildMetadata` (bare titles + canonical + OG/Twitter).
+- **Landing JSON-LD.** `page.tsx` renders the two structured-data `<script type="application/ld+json">` blocks.
+- **Mintlify docs reorg.** `docs.json` regrouped into Get started / Concepts / Guides / Self-hosting / Decisions / Release notes. New pages: `concepts/managed-vs-self-hosted.mdx`, `guides/custom-instructions.mdx`, `guides/managed-key-storage.mdx`, `guides/account-deletion.mdx`, top-level `embed-share.mdx` (matches the dashboard Sidebar's `/embed-share` link). `concepts/stages.mdx` rewritten from the false "Beta stages planned" narrative into a current "Build status & roadmap" page; `guides/embed-widget.mdx`'s stale "planned" banner corrected to shipped.
+- **Architecture diagrams + ADRs.** `concepts/architecture.mdx` gains Mermaid diagrams (managed-vs-self-hosted key flow, envelope encryption, deletion lifecycle). New `docs/decisions/`: `overview.mdx` + `0001-hybrid-key-model`, `0002-deletion-grace-window`, `0003-circuit-breaker-store`, each sourced from the actual code (`crypto/envelope.ts`, `account/delete.ts`, `ai/circuit-breaker.ts`) and `learnings.md`.
+
+**Files changed:**
+
+- `src/lib/seo/site.ts`, `src/lib/seo/structured-data.ts`, `src/lib/seo/og.tsx` - create.
+- `src/app/opengraph-image.tsx`, `src/app/twitter-image.tsx`, `src/app/robots.ts` - create.
+- `src/app/sitemap.ts` - update - use shared `siteUrl()`.
+- `src/app/layout.tsx` - update - metadataBase/title template/OG/twitter/robots; Recruiter→Assistant.
+- `src/app/page.tsx` - update - JSON-LD scripts.
+- `src/app/(marketing)/{why-pro-bot,hire-me,roadmap,about,self-hosting,privacy,terms}/page.tsx` - update - `buildMetadata`.
+- `docs/docs.json` - update - nav reorg + new pages.
+- `docs/concepts/managed-vs-self-hosted.mdx`, `docs/guides/custom-instructions.mdx`, `docs/guides/managed-key-storage.mdx`, `docs/guides/account-deletion.mdx`, `docs/embed-share.mdx` - create.
+- `docs/concepts/stages.mdx` - update - rewritten to current state.
+- `docs/guides/embed-widget.mdx` - update - corrected stale "planned" banner + real widget src.
+- `docs/concepts/architecture.mdx` - update - 3 Mermaid diagrams.
+- `docs/decisions/overview.mdx`, `0001-hybrid-key-model.mdx`, `0002-deletion-grace-window.mdx`, `0003-circuit-breaker-store.mdx` - create.
+- `claude/plan-v1.md`, `docs/changelog.mdx`, `claude/context.md` - update - close-out.
+
+**Decisions made:**
+
+- **Native Next sitemap/robots over `next-sitemap`.** The native metadata routes already regenerate per build and give identical SEO output; adding the package would be a dependency + postbuild step for no benefit, against the zero-cost/no-needless-dep policy.
+- **Centralised metadata via `buildMetadata` + root-layout defaults.** Page OG/Twitter inherit the root defaults and the file-based OG image routes apply site-wide; pages only declare their title/description/path. Keeps one source of truth for the SEO surface.
+- **Dynamic OG images (`next/og`) over static assets.** Zero binary assets to maintain; one shared render feeds both the OG and Twitter routes.
+- **Decoupled docs roadmap from the false Beta narrative** and sourced ADRs from the real implementation files so the docs are truthful about the shipped product (account deletion, envelope encryption, OAuth, custom instructions all verified present in code).
+
+**Open questions / follow-ups:**
+
+- No schema changes - no `drizzle-kit push`.
+- typecheck + check:key-leaks pass (313 files); `docs.json` validates and all 23 nav pages resolve. Run `next build` natively to confirm the `next/og` image routes compile, plus vitest + a Lighthouse SEO pass on the landing + marketing pages (acceptance: 95+).
+- Two embed docs links remain intentionally distinct: the dashboard Sidebar → `/embed-share` (new page) and the dashboard card → `/guides/embed-widget`; both now resolve. Unify later if desired.
+
+---
+
+### 2026-06-22 - Stage 8 (partial): shared-state scaling, alert seam, export perf
+
+**What was asked to do:** Ship the in-repo, code-only slices of Stage 8 in one batch: shared-state backing for the rate limiter + circuit breaker, a `circuit_open` alerting seam, and the NFR-P07 query-perf item. Decisions: use the official `@upstash/redis` package (added to package.json; install is native), logger-event alerting with a Sentry-ready seam. Out of scope (operational/native or not selected): the perf-measurement NFRs, k6, live Sentry, and the smaller Beta-Stage-7 hardening items.
+
+**What I did:**
+
+- **Pluggable shared-state store.** New `src/lib/store/redis.ts` is the single import site for `@upstash/redis`; it exposes a narrow `RedisLike` interface (`eval`, `del`) and a memoized `getRedisClient()` that returns `null` when `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` are unset. Everything else depends on `RedisLike`, so the logic is unit-testable with a fake and the package is isolated.
+- **Rate limiter (`src/lib/ai/rate-limit.ts`).** Extracted a `RateLimitStore` interface; `MemoryRateLimitStore` preserves the exact prior sliding-window behavior; `RedisRateLimitStore` does an atomic sliding window with a sorted set via a Lua `eval` (ZREMRANGEBYSCORE + ZCARD + conditional ZADD + PEXPIRE), with `rollback` (ZREM) for the per-day-rejection case. `checkRateLimit` is now **async** and selects the store by whether Redis is configured. All existing exports (`PER_MINUTE`/`PER_DAY`, `resolveLimits`, `resolveMaxChars`, `__resetRateLimitState`) preserved.
+- **Circuit breaker (`src/lib/ai/circuit-breaker.ts`).** Extracted a `BreakerStore` (`load`/`save`/`reset`); `MemoryBreakerStore` (Map, returns the live entry reference so half-open in-flight is visible within a process); `RedisBreakerStore` (entry as a JSON blob with TTL via GET/SET `eval`). `getCircuitState` + `__resetCircuit` are now async. Added an `onOpen` option fired once on the closed/half-open→open transition.
+- **Alert seam.** New `src/lib/server/alert.ts`: `emitOperationalAlert` + `alertCircuitOpen(provider)`, default sink is a `console.warn` through `redactSensitive` (no key leakage), swappable via `setAlertSink` for a future Sentry transport. The chat route passes `onOpen: alertCircuitOpen` into `callWithBreaker`.
+- **Export perf.** `src/lib/account/export.ts` now buckets child rows by bot once via a shared `groupBy` helper (exported for testing) + a `conversationToBot` map, replacing the O(bots × rows) join that also re-scanned all conversations per message.
+
+**Files changed:**
+
+- `src/lib/store/redis.ts` - create - Upstash client + `RedisLike` + `getRedisClient`.
+- `src/lib/ai/rate-limit.ts` - update - store abstraction + Redis sliding window; async `checkRateLimit`.
+- `src/lib/ai/circuit-breaker.ts` - update - store abstraction + Redis; async state reads; `onOpen` hook.
+- `src/lib/server/alert.ts` - create - operational alert seam.
+- `src/app/api/chat/[botId]/route.ts` - update - `await checkRateLimit`; `onOpen: alertCircuitOpen`; import.
+- `src/lib/account/export.ts` - update - O(n) grouping + exported `groupBy`.
+- `package.json` - update - add `@upstash/redis`.
+- `.env.example` - update - document the two optional Upstash vars + free-tier note.
+- Tests: `src/lib/ai/rate-limit.test.ts` + `src/lib/ai/circuit-breaker.test.ts` (update - async + fake-`RedisLike` cases + `onOpen`), `src/lib/store/redis.test.ts` + `src/lib/server/alert.test.ts` + `src/lib/account/export.test.ts` (create). `src/app/api/chat/[botId]/route.test.ts` intentionally unchanged (its `mockReturnValue` works under `await`).
+- `claude/plan-v1.md`, `docs/changelog.mdx`, `claude/context.md` - update - close-out (Stage 8 marked 🟡 partial).
+
+**Decisions made:**
+
+- **Default behavior is byte-for-byte unchanged.** Redis is strictly opt-in; with the env vars unset the in-memory stores run exactly as before, keeping the default deployment zero-config and zero-cost.
+- **Isolate `@upstash/redis` behind `RedisLike`.** One import site, an interface everywhere else - keeps the package out of the hot-path logic's type surface and makes both stores testable with a fake (the sandbox can't install the package or run vitest).
+- **`@upstash/redis` over a dependency-free fetch client** (user's choice). Trade-off accepted: in-sandbox typecheck flags only `store/redis.ts` until `npm install`; native verification thereafter.
+- **N+1→CTE reframed.** The dashboard analytics (`src/lib/analytics/queries.ts`) and `buildExportBundle` were already batched (aggregate `count(*)` + `inArray`), so there was no real N+1. The honest, measurable win was the export's O(n²) in-memory join → O(n).
+- **Breaker over Redis adds ~2 round-trips per chat call** (load + save) when enabled - documented trade-off of cross-instance correctness vs hot-path latency; the in-memory default is unaffected.
+
+**Open questions / follow-ups:**
+
+- No schema changes - no `drizzle-kit push`. **Run `npm install`** natively for `@upstash/redis`, then `npm run typecheck` (fully green) + `npm test` (the new/updated suites).
+- Operational/native acceptance remains: SRS §6.1 perf NFRs measured in production, k6 load test across two warm instances, and a live Sentry breadcrumb within 10s of `circuit_open` (drop a Sentry transport into `setAlertSink`).
+- Deferred Beta-Stage-7 hardening items (resend-deletion-email, delete revokes other sessions, dashboard breaker indicator, provider-mismatch prompt, ClamAV sidecar) were not in this batch's selected scope.
+
+---
+
+### 2026-06-22 - Stage 8 (perf addendum): kill the Material Symbols icon font
+
+**What was asked to do:** Act on the uploaded mobile + desktop Lighthouse reports to maximize performance across the website, the chatbot, the embed widget, and the package.
+
+**Diagnosis (from the reports):** Landing scored 97 (mobile) / 98 (desktop). The dominant issue on both was the **Material Symbols Outlined icon font**: the root layout loaded it via a render-blocking `fonts.googleapis.com` stylesheet that pulled a **~3.86 MB** variable font from `fonts.gstatic.com` - ~94% of the 4,093 KiB page weight, the 770ms mobile render-block, the long critical chain, and the desktop CLS (0.089 font-swap). It backed only ~20 distinct glyphs used on 5 marketing files; the chat page + dashboard didn't use it yet still paid the render-blocking `<link>`. Secondary: an 11 KiB legacy-JS polyfill chunk (no browserslist). The `.ant-message` "unused CSS" and the 1,755 KiB "unused JS" were all `chrome-extension://` noise (Lighthouse even warned extensions skewed the mobile run), not our code. The embed widget was already lean (8 KB, es2017, no Google Fonts) and the body fonts already self-hosted via `next/font` with swap.
+
+**What I did:**
+
+- **Replaced the icon font with inline SVGs.** New `src/components/ui/Icon.tsx` provides an `Icon` component (+ `IconName` union) with inline SVGs for the 20 glyphs actually used. Icons render at `width/height: 1em` with `stroke="currentColor"`, so the existing font-size utility classes (`!text-lg` etc.) and text color keep controlling them exactly as the font glyphs did.
+- **Swapped all usages + de-duplicated.** Replaced every `MaterialIcon`/`material-symbols-outlined` usage across `src/app/page.tsx`, `src/app/(marketing)/about/page.tsx`, `src/components/marketing/SiteHeader.tsx`, `SiteFooter.tsx`, `DemoVideoModal.tsx`, and deleted the **4 duplicated** local `MaterialIcon` definitions. Data-array icon fields were typed to `IconName`.
+- **Removed the render-blocking `<link>`** (and the now-empty `<head>`) from `src/app/layout.tsx`. This drops the 3.86 MB font, the `fonts.googleapis.com`/`fonts.gstatic.com` origins, the long critical chain, and the font-swap CLS - on **every** route, so the chatbot and dashboard benefit too (they no longer fetch the icon stylesheet at all).
+- **browserslist** added to `package.json` (chrome/edge/firefox ≥109, safari/ios ≥16) so Next stops emitting the `Array.prototype.at/flat`, `Object.fromEntries/hasOwn`, `String.trim*` polyfills (~11 KiB), shrinking the shared JS across every surface. Trade-off: drops transpilation for pre-2023 browsers.
+
+**Files changed:**
+
+- `src/components/ui/Icon.tsx` - create - inline-SVG icon set.
+- `src/components/ui/Icon.test.tsx` - create - renders svg, em/currentColor, class passthrough.
+- `src/app/page.tsx`, `src/app/(marketing)/about/page.tsx`, `src/components/marketing/SiteHeader.tsx`, `src/components/marketing/SiteFooter.tsx`, `src/components/marketing/DemoVideoModal.tsx` - update - `Icon` swaps + removed local `MaterialIcon` defs.
+- `src/app/layout.tsx` - update - removed the Material Symbols `<link>` + empty `<head>`.
+- `package.json` - update - add `browserslist`.
+- `claude/context.md`, `docs/changelog.mdx` - update - close-out.
+
+**Decisions made:**
+
+- **Inline SVGs over subsetting the font.** Subsetting (`&icon_names=` + `&display=swap` + preconnect) would have shrunk the font, but inlining removes the external stylesheet, both font origins, and the render-block entirely - a strictly better outcome for ~20 icons, and it de-duplicates the 4 `MaterialIcon` copies into one component. Minor aesthetic shift: the icons are now stroke-based rather than the filled Material glyphs.
+- **`1em` + `currentColor` sizing** so no call sites needed sizing/color changes - the existing utility classes still apply.
+- **Did not chase the `.ant-message` CSS or the 1.7 MB "unused JS"** - both are browser-extension artifacts, not first-party.
+
+**Open questions / follow-ups:**
+
+- typecheck + key-leak green; run Lighthouse natively to confirm - expect LCP, render-blocking time, and total payload to drop sharply and CLS toward 0 on the landing AND the chat page.
+- If broad legacy-browser support is later required, relax/remove the `browserslist` entry (costs back the ~11 KiB polyfills).
+- The hero's decorative SVG orb animation (`il-wire`/`il-ring`, stroke-dashoffset) is flagged non-composited; left as-is (minor, decorative).
+
+---
+
+### 2026-06-22 - Stage 9: Self-hosted bot architecture (in-repo portions)
+
+**What was asked to do:** Ship the v1.0 capstone - the self-hosted bot runtime architecture - end to end ("everything"): the locked design, the platform-side token auth + versioned API, the dashboard UI, the `probot-bot` runtime scaffold, and the docs. Auth = API token per bot (recommended). Runtime repo = scaffold a `probot-bot/` folder.
+
+**Design (ADR `docs/decisions/0004-self-hosted-bot.mdx`):** a self-hosted runtime authenticates with a per-bot token (`pbt_<hex>`, shown once, stored SHA-256-hashed, soft-delete revoke) over a versioned `/api/v1/bot/*` surface (4 endpoints). The LLM call stays on the runtime's infra (platform is not in the chat critical path); a leaked token = read-only knowledge for one bot + conversation/lead writes for it, no cross-tenant exposure. Rejected OAuth refresh tokens (v1.1) and mTLS (overkill).
+
+**What I did:**
+
+- **Schema** (`src/lib/db/schema.ts`): new `bot_tokens` table (botId FK, unique `token_hash`, name, `last_seen_at`, `revoked_at`, createdAt) + `bots.deployment_mode` (`managed`|`self_hosted`, default managed). `db/index.ts` re-exports via `export *` (no edit needed).
+- **Token service** (`src/lib/bot-tokens/service.ts`): `mintBotToken` (returns raw once), `authenticateBotToken` (header regex before DB, hashed lookup, revoked-check, `last_seen` bump), `listBotTokens`, `revokeBotToken`, and a `requireBotToken` route guard mirroring `requireBotOwner`. Reuses `generateRawToken`/`hashToken`.
+- **Versioned API** (`src/app/api/v1/bot/{config,knowledge,conversations,leads}/route.ts`): all bot-token-authed. `knowledge` reuses `retrieveRelevant` + the managed full-context fallback + `checkRateLimit`; `conversations` reuses the chat route's `(bot,session)` upsert; `leads` reuses a new shared `src/lib/leads/capture.ts` (`captureLead` - lead + recruiter-email + notification in one tx, idempotent on (bot,conversation,email)).
+- **Dashboard API** (`src/app/api/bots/[botId]/{tokens,tokens/[tokenId],deployment}/route.ts`): `requireBotOwner`-gated mint (show-once) / list / revoke / mode toggle.
+- **Dashboard UI**: new `DeployTab` (`src/components/dashboard/settings/DeployTab.tsx`) - mode cards, mint show-once modal, list/revoke; loads tokens client-side via `useEffect` so the inactive panel never mounts in the existing settings tests. Added the `deploy` tab to `SettingsTabs` + rendered the panel in the bot settings page (with `deployment_mode` added to its column select).
+- **`probot-bot/` scaffold**: minimal Next runtime (README, package.json, .env.example, next.config, tsconfig, `lib/platform.ts` typed client, `app/api/chat/route.ts` orchestrator, `app/page.tsx` + `layout.tsx`). Added `probot-bot` to the root `tsconfig.json` `exclude` so it doesn't break the platform typecheck.
+- **Docs**: ADR 0004 (+ row in `decisions/overview.mdx`), `docs/self-hosted-bot/{index,quickstart,api-reference}.mdx`, and `docs.json` nav (Self-hosting + Decisions groups).
+- **Tests** (authored, native): `bot-tokens/service.test.ts`, `api/v1/bot/config/route.test.ts`, `api/v1/bot/leads/route.test.ts`, `DeployTab.test.tsx`.
+
+**Decisions made:**
+
+- **Per-bot API token over OAuth** (user's pick + ADR): simplest model that meets the threat bar; revoke = flag the row, checked on every call.
+- **`captureLead` extracted** so the v1 leads endpoint and (future) managed route share one lead-capture core instead of duplicating the transaction. The managed route is left calling its inline version for now (bounded blast radius); folding it in is a follow-up.
+- **DeployTab fetches tokens client-side**, not via the server page, specifically so the existing settings-page test's `@/lib/db` mock (which has no `botTokens`) keeps passing and inactive panels stay un-mounted.
+- **Scaffold excluded from typecheck** (separate project with its own deps/config); it's a template to extract into its own repo.
+
+**Open questions / follow-ups:**
+
+- **Run `npx drizzle-kit push`** natively to create `bot_tokens` + `bots.deployment_mode`, then `npm test` for the new suites.
+- Extract `probot-bot/` into its own repository and deploy it to exercise the end-to-end acceptance (mint → deploy → see conversations/leads in the dashboard → revoke).
+- The `/api/v1/bot/*` contract is now pinned - breaking changes must ship as `/api/v2` with a deprecation window.
+- Optional: refactor the managed `POST /api/bots/[botId]/leads` to call the shared `captureLead`, and add a session-revoke-on-delete (deferred Beta-Stage-7 item) - both out of this batch's scope.
+
+---
+
+### 2026-06-23 - Post-v1.0 polish (large cross-cutting batch, ~17 items)
+
+**What was asked to do:** A single large request bundling lead-form expansion, save-as-preset, live dashboard deltas, status auto-save, restore-by-username-or-email, dashboard/sidebar UX fixes, live-bot header cleanup, brand icons, roadmap removal from the app, docs-URL consistency, a full docs overhaul + blogs, and plan-v2 additions. User chose "one giant batch"; preset storage = DB; lead form = name/email/company required + LinkedIn optional; docs = full content.
+
+**What I did (by area):**
+
+- **Lead capture form + schema** (native push): added `leads.name/company/linkedin_url`; `leadCaptureInput` now requires name+email+company, optional `linkedinUrl`; `captureLead` + both lead endpoints (`/api/bots/[botId]/leads`, `/api/v1/bot/leads`) thread the fields; `LeadCaptureCard` is a 4-field form; `listLeads`/`listAllLeadsForExport` + the leads dashboard page + CSV export show them. (No recruiter IP is or was ever captured.)
+- **Save-as-preset** (native push): new `bot_presets` table + `src/lib/bot-presets/service.ts` + `POST/GET /api/bot-presets`; a "Save bot settings" section below the BotConfigTab danger zone snapshots the config (no secrets).
+- **Live dashboard %**: `getAnalyticsForUser` adds week-over-week (conversations, messages) + month-over-month (leads) counts + a `formatGrowth` helper; the dashboard tiles render real, sign-coloured deltas; `MetricTile` colours +/- (green/rose), no longer faded.
+- **Status auto-save**: the Bot-status toggle PATCHes immediately (own handler + `activeBaseline` so the main Save's dirty diff stays correct); publish updates the baseline too.
+- **Restore by username OR email**: `undoAccountDeletion` matches either snapshot; route accepts `identifier`; `UndoDeletionForm` relabelled.
+- **Dashboard/sidebar**: Topbar Docs is now a labelled button (book icon) between live-bot and the bell; sidebar "Manage Model & Key" → `?tab=model` (new `modelHref` threaded through `ModelStatusCard`/`SidebarAccountFooter`); `BotSwitcher` always opens and shows a coming-soon "Create New Bot".
+- **Live bot header**: removed the owner `OwnerCard` heading from `/u/[username]/chat` - the public chat shows only bot details.
+- **Security copy**: conversation-retention text rewritten to match reality (kept until bot/account deletion; no time-based purge).
+- **Brand icons**: added `github`/`linkedin`/`portfolio` to `Icon.tsx` (filled marks) and used them in accent on hire-me + about.
+- **Roadmap removed from app**: deleted `(marketing)/roadmap`, removed header/sitemap/hire-me links; roadmap now lives only in docs.
+- **Docs-URL consistency**: `docs.pro-bot.dev` → `pro-bot.dev/docs` across app + docs (planning docs left as historical).
+- **Docs overhaul (full content)**: ~25 new pages (Get started/Guides/Models & keys/Hosting/Trust/Product/Help/Legal + Release-notes Beta/v1/Roadmap/v2 + Blog), removed `concepts/architecture` + `concepts/stages`, restructured `docs.json` into Documentation/Release notes/Blog/API tabs (50 nav pages, all resolve), refreshed `build-your-bot` + fixed stale internal links.
+- **plan-v2**: added dynamic "thinking" messages + fleshed out multibot management (bot switcher + create-from-preset).
+
+**Decisions made:**
+
+- **DB preset over export/localStorage** (user pick): `bot_presets` is user-scoped JSON, ready for the future multibot "create from preset" flow.
+- **Status auto-save via `activeBaseline`** so the toggle and the bulk Save don't double-PATCH or get stuck "dirty".
+- **Brand marks render filled** inside the stroke-based `Icon` wrapper by setting `fill="currentColor" stroke="none"` on the path.
+- **Docs legal pages summarise + link** to the canonical `pro-bot.dev/privacy` / `/terms` rather than duplicating long legal text.
+
+**Open questions / follow-ups:**
+
+- **Run `npx drizzle-kit push`** natively for the `leads` columns + `bot_presets`, then `npm test` + `npm run build`.
+- Updated test fixtures for the runtime-assertion changes (lead form/schemas/routes, BotConfig status auto-save, `MetricTile` growth colour, sidebar/model props, docs-URL test refs); typecheck + key-leak green (335 files).
+- Multibot "Create New Bot" is a coming-soon stub; real multi-bot creation + preset reuse is tracked in plan-v2.
+
+---
+
+### 2026-06-24 - OSS packaging, docs split, branch-protection guide, justify, stage-label cleanup
+
+**What was asked to do:** Seven items: (1) a publishable npm package for the embed widget, (2) justify all paragraph text, (3) call out that ProBot is open source on site + docs, (4) slim the README + split into separate md files (quickstart/architecture/BYO-key/key-storage), remove roadmap, mention Spec-Driven Development, (5) detailed GitHub branch-protection steps for main/dev, (6) remove explicit "Stage N" mentions from website + docs (and, per the user, code comments too), (7) a video-tutorial script md for an AI video generator.
+
+**What I did:**
+
+- **npm package** - `packages/probot-chatbot/` (`package.json` named `probot-chatbot`, unscoped, `unpkg`/`jsdelivr` fields; `build.mjs` that esbuild-bundles the existing `src/widget/widget.ts` + `widget.css` to `dist/probot-chatbot.js` so the package and the hosted `/widget.js` never drift; `README.md`). Added `packages` to the root `tsconfig.json` `exclude`. New root `PUBLISHING.md` with the full publish flow (name-availability check, scoped `@vishalpatil18/probot-chatbot` fallback, `npm publish`, unpkg URL, optional GitHub Action).
+- **Justify everywhere** - one `@layer base` rule in `globals.css` (`p { text-align: justify; text-justify: inter-word }`). Tailwind utilities (`text-center`, etc.) sit in `@layer utilities` and override it, so components that set alignment keep it; only default-aligned prose is justified, and last lines / single-line paragraphs are visually unaffected.
+- **Open source mention** - landing hero badge ("Free & open source"), `SiteFooter` tagline ("Free & open source (MIT)"), and an `<Info>` callout in `docs/introduction.mdx` with the GitHub link.
+- **README + split docs** - rewrote `README.md` minimal (website/docs/GitHub links, Spec-Driven Development section, embed snippet, links to the split files; roadmap + stage-heavy Features + internal `claude/` links removed). New root `QUICKSTART.md`, `ARCHITECTURE.md`, `BYO-KEY.md`, `KEY-STORAGE.md` (extracted, stage refs dropped, `drizzle-kit push` instead of `db:migrate`).
+- **Branch protection** - `GITHUB-BRANCH-PROTECTION.md` (Rulesets + classic, main = PR-only-for-all, dev = PR-for-others with the owner on the bypass list, CODEOWNERS-required approvals, verification steps) + `.github/CODEOWNERS` (`* @vishalpatil18`).
+- **Stage-label cleanup** - reworded `docs/api-reference/bots-upsert.mdx`, `docs/release-notes/beta.mdx`, `docs/concepts/security.mdx`, and the ~9 "Stage N" source-code comments (config/chat routes, OwnerCard, DeployTab, leads/capture, bot-tokens/service, prompt-builder, schema ×2). `grep` confirms no `stage[ -][0-9]` remains in `src` or `docs`.
+- **Video script** - `BOT-TUTORIAL-SCRIPT.md` (12 scenes with screenshot cues + narration + an asset checklist).
+- Close-out: `CHANGELOG.md` entry + this Session History entry.
+
+**Decisions made:**
+
+- **Global base rule for justify** instead of editing dozens of `<p>` - honors "everywhere" with one change and is trivially reversible; relies on Tailwind's utility-over-base precedence so explicit alignments are preserved.
+- **Unscoped `probot-chatbot`** (industry-standard clean install) with a documented scoped fallback when the name is taken; the package reuses the real widget source rather than duplicating it.
+- **Branch protection is repo-admin config**, delivered as a precise guide + CODEOWNERS rather than code (can't be set from the repo).
+
+**Open questions / follow-ups:**
+
+- **Run the publish steps** in `PUBLISHING.md` (`npm login` → name check → `npm publish`) - I can't publish to npm from here.
+- **Apply the branch-protection settings** on GitHub using the guide; commit `.github/CODEOWNERS` to `main` first so CODEOWNERS reviews take effect.
+- typecheck + key-leak green (335 files; `packages` excluded from typecheck like `probot-bot`). The widget package builds natively via `npm run build` in its folder.
+
+### 2026-06-24 - Self-host scoped to the chatbot, recruiter-IP copy removed, animated 404
+
+**What was asked to do:** Four items: (1+2) self-hosting should mean self-hosting *only the chatbot*, not the whole ProBot website/platform - remove the whole-platform self-host story from docs and instructions; (3) stop mentioning "recruiter IP" in docs/instructions (it reads negatively even though IPs aren't kept); (4) a friendly, animated 404 page with a chatbot illustration, the message "Oops! The page you are looking for does not exist. Please check the URL or return to the homepage.", and a button back to the homepage.
+
+**What I did:**
+
+- **Self-hosting reframed to chatbot-only.** The codebase had conflated two stories - self-hosting the tiny `probot-bot` runtime (kept) and self-hosting the whole Next.js platform (removed). Deleted `docs/guides/self-host.mdx` (the full-platform Vercel/Docker deploy guide) and removed its `"guides/self-host"` entry from `docs/docs.json`. Rewrote `docs/hosting/self-hosting.mdx` (now "Self-hosting your bot", `probot-bot` only) and `docs/concepts/managed-vs-self-hosted.mdx` (the "self-hosted" column now means the bot runtime, not the platform). Edited `docs/hosting/managed.mdx`, `docs/guides/deployment.mdx`, `docs/faq.mdx`, `docs/quickstart.mdx`, `docs/features.mdx`, `docs/about.mdx`, and `docs/api-reference/introduction.mdx` (repointed the orphaned `/guides/self-host` link). Marketing: rewrote `src/app/(marketing)/self-hosting/page.tsx` (mint a bot token → deploy `probot-bot`, no fork-repo/KEK/cron); reframed the self-host card + honest caveat on `src/app/(marketing)/about/page.tsx`, the comparison detail on `why-pro-bot/page.tsx`, and the "free to run" copy on `src/app/page.tsx`.
+- **Recruiter-IP wording removed** from `docs/hosting/managed.mdx`, `docs/faq.mdx`, `docs/why-pro-bot.mdx`, `docs/features.mdx`, `docs/guides/analytics-and-leads.mdx`, the dashboard decrypt-audit copy in `src/components/dashboard/settings/AIModelKeyTab.tsx`, and `BOT-TUTORIAL-SCRIPT.md` (scenes 11 + 12) - replaced with "conversations are logged anonymously". Left the internal IP-hashing code comments in `src/lib/db/schema.ts` and `src/lib/crypto/ip-hash.ts` (implementation, not user-facing docs/instructions) and flagged them to the user.
+- **Animated 404 page** `src/app/not-found.tsx` (new) - a self-contained, centered page (renders in the root layout, no marketing chrome) with an SVG chatbot illustration: floating head (`il-float`), blinking eyes (`il-eyes`), glowing aura (`il-orb-glow`), expanding halo rings (`il-ring`), and a chat bubble with typing dots (`il-dot`). All motion reuses the existing landing-illustration classes in `globals.css`, which are already inside the `prefers-reduced-motion` guard, so no new CSS. Added a `home` glyph to `src/components/ui/Icon.tsx` for the "Return to homepage" button.
+
+**Decisions made:**
+
+- **Repurposed (not deleted) the `/self-hosting` route and the `hosting/self-hosting` + `managed-vs-self-hosted` docs** so the existing nav/footer/sitemap/about links stay valid - they now tell the chatbot-only story. Only the redundant full-platform `guides/self-host.mdx` was deleted.
+- **404 reused the shared `il-*` animation system** rather than authoring new keyframes - keeps the CSS surface small and inherits the reduced-motion guard for free.
+- Left the IP-hash internals untouched (the user asked only to stop *mentioning* it; the behavior is unchanged and not surfaced to recruiters).
+
+**Open questions / follow-ups:**
+
+- typecheck + key-leak green (336 source files); no dangling `/guides/self-host` links and no "recruiter IP" left in `docs/`. Run vitest + `next build` natively.
+- The Mintlify docs should be rebuilt locally to confirm the removed page + nav entry render cleanly.

@@ -5,7 +5,7 @@
 ## How this file relates to the others
 
 - [`beta.md`](./beta.md) - frozen Beta build plan + the complete shipped-features checklist.
-- [`plan-v1.md`](./plan-v1.md) - the 9-stage v1.0 plan currently in flight.
+- [`plan-v1.md`](./plan-v1.md) - frozen v1.0 build plan + the complete shipped-features checklist.
 - **This file (`plan-v2.md`)** - v2.0 items. No commitment to dates or sequencing beyond the priority bands below.
 
 ---
@@ -15,7 +15,7 @@
 | Band   | Meaning                                           | Items                                                       |
 | ------ | ------------------------------------------------- | ----------------------------------------------------------- |
 | **P0** | Strong community / SEO signal once v1.0 is live   | Multi-bot generation, blog section                          |
-| **P1** | High-value, well-scoped                           | Portfolio scraping, knowledge graph viz, walkthrough modals |
+| **P1** | High-value, well-scoped                           | Advanced answering controls, guided knowledge-base builder, portfolio scraping, knowledge graph viz, walkthrough modals |
 | **P2** | Nice-to-haves with clear UX impact                | Feedback modal, upvote/downvote                             |
 | **P3** | Single-button "Delete all knowledge base" cleanup |                                                             |
 
@@ -29,12 +29,28 @@
 
 **v2.0 scope:**
 
-- Lift the one-bot-per-user assumption. Each user can create N bots; the dashboard's bot switcher (currently a placeholder) becomes load-bearing.
+- Lift the one-bot-per-user assumption. Each user can create N bots.
+- **Bot switcher + management (UI already stubbed in v1.0):** clicking the current bot name in the top-left sidebar opens a dropdown listing all the user's bots; below the list a **"Create New Bot"** button (shipped in v1.0 with a "coming soon" chip) opens the bot-creation modal. v2.0 wires that button to a real create flow and lets the user manage (rename/duplicate/delete/switch) every bot from this list.
+- **Create from preset:** the v1.0 "Save bot settings" feature stores reusable presets (`bot_presets` table). The Create-New-Bot modal should offer "Start from a saved preset" so a user can spin up a new bot pre-filled with a previous bot's configuration.
 - Per-bot pricing: still free per ProBot, but the user's BYO LLM key now amortises across multiple bots - make that explicit in copy.
 - Per-bot domains: each bot keeps its `/u/[username]/[botSlug]/chat` URL (today the URL is `/u/[username]/chat`).
 - Migration: existing single-bot users get a default `botSlug` of `default` so their URL stays meaningful (`/u/jane/default/chat`).
 
 **Risks:** dashboard analytics queries (`conversations_bot_started_idx`, lead lists, audit logs) all assume one-bot scope. Each needs a `[botId]` filter parameter and a `selectedBotId` cookie / dashboard URL state.
+
+---
+
+### Dynamic "thinking" / generating messages
+
+**Today:** each bot stores a small `loading_messages` array (JSONB) and the chat UI cycles through them while the LLM responds. They're static per bot.
+
+**v2.0 scope:**
+
+- Let owners author richer, context-aware "thinking" messages - e.g. a Claude-style "Thinking…", "Searching your resume…", "Drafting a reply…" sequence that reflects the actual stage of generation (retrieval vs. completion), making the wait feel responsive and engaging.
+- Optionally surface a live status string driven by the pipeline phase (embedding lookup → retrieval → LLM call) rather than a fixed cycle, so the message tracks what the bot is really doing.
+- A small editor in Bot configuration to add/reorder these messages, with sensible defaults seeded for new bots.
+
+**Why post-v1.0:** the static `loading_messages` already covers the baseline UX; phase-aware streaming status depends on the realtime-transport decision below (SSE/WebSockets).
 
 **Why post-v1.0:** rewrites every dashboard query. Doing it during v1.0 would slow down the polish stages that are higher-value-per-day.
 
@@ -64,6 +80,51 @@
 ---
 
 ## P1 - High-value, well-scoped
+
+### Advanced answering controls (LLM generation settings)
+
+**Today:** Each bot dispatches to the provider with fixed, sensible generation defaults (the adapters accept `maxTokens` / `temperature` but nothing is owner-configurable). Owners can pick provider + model and a personality preset, but not the underlying sampling knobs.
+
+**v2.0 scope:**
+
+- A new **"Answering"** panel in Bot configuration that lets owners tune how the model generates replies:
+  - **Temperature** - creativity vs. determinism.
+  - **Top-p** (nucleus sampling) - probability-mass cutoff.
+  - **Max tokens** - response-length ceiling (separate from the per-message char cap).
+  - **Stop sequences** - up to N strings that end generation.
+  - **Frequency penalty** + **Presence penalty** - discourage repetition / encourage new topics.
+  - **Top-k** - candidate-token cap (providers that support it).
+  - **Seed** - fixed seed for reproducible answers when debugging a bot's voice.
+- **Sensible defaults + "Reset to recommended"** so casual users never have to touch this; the panel is collapsed/advanced by default.
+- **Provider-capability gating:** not every provider exposes every knob (e.g. `top_k`, `seed`, penalties vary across Anthropic / OpenAI / Azure / Gemini). The UI only shows controls the selected provider/model supports, and the dispatch layer drops unsupported params rather than erroring.
+- **Per-bot persistence:** store as a single `generation_settings` JSONB column on `bots` (validated by a Zod schema with min/max clamps) so adding a future knob doesn't need a migration.
+- Each value is range-validated client- and server-side; out-of-range inputs clamp with an inline hint instead of failing the save.
+
+**Risks:** param semantics differ subtly per provider; a value that's safe for one model can degrade another. Mitigation: per-provider min/max/default tables and the capability gating above. Setting `temperature` and `top_p` together is discouraged by some providers - surface a gentle warning, don't hard-block.
+
+**Why post-v1.0:** v1.0's fixed defaults already produce good answers; this is power-user polish that benefits from real usage data on which knobs people actually want.
+
+### Guided knowledge-base builder + custom sections
+
+**Today:** Knowledge comes from Wizard Step 2 (PDF upload + free-text paste) and the `context_text` field. There's no structured, guided way to describe yourself - users stare at a blank box and may miss the details recruiters care about.
+
+**v2.0 scope:**
+
+- A **guided, application-style form** that walks owners through the fields recruiters expect, each optional:
+  - **Basics:** name, professional email, location, headline.
+  - **Education:** degrees, institutions, dates, highlights.
+  - **Career:** roles, companies, dates, responsibilities, achievements.
+  - **Skills:** technical + soft, optionally grouped.
+  - **Projects:** title, description, links, tech stack, outcomes.
+  - **Interests** and other relevant background.
+- Each completed section is compiled into clean, labelled prose and written to the bot's knowledge base (chunked + embedded through the existing pipeline, `source_type='profile'`), so the bot answers from a well-structured profile rather than an unstructured blob.
+- **Custom sections:** an "Add custom section" control where the user supplies a **heading**, a short **description** of what the section covers, and the **value/content**. These are appended to the knowledge base alongside the standard sections - giving full flexibility for anything the standard form doesn't capture (publications, certifications, volunteering, "ask me about…", etc.).
+- Sections are **editable and re-orderable**; re-saving a section re-embeds only that section's chunks (incremental, not a full rebuild).
+- Plays nicely with existing sources: the guided profile, PDFs, pasted text, and (P1) scraped URLs all coexist in one knowledge base.
+
+**Risks:** re-embedding on every keystroke would be wasteful - debounce and only re-embed a section on explicit save. Duplicate facts across the form and an uploaded résumé can cause redundant chunks; the (P1) knowledge-graph view helps surface those.
+
+**Why post-v1.0:** v1.0 ships the raw ingestion pipeline; this is the friendly, conversion-boosting layer on top that's worth designing once the pipeline is stable.
 
 ### Portfolio website scraping for the knowledge base
 

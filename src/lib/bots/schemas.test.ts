@@ -58,7 +58,7 @@ describe("botInput - headline validation", () => {
 });
 
 describe("botInput - contextText validation", () => {
-  // Stage 2: contextText may be empty because knowledge can come entirely
+  // ContextText may be empty because knowledge can come entirely
   // from PDF uploads via /api/bots/[botId]/knowledge.
   it("accepts empty contextText (Stage 2 - PDF-only flows)", () => {
     expect(botInput.safeParse({ ...validInput, contextText: "" }).success).toBe(

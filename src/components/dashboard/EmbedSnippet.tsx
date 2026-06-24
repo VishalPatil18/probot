@@ -2,7 +2,7 @@
 
 import { CopyUrlButton } from "./CopyUrlButton";
 
-// Stage 5: Embed surface shown on the bot detail page. Three copyable
+// Embed surface shown on the bot detail page. Three copyable
 // snippets - public chat URL, <script> tag for embedding the widget, and
 // a hand-rolled HTML signature badge for email clients.
 //
@@ -37,6 +37,16 @@ export function EmbedSnippet({ botId, username, themeColor, origin }: Props) {
         copyLabel="Copy embed"
       />
       <SnippetCard
+        label="npm package"
+        description="Prefer a bundler (Vite, webpack, Next.js)? Install the widget, then import it once and add a <script data-bot-id> tag."
+        snippet="npm i probot-chatbot"
+        copyLabel="Copy command"
+        link={{
+          href: "https://www.npmjs.com/package/probot-chatbot",
+          label: "View on npm",
+        }}
+      />
+      <SnippetCard
         label="Email signature"
         description="Paste the HTML into your Gmail / Apple Mail signature settings."
         snippet={signatureHtml}
@@ -51,11 +61,14 @@ function SnippetCard({
   description,
   snippet,
   copyLabel,
+  link,
 }: {
   label: string;
   description: string;
   snippet: string;
   copyLabel: string;
+  // Optional external link shown under the snippet (e.g. the npm package page).
+  link?: { href: string; label: string };
 }) {
   return (
     <div className="rounded-2xl border border-border-base bg-white p-5">
@@ -64,9 +77,19 @@ function SnippetCard({
         <CopyUrlButton url={snippet} label={copyLabel} />
       </div>
       <p className="mb-3 text-xs text-muted">{description}</p>
-      <pre className="overflow-x-auto rounded-xl border border-border-base bg-neutral-50 px-3 py-2 font-mono text-xs leading-relaxed">
-        <code>{snippet}</code>
+      <pre className="overflow-x-auto rounded-xl bg-neutral-900 px-3.5 py-3 font-mono text-xs leading-relaxed text-neutral-100 ring-1 ring-white/10">
+        <code className="text-neutral-100">{snippet}</code>
       </pre>
+      {link ? (
+        <a
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-block text-xs font-semibold text-brand hover:underline"
+        >
+          {link.label} →
+        </a>
+      ) : null}
     </div>
   );
 }

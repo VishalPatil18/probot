@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import { ThemeColorField } from "@/components/dashboard/settings/ThemeColorField";
 
 import { PROVIDER_NAMES, type ProviderName } from "@/lib/ai/providers";
 import {
@@ -41,7 +43,7 @@ const MODEL_OPTIONS: Record<ProviderName, string[]> = {
   azure: [],
 };
 
-// Stage 7 Phase 4: all four providers ship real adapters now. The Set is
+// All four providers ship real adapters now. The Set is
 // kept (rather than dropped) so a future "experimental" / "beta" gate has
 // a single place to live without rewiring the JSX.
 const STAGE1_ENABLED: ReadonlySet<ProviderName> = new Set([
@@ -69,6 +71,7 @@ type InitialBot = {
   contextTokenCap?: number;
   suggestedQuestions: string[] | null;
   customInstructions?: string | null;
+  themeColor?: string;
 };
 
 type Props = {
@@ -82,13 +85,18 @@ type FormState = {
   name: string;
   headline: string;
   personality: Personality;
+  // Bot picture chosen in Step 1; uploaded after the bot row is created (we
+  // need its id). Null = keep the default ProBot icon.
+  botImageFile: File | null;
+  // Per-bot theme color picked in Step 3.
+  themeColor: string;
   contextText: string;
   // PDFs queued in the browser; uploaded after the bot row is created so the
   // /knowledge endpoint can attribute them to a real botId.
   pdfFiles: File[];
   contextTokenCap: number;
   suggestedQuestions: string[];
-  // Stage 7 §FR-002.7: optional free-form prompt addendum captured on Step 3.
+  // Optional free-form prompt addendum captured on Step 3.
   customInstructions: string;
   llmProvider: ProviderName;
   llmModel: string;
@@ -96,11 +104,45 @@ type FormState = {
   // Azure-only extras (ignored when llmProvider !== "azure").
   azureEndpoint: string;
   azureApiVersion: string;
-  // Stage 3 RAG: optional OpenAI key for embedding generation. When present,
+  // RAG: optional OpenAI key for embedding generation. When present,
   // the bot uses semantic search over its knowledge at chat time; when empty,
   // it falls back to the full assembled context (legacy path).
   embeddingApiKey: string;
 };
+
+// Per-file result shape returned by POST /api/bots/[botId]/knowledge.
+type IngestFileResult = {
+  name: string;
+  ok: boolean;
+  error?: string;
+  category?: string;
+};
+
+type IngestFailure = { name: string; error: string };
+
+const INGEST_MESSAGES: Record<string, string> = {
+  file_too_large: "Too large to process.",
+  invalid_file_type: "Not a valid PDF.",
+  pdf_unreadable: "Couldn't read this PDF (encrypted or corrupt).",
+  empty_extract: "No readable text found in this PDF.",
+  too_many_files: "Too many files.",
+  empty_input: "The file was empty.",
+};
+
+function describeIngestFailure(file: IngestFileResult): string {
+  return (
+    (file.category ? INGEST_MESSAGES[file.category] : undefined) ??
+    "Couldn't process this file."
+  );
+}
+
+function collectFailures(
+  files: IngestFileResult[] | undefined,
+): IngestFailure[] {
+  return (files ?? [])
+    .filter((f) => !f.ok)
+    .map((f) => ({ name: f.name, error: describeIngestFailure(f) }));
+}
 
 export function BotFactoryForm({
   username,
@@ -127,6 +169,8 @@ export function BotFactoryForm({
     name: initialBot?.name ?? "",
     headline: initialBot?.headline ?? "",
     personality: initialBot?.personality ?? "professional",
+    botImageFile: null,
+    themeColor: initialBot?.themeColor ?? "#0070dd",
     contextText: initialBot?.contextText ?? "",
     pdfFiles: [],
     contextTokenCap: initialBot?.contextTokenCap ?? CONTEXT_TOKEN_CAP_DEFAULT,
@@ -143,7 +187,11 @@ export function BotFactoryForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdBotId, setCreatedBotId] = useState<string | null>(null);
-  // Stage 7 §FR-002.10: bots are created in draft state; the preview token
+  // PDFs that failed ingestion during submit. Surfaced on Step 5 with a
+  // per-file retry; the bot is already created, so this never blocks the wizard.
+  const [ingestFailures, setIngestFailures] = useState<IngestFailure[]>([]);
+  const [retryingName, setRetryingName] = useState<string | null>(null);
+  // Bots are created in draft state; the preview token
   // returned from POST /api/bots powers the private preview URL on Step 5,
   // and the Publish button flips the live switch via POST /publish.
   const [previewToken, setPreviewToken] = useState<string | null>(null);
@@ -201,7 +249,7 @@ export function BotFactoryForm({
     setSubmitting(true);
     setError(null);
     try {
-      // Stash the BYO key in the (Phase 6) encrypted IndexedDB store BEFORE
+      // Stash the BYO key in the encrypted IndexedDB store BEFORE
       // the network call - so even if the server request hangs, the key is
       // captured locally for the chat UI.
       await setApiKey(form.apiKey);
@@ -213,7 +261,7 @@ export function BotFactoryForm({
           apiVersion: form.azureApiVersion || DEFAULT_AZURE_API_VERSION,
         });
       }
-      // Stage 3 RAG: persist the OpenAI embedding key (when supplied) so the
+      // RAG: persist the OpenAI embedding key (when supplied) so the
       // chat UI can attach it as `x-embedding-api-key` on every chat request.
       // Empty value clears any previously stored key.
       await setEmbeddingApiKey(form.embeddingApiKey);
@@ -228,6 +276,7 @@ export function BotFactoryForm({
           contextText: form.contextText.trim(),
           contextTokenCap: form.contextTokenCap,
           suggestedQuestions: form.suggestedQuestions,
+          themeColor: form.themeColor,
           llmProvider: form.llmProvider,
           llmModel: form.llmModel,
           ...(form.customInstructions.trim().length > 0
@@ -252,9 +301,21 @@ export function BotFactoryForm({
       setPreviewToken(body.bot.previewToken ?? null);
       setPublished(body.bot.isActive ?? false);
 
-      // If PDFs were queued, upload them now that the bot row exists. The
-      // server reassembles `context_text` from all sources, so the manual
-      // text is included as a `manual_text` source when present.
+      // Upload the bot picture now the row exists (id known). Non-fatal: on
+      // failure the bot simply keeps the default ProBot icon.
+      if (form.botImageFile) {
+        const avatarForm = new FormData();
+        avatarForm.append("file", form.botImageFile, form.botImageFile.name);
+        await fetch(`/api/bots/${body.bot.id}/avatar`, {
+          method: "POST",
+          body: avatarForm,
+        }).catch(() => undefined);
+      }
+
+      // If PDFs were queued, upload them now that the bot row exists. The server
+      // processes each file independently and returns per-file results; we
+      // surface any failures inline on Step 5 (retriable) instead of blocking -
+      // the good files are already ingested.
       if (form.pdfFiles.length > 0) {
         const fd = new FormData();
         if (form.contextText.trim().length > 0) {
@@ -273,14 +334,19 @@ export function BotFactoryForm({
           headers: knowledgeHeaders,
           body: fd,
         });
-        if (!kRes.ok) {
-          const kBody = (await kRes.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          setError(
-            kBody.error ?? "Bot saved but PDF ingestion failed. Try again.",
-          );
-          return;
+        const kBody = (await kRes.json().catch(() => ({}))) as {
+          files?: IngestFileResult[];
+          error?: string;
+        };
+        if (kRes.ok) {
+          setIngestFailures(collectFailures(kBody.files));
+        } else {
+          setIngestFailures([
+            {
+              name: "Knowledge",
+              error: kBody.error ?? "Some content couldn't be processed.",
+            },
+          ]);
         }
       }
 
@@ -290,6 +356,40 @@ export function BotFactoryForm({
       setError("Network error. Check your connection and try again.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // Re-upload a single failed PDF without re-submitting the whole bot. On
+  // success the file drops out of the failures list.
+  async function retryFile(name: string): Promise<void> {
+    if (!createdBotId || retryingName) return;
+    const file = form.pdfFiles.find((f) => f.name === name);
+    if (!file) return;
+    setRetryingName(name);
+    try {
+      const fd = new FormData();
+      fd.append("files", file, file.name);
+      const embeddingKey = form.embeddingApiKey.trim();
+      const headers: Record<string, string> = {};
+      if (embeddingKey.length >= 8) {
+        headers["x-embedding-api-key"] = embeddingKey;
+      }
+      const res = await fetch(`/api/bots/${createdBotId}/knowledge`, {
+        method: "POST",
+        headers,
+        body: fd,
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        files?: IngestFileResult[];
+      };
+      const stillFailed = collectFailures(body.files).some(
+        (f) => f.name === name,
+      );
+      if (res.ok && !stillFailed) {
+        setIngestFailures((prev) => prev.filter((f) => f.name !== name));
+      }
+    } finally {
+      setRetryingName(null);
     }
   }
 
@@ -371,14 +471,23 @@ export function BotFactoryForm({
               />
             )}
             {step === 5 && (
-              <StepDeploy
-                username={username}
-                createdBotId={createdBotId}
-                previewToken={previewToken}
-                published={published}
-                publishing={publishing}
-                onPublish={publish}
-              />
+              <>
+                {ingestFailures.length > 0 && (
+                  <IngestFailuresPanel
+                    failures={ingestFailures}
+                    retryingName={retryingName}
+                    onRetry={retryFile}
+                  />
+                )}
+                <StepDeploy
+                  username={username}
+                  createdBotId={createdBotId}
+                  previewToken={previewToken}
+                  published={published}
+                  publishing={publishing}
+                  onPublish={publish}
+                />
+              </>
             )}
 
             {error && (
@@ -507,6 +616,45 @@ function StepIdentity({
       />
       <div className="space-y-5">
         <div>
+          <label className="block text-xs font-semibold mb-1.5">
+            Bot picture
+          </label>
+          <div className="flex items-center gap-4">
+            <BotAvatarPreview file={form.botImageFile} />
+            <div>
+              <label
+                htmlFor="bf-avatar"
+                className="btn btn-secondary !py-2 inline-block cursor-pointer text-xs"
+              >
+                {form.botImageFile ? "Change picture" : "Upload picture"}
+                <input
+                  id="bf-avatar"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) patch("botImageFile", file);
+                  }}
+                />
+              </label>
+              {form.botImageFile ? (
+                <button
+                  type="button"
+                  onClick={() => patch("botImageFile", null)}
+                  className="ml-2 text-xs text-muted hover:text-error"
+                >
+                  Remove
+                </button>
+              ) : null}
+              <p className="mt-1 text-[11px] text-muted">
+                Defaults to the ProBot icon · JPG/PNG/WebP · 2 MB
+              </p>
+            </div>
+          </div>
+        </div>
+        <div>
           <label
             htmlFor="bf-name"
             className="block text-xs font-semibold mb-1.5"
@@ -542,17 +690,129 @@ function StepIdentity({
         <div>
           <label className="block text-xs font-semibold mb-1.5">Bot URL</label>
           <div className="flex items-center border border-border-base rounded-xl overflow-hidden bg-neutral-50">
-            <span className="pl-3 pr-1 text-sm text-muted">probot.com/u/</span>
+            <span className="pl-3 pr-1 text-sm text-muted">pro-bot.dev/u/</span>
             <span className="flex-1 py-2.5 pr-3 text-sm font-mono">
               {username}
             </span>
           </div>
           <p className="text-[11px] text-muted mt-1.5">
-            Slug comes from your username (Stage 1).
+            Slug comes from your username.
           </p>
         </div>
       </div>
     </section>
+  );
+}
+
+// Live preview of the chosen bot picture (or the default ProBot mark). Manages
+// the object URL lifecycle so the blob is revoked when the file changes/clears.
+function BotAvatarPreview({
+  file,
+  sizeClass = "size-16",
+  themeColor,
+}: {
+  file: File | null;
+  sizeClass?: string;
+  themeColor?: string;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) {
+      setUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  if (url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt="Bot picture preview"
+        className={`${sizeClass} shrink-0 rounded-full border border-border-base object-cover`}
+      />
+    );
+  }
+  return (
+    <div
+      className={`grid ${sizeClass} shrink-0 place-items-center rounded-full ${
+        themeColor ? "" : "brand-blue-gradient"
+      }`}
+      style={themeColor ? { background: themeColor } : undefined}
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 40 40" fill="none" className="h-3/5 w-3/5">
+        <circle cx="14" cy="20" r="3.4" fill="#fff" />
+        <circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65" />
+      </svg>
+    </div>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
+
+function IngestFailuresPanel({
+  failures,
+  retryingName,
+  onRetry,
+}: {
+  failures: IngestFailure[];
+  retryingName: string | null;
+  onRetry: (name: string) => void;
+}) {
+  return (
+    <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <p className="text-sm font-semibold text-amber-900">
+        Some files couldn&apos;t be processed
+      </p>
+      <p className="mt-0.5 text-xs text-amber-800">
+        Your bot was created and the rest of your knowledge is saved. Retry the
+        files below, or fix and re-upload them later from settings.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {failures.map((f) => (
+          <li
+            key={f.name}
+            className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs"
+          >
+            <span className="min-w-0 truncate">
+              <span className="font-medium">{f.name}</span>{" "}
+              <span className="text-muted">· {f.error}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => onRetry(f.name)}
+              disabled={retryingName !== null}
+              className="shrink-0 rounded-lg border border-amber-300 px-2.5 py-1 font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+            >
+              {retryingName === f.name ? "Retrying…" : "Retry"}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -671,10 +931,10 @@ function StepKnowledge({
                   <button
                     type="button"
                     onClick={() => removeFile(file.name)}
-                    className="text-xs text-muted hover:text-error"
+                    className="shrink-0 text-red-600 transition-colors hover:text-red-700"
                     aria-label={`Remove ${file.name}`}
                   >
-                    Remove
+                    <TrashIcon />
                   </button>
                 </li>
               ))}
@@ -859,6 +1119,19 @@ function StepPersonality({
           <p className="text-[11px] text-muted mt-1.5">
             Added to the system prompt below personality. Safety rules still
             win. You can edit this later in settings.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold mb-1.5">
+            Theme color
+          </label>
+          <ThemeColorField
+            value={form.themeColor}
+            onChange={(hex) => patch("themeColor", hex)}
+          />
+          <p className="text-[11px] text-muted mt-1.5">
+            Used by your embeddable widget and email signature badge.
           </p>
         </div>
 
@@ -1105,7 +1378,7 @@ function StepDeploy({
   publishing: boolean;
   onPublish: () => void;
 }) {
-  // Stage 4: build the real public URL from the current origin so localhost
+  // Build the real public URL from the current origin so localhost
   // dev, preview deploys, and prod all show the right share link.
   const origin =
     typeof window !== "undefined" && window.location.origin
@@ -1190,7 +1463,7 @@ function StepDeploy({
         ) : null}
 
         <div className="rounded-xl p-4 border border-border-base bg-neutral-50 opacity-60">
-          <p className="text-sm font-semibold">Embed code - Stage 5</p>
+          <p className="text-sm font-semibold">Embed code</p>
           <p className="text-xs text-muted mt-1">Lands with the widget.</p>
         </div>
       </div>
@@ -1201,10 +1474,6 @@ function StepDeploy({
 function LivePreview({ form }: { form: FormState }) {
   const name = form.name.trim() || "Your name";
   const headline = form.headline.trim() || "Your headline";
-  const initials = useMemo(() => {
-    const parts = (form.name || "Your Name").trim().split(/\s+/);
-    return `${parts[0]?.[0] ?? "Y"}${parts[1]?.[0] ?? ""}`.toUpperCase();
-  }, [form.name]);
 
   return (
     // `lg:overflow-y-auto` - internal scroll if the preview card ever
@@ -1216,9 +1485,11 @@ function LivePreview({ form }: { form: FormState }) {
       </p>
       <div className="w-full max-w-[340px] bg-white rounded-2xl border border-border-base shadow-floating overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border-base">
-          <div className="size-10 rounded-full brand-blue-gradient grid place-items-center text-white font-display font-bold">
-            {initials}
-          </div>
+          <BotAvatarPreview
+            file={form.botImageFile}
+            sizeClass="size-10"
+            themeColor={form.themeColor}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold leading-tight truncate">{name}</p>
             <p className="text-[11px] text-muted truncate">{headline}</p>
@@ -1228,14 +1499,27 @@ function LivePreview({ form }: { form: FormState }) {
           <div className="px-3 py-2 text-xs rounded-2xl bg-neutral-100 w-fit max-w-[85%]">
             👋 Hi! Ask me anything.
           </div>
-          {form.suggestedQuestions[0] && (
-            <div className="px-3 py-2 text-xs rounded-2xl bg-brand text-white w-fit max-w-[85%] ml-auto">
-              {form.suggestedQuestions[0]}
+          {form.suggestedQuestions.length > 0 ? (
+            <div className="flex flex-wrap justify-end gap-1.5 pt-1">
+              {form.suggestedQuestions.map((q, i) => (
+                <span
+                  key={`${q}-${i}`}
+                  className="rounded-full border bg-white px-2.5 py-1 text-[11px] font-medium"
+                  style={{ borderColor: form.themeColor, color: form.themeColor }}
+                >
+                  {q}
+                </span>
+              ))}
             </div>
-          )}
+          ) : null}
         </div>
         <div className="px-4 py-3 border-t border-border-base flex items-center gap-2">
           <span className="text-xs text-muted flex-1">Ask anything…</span>
+          <span
+            className="size-7 shrink-0 rounded-lg"
+            style={{ background: form.themeColor }}
+            aria-hidden="true"
+          />
         </div>
       </div>
       <p className="text-xs text-muted mt-4 text-center max-w-[300px]">

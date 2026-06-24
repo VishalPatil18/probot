@@ -20,9 +20,9 @@ export interface AssembleResult {
 // (sourceName, chunkIndex). Each chunk is separated by a blank line so the
 // LLM sees prose-block boundaries.
 //
-// Note (Stage 2 tradeoff): chunkText produces overlapping chunks (default 100
+// Note (tradeoff): chunkText produces overlapping chunks (default 100
 // tokens of overlap) so the same content appears in adjacent chunks. The
-// assembler does NOT dedupe - Stage 3 (RAG) replaces this assembly path
+// assembler does NOT dedupe - the RAG retrieval path replaces this assembly path
 // entirely, so adding dedupe logic here would be code that gets deleted.
 // The 100-token overlap is ~13% redundancy at the default 750-token target;
 // the per-bot `contextTokenCap` absorbs it.
@@ -63,7 +63,7 @@ export function assembleFromChunks(
 
 // Reads all knowledge_base rows for a bot, assembles them under the bot's
 // per-bot `contextTokenCap`, and writes the result back to `bots.context_text`
-// so the Stage 1 chat route can keep reading the same column unchanged.
+// so the chat route can keep reading the same column unchanged.
 export async function assembleAndSaveBotContext(
   botId: string,
 ): Promise<AssembleResult> {

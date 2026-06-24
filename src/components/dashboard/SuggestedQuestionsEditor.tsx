@@ -10,7 +10,7 @@ type Props = {
 const MAX_QUESTIONS = 6;
 const MAX_CHARS = 200;
 
-// Stage 6 §6.5: chip-based suggested questions editor for the settings
+// Chip-based suggested questions editor for the settings
 // page. Mirrors the Bot Factory affordance but is its own component (the
 // wizard step has different copy / spacing).
 //

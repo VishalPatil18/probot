@@ -9,7 +9,7 @@ import { buildTokenUrl } from "@/lib/auth/tokens";
 
 // POST /api/users/me/delete
 //
-// Stage 7 Phase 5 §NFR-C01/C05. Initiates the 7-day deletion grace
+// Initiates the 7-day deletion grace
 // period. The client (DeleteAccountModal) collected a username retype as
 // a GitHub-style confirmation; we re-validate it server-side before
 // scheduling. On success, sends the user an email containing an undo link
@@ -17,7 +17,7 @@ import { buildTokenUrl } from "@/lib/auth/tokens";
 //
 // Idempotent: re-submitting while a deletion is already pending returns
 // `already_requested` rather than scheduling a second purge or resending
-// the email. (Resending the email is a future Phase 6 polish - "I lost
+// the email. (Resending the email is a future polish - "I lost
 // the link, send me a new one.")
 
 const deleteInput = z.object({
@@ -66,7 +66,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Best-effort email send. The grace period and undo flow still work if
-  // the email never makes it out; the dashboard banner (Phase 6) will
+  // the email never makes it out; the dashboard banner (a future addition) will
   // also expose the deletion request, and the user can use the in-app
   // "Cancel deletion" button instead of the email link.
   try {

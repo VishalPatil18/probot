@@ -11,7 +11,7 @@ type Props = {
 
 const DEBOUNCE_MS = 300;
 
-// Stage 6 §6.4: debounced search input for the conversations list. Pushes
+// Debounced search input for the conversations list. Pushes
 // the value to the URL via `router.replace` (so the back button doesn't
 // fill with every keystroke) and wraps the update in `useTransition` so
 // the input stays responsive while the server-rendered list re-fetches.

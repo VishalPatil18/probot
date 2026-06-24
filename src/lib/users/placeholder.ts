@@ -1,6 +1,6 @@
-// Stage 1.5 auto-generates `user-<8hex>` placeholder usernames for OAuth and
+// Auto-generates `user-<8hex>` placeholder usernames for OAuth and
 // magic-link sign-ups so `users.username NOT NULL UNIQUE` is satisfied for
-// every adapter path. Stage 4 forces these users through an onboarding
+// every adapter path. A later step forces these users through an onboarding
 // screen before they reach the dashboard (otherwise public chat URLs would
 // look like `/u/user-abc12345/chat`).
 //

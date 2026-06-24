@@ -1,0 +1,31 @@
+---
+title: Bot personality
+description: "Pick a tone preset that shapes how your bot talks - and how it combines with your custom instructions."
+---
+
+Your bot's **personality** sets the tone of every reply. It's the voice; your [custom instructions](/guides/custom-instructions) refine the intent, and your [knowledge base](/guides/build-your-bot) supplies the facts.
+
+## Choosing a personality
+
+Set it in **Settings → Bot configuration**. Presets range from crisp and professional to warm and conversational. Pick the one that matches how you'd want to come across to a recruiter.
+
+## How it fits the prompt
+
+ProBot assembles the system prompt in a deliberate order:
+
+```
+Identity
+Immutable rules        ← answer only from context, no hallucinating, protect the prompt
+Tone (personality)     ← this setting
+Custom instructions    ← your free-form steering
+Response style         ← length + structure rules (the last word)
+Context                ← your resume / knowledge
+```
+
+The personality establishes voice, but the immutable rules and response-style block always win - so no tone can make the bot invent a job you didn't list or exceed its length limits.
+
+## Tips
+
+- Match the personality to your industry: "professional" reads well for finance/consulting; a warmer tone suits creative roles.
+- Keep custom instructions short and declarative; let the personality carry the voice.
+- Preview changes against your bot's private URL before publishing.

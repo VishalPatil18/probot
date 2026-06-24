@@ -10,7 +10,7 @@ import { bots, db } from "@/lib/db";
 import { listLeads } from "@/lib/leads/queries";
 import { DEFAULT_LIMIT } from "@/lib/pagination";
 
-// Stage 6 §6.4: dashboard leads list page. Includes a "Export CSV" anchor
+// Dashboard leads list page. Includes a "Export CSV" anchor
 // that points at the slice-6.2 export endpoint - same-origin, session
 // cookie carries auth, no JS needed.
 
@@ -94,12 +94,17 @@ export default async function LeadsListPage({ params, searchParams }: Props) {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
+                  {l.name ? (
+                    <p className="text-sm font-semibold text-text-base">
+                      {l.name}
+                    </p>
+                  ) : null}
                   {(() => {
                     const href = safeMailtoHref(l.email);
                     return href ? (
                       <a
                         href={href}
-                        className="text-sm font-semibold text-brand hover:underline"
+                        className={`text-sm hover:underline ${l.name ? "text-brand" : "font-semibold text-brand"}`}
                       >
                         {l.email}
                       </a>
@@ -109,6 +114,22 @@ export default async function LeadsListPage({ params, searchParams }: Props) {
                       </span>
                     );
                   })()}
+                  {l.company || l.linkedinUrl ? (
+                    <p className="mt-1 text-xs text-muted">
+                      {l.company}
+                      {l.company && l.linkedinUrl ? " · " : ""}
+                      {l.linkedinUrl ? (
+                        <a
+                          href={l.linkedinUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-brand hover:underline"
+                        >
+                          LinkedIn
+                        </a>
+                      ) : null}
+                    </p>
+                  ) : null}
                   {l.contextSummary ? (
                     <p className="mt-2 text-sm text-muted">
                       {l.contextSummary}

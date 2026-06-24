@@ -4,7 +4,7 @@ import { listAllLeadsForExport } from "@/lib/leads/queries";
 
 // GET /api/bots/[botId]/leads/export
 //
-// Stage 6 §6.4: CSV download of every captured lead for this bot. Streams
+// CSV download of every captured lead for this bot. Streams
 // a Content-Disposition: attachment response so the browser triggers a
 // file download with a date-stamped filename.
 //
@@ -34,7 +34,10 @@ export async function GET(
 
   const csv = toCsv(rows, [
     { header: "captured_at", cell: (r) => isoDate(r.capturedAt) },
+    { header: "name", cell: (r) => r.name ?? "" },
     { header: "email", cell: (r) => r.email },
+    { header: "company", cell: (r) => r.company ?? "" },
+    { header: "linkedin_url", cell: (r) => r.linkedinUrl ?? "" },
     { header: "bot_name", cell: () => bot.name },
     { header: "context_summary", cell: (r) => r.contextSummary ?? "" },
     { header: "conversation_id", cell: (r) => r.conversationId ?? "" },

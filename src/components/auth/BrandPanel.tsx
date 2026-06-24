@@ -17,12 +17,13 @@ export function BrandPanel() {
         </span>
       </Link>
 
-      <div className="relative z-10 max-w-md">
+      <div className="relative z-10 max-w-md mx-auto">
         <h2 className="font-display text-4xl font-extrabold tracking-tight leading-[1.08] mb-6">
           Your career, answering questions while you sleep.
         </h2>
         <p className="text-white/50 text-sm leading-relaxed mb-6 -mt-3">
-          Free to use · bring your own LLM key · stored locally, never tracked.
+          Free &amp; open source · four LLM providers · keys encrypted, never
+          tracked.
         </p>
         <div className="bg-white/5 backdrop-blur rounded-2xl border border-white/10 p-5">
           <div className="flex items-center gap-3 pb-3 border-b border-white/10 mb-3">
@@ -30,7 +31,7 @@ export function BrandPanel() {
               <BotIcon />
             </div>
             <div>
-              <p className="text-sm font-bold">Jane&apos;s AI Recruiter</p>
+              <p className="text-sm font-bold">Jane&apos;s AI Assistant</p>
               <p className="text-[11px] text-white/50">
                 ● answered 47 recruiters this week
               </p>
@@ -50,13 +51,13 @@ export function BrandPanel() {
 
       <div className="relative z-10 flex items-center gap-6 text-sm text-white/50">
         <span className="flex items-center gap-1.5">
-          <CodeIcon /> Free to use
+          <CodeIcon /> Free &amp; open source
         </span>
         <span className="flex items-center gap-1.5">
-          <KeyIcon /> Your own LLM key
+          <KeyIcon /> 4 providers, BYO key
         </span>
         <span className="flex items-center gap-1.5">
-          <LockIcon /> Keys stay local
+          <LockIcon /> Encrypted · no telemetry
         </span>
       </div>
     </div>
