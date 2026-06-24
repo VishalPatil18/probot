@@ -38,13 +38,21 @@ ProBot is built spec-first: write the spec, derive the plan, then ship in small,
 
 ## Embed it anywhere
 
-Add a ProBot to any site with one script tag (or `npm install probot-chatbot`):
+Add a ProBot to any site with one script tag, or install the [`probot-chatbot`](https://www.npmjs.com/package/probot-chatbot) npm package:
 
 ```html
-<script src="https://unpkg.com/probot-chatbot@latest/dist/probot-chatbot.js" data-bot-id="YOUR_BOT_ID" async></script>
+<script
+  src="https://unpkg.com/probot-chatbot@latest/dist/probot-chatbot.js"
+  data-bot-id="YOUR_BOT_ID"
+  async
+></script>
 ```
 
-See [packages/probot-chatbot](packages/probot-chatbot) and [PUBLISHING.md](PUBLISHING.md).
+```bash
+npm i probot-chatbot
+```
+
+npm: [npmjs.com/package/probot-chatbot](https://www.npmjs.com/package/probot-chatbot) · See [packages/probot-chatbot](packages/probot-chatbot).
 
 ## How it works
 

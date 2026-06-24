@@ -34,6 +34,27 @@ To put the chat directly on your own site, add a one-line script tag:
 
 It injects a floating chat bubble that opens an iframe-isolated chat surface. The widget talks to your hosted chat endpoint, so your LLM key is **never** exposed to the embedding site - the visitor uses your hosted endpoint, not your key. Copy the exact snippet (with your real bot ID prefilled) from the **Embed** section of your dashboard.
 
+### Install via npm
+
+Prefer a bundler (Vite, webpack, Next.js)? The widget is published on npm as [`probot-chatbot`](https://www.npmjs.com/package/probot-chatbot):
+
+```bash
+npm i probot-chatbot
+```
+
+Then import it once for its side effect and add a `<script>` tag carrying your bot ID:
+
+```js
+// app entry - importing mounts the widget
+import "probot-chatbot";
+```
+
+```html
+<script data-bot-id="00000000-0000-0000-0000-000000000000"></script>
+```
+
+Package page: [npmjs.com/package/probot-chatbot](https://www.npmjs.com/package/probot-chatbot).
+
 ## Which should I use?
 
 Use the **public URL** when you want a clean link to share. Use the **embed widget** when you want recruiters to chat without leaving your portfolio. Many people use both.

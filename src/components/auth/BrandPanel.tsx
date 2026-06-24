@@ -17,12 +17,13 @@ export function BrandPanel() {
         </span>
       </Link>
 
-      <div className="relative z-10 max-w-md">
+      <div className="relative z-10 max-w-md mx-auto">
         <h2 className="font-display text-4xl font-extrabold tracking-tight leading-[1.08] mb-6">
           Your career, answering questions while you sleep.
         </h2>
         <p className="text-white/50 text-sm leading-relaxed mb-6 -mt-3">
-          Free &amp; open source · four LLM providers · keys encrypted, never tracked.
+          Free &amp; open source · four LLM providers · keys encrypted, never
+          tracked.
         </p>
         <div className="bg-white/5 backdrop-blur rounded-2xl border border-white/10 p-5">
           <div className="flex items-center gap-3 pb-3 border-b border-white/10 mb-3">

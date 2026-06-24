@@ -15,7 +15,7 @@
 | Band   | Meaning                                           | Items                                                       |
 | ------ | ------------------------------------------------- | ----------------------------------------------------------- |
 | **P0** | Strong community / SEO signal once v1.0 is live   | Multi-bot generation, blog section                          |
-| **P1** | High-value, well-scoped                           | Portfolio scraping, knowledge graph viz, walkthrough modals |
+| **P1** | High-value, well-scoped                           | Advanced answering controls, guided knowledge-base builder, portfolio scraping, knowledge graph viz, walkthrough modals |
 | **P2** | Nice-to-haves with clear UX impact                | Feedback modal, upvote/downvote                             |
 | **P3** | Single-button "Delete all knowledge base" cleanup |                                                             |
 
@@ -80,6 +80,51 @@
 ---
 
 ## P1 - High-value, well-scoped
+
+### Advanced answering controls (LLM generation settings)
+
+**Today:** Each bot dispatches to the provider with fixed, sensible generation defaults (the adapters accept `maxTokens` / `temperature` but nothing is owner-configurable). Owners can pick provider + model and a personality preset, but not the underlying sampling knobs.
+
+**v2.0 scope:**
+
+- A new **"Answering"** panel in Bot configuration that lets owners tune how the model generates replies:
+  - **Temperature** - creativity vs. determinism.
+  - **Top-p** (nucleus sampling) - probability-mass cutoff.
+  - **Max tokens** - response-length ceiling (separate from the per-message char cap).
+  - **Stop sequences** - up to N strings that end generation.
+  - **Frequency penalty** + **Presence penalty** - discourage repetition / encourage new topics.
+  - **Top-k** - candidate-token cap (providers that support it).
+  - **Seed** - fixed seed for reproducible answers when debugging a bot's voice.
+- **Sensible defaults + "Reset to recommended"** so casual users never have to touch this; the panel is collapsed/advanced by default.
+- **Provider-capability gating:** not every provider exposes every knob (e.g. `top_k`, `seed`, penalties vary across Anthropic / OpenAI / Azure / Gemini). The UI only shows controls the selected provider/model supports, and the dispatch layer drops unsupported params rather than erroring.
+- **Per-bot persistence:** store as a single `generation_settings` JSONB column on `bots` (validated by a Zod schema with min/max clamps) so adding a future knob doesn't need a migration.
+- Each value is range-validated client- and server-side; out-of-range inputs clamp with an inline hint instead of failing the save.
+
+**Risks:** param semantics differ subtly per provider; a value that's safe for one model can degrade another. Mitigation: per-provider min/max/default tables and the capability gating above. Setting `temperature` and `top_p` together is discouraged by some providers - surface a gentle warning, don't hard-block.
+
+**Why post-v1.0:** v1.0's fixed defaults already produce good answers; this is power-user polish that benefits from real usage data on which knobs people actually want.
+
+### Guided knowledge-base builder + custom sections
+
+**Today:** Knowledge comes from Wizard Step 2 (PDF upload + free-text paste) and the `context_text` field. There's no structured, guided way to describe yourself - users stare at a blank box and may miss the details recruiters care about.
+
+**v2.0 scope:**
+
+- A **guided, application-style form** that walks owners through the fields recruiters expect, each optional:
+  - **Basics:** name, professional email, location, headline.
+  - **Education:** degrees, institutions, dates, highlights.
+  - **Career:** roles, companies, dates, responsibilities, achievements.
+  - **Skills:** technical + soft, optionally grouped.
+  - **Projects:** title, description, links, tech stack, outcomes.
+  - **Interests** and other relevant background.
+- Each completed section is compiled into clean, labelled prose and written to the bot's knowledge base (chunked + embedded through the existing pipeline, `source_type='profile'`), so the bot answers from a well-structured profile rather than an unstructured blob.
+- **Custom sections:** an "Add custom section" control where the user supplies a **heading**, a short **description** of what the section covers, and the **value/content**. These are appended to the knowledge base alongside the standard sections - giving full flexibility for anything the standard form doesn't capture (publications, certifications, volunteering, "ask me about…", etc.).
+- Sections are **editable and re-orderable**; re-saving a section re-embeds only that section's chunks (incremental, not a full rebuild).
+- Plays nicely with existing sources: the guided profile, PDFs, pasted text, and (P1) scraped URLs all coexist in one knowledge base.
+
+**Risks:** re-embedding on every keystroke would be wasteful - debounce and only re-embed a section on explicit save. Duplicate facts across the form and an uploaded résumé can cause redundant chunks; the (P1) knowledge-graph view helps surface those.
+
+**Why post-v1.0:** v1.0 ships the raw ingestion pipeline; this is the friendly, conversion-boosting layer on top that's worth designing once the pipeline is stable.
 
 ### Portfolio website scraping for the knowledge base
 

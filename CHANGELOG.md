@@ -12,13 +12,12 @@ All notable changes to **ProBot** are documented in this file.
 
 ## 2026-06-24 - OSS packaging, docs & polish
 
-- **`probot-chatbot` npm package** - the embeddable widget is now a publishable package (`packages/probot-chatbot`) reusing the platform's widget source; install via `npm install probot-chatbot` or a one-line unpkg `<script>`. See [PUBLISHING.md](PUBLISHING.md).
+- **`probot-chatbot` npm package** - the embeddable widget is now a publishable package (`packages/probot-chatbot`) reusing the platform's widget source; install via `npm install probot-chatbot` or a one-line unpkg `<script>`.
 - **Open source, front and center** - "free & open source (MIT)" called out on the landing page, footer, and docs.
 - **README slimmed down** - minimal README linking the website + docs, with details split into [QUICKSTART.md](QUICKSTART.md), [ARCHITECTURE.md](ARCHITECTURE.md), [BYO-KEY.md](BYO-KEY.md), [KEY-STORAGE.md](KEY-STORAGE.md); roadmap section removed; Spec-Driven Development noted.
 - **Justified body text** app-wide via a single base-layer rule.
 - **Removed internal "Stage N" labels** from the website, docs, and source comments.
 - **Contributor guardrails** - [`.github/CODEOWNERS`](.github/CODEOWNERS) + a step-by-step [branch-protection guide](GITHUB-BRANCH-PROTECTION.md) for `main`/`dev`.
-- **Video tutorial script** ([BOT-TUTORIAL-SCRIPT.md](BOT-TUTORIAL-SCRIPT.md)) for an AI video generator.
 
 ## v0.1.0 - 2026-06-18 - Stage 1 close-out
 

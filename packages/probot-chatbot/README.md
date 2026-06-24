@@ -1,5 +1,9 @@
 # probot-chatbot
 
+[![npm](https://img.shields.io/npm/v/probot-chatbot.svg)](https://www.npmjs.com/package/probot-chatbot)
+
+> Install: `npm i probot-chatbot` · npm: [npmjs.com/package/probot-chatbot](https://www.npmjs.com/package/probot-chatbot)
+
 Embed a [ProBot](https://pro-bot.dev) AI chatbot on any website with a single script tag. ProBot turns your resume into an AI assistant that answers recruiters' questions in your voice, 24/7 - BYO LLM key, free and open source.
 
 ## Quick start (no build step)
@@ -19,7 +23,7 @@ Copy the exact snippet (with your real bot ID prefilled) from the **Embed** sect
 ## Install via npm
 
 ```bash
-npm install probot-chatbot
+npm i probot-chatbot
 ```
 
 Then either:
@@ -54,6 +58,7 @@ The widget is a tiny (~8 KB), dependency-free, iframe-isolated chat surface. It 
 
 ## Links
 
+- npm: [npmjs.com/package/probot-chatbot](https://www.npmjs.com/package/probot-chatbot) (`npm i probot-chatbot`)
 - Website: [pro-bot.dev](https://pro-bot.dev)
 - Docs: [pro-bot.dev/docs](https://pro-bot.dev/docs)
 - Embed & share guide: [pro-bot.dev/docs/embed-share](https://pro-bot.dev/docs/embed-share)
