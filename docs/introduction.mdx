@@ -5,9 +5,20 @@ description: "ProBot is a chatbot platform that turns your resume into a recruit
 
 ## What ProBot is
 
-ProBot is a multi-tenant, open-source platform for job seekers. You paste your resume and bio, pick an LLM provider (Anthropic, OpenAI, Azure OpenAI, or Google), and paste **your own API key**. ProBot keeps the key only in your browser's `localStorage` and forwards it on each chat request - the server never sees, logs, or persists it.
+ProBot is a multi-tenant, open-source platform for job seekers. You paste your resume and bio, pick an LLM provider (Anthropic, OpenAI, Azure OpenAI, or Google), and paste **your own API key**. ProBot keeps the key only in your browser's `localStorage` and forwards it on each chat request. The server never sees, logs, or persists it.
 
 Recruiters then chat with your bot at a public URL or via an embeddable `<script>` widget.
+
+<Tip>New here? Watch a one-minute live demo below!</Tip>
+<Frame>
+  <video
+    src="https://res.cloudinary.com/dbjdu0hvl/video/upload/v1782434715/probot/demo_mn8yv1.mp4"
+    title="How to create a bot on ProBot"
+    className="w-full rounded-xl"
+    controls
+    playsInline
+  />
+</Frame>
 
 <Info>
   **ProBot is free and open source (MIT).** Read every line, fork it, audit the
@@ -38,22 +49,22 @@ Recruiters then chat with your bot at a public URL or via an embeddable `<script
 
 Most "AI chatbot for your resume" products either ask you to upload your resume to an opaque service or bill you per recruiter conversation. ProBot does neither:
 
-- **The hosted version is free.** You pay only your own provider (Anthropic, OpenAI, Azure, or Google) at their normal per-token rate.
-- **Your key stays on your device.** It rides each chat request as an `x-llm-api-key` header straight from your browser to the provider. ProBot's server forwards it; it never stores it.
-- **The code is open.** [MIT-licensed on GitHub](https://github.com/vishalpatil18/probot) - fork it, self-host it, or audit the key path yourself.
+- **The hosted version is free:** You pay only your own provider (Anthropic, OpenAI, Azure, or Google) at their normal per-token rate.
+- **Your key stays on your device:** It rides each chat request as an `x-llm-api-key` header straight from your browser to the provider. ProBot's server forwards it; it never stores it.
+- **The code is open:** [MIT-licensed on GitHub](https://github.com/vishalpatil18/probot) - fork it, self-host it, or audit the key path yourself.
 
 ## What you can do today
 
 - **Build a bot** from a 5-step factory: identity → knowledge (resume text) → personality preset → AI model + key → deploy.
 - **Chat with your bot** in the in-dashboard preview using your own key.
 - **Pick a provider** you already use: Anthropic Claude, OpenAI GPT, Azure OpenAI, or Google Gemini (stub).
-- **Trust defense-in-depth security.** ~35 prompt-injection patterns, 4 output-leakage checks, Unicode normalization before pattern matching, markdown rendered safely.
+- **Trust defense-in-depth security** & has ~35 prompt-injection patterns, 4 output-leakage checks, Unicode normalization before pattern matching, markdown rendered safely.
 
 The public chat URL, embeddable widget, lead capture, and analytics are on the [roadmap](/release-notes/roadmap).
 
 ## How this documentation is organized
 
-- **Get started** - install ProBot locally and ship a bot.
-- **Concepts** - the BYO-key transport, defense-in-depth security, system architecture, and what's shipped vs. planned.
-- **Guides** - task-oriented walkthroughs (build a bot, self-host, embed the widget).
-- **API reference** - every `/api/*` route with request/response shape, status codes, and error envelopes.
+- **Get started**: install ProBot locally and ship a bot.
+- **Concepts**: the BYO-key transport, defense-in-depth security, system architecture, and what's shipped vs. planned.
+- **Guides**: task-oriented walkthroughs (build a bot, self-host, embed the widget).
+- **API reference**: every `/api/*` route with request/response shape, status codes, and error envelopes.

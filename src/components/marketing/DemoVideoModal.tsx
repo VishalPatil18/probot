@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/ui/Icon";
 
-// Landing-page "Watch demo" button + borderless video modal. The video URL is
-// build-time injected via NEXT_PUBLIC_DEMO_VIDEO_URL (e.g. a YouTube embed
-// URL). Until that's set, the modal shows a "coming soon" poster instead of a
-// broken embed. Closing is a pure overlay dismiss - no navigation - so the
-// page's scroll position is preserved. Esc and backdrop click also close.
-const VIDEO_URL = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? "";
+// Landing-page "See a live demo" button + borderless video modal. The video
+// autoplays with sound when the modal opens and exposes the browser's native
+// player controls (play/pause, scrub, volume, speed, fullscreen). Replace the
+// placeholder URL below with the real Cloudinary asset link (or set
+// NEXT_PUBLIC_DEMO_VIDEO_URL at build time).
+const VIDEO_URL =
+  "https://res.cloudinary.com/dbjdu0hvl/video/upload/v1782434715/probot/demo_mn8yv1.mp4";
 
 export function DemoVideoModal() {
   const [open, setOpen] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -21,6 +23,28 @@ export function DemoVideoModal() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  // Autoplay with sound when the modal opens. Opening is a user gesture, so
+  // most browsers allow audible autoplay; if one still blocks it, fall back to
+  // muted playback so the video at least plays - the native controls then let
+  // the viewer unmute.
+  useEffect(() => {
+    if (!open) return;
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = false;
+    try {
+      const played = video.play();
+      if (played && typeof played.catch === "function") {
+        played.catch(() => {
+          video.muted = true;
+          void video.play()?.catch(() => {});
+        });
+      }
+    } catch {
+      // jsdom / autoplay blocked - safe to ignore.
+    }
   }, [open]);
 
   return (
@@ -43,41 +67,29 @@ export function DemoVideoModal() {
             role="dialog"
             aria-modal="true"
             aria-label="ProBot demo video"
-            className="relative w-full max-w-3xl"
+            className="relative w-[90vw] max-w-[1400px] md:w-[70vw]"
             onClick={(event) => event.stopPropagation()}
           >
             <button
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close"
-              className="absolute -top-7 right-1 text-white/80 hover:text-white"
+              className="absolute -top-7 right-1 text-white/80 transition-colors hover:text-white"
             >
               <CloseIcon />
             </button>
 
-            {VIDEO_URL ? (
-              <div className="aspect-video overflow-hidden rounded-xl bg-black">
-                <iframe
-                  src={VIDEO_URL}
-                  title="ProBot demo"
-                  className="h-full w-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            ) : (
-              <div className="grid aspect-video place-items-center rounded-xl bg-neutral-900 px-6 text-center text-white">
-                <div>
-                  <p className="font-display text-2xl font-bold">
-                    Demo coming soon
-                  </p>
-                  <p className="mx-auto mt-2 max-w-sm text-sm text-white/70">
-                    A one-minute walkthrough is on the way. In the meantime,
-                    chat with a live bot.
-                  </p>
-                </div>
-              </div>
-            )}
+            <div className="aspect-video overflow-hidden rounded-xl bg-black">
+              <video
+                ref={videoRef}
+                src={VIDEO_URL}
+                className="h-full w-full"
+                autoPlay
+                playsInline
+                controls
+                controlsList="nodownload"
+              />
+            </div>
           </div>
         </div>
       ) : null}

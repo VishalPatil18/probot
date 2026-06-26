@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://pro-bot.dev"><strong>Website</strong></a> ·
   <a href="https://pro-bot.dev/docs"><strong>Docs</strong></a> ·
-  <a href="https://github.com/vishalpatil18/probot"><strong>GitHub</strong></a>
+  <a href="https://www.npmjs.com/package/probot-chatbot"><strong>Package</strong></a>
 </p>
 
 <p align="center">
@@ -20,6 +20,7 @@
   <img src="https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white" alt="Next.js 14">
   <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5.6">
   <img src="https://img.shields.io/badge/LLM-BYO%20Key-2563eb" alt="BYO LLM Key">
+  <img src="https://img.shields.io/npm/v/probot-chatbot.svg" alt="pro-bot npm package">
 </p>
 
 ---
@@ -32,6 +33,13 @@ ProBot is built spec-first: write the spec, derive the plan, then ship in small,
 
 ## Get started
 
+<p align="center">
+  <video src="https://res.cloudinary.com/dbjdu0hvl/video/upload/v1782434715/probot/demo_mn8yv1.mp4" controls width="720">
+    Demo - your viewer doesn't support inline playback. <a src="https://res.cloudinary.com/dbjdu0hvl/video/upload/v1782434715/probot/demo_mn8yv1.mp4">Watch it directly.</a>
+  </video>
+</p>
+
+- **Watch the demo:** a one-minute walkthrough of building a bot.
 - **Use it:** [pro-bot.dev](https://pro-bot.dev) - sign up and build a bot in minutes.
 - **Run it locally:** [QUICKSTART.md](QUICKSTART.md)
 - **Read the docs:** [pro-bot.dev/docs](https://pro-bot.dev/docs)

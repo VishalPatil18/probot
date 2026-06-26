@@ -1,28 +1,153 @@
 ---
-title: Welcome to the ProBot blog
-description: "Our first post - a placeholder template while we get the blog rolling."
+title: Welcome to ProBot
+description: "The motivation and journey behind ProBot."
 ---
 
-*Posted by the ProBot team*
-
-> This is a template post (placeholder content). Real articles are on the way.
-
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-
-## What you'll find here
-
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-- Lorem ipsum dolor sit amet
-- Consectetur adipiscing elit
-- Sed do eiusmod tempor incididunt
-
-## A second section
-
-Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
-
-Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
+_By [Vishal Patil](https://www.linkedin.com/in/vishalrameshpatil/)_
 
 ---
 
-*Want to be notified when we publish real posts? Follow the project on [GitHub](https://github.com/vishalpatil18/probot).*
+<p align="justify">
+  Every great tool starts as someone's personal annoyance. ProBot is no
+  exception, so let me tell you how it began.
+</p>
+
+## The problem: I kept missing recruiters
+
+<p align="justify">
+  It always played out the same way. A recruiter would reach out with a genuine
+  query or a screening message to get basic details, and by the time I actually
+  saw it, the moment had passed. Sometimes it was the time difference, they
+  messaged during their morning, I read it during my midnight. Sometimes I was
+  heads-down on a project for days. And sometimes the message simply drowned in
+  a cluttered inbox, three pages deep, never to be seen again.
+</p>
+
+<p align="justify">
+  The opportunities were real. My availability wasn't. There had to be a better
+  way than hoping I'd refresh my inbox at exactly the right time.
+</p>
+
+## So I built VAi
+
+<p align="justify">
+  That frustration led me to build **[VAi](https://vishalpatil.vercel.app/)** my
+  personal AI assistant that lives right on my portfolio. VAi answers any
+  question a recruiter might ask about me, **in my voice**, grounded in my real
+  professional data: my
+  [resume](https://vishalpatil.vercel.app/Resume_Vishal_Patil.pdf), my
+  [LinkedIn](https://www.linkedin.com/in/vishalrameshpatil/) profile, and my
+  [portfolio site](https://vishalpatil.vercel.app/). You ask, VAi answers on my
+  behalf, 24/7, no matter the timezone or how buried my inbox is.
+</p>
+
+<Tip>
+  Go [try it out](https://vishalpatil.vercel.app/). It's genuinely fun. Ask it
+  anything, poke at it, play around, **eat up my tokens!** <br /> (Ha ha - just
+  kidding. It won't actually let you, because it's wrapped in rate limiters,
+  input sanitization, and all kinds of guardrails. But you're very welcome to
+  try.)
+</Tip>
+
+## VAi went viral
+
+<p align="justify">
+  I didn't expect what happened next. The story of VAi took off. People loved
+  it. My peers loved it. Recruiters _especially_ loved it. Chatting with a
+  candidate's bot turned out to be far more delightful than skimming yet another
+  PDF resume.
+</p>
+
+<p align="justify">It even got featured on CNBC.</p>
+
+<Note>
+  <p align="justify">
+    [These 2 job seekers built AI chatbots to talk to recruiters for them: ‘It
+    has opened up a lot of opportunities for
+    me’](https://www.cnbc.com/2026/04/30/these-2-job-seekers-built-ai-chatbots-to-talk-to-recruiters-for-them.html).
+  </p>
+</Note>
+
+<p align="justify">
+  And then the messages started coming in. Not just from developers, from
+  designers, marketers, students, career-switchers, people from every field. All
+  asking the same thing:
+</p>
+
+> "This is amazing. How do I get a bot like VAi for myself?"
+
+<p align="justify">
+  Most of them couldn't build one from scratch. But all of them wanted one. That
+  was the spark. I realized the real problem wasn't _my_ missed recruiter
+  replies anymore, it was that **everyone** deserved their own VAi, without
+  needing to write a single line of code.
+</p>
+
+<p align="justify">So I set out to solve it. And **ProBot** was born.</p>
+
+## See it in action
+
+<p align="justify">
+  Here's a quick walkthrough of building your own bot on ProBot, start to
+  finish:
+</p>
+
+<Frame>
+  <video
+    src="https://res.cloudinary.com/dbjdu0hvl/video/upload/v1782434715/probot/demo_mn8yv1.mp4"
+    title="How to create a bot on ProBot"
+    className="w-full rounded-xl"
+    controls
+    playsInline
+  />
+</Frame>
+
+## What ProBot actually is
+
+<p align="justify">
+  ProBot turns _anyone's_ resume into an AI representative, the same idea as
+  VAi, but as a product you can set up in minutes. Paste your career data, pick
+  a personality, bring your own LLM key, and share a public link or drop a
+  one-line widget onto your own site. Recruiters chat with the real you, on your
+  terms.
+</p>
+
+A few decisions shaped what ProBot became:
+
+<p align="justify">
+  **Building for the community made it open source and free:** VAi was a gift to
+  recruiters, ProBot is a gift to everyone job-hunting. There's no paywall and
+  no usage meter. You bring your own model key, so you only ever pay your
+  provider directly (often pennies, or nothing on free tiers). The entire
+  project is MIT-licensed and [open on
+  GitHub](https://github.com/vishalpatil18/probot) for anyone to read, fork, and
+  audit.
+</p>
+
+<p align="justify">
+  **Building for non-developers made ProBot a hosting platform:** The people
+  asking for a VAi of their own didn't want to manage servers so ProBot hosts
+  your bot for you. Sign up, build, share. Nothing to deploy.
+</p>
+
+<p align="justify">
+  **And for the security-conscious, you can self-host the bot:** If you'd rather
+  not trust any operator with your setup, run the tiny `probot-bot` runtime on
+  your own domain while the platform handles the heavy lifting, your LLM key
+  never leaves your infrastructure.
+</p>
+
+## What's coming next
+
+<p align="justify">
+  This is just the origin story. In the posts ahead, I'll pull back the curtain
+  on **how I actually built ProBot** the architecture, the design decisions and
+  trade-offs, the spec-driven development workflow that kept it on the rails,
+  and a tour through ProBot's full lifecycle from idea to launch.
+</p>
+
+<p align="justify">If that sounds like your kind of deep dive, stick around.</p>
+
+---
+
+_Ready to build your own representative? [Get started free](https://pro-bot.dev/register) or follow along on [GitHub](https://github.com/vishalpatil18/probot)._
