@@ -3083,3 +3083,25 @@ _Tests + types:_
 
 - typecheck + key-leak green (336 source files); no dangling `/guides/self-host` links and no "recruiter IP" left in `docs/`. Run vitest + `next build` natively.
 - The Mintlify docs should be rebuilt locally to confirm the removed page + nav entry render cleanly.
+
+### 2026-06-29 17:55 - Bot Factory Step 5: real embed snippet replaces placeholder
+
+**What was asked to do:** Replace the placeholder "Embed code / Lands with the widget." text in Bot Factory Step 5 (Deploy) with the actual, dynamic `<script>` snippet the user can copy-paste into their site - prefilled with their bot id and the current origin, generated automatically when they finish creating the bot.
+
+**What I did:**
+
+- Replaced the disabled placeholder div in `StepDeploy` ([src/components/bot-factory/BotFactoryForm.tsx](src/components/bot-factory/BotFactoryForm.tsx)) with a real, copyable snippet block. When `createdBotId` exists, it renders `<script src="${origin}/widget.js" data-bot-id="${createdBotId}"></script>` inside a dark `<pre>`/`<code>` surface alongside a `CopyUrlButton` ("Copy embed"), matching the dark-snippet style established by the dashboard `EmbedSnippet` component. A short helper line tells the user where to paste it. Until the bot has been saved (no `createdBotId` yet), a muted card explains the snippet appears once the bot is saved - so the step never shows a broken/empty snippet.
+- Reused the already-imported `CopyUrlButton` and the already-computed `origin` constant; no new props threaded through `StepDeploy` (the snippet only needs `createdBotId` + `origin`, both already in scope).
+
+**Files changed:**
+
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - replace the Step 5 Embed-code placeholder with a dynamic, copyable `<script>` snippet gated on `createdBotId`.
+
+**Decisions made:**
+
+- **Inline snippet block, not a re-use of `EmbedSnippet`** - the dashboard `EmbedSnippet` shows four cards (URL, embed, npm, signature) and would duplicate the public-URL card that Step 5 already renders above. Step 5 only needs the embed snippet, so an inline block stays surgical and keeps the Step 5 layout intact.
+- **Gate on `createdBotId`** - the widget script hard-requires a real bot id. Showing a fake placeholder id would mislead users into pasting a non-functional tag. The placeholder copy now tells them to save the bot first.
+
+**Open questions / follow-ups:**
+
+- typecheck on the modified file is clean. The pre-existing unused `useMemo` import in the same file is unrelated and was left alone per surgical-changes guidance.
