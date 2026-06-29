@@ -8,9 +8,9 @@ const SKELETON_BARS = [
   { label: "Availability", widthPct: 7 },
 ];
 
-// "Top topics asked" panel. NLP categorization is future work
-// (mentioned in plan.md), so this slice renders a faded skeleton of
-// the design's reference bars with a Coming Soon pill.
+// "Top topics asked" panel. NLP categorization of questions is future
+// work, so this renders a faded skeleton of reference bars with a
+// Coming Soon pill.
 export function TopTopicsPlaceholder() {
   return (
     <div className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">

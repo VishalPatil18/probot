@@ -10,7 +10,7 @@ import {
   users,
 } from "@/lib/db";
 
-// GDPR §NFR-C04: portable JSON dump of every row the system holds about
+// GDPR data portability: portable JSON dump of every row the system holds about
 // one user. Includes nested bot data (knowledge chunks, conversations,
 // messages, leads). Deliberately excludes:
 //   - `hashedPassword` (a hash isn't useful to export, and shipping it

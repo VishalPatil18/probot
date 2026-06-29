@@ -19,9 +19,9 @@ All notable changes to **ProBot** are documented in this file.
 - **Removed internal "Stage N" labels** from the website, docs, and source comments.
 - **Contributor guardrails** - [`.github/CODEOWNERS`](.github/CODEOWNERS) + a step-by-step [branch-protection guide](GITHUB-BRANCH-PROTECTION.md) for `main`/`dev`.
 
-## v0.1.0 - 2026-06-18 - Stage 1 close-out
+## v0.1.0 - 2026-06-18 - First pre-release
 
-The first pre-release of ProBot. End-to-end Stage 1 loop works: register → log in → build a bot
+The first pre-release of ProBot. The end-to-end core loop works: register → log in → build a bot
 (paste résumé text + pick an LLM provider + paste your own API key) → chat with the bot using
 your own LLM key. **260/260 tests green** across 24 files. Build and typecheck both clean.
 
@@ -39,7 +39,7 @@ your own LLM key. **260/260 tests green** across 24 files. Build and typecheck b
 - **Registration endpoint** at `POST /api/auth/register` - Zod-validated, pre-check + Postgres
   `unique_violation` (code 23505) backstop translates to 409 instead of leaking 500.
 - **Login + Register UI** ported from `design/login.html` - shared `(auth)/layout.tsx` chrome,
-  brand panel with inline SVGs, disabled OAuth buttons with "SOON" badges (Stage 7 wires them).
+  brand panel with inline SVGs, disabled OAuth buttons with "SOON" badges (OAuth wiring is planned).
 
 ### BYO-key LLM client abstraction
 
@@ -79,11 +79,11 @@ deployment, apiVersion })`. No singletons; no shared mutation hazard across user
   `rel="noopener noreferrer" target="_blank"` on every external link. No `rehype-raw` (XSS-safe
   by default - `<img onerror=…>` strings render as text, never as DOM nodes).
 - **Synthetic message IDs** (`crypto.randomUUID()` per insertion) on every message - prevents
-  React from reconciling the wrong DOM when Task 1.8 introduces error-retry mid-list mutations.
+  React from reconciling the wrong DOM once error-retry introduces mid-list mutations.
 - **Rate-limit sentinel rendering** - 429 responses push a special `rateLimitMessage: true`
   bubble that renders a "slow down" card instead of a markdown bubble.
 - **Cycling loading-messages indicator** (3-second cycle with 300ms fade) reading
-  `bot.loading_messages` from the DB column. Per-bot customizable; editor lands Stage 7.
+  `bot.loading_messages` from the DB column. Per-bot customizable; a settings editor is planned.
 
 ### Chat API
 
@@ -103,12 +103,12 @@ deployment, apiVersion })`. No singletons; no shared mutation hazard across user
   "system prompt" string) → fixed fallback string + 1500-char truncation with `…`.
 - **`rate-limit.ts`** - in-memory two-tier sliding window per `botId`, 10/min + 50/day, sliding
   via timestamp arrays with immutable updates. Per-day rejection rolls back the per-minute slot
-  it just consumed. Stage 7 swaps to Upstash Redis without changing the call shape.
+  it just consumed. A future change swaps to Upstash Redis without changing the call shape.
 - **Defense-in-depth** - `ProviderError` categories map to fixed enum response codes
   (`invalid_llm_key` → 400, `provider_rate_limit` → 429, `provider_unavailable` → 502); raw
   SDK error messages are never propagated to the client.
 
-### Azure migration (post Stage 1)
+### Azure migration
 
 - **Replaced DeepSeek with Azure OpenAI** as a registered provider. Bot factory Step 4 collects
   4 Azure fields (key + endpoint + deployment + API version); deployment doubles as the
@@ -123,8 +123,8 @@ deployment, apiVersion })`. No singletons; no shared mutation hazard across user
   serverless functions co-deployed with the frontend.
 - **Database:** PostgreSQL on **Supabase** free tier.
 - **No always-on backend service** - there is no separate Node server.
-- **No persistent rate-limit store** - in-memory; Stage 7 adds Upstash Redis.
-- **No CDN yet** - Stage 5 adds AWS CloudFront fronting an S3 bucket for the embeddable
+- **No persistent rate-limit store** - in-memory; a persistent Upstash Redis store is planned.
+- **No CDN yet** - CloudFront fronting an S3 bucket for the embeddable
   `widget.js`.
 
 ---

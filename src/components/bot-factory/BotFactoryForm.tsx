@@ -9,7 +9,7 @@ import { CONTEXT_TOKEN_CAP_DEFAULT } from "@/lib/bots/schemas";
 import { setEmbeddingApiKey } from "@/lib/client/embedding-key-store";
 import { setApiKey, setAzureCreds } from "@/lib/client/llm-key-store";
 
-import { DEFAULT_AZURE_API_VERSION, STAGE1_ENABLED, TOTAL_STEPS } from "./constants";
+import { DEFAULT_AZURE_API_VERSION, ENABLED_PROVIDERS, TOTAL_STEPS } from "./constants";
 import {
   collectFailures,
   type IngestFailure,
@@ -84,7 +84,7 @@ export function BotFactoryForm({
   }
 
   function selectProvider(provider: ProviderName) {
-    if (!STAGE1_ENABLED.has(provider)) return;
+    if (!ENABLED_PROVIDERS.has(provider)) return;
     setForm((prev) => ({
       ...prev,
       llmProvider: provider,

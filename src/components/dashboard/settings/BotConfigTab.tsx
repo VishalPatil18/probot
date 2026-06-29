@@ -105,7 +105,7 @@ export function BotConfigTab({
 }: Props) {
   const router = useRouter();
   // State seeded from props once; subsequent prop changes do NOT clobber
-  // user edits (same pattern as slice-6.5 BotSettingsForm).
+  // in-progress user edits.
   const [isActive, setIsActive] = useState(initialIsActive);
   // The status toggle auto-saves on click (independent of "Save bot settings"),
   // so we track its own committed baseline. The main dirty/patch diff uses this

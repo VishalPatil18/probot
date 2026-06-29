@@ -43,7 +43,7 @@ const chatInput = z.object({
   // Client-generated per-tab UUID from sessionStorage. Required
   // so the chat orchestrator can UPSERT a `conversations` row and persist
   // the user/assistant turn into `messages` for the dashboard analytics
-  // surface. See claude/plan.md §6.
+  // surface.
   sessionId: z.string().uuid(),
 });
 
@@ -429,11 +429,11 @@ export function resolveAzureExtras(
   return { ok: true, extras };
 }
 
-// Provider call wrapped in a per-provider circuit breaker (NFR-S03). The
+// Provider call wrapped in a per-provider circuit breaker. The
 // breaker key is the provider NAME, not the bot id, so a single broken
 // upstream (e.g. Anthropic outage) trips one breaker that protects every bot
 // on that provider. Returns either the raw reply or a ready-to-send Response
-// (including the NFR-S04 friendly 200 fallback when the breaker is open).
+// (including the friendly 200 fallback when the breaker is open).
 export async function callProvider(args: {
   providerName: ProviderName;
   provider: LLMProvider;
@@ -479,7 +479,7 @@ export async function callProvider(args: {
           ),
         };
       }
-      // NFR-S04 graceful fallback: when the breaker is open OR the
+      // Graceful fallback: when the breaker is open OR the
       // provider returns "unknown" (network blip, malformed response), we
       // surface a friendly canned reply rather than a hard 502. The
       // client renders this as an assistant message asking the recruiter

@@ -35,7 +35,7 @@ import {
 // String-zeroing limitation: Node JS strings are GC-managed and cannot be
 // reliably wiped. Buffers can. The route decrypts into a Buffer, hands a
 // short-lived string to the provider SDK, and lets V8's allocator reclaim
-// it. Acceptable trade for the BYO-key use case; documented in CLAUDE.md.
+// it. Acceptable trade-off for the bring-your-own-key use case.
 
 export interface EnvelopePayload {
   ciphertext: string; // base64

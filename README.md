@@ -29,7 +29,7 @@ ProBot is a **free, open-source, BYO-key** chatbot platform for job seekers. Pas
 
 ## Built with Spec-Driven Development
 
-ProBot is built spec-first: write the spec, derive the plan, then ship in small, verifiable slices with a documented build log behind every change. That discipline is why the codebase stays consistent and the security guarantees (BYO-key, no key logging, envelope encryption) hold end to end.
+ProBot ships in small, verifiable, well-tested changes. That discipline keeps the codebase consistent and the security guarantees (BYO-key, no key logging, envelope encryption) holding end to end.
 
 ## Get started
 

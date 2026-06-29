@@ -3,7 +3,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { bots, db, leads } from "@/lib/db";
 
 // Shared lead queries. Called by both the API routes
-// (paginated list + CSV export) and the slice-6.3 RSC dashboard pages.
+// (paginated list + CSV export) and the dashboard list pages.
 //
 // **Caller contract - tenancy is the caller's responsibility.** These
 // functions take a `botId` and trust the caller has already verified the

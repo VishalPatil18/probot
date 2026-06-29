@@ -2,8 +2,8 @@
 //
 // `id` is a per-insertion synthetic identifier so React can reconcile this
 // list correctly through retries, replacements, and (later) optimistic edits.
-// Never use the array index - Task 1.8 will introduce error-retry that mutates
-// items in place.
+// Never use the array index - error-retry can replace items in place, which
+// would make index-based keys unstable.
 //
 // The `rateLimitMessage` sentinel is a server-error signal that the chat UI
 // renders as a special "slow down" card instead of a markdown bubble. It

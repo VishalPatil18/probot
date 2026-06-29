@@ -72,7 +72,7 @@ npm run typecheck                 # tsc --noEmit
 npm run lint                      # next lint
 ```
 
-We expect every PR to land with `npm test` green and `npm run typecheck` clean. CI will run these on push (Stage 7).
+We expect every PR to land with `npm test` green and `npm run typecheck` clean. CI runs these on every push.
 
 ---
 
@@ -139,7 +139,7 @@ Examples:
 - **No `dangerouslySetInnerHTML`, no `rehype-raw`.** The XSS-safety of the chat UI rests on this; new contributors sometimes try to add raw-HTML support without realizing the threat model.
 - **The BYO-key invariant.** If your change touches the chat path, error path, or any logging surface, prove (with a canary test) that the key value can't escape. See [`SECURITY.md`](./SECURITY.md) for the full invariant.
 - **Diff scope.** PRs that bundle unrelated cleanups are harder to review. Open separate PRs.
-- **No half-finished features behind unused flags.** YAGNI. Per `CLAUDE.md §2`.
+- **No half-finished features behind unused flags.** YAGNI - don't add speculative abstraction or config that isn't used yet.
 
 ### Review etiquette
 
@@ -162,8 +162,8 @@ probot/
 ├── package.json              # Next.js 14 / React 18 / Drizzle / NextAuth / Anthropic + OpenAI SDKs / Zod / Vitest
 ├── drizzle/                  # Generated Drizzle migrations (committed)
 ├── claude/
-│   ├── beta.md               # 7-stage Beta build plan (shipped) + features checklist
-│   ├── plan-v1.md            # Active 9-stage Version 1.0 plan
+│   ├── beta.md               # Beta build plan + feature checklist (internal notes)
+│   ├── plan-v1.md            # Active v1.0 development plan (internal notes)
 │   ├── plan-v2.md            # Version 2.0 backlog
 │   ├── srs.md                # Software Requirements Specification
 │   ├── context.md            # Append-only session history
@@ -172,9 +172,9 @@ probot/
 └── src/
     ├── app/                  # Next.js App Router
     │   ├── (auth)/           # Login + Register
-    │   ├── (dashboard)/      # Bot factory; full dashboard lands Stage 6
+    │   ├── (dashboard)/      # Bot factory + owner dashboard
     │   ├── api/              # API routes (auth, bots, chat)
-    │   ├── u/[username]/chat/  # Public chat (auth-gated in Stage 1, public in Stage 4)
+    │   ├── u/[username]/chat/  # Public chat page for a bot
     │   └── icon.svg          # Brand mark (Next 14 auto-injects <link rel="icon">)
     ├── components/
     │   ├── auth/             # Login/Register forms + brand panel
@@ -197,7 +197,7 @@ probot/
 ## Where to start
 
 - **First-time?** Look for issues labelled [`good first issue`](https://github.com/vishalpatil18/probot/labels/good%20first%20issue).
-- **Larger feature?** Open a feature-request issue first so we can align on scope before you build. The active plan in `claude/plan-v1.md` is the source of truth for what's in-flight (and `claude/plan-v2.md` lists what's on the backlog).
+- **Larger feature?** Open a feature-request issue first so we can align on scope before you build.
 - **Doc fix?** Just open the PR - no issue needed.
 - **Security issue?** **Don't open a public issue or PR.** See [`SECURITY.md`](./SECURITY.md).
 

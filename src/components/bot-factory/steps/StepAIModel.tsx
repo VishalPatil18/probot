@@ -4,7 +4,7 @@ import { MODEL_OPTIONS } from "@/lib/ai/model-options";
 import { PROVIDER_LABELS } from "@/lib/ai/provider-labels";
 import { PROVIDER_NAMES, type ProviderName } from "@/lib/ai/providers";
 
-import { DEFAULT_AZURE_API_VERSION, STAGE1_ENABLED } from "../constants";
+import { DEFAULT_AZURE_API_VERSION, ENABLED_PROVIDERS } from "../constants";
 import { StepHeading } from "../parts/StepHeading";
 import type { FormState, PatchFn } from "../types";
 
@@ -38,7 +38,7 @@ export function StepAIModel({
           <label className="block text-xs font-semibold mb-2">Provider</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {PROVIDER_NAMES.map((p) => {
-              const enabled = STAGE1_ENABLED.has(p);
+              const enabled = ENABLED_PROVIDERS.has(p);
               const active = form.llmProvider === p;
               const meta = PROVIDER_LABELS[p];
               return (

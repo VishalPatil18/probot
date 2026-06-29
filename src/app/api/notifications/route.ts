@@ -9,8 +9,8 @@ import { parsePagination } from "@/lib/pagination";
 //
 // Paginated notification feed for the dashboard bell. The
 // optional `?unread=true` filter narrows to unread rows so the bell-list
-// dropdown can cheaply show "what's new since I last looked." The slice-
-// 6.1 partial index `notifications_user_unread_idx` covers that query.
+// dropdown can cheaply show "what's new since I last looked." A partial
+// index (`notifications_user_unread_idx`) covers that query.
 //
 // Always returns the unread count too - the bell badge polls
 // /unread-count for cheap updates, but the list response includes the

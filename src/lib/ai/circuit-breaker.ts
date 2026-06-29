@@ -1,4 +1,4 @@
-// Circuit breaker for provider calls (NFR-S03), backed by a pluggable store.
+// Circuit breaker for provider calls, backed by a pluggable store.
 //
 // State machine (per provider name):
 //

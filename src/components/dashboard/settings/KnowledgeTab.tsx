@@ -130,8 +130,7 @@ export function KnowledgeTab({ botId }: Props) {
 
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files && e.target.files.length > 0) {
-      // Capture FileList ref before clearing; same ordering note as in
-      // the slice-6.5 KnowledgeManager.
+      // Capture the FileList before clearing the input value below.
       void handleUpload(e.target.files);
     }
     e.target.value = "";

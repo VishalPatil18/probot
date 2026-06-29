@@ -28,7 +28,7 @@ const bytea = customType<{ data: Buffer; default: false }>({
 // users
 // The LLM API key is intentionally NOT stored here - it lives only in the
 // user's browser (localStorage `probot.llm.key.v1`) and rides the
-// `x-llm-api-key` header per chat request. See claude/plan.md §1.5.
+// `x-llm-api-key` header per chat request.
 // RLS is enabled with no policies so Supabase PostgREST anon/authenticated
 // roles are denied by default; the app's pg.Pool (table-owner) connection
 // is unaffected because we do NOT use FORCE ROW LEVEL SECURITY.
@@ -196,7 +196,7 @@ export const verificationTokens = pgTable(
   }),
 ).enableRLS();
 
-// encrypted_llm_keys (managed-key path, §FR-010.5 / §SEC-D06)
+// encrypted_llm_keys (managed-key path)
 // One row per bot whose owner opted in to managed key storage. The user's
 // LLM API key is NEVER stored in plaintext - the columns hold an envelope-
 // encryption payload (see src/lib/crypto/envelope.ts):
@@ -267,7 +267,7 @@ export const decryptAuditLog = pgTable(
   }),
 ).enableRLS();
 
-// password_reset_tokens (§FR-001.6)
+// password_reset_tokens
 // One row per outstanding reset request. `token_hash` stores SHA-256 of the
 // raw token we email; the raw token never touches the DB so a leaked dump
 // cannot be used to take over accounts. TTL = 1 hour. `used_at` makes tokens
@@ -297,7 +297,7 @@ export const passwordResetTokens = pgTable(
   }),
 ).enableRLS();
 
-// deletion_requests (§NFR-C01/C04/C05)
+// deletion_requests
 // One row per outstanding account-deletion request. The grace period is
 // `scheduled_purge_at - requested_at` (7 days in code). Snapshots
 // `email_snapshot` + `username_snapshot` so the post-purge completion
@@ -360,7 +360,7 @@ export const deletionRequests = pgTable(
   }),
 ).enableRLS();
 
-// email_verification_tokens (§FR-001.5)
+// email_verification_tokens
 // Sent to credentials-registered users at signup time. Magic-link signups
 // don't use this table - NextAuth's `verification_tokens` covers them and
 // sets `email_verified` on click. TTL = 24 hours. Verifying the email
@@ -515,9 +515,9 @@ export const messages = pgTable(
 // Captured recruiter emails per bot. `conversation_id` is ON DELETE SET NULL
 // (not cascade) so a GDPR-driven conversation purge still
 // preserves the lead - the email is business-valuable even if the chat log
-// is gone. `context_summary` is filled by the lead-capture client in slice
-// 6.4 with a truncated concatenation of the first 2-3 recruiter messages
-// (deterministic + free; LLM-generated summaries would violate CLAUDE.md §7).
+// is gone. `context_summary` is filled by the lead-capture client with a
+// truncated concatenation of the first 2-3 recruiter messages (deterministic
+// and free; LLM-generated summaries would add a paid dependency).
 export const leads = pgTable(
   "leads",
   {

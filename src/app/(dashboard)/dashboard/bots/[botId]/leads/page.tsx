@@ -11,7 +11,7 @@ import { listLeads } from "@/lib/leads/queries";
 import { DEFAULT_LIMIT } from "@/lib/pagination";
 
 // Dashboard leads list page. Includes a "Export CSV" anchor
-// that points at the slice-6.2 export endpoint - same-origin, session
+// that points at the CSV export endpoint - same-origin, session
 // cookie carries auth, no JS needed.
 
 type Props = {

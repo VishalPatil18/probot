@@ -11,7 +11,7 @@ import { parsePagination } from "@/lib/pagination";
 // can render "list with preview" without a second round-trip. Search via
 // optional `?q=` is case-insensitive on email + preview.
 //
-// Delegates to `listConversations` (shared with the slice-6.3 RSC pages).
+// Delegates to `listConversations` (shared with the dashboard list pages).
 
 export async function GET(
   request: Request,

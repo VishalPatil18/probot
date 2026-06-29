@@ -14,7 +14,7 @@ const DEFAULT_TEMPERATURE = 0.3;
 //
 // `params.model` carries the deployment name; the route resolves it from
 // `users.llmModel` (Q1=a). `extras.endpoint` and `extras.apiVersion` come
-// from the chat request's custom headers (Task 1.5 key-transport extension).
+// from the chat request's custom headers (via the key-transport helpers).
 
 export const azureProvider: LLMProvider = {
   // `defaultModel` is a placeholder; for Azure the user MUST supply their

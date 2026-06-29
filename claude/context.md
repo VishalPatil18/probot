@@ -3141,3 +3141,25 @@ _Tests + types:_
 
 **Open questions / follow-ups:**
 - Run vitest + build natively to confirm the chat-route and BotFactory/settings suites stay green after the extraction.
+
+### 2026-06-29 22:40 - Comment + docs cleanup for open-sourcing (remove internal build-process jargon)
+
+**What was asked to do:** Prepare the codebase for a public open-source release: strip internal build-process jargon ("Stage N", "slice-N.x", "Task N", spec cross-refs to plan.md/srs.md/CLAUDE.md, internal codes like NFR-S03 / §FR-010.5 / §SEC-D06) from comments, docs, and README/root markdown; rewrite thinned comments in plain language; and lightly reframe top-level product descriptions around "create your own AI bot" rather than "the platform/dashboard". Leave claude/ as internal notes.
+
+**What I did:**
+- Source comments (~30 files in src/ + scripts/): removed Stage/slice/Task/spec-ref breadcrumbs from comments and rewrote them to explain the *why* in plain terms. Rewrote references that pointed at claude/plan.md/srs.md/CLAUDE.md into self-contained explanations so public readers aren't sent to internal files.
+- Renamed the misleadingly-named `STAGE1_ENABLED` constant to `ENABLED_PROVIDERS` (bot-factory) and updated its two usages. Behavior identical.
+- Root markdown: cleaned Stage/build-plan references in CHANGELOG.md (kept the actual change history), CONTRIBUTING.md (repo-tree descriptions + guidelines), SECURITY.md, README.md, todo.md. Left the SECURITY.md disclosure-timeline "Stage" table (that column is the vuln-handling phase, not a build stage).
+- docs/ (34 files): no dev-jargon was present. Applied a light-touch reframe on the top-level product descriptions (introduction.mdx, docs.json) from "chatbot platform" toward "build your own AI bot". Preserved the architecture-accurate "managed platform" wording in the managed-vs-self-hosted / self-hosted-bot docs, where "the platform" is the precise term for the hosted backend.
+
+**Decisions made:**
+- Left claude/ and root CLAUDE.md untouched (internal build log + working guidance), per the user's choice.
+- Kept legitimate non-jargon uses of "slice" (index slice), "platform" (managed vs self-hosted), and the SECURITY disclosure "Stage" table - removing them would have reduced accuracy.
+- Comment/doc only; the single code change (constant rename) is behavior-neutral.
+
+**Verification:**
+- `npm run typecheck` green; `npm run check:key-leaks` green (366 files); docs.json still valid JSON; repo-wide grep confirms no Stage/slice/Task/spec-code jargon remains outside claude/ + CLAUDE.md.
+
+**Open questions / follow-ups:**
+- `todo.md` is a personal scratch list (contains "public launch linkedin post" etc.) - consider gitignoring it before publishing rather than shipping it.
+- CONTRIBUTING.md still points contributors at `claude/plan-v1.md` / `plan-v2.md` as the roadmap; fine if those stay in the repo, otherwise repoint before publishing.

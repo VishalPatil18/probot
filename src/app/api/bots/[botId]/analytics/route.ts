@@ -6,7 +6,7 @@ import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 // GET /api/bots/[botId]/analytics
 //
 // Dashboard overview cards. Returns the five-metric snapshot
-// computed by `getAnalyticsForBot` - shared with the slice-6.3 RSC pages
+// computed by `getAnalyticsForBot` - shared with the dashboard pages
 // so the SQL lives in one place.
 
 export async function GET(

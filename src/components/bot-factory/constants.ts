@@ -4,10 +4,10 @@ import type { Personality } from "@/lib/bots/schemas";
 export const TOTAL_STEPS = 5;
 export const DEFAULT_AZURE_API_VERSION = "2025-01-01-preview";
 
-// All four providers ship real adapters now. The Set is
-// kept (rather than dropped) so a future "experimental" / "beta" gate has
-// a single place to live without rewiring the JSX.
-export const STAGE1_ENABLED: ReadonlySet<ProviderName> = new Set([
+// Providers the bot creator is allowed to pick. All four ship real adapters
+// today; this set is the single place to gate one off (for example, to mark
+// a provider "experimental") without touching the provider-picker JSX.
+export const ENABLED_PROVIDERS: ReadonlySet<ProviderName> = new Set([
   "anthropic",
   "openai",
   "azure",
