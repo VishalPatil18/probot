@@ -3,10 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { MODEL_OPTIONS } from "@/lib/ai/model-options";
 import { describeProvider, PROVIDER_LABELS } from "@/lib/ai/provider-labels";
 import type { ProviderName } from "@/lib/ai/providers";
 import { PROVIDER_NAMES } from "@/lib/ai/providers";
 import { setApiKey } from "@/lib/client/llm-key-store";
+
+import { type AuditResponse, formatTimestamp } from "./audit";
+import { ManagedKeyStatusPill } from "./ManagedKeyStatusPill";
 
 type Props = {
   // Null on the account-only /dashboard/settings route (no bot yet). The
@@ -33,20 +37,6 @@ type Props = {
 // Provider/model preferences live on the USER (one provider per account, as
 // the existing onboarding flow assumes); managed key + audit log are per-BOT
 // since a future multi-bot user may want to scope keys per bot.
-
-const MODEL_OPTIONS: Record<ProviderName, string[]> = {
-  anthropic: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"],
-  openai: ["gpt-4o-mini", "gpt-4o", "o3-mini"],
-  google: ["gemini-2.5-flash", "gemini-2.5-pro"],
-  azure: [],
-};
-
-interface AuditResponse {
-  stored: boolean;
-  provider: string | null;
-  lastDecryptedAt: string | null;
-  entries: Array<{ decryptedAt: string; ipHashSuffix: string | null }>;
-}
 
 export function AIModelKeyTab({
   botId,
@@ -439,50 +429,6 @@ export function AIModelKeyTab({
       )}
     </div>
   );
-}
-
-function ManagedKeyStatusPill({ audit }: { audit: AuditResponse | null }) {
-  if (!audit) {
-    return (
-      <span className="text-[11px] font-semibold text-muted">Loading…</span>
-    );
-  }
-  if (!audit.stored) {
-    return (
-      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-muted">
-        Not stored
-      </span>
-    );
-  }
-  const last = audit.lastDecryptedAt
-    ? formatRelative(audit.lastDecryptedAt)
-    : "never used";
-  return (
-    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-      Encrypted · last decrypted {last}
-    </span>
-  );
-}
-
-function formatTimestamp(iso: string): string {
-  try {
-    return new Date(iso).toISOString().replace("T", " ").slice(0, 19) + " UTC";
-  } catch {
-    return iso;
-  }
-}
-
-function formatRelative(iso: string): string {
-  try {
-    const then = new Date(iso).getTime();
-    const diffSec = Math.floor((Date.now() - then) / 1000);
-    if (diffSec < 60) return "moments ago";
-    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min ago`;
-    if (diffSec < 86_400) return `${Math.floor(diffSec / 3600)}h ago`;
-    return `${Math.floor(diffSec / 86_400)}d ago`;
-  } catch {
-    return "recently";
-  }
 }
 
 function isProviderName(

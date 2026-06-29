@@ -3105,3 +3105,39 @@ _Tests + types:_
 **Open questions / follow-ups:**
 
 - typecheck on the modified file is clean. The pre-existing unused `useMemo` import in the same file is unrelated and was left alone per surgical-changes guidance.
+
+### 2026-06-29 22:19 - Code-cleanup batch: de-dup shared constants + modularize the four largest source files
+
+**What was asked to do:** Identify optimization/modularization opportunities (using the coding-standards guidance) and break the largest files into smaller, developer-friendly modules - strictly no functional or UI changes, code-only, in 3-4 staged passes.
+
+**What I did:**
+- Stage 1 (de-dup): lifted the duplicated `MODEL_OPTIONS` map into a new shared module and pointed both the wizard and the AI-key settings tab at it; removed the second copy of `PROVIDER_LABELS` from the wizard (the shared `provider-labels.ts` already existed).
+- Stage 2 (BotFactoryForm 1555→414): extracted the five step renderers, the live preview, header/heading/avatar/trash/ingest-failure parts, the ingest helpers, the form types, and the wizard constants into a `bot-factory/{steps,parts}` subtree. `BotFactoryForm.tsx` is now a thin orchestrator (state + submit/retry/publish + layout).
+- Stage 3 (settings + landing): pulled `LabeledInput`/`RateLimitField`/`Toggle`/`SaveButton` into `settings/fields/`; moved `AuditResponse` + the two date formatters into `settings/audit.ts` and `ManagedKeyStatusPill` into its own file. Split the 959-line landing `page.tsx` into seven server-component sections under `marketing/sections/` (`page.tsx` is now 45 lines).
+- Stage 4 (chat route 462→126): extracted the 12-step POST pipeline into `api/chat/[botId]/pipeline.ts` as discriminated-union step functions (`{ ok: true, ... } | { ok: false, response }`), matching the existing `requireBotOwner` pattern. `route.ts` is now a readable sequence of guarded helper calls; `OPTIONS` + `isPersonality` + the inline input/output sanitize stayed in the route.
+
+**Files changed:**
+- `src/lib/ai/model-options.ts` - create - single source for the per-provider model lists.
+- `src/components/bot-factory/{types.ts,constants.ts,ingest-helpers.ts}` - create - shared wizard types/constants/ingest helpers.
+- `src/components/bot-factory/parts/{StepperHeader,StepHeading,TrashIcon,IngestFailuresPanel,BotAvatarPreview,LivePreview}.tsx` - create.
+- `src/components/bot-factory/steps/{StepIdentity,StepKnowledge,StepPersonality,StepAIModel,StepDeploy}.tsx` - create.
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - reduced to orchestrator; imports shared constants/labels.
+- `src/components/dashboard/settings/fields/{LabeledInput,RateLimitField,Toggle,SaveButton}.tsx` - create - shared form primitives.
+- `src/components/dashboard/settings/{audit.ts,ManagedKeyStatusPill.tsx}` - create - audit shape/formatters + status pill.
+- `src/components/dashboard/settings/{BotConfigTab,AIModelKeyTab}.tsx` - update - import the extracted pieces; dropped now-unused `MODEL_OPTIONS`/`useId`.
+- `src/components/marketing/sections/{constants.ts,HeroSection,TrustStrip,LivePipelineSection,HowItWorksSection,FeaturesSection,FreeToUseSection,DocsCtaSection}.tsx` - create.
+- `src/app/page.tsx` - update - composes the seven sections.
+- `src/app/api/chat/[botId]/pipeline.ts` - create - extracted chat pipeline steps.
+- `src/app/api/chat/[botId]/route.ts` - update - thin POST orchestrator over the pipeline helpers.
+
+**Decisions made:**
+- Used subfolders per feature (`steps/`, `parts/`, `fields/`, `sections/`) and the discriminated-union short-circuit pattern for the route pipeline, per the user's choices and the existing `requireBotOwner` precedent.
+- Kept extraction surgical: no behavior/UI change, JSX/response shapes preserved byte-for-byte, every error status/body identical. Tests untouched (they import only the top-level exports, whose public APIs are unchanged).
+- Left pre-existing dead code alone except imports that *this* change made unused (`MODEL_OPTIONS`/`useId`/`sanitizeOutput`/`PROVIDER_LABELS` redefinition).
+
+**Verification:**
+- `npm run typecheck` green; `npm run check:key-leaks` green (366 files); custom unused-import scan clean.
+- `npm test` (vitest) and `npm run build` to be run natively on the Mac (sandbox platform mismatch) - the route/component test suites are the regression gate for behavior parity.
+
+**Open questions / follow-ups:**
+- Run vitest + build natively to confirm the chat-route and BotFactory/settings suites stay green after the extraction.
