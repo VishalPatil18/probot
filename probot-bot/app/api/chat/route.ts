@@ -53,17 +53,32 @@ export async function POST(request: Request): Promise<Response> {
   return NextResponse.json({ reply, sessionId });
 }
 
-// Minimal OpenAI-compatible chat call using the operator's own key. Replace
-// with Anthropic / Gemini / Azure as needed.
+// Minimal chat call against any OpenAI-compatible endpoint, configured by env
+// so you can point it at the provider of your choice without code changes:
+//   PROBOT_LLM_BASE_URL  - default https://api.openai.com/v1
+//                          (e.g. http://localhost:11434/v1 for local Ollama,
+//                           https://api.x.ai/v1 for Grok)
+//   PROBOT_LLM_MODEL     - default gpt-4o-mini (e.g. llama3.2, grok-4.3)
+//   PROBOT_LLM_API_KEY   - your key; not needed for local Ollama (any value)
+//
+// Running local Ollama here is the fully free, $0 path: the model runs on your
+// own machine and no key ever leaves it.
 async function callLlm(system: string, userMessage: string): Promise<string> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  const baseUrl = (
+    process.env.PROBOT_LLM_BASE_URL ?? "https://api.openai.com/v1"
+  ).replace(/\/+$/, "");
+  const model = process.env.PROBOT_LLM_MODEL ?? "gpt-4o-mini";
+  // Ollama ignores the key but the OpenAI-compatible header still expects one.
+  const apiKey = process.env.PROBOT_LLM_API_KEY ?? "ollama";
+
+  const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}`,
+      authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model,
       messages: [
         { role: "system", content: system },
         { role: "user", content: userMessage },

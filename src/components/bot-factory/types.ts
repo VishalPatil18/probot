@@ -36,6 +36,8 @@ export type FormState = {
   apiKey: string;
   azureEndpoint: string;
   azureApiVersion: string;
+  // Ollama-only: base URL of the local model server (ignored for other providers).
+  ollamaBaseUrl: string;
   embeddingApiKey: string;
 };
 

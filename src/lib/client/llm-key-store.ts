@@ -14,8 +14,10 @@ import { getSecureKeyStore } from "./secure-key-store";
 
 const LEGACY_STORAGE_KEY = "probot.llm.key.v1";
 const LEGACY_AZURE_KEY = "probot.llm.azure.v1";
+const LEGACY_OLLAMA_KEY = "probot.llm.ollama.v1";
 const SECRET_NAME = "llm.key.v1";
 const AZURE_SECRET_NAME = "llm.azure.v1";
+const OLLAMA_SECRET_NAME = "llm.ollama.v1";
 
 function legacyLocal(): Storage | null {
   if (typeof window === "undefined") return null;
@@ -146,4 +148,44 @@ export async function clearAzureCreds(): Promise<void> {
   const store = getSecureKeyStore();
   if (store) await store.clearSecret(AZURE_SECRET_NAME);
   legacyLocal()?.removeItem(LEGACY_AZURE_KEY);
+}
+
+// Ollama needs only a base URL (where the local model server lives) - no key.
+// Stored alongside the keys so the chat UI can attach it as the
+// `x-llm-ollama-base-url` header on each request.
+export async function getOllamaBaseUrl(): Promise<string | null> {
+  const store = getSecureKeyStore();
+  if (!store) {
+    const ls = legacyLocal();
+    if (!ls) return null;
+    const raw = ls.getItem(LEGACY_OLLAMA_KEY);
+    if (raw === null) return null;
+    const trimmed = raw.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  }
+  const stored = await store.getSecret(OLLAMA_SECRET_NAME);
+  if (stored !== null) return stored;
+  return migrateFromLocalStorage(OLLAMA_SECRET_NAME, LEGACY_OLLAMA_KEY);
+}
+
+export async function setOllamaBaseUrl(baseUrl: string): Promise<void> {
+  const trimmed = baseUrl.trim();
+  const store = getSecureKeyStore();
+  if (trimmed.length === 0) {
+    if (store) await store.clearSecret(OLLAMA_SECRET_NAME);
+    legacyLocal()?.removeItem(LEGACY_OLLAMA_KEY);
+    return;
+  }
+  if (store) {
+    await store.setSecret(OLLAMA_SECRET_NAME, trimmed);
+    legacyLocal()?.removeItem(LEGACY_OLLAMA_KEY);
+  } else {
+    legacyLocal()?.setItem(LEGACY_OLLAMA_KEY, trimmed);
+  }
+}
+
+export async function clearOllamaBaseUrl(): Promise<void> {
+  const store = getSecureKeyStore();
+  if (store) await store.clearSecret(OLLAMA_SECRET_NAME);
+  legacyLocal()?.removeItem(LEGACY_OLLAMA_KEY);
 }

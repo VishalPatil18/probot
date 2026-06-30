@@ -11,6 +11,8 @@ export const PROVIDER_LABELS: Record<
   google: { name: "Google", family: "Gemini" },
   azure: { name: "Azure", family: "OpenAI" },
   openai: { name: "OpenAI", family: "GPT" },
+  grok: { name: "Grok", family: "xAI" },
+  ollama: { name: "Ollama", family: "Local" },
 };
 
 export function describeProvider(

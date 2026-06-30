@@ -101,7 +101,14 @@ describe("botInput - personality enum", () => {
 });
 
 describe("botInput - llmProvider enum", () => {
-  it.each([["anthropic"], ["openai"], ["google"], ["azure"]])(
+  it.each([
+    ["anthropic"],
+    ["openai"],
+    ["google"],
+    ["azure"],
+    ["grok"],
+    ["ollama"],
+  ])(
     "accepts llmProvider=%s",
     (llmProvider) => {
       expect(botInput.safeParse({ ...validInput, llmProvider }).success).toBe(

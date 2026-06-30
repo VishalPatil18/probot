@@ -7,7 +7,11 @@ import { MODEL_OPTIONS } from "@/lib/ai/model-options";
 import { type ProviderName } from "@/lib/ai/providers";
 import { CONTEXT_TOKEN_CAP_DEFAULT } from "@/lib/bots/schemas";
 import { setEmbeddingApiKey } from "@/lib/client/embedding-key-store";
-import { setApiKey, setAzureCreds } from "@/lib/client/llm-key-store";
+import {
+  setApiKey,
+  setAzureCreds,
+  setOllamaBaseUrl,
+} from "@/lib/client/llm-key-store";
 
 import { DEFAULT_AZURE_API_VERSION, ENABLED_PROVIDERS, TOTAL_STEPS } from "./constants";
 import {
@@ -37,11 +41,11 @@ export function BotFactoryForm({
   // If the DB has a model that isn't in our current MODEL_OPTIONS (e.g. a
   // deprecated id, or one chosen via a future custom field), fall back to the
   // first option so the <select> can't render in a desynced state.
-  // Azure has an empty MODEL_OPTIONS list - the user supplies deployment name
-  // as free text, so we pass through whatever the DB has (or empty).
+  // Free-text providers (Azure, Grok, Ollama) have an empty MODEL_OPTIONS list -
+  // the user types the model name - so we pass through whatever the DB has.
   const providerModels = MODEL_OPTIONS[initialProvider];
   const initialModel =
-    initialProvider === "azure"
+    providerModels.length === 0
       ? (initialLlmModel ?? "")
       : initialLlmModel && providerModels.includes(initialLlmModel)
         ? initialLlmModel
@@ -62,6 +66,7 @@ export function BotFactoryForm({
     apiKey: "",
     azureEndpoint: "",
     azureApiVersion: DEFAULT_AZURE_API_VERSION,
+    ollamaBaseUrl: "http://localhost:11434",
     embeddingApiKey: "",
   });
   const [newQuestion, setNewQuestion] = useState("");
@@ -115,11 +120,22 @@ export function BotFactoryForm({
     }
     if (n === 3) return true;
     if (n === 4) {
+      // Ollama needs a base URL + model name, but no API key.
+      if (form.llmProvider === "ollama") {
+        return (
+          form.ollamaBaseUrl.trim().length > 0 &&
+          form.llmModel.trim().length > 0
+        );
+      }
       if (form.apiKey.trim().length < 8) return false;
       if (form.llmProvider === "azure") {
         const endpoint = form.azureEndpoint.trim();
         const deployment = form.llmModel.trim();
         return endpoint.startsWith("https://") && deployment.length > 0;
+      }
+      // Grok takes a free-text model name alongside the key.
+      if (form.llmProvider === "grok") {
+        return form.llmModel.trim().length > 0;
       }
       return true;
     }
@@ -141,6 +157,10 @@ export function BotFactoryForm({
           endpoint: form.azureEndpoint,
           apiVersion: form.azureApiVersion || DEFAULT_AZURE_API_VERSION,
         });
+      }
+      // Ollama needs only its base URL (no key) stored for the chat UI.
+      if (form.llmProvider === "ollama") {
+        await setOllamaBaseUrl(form.ollamaBaseUrl);
       }
       // RAG: persist the OpenAI embedding key (when supplied) so the
       // chat UI can attach it as `x-embedding-api-key` on every chat request.

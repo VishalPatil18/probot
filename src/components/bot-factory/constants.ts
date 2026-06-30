@@ -12,6 +12,8 @@ export const ENABLED_PROVIDERS: ReadonlySet<ProviderName> = new Set([
   "openai",
   "azure",
   "google",
+  "grok",
+  "ollama",
 ]);
 
 export const PERSONALITY_LABELS: Record<

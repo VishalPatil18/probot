@@ -25,12 +25,12 @@ export function StepAIModel({
       <StepHeading
         step={4}
         title="Choose your AI model."
-        subtitle="ProBot runs on your own LLM key. Pick a provider and paste your key - it's stored locally and never tracked by ProBot."
+        subtitle="ProBot runs on your own model. Pick a provider and connect it - credentials stay on this device and are never tracked by ProBot."
       />
       <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 mb-6 text-[13px] leading-relaxed">
-        Your key stays on this device. It's saved to local storage and used only
-        to call the model directly - <strong>never</strong> sent to or logged by
-        ProBot.
+        Your credentials stay on this device, used only to call the model
+        directly - <strong>never</strong> sent to or logged by ProBot. Ollama
+        runs locally and needs no key at all.
       </div>
 
       <div className="space-y-5">
@@ -130,7 +130,55 @@ export function StepAIModel({
               />
             </div>
           </>
-        ) : (
+        ) : form.llmProvider === "ollama" ? (
+          <>
+            <div>
+              <label
+                htmlFor="bf-ollama-url"
+                className="block text-xs font-semibold mb-1.5"
+              >
+                Ollama base URL
+              </label>
+              <input
+                id="bf-ollama-url"
+                type="url"
+                value={form.ollamaBaseUrl}
+                onChange={(e) => patch("ollamaBaseUrl", e.target.value)}
+                maxLength={512}
+                placeholder="http://localhost:11434"
+                className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-muted mt-1.5">
+                Where your Ollama server runs. localhost works when you
+                self-host the bot; on the managed site it must be a public
+                https:// URL the server can reach.
+              </p>
+            </div>
+            <div>
+              <label
+                htmlFor="bf-model"
+                className="block text-xs font-semibold mb-1.5"
+              >
+                Model
+              </label>
+              <input
+                id="bf-model"
+                type="text"
+                value={form.llmModel}
+                onChange={(e) => patch("llmModel", e.target.value)}
+                maxLength={60}
+                placeholder="llama3.2"
+                className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-muted mt-1.5">
+                The model you&apos;ve pulled in Ollama (e.g. llama3.2,
+                qwen2.5). No API key needed - it runs on your machine.
+              </p>
+            </div>
+          </>
+        ) : models.length > 0 ? (
           <div>
             <label
               htmlFor="bf-model"
@@ -151,31 +199,59 @@ export function StepAIModel({
               ))}
             </select>
           </div>
+        ) : (
+          <div>
+            <label
+              htmlFor="bf-model"
+              className="block text-xs font-semibold mb-1.5"
+            >
+              Model
+            </label>
+            <input
+              id="bf-model"
+              type="text"
+              value={form.llmModel}
+              onChange={(e) => patch("llmModel", e.target.value)}
+              maxLength={60}
+              placeholder="grok-4.3"
+              className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
+              autoComplete="off"
+            />
+            <p className="text-[11px] text-muted mt-1.5">
+              The {providerLabel} model id to use.
+            </p>
+          </div>
         )}
 
-        <div>
-          <label
-            htmlFor="bf-key"
-            className="block text-xs font-semibold mb-1.5"
-          >
-            {providerLabel} API key
-          </label>
-          <input
-            id="bf-key"
-            type="password"
-            value={form.apiKey}
-            onChange={(e) => patch("apiKey", e.target.value)}
-            maxLength={256}
-            placeholder={
-              form.llmProvider === "azure" ? "your azure key" : "sk-…"
-            }
-            className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
-            autoComplete="off"
-          />
-          <p className="text-[11px] text-muted mt-1.5">
-            Stored locally · never tracked by ProBot
-          </p>
-        </div>
+        {form.llmProvider !== "ollama" && (
+          <div>
+            <label
+              htmlFor="bf-key"
+              className="block text-xs font-semibold mb-1.5"
+            >
+              {providerLabel} API key
+            </label>
+            <input
+              id="bf-key"
+              type="password"
+              value={form.apiKey}
+              onChange={(e) => patch("apiKey", e.target.value)}
+              maxLength={256}
+              placeholder={
+                form.llmProvider === "azure"
+                  ? "your azure key"
+                  : form.llmProvider === "grok"
+                    ? "xai-…"
+                    : "sk-…"
+              }
+              className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
+              autoComplete="off"
+            />
+            <p className="text-[11px] text-muted mt-1.5">
+              Stored locally · never tracked by ProBot
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );

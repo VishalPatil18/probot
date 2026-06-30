@@ -15,6 +15,7 @@ import {
   persistConversation,
   recordDecryptAudit,
   resolveAzureExtras,
+  resolveOllamaExtras,
   resolveProviderAndKey,
   retrieveChunks,
 } from "./pipeline";
@@ -89,9 +90,12 @@ export async function POST(
     ...(relevantChunks ? { relevantChunks } : {}),
   });
 
-  // Azure-only: endpoint + apiVersion ride in custom headers.
+  // Provider-specific runtime config carried in custom headers: Azure's
+  // endpoint/apiVersion, or Ollama's base URL. Only one applies per request.
   const azure = resolveAzureExtras(request, providerName);
   if (!azure.ok) return azure.response;
+  const ollama = resolveOllamaExtras(request, providerName);
+  if (!ollama.ok) return ollama.response;
 
   // Provider call (per-provider circuit breaker + graceful fallback).
   const called = await callProvider({
@@ -101,7 +105,7 @@ export async function POST(
     userMessage: sanitized.message,
     apiKey,
     model: ownerRow.llmModel,
-    extras: azure.extras,
+    extras: azure.extras ?? ollama.extras,
   });
   if (!called.ok) return called.response;
 

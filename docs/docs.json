@@ -113,9 +113,15 @@
         "tab": "Blog",
         "groups": [
           {
-            "group": "Blog",
+            "group": "Journey",
             "pages": [
               "blogs/welcome"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "blogs/azure-student-credits"
             ]
           }
         ]

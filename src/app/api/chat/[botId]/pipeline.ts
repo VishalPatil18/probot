@@ -9,6 +9,7 @@ import {
   readApiKey,
   readAzureCreds,
   readEmbeddingApiKey,
+  readOllamaBaseUrl,
 } from "@/lib/ai/key-transport";
 import {
   type LLMProvider,
@@ -331,6 +332,9 @@ export async function resolveProviderAndKey(
   let managedKeyUsed = false;
   if (headerApiKey) {
     apiKey = headerApiKey;
+  } else if (providerName === "ollama") {
+    // Ollama runs locally and needs no key; the adapter uses a placeholder.
+    apiKey = "ollama";
   } else if (providerName === "azure") {
     return {
       ok: false,
@@ -427,6 +431,42 @@ export function resolveAzureExtras(
     extras.apiVersion = azureCreds.apiVersion;
   }
   return { ok: true, extras };
+}
+
+// Ollama needs a base URL (where the local model server lives), supplied in a
+// custom header. Missing/invalid base URL when provider is ollama is the same
+// UX class as a missing api key. Non-Ollama providers resolve to no extras.
+export function resolveOllamaExtras(
+  request: Request,
+  providerName: ProviderName,
+):
+  | { ok: true; extras: Record<string, string> | undefined }
+  | { ok: false; response: Response } {
+  if (providerName !== "ollama") {
+    return { ok: true, extras: undefined };
+  }
+  let baseUrl: string | null;
+  try {
+    baseUrl = readOllamaBaseUrl(request.headers);
+  } catch (err) {
+    if (err instanceof KeyTransportError) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: "missing_llm_key" },
+          { status: 400 },
+        ),
+      };
+    }
+    throw err;
+  }
+  if (!baseUrl) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "missing_llm_key" }, { status: 400 }),
+    };
+  }
+  return { ok: true, extras: { baseUrl } };
 }
 
 // Provider call wrapped in a per-provider circuit breaker. The

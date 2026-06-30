@@ -9,7 +9,11 @@ import {
   readLeadCaptureState,
   writeLeadCaptureState,
 } from "@/lib/client/lead-capture-state";
-import { getApiKey, getAzureCreds } from "@/lib/client/llm-key-store";
+import {
+  getApiKey,
+  getAzureCreds,
+  getOllamaBaseUrl,
+} from "@/lib/client/llm-key-store";
 import { getOrCreateSessionId } from "@/lib/client/session-id-store";
 
 import { LeadCaptureCard } from "./LeadCaptureCard";
@@ -134,8 +138,11 @@ export function ChatWindow({
     if (trimmed.length === 0 || loading) return;
     setShowSuggestionList(false);
 
+    // Ollama runs locally and needs no key - only a base URL. Every other
+    // provider requires the BYO key.
+    const isOllama = llmProvider === "ollama";
     const apiKey = await getApiKey();
-    if (!apiKey) {
+    if (!apiKey && !isOllama) {
       setMissingKey(true);
       return;
     }
@@ -145,6 +152,16 @@ export function ChatWindow({
     if (llmProvider === "azure") {
       azureCreds = await getAzureCreds();
       if (!azureCreds) {
+        setMissingKey(true);
+        return;
+      }
+    }
+
+    // Ollama needs the base URL where its local server is reachable.
+    let ollamaBaseUrl: string | null = null;
+    if (isOllama) {
+      ollamaBaseUrl = await getOllamaBaseUrl();
+      if (!ollamaBaseUrl) {
         setMissingKey(true);
         return;
       }
@@ -161,11 +178,15 @@ export function ChatWindow({
     // BYO credentials ride ONLY in headers - never in the JSON body.
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "x-llm-api-key": apiKey,
+      // Ollama ignores the key but the header contract still requires a value.
+      "x-llm-api-key": apiKey ?? "ollama-local",
     };
     if (azureCreds) {
       headers["x-llm-azure-endpoint"] = azureCreds.endpoint;
       headers["x-llm-azure-api-version"] = azureCreds.apiVersion;
+    }
+    if (ollamaBaseUrl) {
+      headers["x-llm-ollama-base-url"] = ollamaBaseUrl;
     }
     // RAG: include the optional OpenAI embedding key. Absent →
     // server skips retrieval and falls back to full-context. Same security

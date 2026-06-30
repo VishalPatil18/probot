@@ -1,0 +1,178 @@
+---
+title: Run your bot for free with Azure student credits
+description: "Students get $100 in Azure credits - enough to deploy your own model and power a ProBot for up to a year. Here's the full walkthrough."
+---
+
+_A ProBot resource guide_
+
+---
+
+<p align="justify">
+  ProBot is bring-your-own-key: you connect your own model, and you pay your
+  provider directly (often pennies per conversation). But "pennies" still means
+  a card on file - and if you're a student, you can skip that entirely.
+</p>
+
+<p align="justify">
+  **[Azure for Students](https://azure.microsoft.com/en-us/free/students/) gives
+  you $100 in Azure credit with no credit card required.** That's more than
+  enough to deploy your own small chat model and run a ProBot on it for months.
+  This guide walks you from a fresh student account to a live bot, end to end.
+</p>
+
+<Note>
+  This is the closest thing to a truly $0 hosted bot: Azure covers the model
+  bill from your free credit, and ProBot's hosted app is free to use. The one
+  honest caveat - student credit lasts **12 months** (renewable while you're
+  enrolled), so it's "free for now," not "free forever." We cover how to make it
+  last at the end.
+</Note>
+
+## Why this works so well
+
+<p align="justify">
+  ProBot already speaks Azure OpenAI natively. Once you deploy a model in Azure,
+  you get four values - an endpoint, a deployment name, an API key, and an API
+  version - and ProBot has a field for each. A resume-Q&A bot is light work for
+  a "mini"-class model, so your $100 stretches a long way.
+</p>
+
+| What you get from Azure | Where it goes in ProBot                           |
+| ----------------------- | ------------------------------------------------- |
+| Endpoint URL            | **Azure endpoint**                                |
+| Deployment name         | **Deployment name** (used as the model)           |
+| API key                 | **API key**                                       |
+| API version             | **API version** (a sensible default is prefilled) |
+
+## Before you start
+
+<p align="justify">You'll need:</p>
+
+- A school email address (or [GitHub Student](https://education.github.com/pack) verification).
+- To be 18+ and a full-time student at an accredited institution.
+- About 15 minutes. **No credit card.**
+
+## Step 1 - Claim your $100 Azure student credit
+
+<Steps>
+  <Step title="Open the Azure for Students offer">
+    Go to
+    [azure.microsoft.com/free/students](https://azure.microsoft.com/en-us/free/students/)
+    and click **Start free**. Sign in with a personal Microsoft account (or
+    create one).
+  </Step>
+  <Step title="Verify you're a student">
+    Enter your details and your **school email**. Azure verifies your academic
+    status automatically; if it can't, it'll ask you to upload a student ID or
+    verify through GitHub Student. No card is requested at any point.
+  </Step>
+  <Step title="Land in the Azure portal">
+    Once approved you'll have a subscription with **$100 of credit** valid for
+    12 months. You can see the remaining balance any time under **Subscriptions
+    → your subscription**.
+  </Step>
+</Steps>
+
+<Tip>
+  The credit doesn't roll over, but you can **renew each year you're enrolled**
+  for a fresh $100. Set a calendar reminder a few weeks before it expires.
+</Tip>
+
+## Step 2 - Deploy a model
+
+<p align="justify">
+  Azure's AI tooling now lives in the **[Microsoft Foundry
+  portal](https://ai.azure.com)** (you may also see it called Azure AI Foundry
+  or Azure OpenAI). The flow is the same: create a resource, then deploy a model
+  into it.
+</p>
+
+<Steps>
+  <Step title="Create an Azure OpenAI resource">
+    In the [Azure portal](https://portal.azure.com), search **Azure OpenAI** →
+    **Create**. Pick your student subscription, a resource group (create one if
+    needed), and a region, then create it. Microsoft's official walkthrough is
+    [here](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/create-resource).
+  </Step>
+  <Step title="Open the Foundry portal and deploy a model">
+    From the resource, open **Microsoft Foundry** (or go to
+    [ai.azure.com](https://ai.azure.com)). Go to **Models + endpoints** →
+    **Deploy model**, and choose an inexpensive chat model such as
+    **`gpt-4o-mini`**. Give the deployment a name you'll remember - that name is
+    what you'll use as the model in ProBot.
+  </Step>
+  <Step title="Wait for the deployment to finish">
+    It takes a minute or two. When it's ready, it shows up in your **Models +
+    endpoints** list.
+  </Step>
+</Steps>
+
+<Tip>
+  Choose a **mini / small** model. For answering questions about your resume you
+  do not need a flagship model, and the cheaper one makes your $100 last
+  dramatically longer.
+</Tip>
+
+## Step 3 - Copy the four values ProBot needs
+
+<p align="justify">
+  Open your deployment's detail page (**Models + endpoints → your deployment**).
+  From there, collect:
+</p>
+
+- **Endpoint** - the resource URL, e.g. `https://your-resource.openai.azure.com` (it must start with `https://`).
+- **Deployment name** - exactly what you named the deployment in Step 2.
+- **API key** - copy **Key 1** from the resource's **Keys and Endpoint** page. Treat it like a password.
+- **API version** - e.g. `2025-01-01-preview`. ProBot prefills a working default, so you can usually leave it.
+
+<Warning>
+  Your API key is a secret. Don't paste it into chats, screenshots, or commits.
+  In ProBot it's stored **in your browser** and sent only to Azure - never to
+  ProBot's servers.
+</Warning>
+
+## Step 4 - Plug it into ProBot
+
+<Steps>
+  <Step title="Open AI model & key">
+    In ProBot, go to **AI model & key** (sidebar → *Manage model & key*, or
+    Settings → AI model & key) - or set it while building the bot in the Bot
+    Factory.
+  </Step>
+  <Step title="Pick Azure and fill the fields">
+    Choose **Azure** as the provider, then paste your **endpoint**, **deployment
+    name** (this is the model), **API key**, and leave the **API version** at
+    its default unless you have a reason to change it.
+  </Step>
+  <Step title="Save and test">
+    Save, then open your bot and ask it a question. If it replies, you're live -
+    running on your own model, paid for by your Azure credit.
+  </Step>
+</Steps>
+
+<p align="justify">
+  For the exact field-by-field reference, see [Models &amp; keys → Azure
+  specifics](/guides/models-and-keys).
+</p>
+
+## Make your $100 last
+
+<p align="justify">A few habits keep the credit going for the long haul:</p>
+
+- **Set a spending alert.** In the Azure portal under **Cost Management → Budgets**, create a budget (say $5/month) so you're warned long before the credit runs low.
+- **Stick to a mini model.** It's the single biggest lever on cost.
+- **Lean on ProBot's guardrails.** Per-bot rate limits and input sanitization are on by default, so a curious visitor can't burn through your credit.
+- **Watch the expiry date.** Renew your student offer each year, or switch the bot to another provider's free tier before the credit lapses.
+
+## A note on honesty
+
+<p align="justify">
+  This path is genuinely free *while your student credit lasts*. When it
+  expires, your bot doesn't have to die - ProBot lets you swap providers any
+  time (including a fully free local model via [Ollama](/guides/models-and-keys)
+  if you self-host). Your bot, your model, your call.
+</p>
+
+---
+
+_Ready to point a model at your bot? [Get started free](https://pro-bot.dev/register), and see [Models &amp; keys](/guides/models-and-keys) for every supported provider._

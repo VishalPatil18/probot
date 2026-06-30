@@ -3163,3 +3163,64 @@ _Tests + types:_
 **Open questions / follow-ups:**
 - `todo.md` is a personal scratch list (contains "public launch linkedin post" etc.) - consider gitignoring it before publishing rather than shipping it.
 - CONTRIBUTING.md still points contributors at `claude/plan-v1.md` / `plan-v2.md` as the roadmap; fine if those stay in the repo, otherwise repoint before publishing.
+
+### 2026-06-30 03:22 - Add Grok (xAI) + Ollama providers (free / BYO-key model options)
+
+**What was asked to do:** Add Ollama and Grok as selectable LLM providers (alongside Anthropic/OpenAI/Azure/Google) so bot creation/hosting can be done at little or no cost - Ollama for a genuinely $0 local path, Grok as another BYO-key option.
+
+**What I did:**
+- Both providers speak the OpenAI-compatible API, so both adapters wrap the existing `openai` SDK. Grok = fixed base URL `https://api.x.ai/v1` + the user's (paid) xAI key. Ollama = user-supplied base URL (default `http://localhost:11434`), no key (placeholder), model is whatever was pulled locally.
+- Widened the `ProviderName` union; because `PROVIDERS`, `PROVIDER_LABELS`, and `MODEL_OPTIONS` are all `Record<ProviderName, …>`, the compiler enforced updating each. Grok/Ollama use empty `MODEL_OPTIONS` (= free-text model field, same UI branch as Azure).
+- New transport header `x-llm-ollama-base-url` (`readOllamaBaseUrl` allows http only for localhost/loopback, requires https otherwise). Pipeline gained `resolveOllamaExtras` (→ `extras.baseUrl`); `resolveProviderAndKey` gives Ollama a placeholder key so it never hits the managed-key path; the route passes `azure.extras ?? ollama.extras`.
+- Client: `llm-key-store` got `get/set/clearOllamaBaseUrl`; `ChatWindow` requires a base URL (not a key) for Ollama and sends the new header with a placeholder `x-llm-api-key`.
+- Wizard: `FormState.ollamaBaseUrl` (default localhost), step-4 validation (Ollama→base URL+model, Grok→key+model), `StepAIModel` renders a base-URL field for Ollama and hides the key field; free-text model for any empty-list provider; fixed the initial-model passthrough so editing an existing Grok/Ollama bot keeps its saved model. `AIModelKeyTab` renders free-text model whenever the provider's list is empty.
+- Self-hosted runtime (`probot-bot`): `callLlm` is now env-driven (`PROBOT_LLM_BASE_URL`/`_MODEL`/`_API_KEY`, defaults preserve OpenAI) so a self-hoster points it at local Ollama for a true $0 path; documented in `probot-bot/.env.example`.
+
+**Files changed:**
+- `src/lib/ai/providers/types.ts` - update - `ProviderName` += `grok | ollama`.
+- `src/lib/ai/providers/grok.ts`, `ollama.ts` - create - OpenAI-compatible adapters.
+- `src/lib/ai/providers/index.ts` - update - register both; extend `PROVIDER_NAMES`.
+- `src/lib/ai/provider-labels.ts`, `model-options.ts` - update - add grok/ollama (empty model lists).
+- `src/lib/ai/key-transport.ts` - update - `readOllamaBaseUrl` + scheme rules.
+- `src/app/api/chat/[botId]/pipeline.ts` - update - `resolveOllamaExtras`; Ollama key branch.
+- `src/app/api/chat/[botId]/route.ts` - update - merge ollama extras into the provider call.
+- `src/lib/client/llm-key-store.ts` - update - Ollama base-URL helpers.
+- `src/components/chat/ChatWindow.tsx` - update - Ollama header/key handling.
+- `src/components/bot-factory/types.ts`, `BotFactoryForm.tsx`, `steps/StepAIModel.tsx`, `constants.ts` - update - wizard fields, defaults, validation, enabled set.
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` - update - free-text model for empty lists.
+- `probot-bot/app/api/chat/route.ts`, `probot-bot/.env.example` - update - env-driven LLM.
+- Tests: `providers/grok.test.ts`, `providers/ollama.test.ts` - create; `providers/index.test.ts`, `key-transport.test.ts`, `bots/schemas.test.ts` - update.
+- `docs/guides/models-and-keys.mdx` - update - add Ollama + Grok rows, specifics, honest cost note.
+
+**Decisions made:**
+- Reused the OpenAI SDK (both are OpenAI-compatible) rather than new clients; matched the existing Azure "extras + free-text model" pattern.
+- Free-text model fields for Grok/Ollama because xAI's catalog churns and Ollama models are user-pulled.
+- Excluded Grok/Ollama from managed encrypted-key storage (same posture as Azure).
+- Ollama base URL: http allowed only for loopback, https required for remote - never forward to an untrusted non-TLS host.
+
+**Verification:** typecheck green; key-leak scan green (370 files); unused-import scan clean. `npm test` (new adapter specs) and `npm run build` to be run natively on the Mac.
+
+**Open questions / follow-ups:**
+- Managed pro-bot.dev can't reach a user's localhost Ollama - the genuinely-$0 Ollama path is self-host/local or a publicly reachable Ollama URL (documented).
+- `ChatWindow`'s "missing credentials" prompt copy still says "API key", which reads slightly off for an Ollama bot missing its base URL - minor UX reword.
+
+### 2026-06-30 03:22 - Docs: Azure-student-credits blog + Journey/Resources blog nav
+
+**What was asked to do:** Write a blog showing students how to deploy their own model with the $100 Azure for Students credit and use that key to power a bot; reorganize the docs Blog tab so the origin-story post sits under "Journey" and the new how-to sits under "Resources".
+
+**What I did:**
+- Wrote a step-by-step Mintlify guide: claim the $100 Azure for Students credit (no card) → deploy a `gpt-4o-mini`-class model in the Microsoft Foundry portal → copy endpoint / deployment name / API key / API version → fill ProBot's Azure provider fields. Includes a field-mapping table, cost-control tips (Cost Management budget alert, mini model, built-in rate limits), and an honest caveat that credit lasts 12 months (renewable), with Ollama as the free fallback. Verified current facts via web search before writing.
+- Restructured the Blog tab in `docs.json` from a single "Blog" group into "Journey" (`blogs/welcome`) and "Resources" (`blogs/azure-student-credits`).
+
+**Files changed:**
+- `docs/blogs/azure-student-credits.mdx` - create - the student/Azure how-to (Resources).
+- `docs/docs.json` - update - Blog tab split into Journey + Resources groups.
+
+**Decisions made:**
+- Linked to official Microsoft docs for each step so the walkthrough stays correct as the portal (Azure AI Foundry → Microsoft Foundry) keeps getting renamed.
+- Framed it honestly as "free while student credit lasts," not "free forever," and pointed to provider-switching/Ollama for after expiry.
+
+**Verification:** `docs.json` validates as JSON; both Blog nav pages resolve to real files. Preview with `mintlify dev` in `docs/`.
+
+**Open questions / follow-ups:**
+- None.

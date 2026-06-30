@@ -13,11 +13,24 @@ ProBot is **bring-your-own-key (BYO key)**: you connect your own LLM provider ac
 | **OpenAI** | GPT-4o, GPT-4o-mini | [platform.openai.com](https://platform.openai.com/api-keys) |
 | **Azure OpenAI** | Your deployed GPT models | Azure portal → your OpenAI resource |
 | **Google Gemini** | Gemini 1.5 Flash / Pro | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| **Grok (xAI)** | grok-4.3 and newer | [x.ai/api](https://x.ai/api) |
+| **Ollama (local)** | llama3.2, qwen2.5, … | No key - runs on your machine |
 
 <Tip>
   For the cheapest good results, a "mini"/"flash" tier model (GPT-4o-mini,
   Claude Haiku, Gemini Flash) is plenty for resume Q&A.
 </Tip>
+
+<Note>
+  **Want it truly $0?** Run [Ollama](https://ollama.com) locally and pick the
+  **Ollama** provider - the model runs on your own machine, so there's no API
+  key and no per-message cost. The catch: the server that runs the chat must be
+  able to reach your Ollama. That's automatic when you
+  [self-host your bot](/self-hosted-bot/index) (Ollama at `http://localhost:11434`);
+  on the managed site at pro-bot.dev you'd need to expose Ollama at a public
+  `https://` URL. **Grok**, by contrast, uses xAI's paid API - it's free to
+  *operate* (you bring your own key) but xAI bills you for usage.
+</Note>
 
 ## Setup
 
@@ -29,6 +42,14 @@ ProBot is **bring-your-own-key (BYO key)**: you connect your own LLM provider ac
 ### Azure specifics
 
 Azure also needs your **endpoint** and (optionally) an **API version**; these ride in their own headers alongside the key. Use your deployed model's deployment name as the model.
+
+### Ollama specifics
+
+Ollama needs no key - just the **base URL** of your Ollama server (default `http://localhost:11434`) and the **model name** you've pulled (e.g. `llama3.2`). The base URL is stored in your browser and sent per request in the `x-llm-ollama-base-url` header. Plain `http://` is allowed only for localhost; any remote Ollama must be served over `https://`.
+
+### Grok specifics
+
+Grok works like OpenAI - paste your xAI key and type the model id (e.g. `grok-4.3`). xAI's model catalog changes often, so the model is a free-text field rather than a dropdown.
 
 ## Where your key lives
 

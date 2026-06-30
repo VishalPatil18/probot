@@ -256,13 +256,19 @@ export function AIModelKeyTab({
         >
           Model
         </label>
-        {provider === "azure" ? (
+        {models.length === 0 ? (
           <input
             id="ai-model-input"
             type="text"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="your Azure deployment name"
+            placeholder={
+              provider === "azure"
+                ? "your Azure deployment name"
+                : provider === "ollama"
+                  ? "llama3.2"
+                  : "model id (e.g. grok-4.3)"
+            }
             className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
           />
         ) : (
