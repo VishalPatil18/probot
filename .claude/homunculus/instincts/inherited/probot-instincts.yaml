@@ -1,0 +1,690 @@
+# Instincts generated from https://github.com/VishalPatil18/probot
+# Generated: 2026-07-05T23:09:33.047Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: probot-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: fix, feat
+
+## Evidence
+
+- 7 commits analyzed
+- Detected conventional commit pattern
+- Examples: feat: [STAGE v1.12] Demo video and Welcome Blog, fix: [STAGE v1.16] Comments cleanup
+
+---
+id: probot-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Commit Length
+
+## Action
+
+Keep commit messages concise (~49 characters)
+
+## Evidence
+
+- Average commit message length: 49 chars
+- Based on 7 commits
+
+---
+id: probot-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: probot-import-alias
+trigger: "when importing modules"
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Import Alias
+
+## Action
+
+Use path aliases (@/, ~/) instead of relative imports
+
+## Evidence
+
+- Import analysis shows alias pattern
+- Example: import { x } from '@/lib/x'
+
+---
+id: probot-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Export Style
+
+## Action
+
+Prefer mixed exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: mixed
+
+---
+id: probot-arch-type-based
+trigger: "when adding new code"
+confidence: 0.8
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Arch Type Based
+
+## Action
+
+Place code in the appropriate type folder (components/, services/, utils/, etc.)
+
+## Evidence
+
+- Type-based module organization detected
+- Folders: app, components, lib, widget
+
+---
+id: probot-test-colocate
+trigger: "when writing tests"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Colocate
+
+## Action
+
+Place test file next to the source file (e.g., Button.test.tsx next to Button.tsx)
+
+## Evidence
+
+- Colocated test pattern detected
+- Tests live alongside source files
+
+---
+id: probot-test-framework
+trigger: "when writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Framework
+
+## Action
+
+Use vitest as the test framework
+
+## Evidence
+
+- Test framework detected: vitest
+- File pattern: *.test.ts
+
+---
+id: probot-test-naming
+trigger: "when creating a test file"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Naming
+
+## Action
+
+Name test files using the pattern: *.test.ts
+
+## Evidence
+
+- File pattern: *.test.ts
+- Consistent across test files
+
+---
+id: probot-test-mocking
+trigger: "when mocking dependencies in tests"
+confidence: 0.75
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Mocking
+
+## Action
+
+Use vi.mock for mocking
+
+## Evidence
+
+- Mocking pattern detected: vi.mock
+- Consistent across test files
+
+---
+id: probot-test-types
+trigger: "when planning tests for a feature"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Types
+
+## Action
+
+Write unit, integration tests to match project standards
+
+## Evidence
+
+- Test types detected: unit, integration
+- Coverage config: no
+
+---
+id: probot-workflow-feature-development-with-docs-and-tests
+trigger: "when doing feature development with docs and tests"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Feature Development With Docs And Tests
+
+## Action
+
+Follow the feature-development-with-docs-and-tests workflow:
+1. Implement or update feature in relevant src/components or src/app files.
+2. Update or add related documentation in docs/ or README.md.
+3. Add or update test files alongside implementation (e.g., *.test.tsx).
+4. Update or add static assets if needed (e.g., images, videos).
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/components/**/*.tsx, src/app/**/*.ts, docs/**/*.mdx
+
+---
+id: probot-workflow-bot-factory-module-enhancement
+trigger: "when doing bot factory module enhancement"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Bot Factory Module Enhancement
+
+## Action
+
+Follow the bot-factory-module-enhancement workflow:
+1. Update or add files in src/components/bot-factory/steps/ or parts/.
+2. Modify src/components/bot-factory/BotFactoryForm.tsx and related constants/types.
+3. Update related dashboard/settings files if needed.
+4. Optionally update related API routes or lib files.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/components/bot-factory/BotFactoryForm.tsx, src/components/bot-factory/steps/*.tsx, src/components/bot-factory/parts/*.tsx
+
+---
+id: probot-workflow-ai-model-provider-integration
+trigger: "when doing ai model provider integration"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Ai Model Provider Integration
+
+## Action
+
+Follow the ai-model-provider-integration workflow:
+1. Add or update files in src/lib/ai/providers/ (including .ts and .test.ts).
+2. Update src/lib/ai/model-options.ts and provider-labels.ts.
+3. Update API pipeline/route files if needed.
+4. Update configuration or documentation.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/lib/ai/providers/*.ts, src/lib/ai/providers/*.test.ts, src/lib/ai/model-options.ts
+
+---
+id: probot-workflow-documentation-and-blog-update
+trigger: "when doing documentation and blog update"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Documentation And Blog Update
+
+## Action
+
+Follow the documentation-and-blog-update workflow:
+1. Edit or add files in docs/ (including blogs/, guides/, concepts/, api-reference/).
+2. Update README.md or other top-level docs if needed.
+3. Optionally update static assets (images, videos) referenced in docs.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: docs/**/*.mdx, README.md, src/app/icon.png
+
+---
+id: probot-workflow-code-cleanup-and-refactor
+trigger: "when doing code cleanup and refactor"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Code Cleanup And Refactor
+
+## Action
+
+Follow the code-cleanup-and-refactor workflow:
+1. Edit multiple files across src/, lib/, and docs/ to clean up code or comments.
+2. Update meta files (CHANGELOG.md, CONTRIBUTING.md, etc.) if needed.
+3. Optionally update scripts or configuration.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/**/*.ts, src/**/*.tsx, src/lib/**/*.ts
+
+---
+id: probot-naming-files-camelCase
+trigger: "When creating or renaming a file"
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Naming Files CamelCase
+
+## Action
+
+Use camelCase for file names
+
+## Evidence
+
+- Pattern in namingConventions.files
+- Observed in src/components/bot-factory/BotFactoryForm.tsx
+
+---
+id: probot-naming-functions-camelCase
+trigger: "When defining a function"
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Naming Functions CamelCase
+
+## Action
+
+Use camelCase for function names
+
+## Evidence
+
+- Pattern in namingConventions.functions
+- Observed in multiple src/app/**/*.ts files
+
+---
+id: probot-naming-classes-PascalCase
+trigger: "When defining a class"
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Naming Classes PascalCase
+
+## Action
+
+Use PascalCase for class names
+
+## Evidence
+
+- Pattern in namingConventions.classes
+- Observed in src/components/bot-factory/BotFactoryForm.tsx
+
+---
+id: probot-naming-constants-SCREAMING_SNAKE_CASE
+trigger: "When defining a constant"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Naming Constants SCREAMING_SNAKE_CASE
+
+## Action
+
+Use SCREAMING_SNAKE_CASE for constant names
+
+## Evidence
+
+- Pattern in namingConventions.constants
+- Observed in src/components/bot-factory/constants.ts
+
+---
+id: probot-import-alias
+trigger: "When importing modules"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Import Alias
+
+## Action
+
+Use alias import style
+
+## Evidence
+
+- Pattern in importStyle
+- Observed in src/app/**/*.ts
+
+---
+id: probot-export-mixed
+trigger: "When exporting modules or functions"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Export Mixed
+
+## Action
+
+Use both named and default exports as appropriate
+
+## Evidence
+
+- Pattern in exportStyle
+- Observed in src/lib/**/*.ts
+
+---
+id: probot-testing-vitest
+trigger: "When writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Testing Vitest
+
+## Action
+
+Use Vitest as the testing framework
+
+## Evidence
+
+- Pattern in testing.framework
+- Presence of vi.mock in test files
+
+---
+id: probot-testing-file-pattern
+trigger: "When naming test files"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Testing File Pattern
+
+## Action
+
+Use the *.test.ts or *.test.tsx pattern for test files
+
+## Evidence
+
+- Pattern in testing.filePattern
+- Observed in src/components/**/*.test.tsx
+
+---
+id: probot-testing-colocated
+trigger: "When adding tests for a component or module"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Testing Colocated
+
+## Action
+
+Place test files next to the implementation (colocated)
+
+## Evidence
+
+- Pattern in architecture.folderStructure.testLocation
+- Observed in src/components/**/*.test.tsx
+
+---
+id: probot-testing-mocking-vi-mock
+trigger: "When mocking dependencies in tests"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Testing Mocking Vi Mock
+
+## Action
+
+Use vi.mock for mocking
+
+## Evidence
+
+- Pattern in testing.mockingStyle
+- Observed in src/lib/ai/providers/*.test.ts
+
+---
+id: probot-git-conventional-commits
+trigger: "When writing a commit message"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Git Conventional Commits
+
+## Action
+
+Use conventional commit format with 'feat' or 'fix' prefixes
+
+## Evidence
+
+- Pattern in commits.type and prefixes
+- Examples: 'feat: [STAGE v1.12] Demo video and Welcome Blog'
+
+---
+id: probot-git-commit-length
+trigger: "When writing a commit message"
+confidence: 0.8
+domain: git
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Git Commit Length
+
+## Action
+
+Keep commit messages concise (around 49 characters on average)
+
+## Evidence
+
+- Pattern in commits.averageLength
+- Observed in commit examples
+
+---
+id: probot-workflow-feature-development
+trigger: "When adding a new feature or major improvement with docs and tests"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Workflow Feature Development
+
+## Action
+
+Update implementation, documentation, and tests together; use /new-feature command
+
+## Evidence
+
+- Workflow: feature-development-with-docs-and-tests
+- Pattern in commit sequences and files involved
+
+---
+id: probot-workflow-bot-factory-enhancement
+trigger: "When enhancing or refactoring the bot factory module"
+confidence: 0.88
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Workflow Bot Factory Enhancement
+
+## Action
+
+Update steps/parts, BotFactoryForm, constants/types, and related dashboard files; use /update-bot-factory command
+
+## Evidence
+
+- Workflow: bot-factory-module-enhancement
+- Pattern in files involved and commit sequences
+
+---
+id: probot-workflow-ai-model-provider-integration
+trigger: "When adding or updating AI model provider integrations"
+confidence: 0.86
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Workflow Ai Model Provider Integration
+
+## Action
+
+Update provider files, model options, API routes, and docs; use /add-model-provider command
+
+## Evidence
+
+- Workflow: ai-model-provider-integration
+- Pattern in files involved and commit sequences
+
+---
+id: probot-workflow-documentation-update
+trigger: "When updating documentation, guides, FAQs, or blog posts"
+confidence: 0.87
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Workflow Documentation Update
+
+## Action
+
+Edit docs, update README, and optionally update static assets; use /update-docs command
+
+## Evidence
+
+- Workflow: documentation-and-blog-update
+- Pattern in files involved and commit sequences
+
+---
+id: probot-workflow-code-cleanup-refactor
+trigger: "When performing code cleanup, comment removal, or broad refactoring"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Workflow Code Cleanup Refactor
+
+## Action
+
+Edit multiple files across codebase and meta files; use /cleanup command
+
+## Evidence
+
+- Workflow: code-cleanup-and-refactor
+- Pattern in files involved and commit sequences
+
