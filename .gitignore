@@ -37,6 +37,7 @@ logs/
 coverage/
 .nyc_output/
 *.lcov
+manual-testing/
 
 # --- Caches ---
 .cache/

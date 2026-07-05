@@ -4,27 +4,22 @@ import { describe, expect, it } from "vitest";
 
 import { DemoVideoModal } from "./DemoVideoModal";
 
-// NEXT_PUBLIC_DEMO_VIDEO_URL is unset in the test env, so VIDEO_URL resolves to
-// "" and the modal renders the "coming soon" poster rather than an iframe.
+// The modal renders a native <video> (jsdom doesn't implement play(), which the
+// component guards against) plus a mute/unmute toggle and a close button.
 describe("DemoVideoModal", () => {
   it("is closed until the trigger is clicked", () => {
     render(<DemoVideoModal />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("opens the poster and closes on Escape", async () => {
+  it("opens the video dialog and closes on Escape", async () => {
     const user = userEvent.setup();
-    render(<DemoVideoModal />);
+    const { container } = render(<DemoVideoModal />);
 
     await user.click(screen.getByRole("button", { name: /see a live demo/i }));
 
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toBeInTheDocument();
-    expect(screen.getByText(/demo coming soon/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /see a live bot/i })).toHaveAttribute(
-      "href",
-      "/u/vishal/chat",
-    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(container.querySelector("video")).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -38,5 +33,16 @@ describe("DemoVideoModal", () => {
     await user.click(screen.getByRole("button", { name: /close/i }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("renders the video with native controls enabled", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<DemoVideoModal />);
+
+    await user.click(screen.getByRole("button", { name: /see a live demo/i }));
+
+    const video = container.querySelector("video");
+    expect(video).toBeInTheDocument();
+    expect(video).toHaveAttribute("controls");
   });
 });

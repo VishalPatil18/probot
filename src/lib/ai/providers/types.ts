@@ -1,4 +1,10 @@
-export type ProviderName = "anthropic" | "openai" | "google" | "azure";
+export type ProviderName =
+  | "anthropic"
+  | "openai"
+  | "google"
+  | "azure"
+  | "grok"
+  | "ollama";
 
 export type CompleteParams = {
   system: string;

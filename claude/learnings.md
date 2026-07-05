@@ -1880,3 +1880,127 @@ When NOT to duplicate: when the duplication encodes a CHOICE (which algorithm, w
 A useful smell-test: **does updating one copy require updating the other?** If yes (the two copies are coupled by domain semantics), duplication is fine and the coupling lives in your head + the runbook. If no (the two copies were independently arrived at via separate decisions), congratulations - you have two unrelated pieces of code that happen to look similar, and forcing them through a shared abstraction would couple things that shouldn't be coupled.
 
 ---
+
+### Modularizing a fat React component without changing behavior
+
+> When a 1500-line component "needs splitting," what actually makes the split safe, and how do you keep the public surface identical?
+
+The key insight is the distinction between a component's *public API* (its exported name and props) and its *internal composition* (the helper components and functions it happens to define in the same file). Tests, and every other importer, only ever touch the public API. So you can move every inner piece - step renderers, presentational sub-components, pure helpers, constant maps, types - into separate files, and as long as the top-level component still re-composes them into the same rendered tree, nothing observable changes. The test file that does `import { BotFactoryForm } from "./BotFactoryForm"` neither knows nor cares that `StepIdentity` now lives in `steps/StepIdentity.tsx`.
+
+A few mechanics that make this clean in Next.js + TypeScript. (1) The `"use client"` boundary is *inherited*: once a client component imports a child module, that child is pulled into the client bundle automatically, so extracted interactive components work whether or not you re-declare the directive - though declaring it on files that use hooks/handlers is clearer and harmless. (2) A shared prop type like the form's single-field updater (`type PatchFn = <K extends keyof FormState>(k: K, v: FormState[K]) => void`) is worth lifting into a `types.ts` so every step file references one definition instead of re-spelling the generic signature. (3) Co-locate by feature in subfolders (`steps/`, `parts/`) rather than dumping siblings flat - the import graph then reads like the UI hierarchy.
+
+The trap to avoid is splitting *stateful* sections that are coupled to the parent's `useState`. Extracting a leaf like `<Toggle>` or `<StepHeading>` is free because it only receives props. Extracting a "section" that reads and writes ten pieces of parent state would force you to thread ten props (or lift state oddly), which is real risk for a "no behavior change" refactor. The safe, high-value move is to extract the leaves and the pure helpers first; the parent stays as the state owner and orchestrator.
+
+### The discriminated-union short-circuit for breaking up a long request handler
+
+> A 460-line API route is one big function full of early `return NextResponse.json(...)` guards. How do you split it into testable steps without changing a single status code?
+
+A request handler resists naive extraction because every step can *abort* the whole request with its own response. You can't just pull "step 8" into a function that returns its data - it also needs the power to say "stop, send this 429." The clean pattern (already used elsewhere in this codebase as `requireBotOwner`) is to have each step return a discriminated union: `{ ok: true; ...data } | { ok: false; response: Response }`. The orchestrator then becomes a flat sequence of `const r = await step(...); if (!r.ok) return r.response;` lines, and each step owns exactly the response shapes it used to emit inline.
+
+Why a union rather than throwing? Throwing an exception to signal "send a 404" works, but it splits the control flow into two channels (return values *and* exceptions) and forces a catch block that has to re-derive which status to send. The union keeps everything in the return channel: the response object is constructed at the exact site that decided to abort, carrying its precise status and body, and the orchestrator just forwards it. Behavior parity is then almost mechanical to verify - each extracted `NextResponse.json({...}, {status})` is the same literal it was inline.
+
+Two details preserve exact behavior. Ordering: the steps must run in the original sequence (e.g. the BYO-key header is parsed *before* the body is read, so a malformed key still 400s even on a request with bad JSON) - keeping that order inside the extracting function, not just across functions, matters. And the "success-looking" abort: one branch here returns a *200* with a friendly fallback message when the circuit breaker is open. That's still an `{ ok: false; response }` from the orchestrator's point of view - "ok" means "produce the normal reply," not "HTTP 2xx" - so the union's discriminant is about control flow, not status class.
+
+### Rotating conic-gradient rings via `mask-composite: exclude`
+
+> How do you draw an animated gradient border on a rounded element without stacking two divs or using SVG?
+
+The classic trick: paint the full gradient on a `::before` pseudo-element that's a few pixels larger than the button (`inset: -3px`), then mask out its interior so only a ring remains. The mask is two overlapping black layers - one clipped to `content-box`, one covering the whole element - composited with `xor` (WebKit) / `exclude` (spec). Because "black-on-black minus black-on-black" cancels wherever both layers exist and leaves black only in the padding strip, the result is: gradient visible only in the padding band, i.e. a ring. Rotate the element and the ring appears to spin, even though `conic-gradient` itself has no built-in rotation. This costs one composited layer and animates on the compositor thread (transform-only), which stays smooth even on cheap phones.
+
+Why not just `border-image: conic-gradient(...)`? Because `border-image` doesn't play well with `border-radius` on non-rectangular borders - the gradient gets clipped to the box, not the rounded silhouette. The mask trick works with any `border-radius`.
+
+Two gotchas learned while wiring this into the ProBot widget:
+
+- Set `pointer-events: none` on the ring pseudo-element. Otherwise the 3px padding halo intercepts clicks and the button feels dead near its edges.
+- Pair `-webkit-mask-composite: xor` with `mask-composite: exclude`. They mean the same thing but ship under different names; declaring both keeps the ring visible in Safari and in Chromium/Firefox alike. Prefixed `-webkit-mask` must come first because the shorthand is order-sensitive.
+
+Concretely, the ProBot bubble uses:
+
+```css
+.probot-bubble::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  padding: 3px;
+  background: conic-gradient(from 0deg, #7c5cff, #ff5cae, #ffb85c, #5cffb8, #5caeff, #7c5cff);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: probot-spin 3s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+```
+
+The `z-index: -1` tucks the ring behind the button's own background so the gradient shows through only in the padding band, never over the star SVG.
+
+### Progressive-render pattern for third-party embed widgets
+
+> When an embed script needs a network fetch before it can render, what's the right failure mode?
+
+Two mount patterns:
+
+1. **Fetch-then-render.** Wait for the config API, only then attach the widget to the DOM. Clean happy path, but any network hiccup, CORS mismatch, or 404 on the config endpoint yields *no visible widget at all* - and because embed scripts silently `return` on failure by design (they must never throw on host pages), the site owner has no signal that anything went wrong. This is exactly what the ProBot widget did originally and it's why the manual-testing HTML page was blank.
+
+2. **Render-then-hydrate.** Attach the bubble and a minimal fallback dialog synchronously, then fire the config fetch. On success, mutate the dialog's `innerHTML` and update the theme colour. On failure, leave the fallback in place. The bubble is *always* visible; the worst-case UX is a bubble that opens a "we're warming up, visit ProBot" dialog instead of a broken silent embed.
+
+Pattern (2) is strictly better for a third-party embed: the whole point of embedding is that the site owner has already committed pixels to your widget, so failing invisibly wastes that commitment. It also makes the widget more debuggable - the site owner sees the bubble, clicks it, and immediately knows whether the config layer is broken.
+
+The trade-off: pattern (2) forces you to keep a *safe default* rendering path that doesn't depend on config. That means a fallback theme colour (`#7c5cff` in ProBot's case), a generic aria-label ("Open chat" instead of "Open chat with Jane"), and a minimal fallback dialog with no owner data. These defaults must be correct *without* the config fetch - so the mount function can never depend on config being present before it renders.
+
+A subtler bit: when you upgrade from fallback → hydrated dialog, mutate `dialog.innerHTML` in place rather than removing and re-appending the node. The click handler was bound to the dialog element with event delegation (`dataset.action === "close"`), so swapping innerHTML preserves the listener and the newly-rendered close button still works without any rewiring. If instead you swapped in a new dialog element, you'd have to re-attach every listener.
+
+
+### Cross-origin chat calls from an embeddable widget
+
+> How does an embed widget call a chat API on the vendor's domain without a user-supplied API key, and what breaks if you don't think about it?
+
+Two things have to line up for this to work: **credential resolution** and **CORS**.
+
+**Credential resolution.** The ProBot architecture has two BYO-key paths (documented in BYO-KEY.md). Path 1 is browser-local: the visitor's own encrypted `IndexedDB` holds the key, and every chat request rides an `x-llm-api-key` header. Path 2 is managed: the bot owner encrypted their own key into the DB via a KEK-wrapped DEK, and the chat route unwraps it in-memory whenever a request arrives without a header. For an embed widget on a third-party site, path 1 is a non-starter — asking a random recruiter to paste an OpenAI key is unrealistic — so the widget always uses path 2 by omitting the header. If the owner hasn't enabled managed storage, the server returns a non-2xx and the widget has to degrade to a fallback message rather than crashing. The takeaway: an embeddable surface *forces* the managed-key path to exist, or the surface is broken by default. It's not an optional feature.
+
+**CORS.** The widget runs on `example.com`, but its fetch targets `pro-bot.dev`. Without an `Access-Control-Allow-Origin` header on the response, the browser aborts the request *before* it hits application code — you'll see a red CORS error in devtools and never a 200 or a useful body. ProBot's chat and config routes ship a shared `PUBLIC_CORS_HEADERS` (`Access-Control-Allow-Origin: *`, methods `GET, POST, OPTIONS`, a small allow-list of headers, plus `Max-Age: 86400`) and a matching `OPTIONS` handler returning 204. The `*` wildcard is safe here because the routes are already public — no cookies, no auth, no CSRF surface — but if you ever add a credentialed endpoint, `*` becomes forbidden with `Access-Control-Allow-Credentials`, and you'll need to echo the caller's `Origin` back explicitly.
+
+Both concerns show up together: even if your credential resolution is perfect, a missing OPTIONS handler means the browser never sends the POST. And even if CORS is perfect, a widget that sends no key and hits a server without managed storage will 4xx. Debugging one without checking the other wastes time.
+
+### Preserving delegated event handlers across `innerHTML` swaps
+
+> The dialog listener was added to the dialog element before the click target existed. Why does it still work after the widget rewrites the dialog's inner HTML?
+
+Because the listener is on the *parent* container, not on the eventual target — it uses delegation. The dialog element itself never gets replaced; only its children do. When `dialog.innerHTML = ...` runs, the DOM parses new child nodes and swaps them in, but the dialog node's own identity, its position in the tree, and its attached listeners all persist. Any click on the new children still bubbles up to the dialog, where the delegated handler reads `event.target.dataset.action` and dispatches on the value. This is why the widget hydrates the fallback dialog first, wires up the delegation once, and then rewrites the inner HTML when the config arrives — the "close" and "ask" handlers keep working across the swap with zero rewiring.
+
+The alternative — attaching a listener directly to each button — would require re-binding after every `innerHTML` mutation, which is exactly the kind of thing that quietly stops working when a UI ships. Delegation moves the listener up to a node that isn't going to churn.
+
+
+### Hand-rolling a safe markdown parser when a full library is too heavy
+
+> When does it make sense to write your own markdown parser instead of pulling in `marked`, `micromark`, or `markdown-it`?
+
+The trigger is bundle-size context. A React app that already ships MB of runtime doesn't notice a 40 KB parser. A widget that has a 50 KB budget and is 19 KB before markdown notices it very much — `marked` alone pushed the ProBot widget from 19 KB to 63 KB, past its budget. In that world, hand-rolling ~110 lines is *simpler* than the alternative, because the alternative isn't "just add a dep" — it's "add a dep and now audit-and-fight-with the bundle splitter."
+
+The other trigger is scope. Full markdown parsers implement CommonMark — nested emphasis, setext headings, reference-style links, escape sequences, HTML pass-through, tight-vs-loose lists, and dozens of edge cases most users never hit. LLM-emitted markdown for a chat surface is a small subset: bold, italic, inline code, code fences, links, headings, lists, blockquotes, hard breaks. Skip the rest and the parser is a few dozen substitutions.
+
+**Safety is the load-bearing part.** A parser that emits HTML from untrusted input has to prove it can't inject scripts. The pattern that works:
+
+1. Call `escapeHtml` on every user-controlled substring *before* running any regex. `<script>alert(1)</script>` becomes `&lt;script&gt;alert(1)&lt;/script&gt;` before the parser even sees it. From that point on, the parser is only inserting tags it produces itself — the input can never introduce a real angle bracket.
+2. Whitelist URL schemes on link `href`. `[click](javascript:alert(1))` looks like a legitimate markdown link but produces a working XSS payload if you emit the URL verbatim. Match `^(https?:|mailto:)` and collapse anything else to `#`.
+3. Protect inline code from other transforms. Otherwise `` `**not bold**` `` gets its inner `**` eaten by the emphasis pass and renders as `<code><strong>not bold</strong></code>`. The trick: extract every `` `...` `` region into placeholders (`\x00C0\x00`, `\x00C1\x00`, ...) before running emphasis/link regexes, then restore. `\x00` is a null byte — it can't appear in normal text and won't collide with any other regex.
+
+**What you give up:** correctness at the margins. `5*3*7` will incorrectly render as `5<em>3</em>7`. Nested emphasis in weird positions won't do the "right" thing. Reference-style links (`[text][ref]`) won't resolve. For a chat surface where the input is either LLM output (clean-ish) or a visitor's own message (rendered as text, not markdown), those trade-offs are invisible. In a Wikipedia-style setting they'd be unacceptable.
+
+The generalizable heuristic: **use a full parser when your input is human-authored prose that people will proofread; hand-roll when the input is machine-generated or ephemeral and no one will notice a mis-rendered edge case.** LLM chat replies fall firmly in the second bucket.
+
+### Bundle-size regressions from tree-shaking-resistant dependencies
+
+> Why did adding a single import for `marked` add 44 KB to the widget bundle, not 10 KB like the "gzipped size" badge suggested?
+
+Because the "gzipped size" number is a lie for un-served code. The bundle you ship over the network is minified but *not* gzipped by the build — the CDN gzips it in flight. So the meaningful budget for widget.js is the minified byte count, which is what esbuild reports. `marked` is 42 KB minified (44 KB after wrapping in the widget IIFE), and gzip cuts that in half over the wire but not for `esbuild --minify`'s output-size guard.
+
+Tree-shaking helps only when the library was authored with side-effect-free named exports. `marked` v14+ *is* ESM with named exports (`import { marked } from "marked"`), so most of the encoding table code should be droppable... except the parser dispatches to token handlers via a Lexer→Parser→Renderer chain where every renderer method is reachable from `marked.parse`, so esbuild sees "everything used" and keeps it all. This is a common shape: a library exposes one function that internally reaches every code path, and tree-shaking gives you no savings because the reachability graph is dense.
+
+The heuristic that would have saved a build cycle: **grep the library source for the entrypoint, and if it dispatches to many methods through a registry (renderer, lexer, plugin manager), assume tree-shaking will yield zero savings and budget for the full unminified byte count.** For `marked` this would have flagged the 42 KB before install.
+
+The fix is either (a) a library with much smaller total surface (like `snarkdown` — 1 KB but allows raw HTML pass-through, an XSS problem) or (b) hand-rolling the subset you need. The ProBot widget went with (b) because the subset was small and the XSS risk had to be controlled anyway.
+

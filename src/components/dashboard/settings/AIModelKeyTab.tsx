@@ -1,12 +1,23 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { MODEL_OPTIONS } from "@/lib/ai/model-options";
 import { describeProvider, PROVIDER_LABELS } from "@/lib/ai/provider-labels";
 import type { ProviderName } from "@/lib/ai/providers";
 import { PROVIDER_NAMES } from "@/lib/ai/providers";
-import { setApiKey } from "@/lib/client/llm-key-store";
+import {
+  getApiKey,
+  getAzureCreds,
+  setApiKey,
+  setAzureCreds,
+} from "@/lib/client/llm-key-store";
+import { DEFAULT_AZURE_API_VERSION } from "@/components/bot-factory/constants";
+
+import { type AuditResponse, formatTimestamp } from "./audit";
+import { ManagedKeyStatusPill } from "./ManagedKeyStatusPill";
 
 type Props = {
   // Null on the account-only /dashboard/settings route (no bot yet). The
@@ -33,20 +44,6 @@ type Props = {
 // Provider/model preferences live on the USER (one provider per account, as
 // the existing onboarding flow assumes); managed key + audit log are per-BOT
 // since a future multi-bot user may want to scope keys per bot.
-
-const MODEL_OPTIONS: Record<ProviderName, string[]> = {
-  anthropic: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"],
-  openai: ["gpt-4o-mini", "gpt-4o", "o3-mini"],
-  google: ["gemini-2.5-flash", "gemini-2.5-pro"],
-  azure: [],
-};
-
-interface AuditResponse {
-  stored: boolean;
-  provider: string | null;
-  lastDecryptedAt: string | null;
-  entries: Array<{ decryptedAt: string; ipHashSuffix: string | null }>;
-}
 
 export function AIModelKeyTab({
   botId,
@@ -76,6 +73,23 @@ export function AIModelKeyTab({
   const [audit, setAudit] = useState<AuditResponse | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
 
+  // Azure credentials live in the browser's encrypted IndexedDB store - Azure's
+  // multi-secret credential (key + endpoint + apiVersion) isn't wired into the
+  // server-side managed-key path. This mirrors Bot Factory Step 4 so owners can
+  // update the same three values from Settings without re-running the wizard.
+  const [azureEndpoint, setAzureEndpoint] = useState("");
+  const [azureApiVersion, setAzureApiVersion] = useState(
+    DEFAULT_AZURE_API_VERSION,
+  );
+  const [azureKey, setAzureKey] = useState("");
+  const [azureKeyStored, setAzureKeyStored] = useState(false);
+  const [showAzureKey, setShowAzureKey] = useState(false);
+  const [savingAzure, setSavingAzure] = useState(false);
+  const [azureStatus, setAzureStatus] = useState<"idle" | "saved" | "error">(
+    "idle",
+  );
+  const [azureError, setAzureError] = useState<string | null>(null);
+
   const fetchAudit = useCallback(async () => {
     if (!botId) return;
     try {
@@ -95,6 +109,69 @@ export function AIModelKeyTab({
   useEffect(() => {
     void fetchAudit();
   }, [fetchAudit]);
+
+  // Pre-fill the Azure form from the encrypted browser store when the tab
+  // opens on Azure (or when the user flips the provider to Azure). Only the
+  // endpoint + apiVersion round-trip visibly; the key is masked with a
+  // placeholder if one is already stored (same UX as the managed-key input).
+  useEffect(() => {
+    if (provider !== "azure") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [creds, existingKey] = await Promise.all([
+          getAzureCreds(),
+          getApiKey(),
+        ]);
+        if (cancelled) return;
+        if (creds) {
+          setAzureEndpoint(creds.endpoint);
+          setAzureApiVersion(creds.apiVersion || DEFAULT_AZURE_API_VERSION);
+        }
+        setAzureKeyStored(Boolean(existingKey && existingKey.length > 0));
+      } catch {
+        // Non-fatal - the user can still type new credentials in.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [provider]);
+
+  async function saveAzureCreds() {
+    if (savingAzure) return;
+    const endpoint = azureEndpoint.trim();
+    const apiVersion = azureApiVersion.trim() || DEFAULT_AZURE_API_VERSION;
+    const keyInput = azureKey.trim();
+    if (!endpoint.startsWith("https://")) {
+      setAzureStatus("error");
+      setAzureError("Endpoint must start with https://");
+      return;
+    }
+    // Key required only when nothing has been stored yet - blank means
+    // "keep the existing one" on a settings update.
+    if (!azureKeyStored && keyInput.length < 8) {
+      setAzureStatus("error");
+      setAzureError("API key must be at least 8 characters.");
+      return;
+    }
+    setSavingAzure(true);
+    setAzureError(null);
+    try {
+      await setAzureCreds({ endpoint, apiVersion });
+      if (keyInput.length >= 8) {
+        await setApiKey(keyInput);
+      }
+      setAzureKey("");
+      setAzureKeyStored(true);
+      setAzureStatus("saved");
+    } catch {
+      setAzureStatus("error");
+      setAzureError("Couldn't save credentials. Please try again.");
+    } finally {
+      setSavingAzure(false);
+    }
+  }
 
   function selectProvider(next: ProviderName) {
     setProvider(next);
@@ -156,7 +233,7 @@ export function AIModelKeyTab({
         setKeyStatus("error");
         setKeyError(
           body.error === "managed_storage_unavailable"
-            ? "This deployment hasn't enabled managed key storage. Use the local-only path or contact the operator."
+            ? "This deployment hasn't enabled managed key storage. Contact the operator."
             : "Couldn't store the encrypted key. Please try again.",
         );
         return;
@@ -225,9 +302,9 @@ export function AIModelKeyTab({
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
         <p className="text-sm leading-relaxed text-ink">
-          <strong>Your key, your choice.</strong> Keep it local (your browser
-          only) or store it encrypted on pro-bot.dev so recruiters can chat when
-          you&apos;re offline. Either way, the plaintext key is never logged.
+          <strong>Your key stays encrypted end-to-end.</strong>{" "}
+          Envelope-encrypted at rest on pro-bot.dev so recruiters can chat any
+          time, and never logged in plaintext.
         </p>
       </div>
 
@@ -266,13 +343,19 @@ export function AIModelKeyTab({
         >
           Model
         </label>
-        {provider === "azure" ? (
+        {models.length === 0 ? (
           <input
             id="ai-model-input"
             type="text"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="your Azure deployment name"
+            placeholder={
+              provider === "azure"
+                ? "your Azure deployment name"
+                : provider === "ollama"
+                  ? "llama3.2"
+                  : "model id (e.g. grok-4.3)"
+            }
             className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
           />
         ) : (
@@ -310,27 +393,148 @@ export function AIModelKeyTab({
         </div>
       </section>
 
-      {botId ? (
+      {provider === "azure" ? (
+        <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <h3 className="font-bold">Azure credentials</h3>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                azureKeyStored
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-neutral-100 text-neutral-600"
+              }`}
+            >
+              {azureKeyStored ? "Saved" : "Not saved"}
+            </span>
+          </div>
+          <p className="mb-5 text-xs text-muted">
+            Kept encrypted in your browser. Azure&apos;s multi-secret credential
+            isn&apos;t supported by server-side managed storage in this release,
+            so recruiters can only reach an Azure bot when you&apos;re online -
+            or via the{" "}
+            <Link
+              href="/self-hosted-bot"
+              className="text-brand font-semibold hover:underline"
+            >
+              self-hosted runtime
+            </Link>
+            .
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="azure-endpoint-input"
+                className="mb-1.5 block text-xs font-semibold"
+              >
+                Azure endpoint
+              </label>
+              <input
+                id="azure-endpoint-input"
+                type="url"
+                value={azureEndpoint}
+                onChange={(e) => setAzureEndpoint(e.target.value)}
+                autoComplete="off"
+                placeholder="https://your-resource.cognitiveservices.azure.com"
+                className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              />
+              <p className="mt-1.5 text-[11px] text-muted">Must use https://</p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="azure-version-input"
+                className="mb-1.5 block text-xs font-semibold"
+              >
+                API version
+              </label>
+              <input
+                id="azure-version-input"
+                type="text"
+                value={azureApiVersion}
+                onChange={(e) => setAzureApiVersion(e.target.value)}
+                autoComplete="off"
+                placeholder={DEFAULT_AZURE_API_VERSION}
+                className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="azure-key-input"
+                className="mb-1.5 block text-xs font-semibold"
+              >
+                Azure API key
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="azure-key-input"
+                  type={showAzureKey ? "text" : "password"}
+                  value={azureKey}
+                  onChange={(e) => setAzureKey(e.target.value)}
+                  autoComplete="off"
+                  placeholder={
+                    azureKeyStored
+                      ? "•••••••• (key stored - re-enter to replace)"
+                      : "your Azure key"
+                  }
+                  className="flex-1 rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAzureKey((v) => !v)}
+                  className="text-xs font-semibold text-brand hover:underline"
+                >
+                  {showAzureKey ? "Hide" : "Show"}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted">
+                Deployment name comes from the <strong>Model</strong> field
+                above.
+              </p>
+            </div>
+          </div>
+
+          {azureError ? (
+            <p role="alert" className="mt-3 text-xs text-rose-700">
+              {azureError}
+            </p>
+          ) : null}
+          <div className="mt-5 flex items-center justify-end gap-3">
+            {azureStatus === "saved" ? (
+              <span className="text-sm font-medium text-emerald-700">
+                Saved!
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={saveAzureCreds}
+              disabled={savingAzure}
+              className="btn btn-primary disabled:opacity-60"
+            >
+              {savingAzure
+                ? "Saving…"
+                : azureKeyStored
+                  ? "Update credentials"
+                  : "Save credentials"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {provider === "azure" ? null : botId ? (
         <>
           <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
-        <div className="mb-1 flex items-center justify-between gap-3">
-          <h3 className="font-bold">Managed key storage</h3>
-          <ManagedKeyStatusPill audit={audit} />
-        </div>
-        <p className="mb-5 text-xs text-muted">
-          Stored encrypted with envelope encryption. The plaintext is in memory
-          only during one chat request, then discarded. Required for recruiters
-          to chat with your bot when you&apos;re offline.
-        </p>
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <h3 className="font-bold">Managed key storage</h3>
+              <ManagedKeyStatusPill audit={audit} />
+            </div>
+            <p className="mb-5 text-xs text-muted">
+              Stored encrypted with envelope encryption. The plaintext is in
+              memory only during one chat request, then discarded. Required for
+              recruiters to chat with your bot when you&apos;re offline.
+            </p>
 
-        {provider === "azure" ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            Azure keys aren&apos;t supported by managed storage in this release
-            - the endpoint + apiVersion live in your browser. Use the
-            self-hosted path for now.
-          </div>
-        ) : (
-          <>
             <label
               htmlFor="managed-key-input"
               className="mb-1.5 block text-xs font-semibold"
@@ -368,7 +572,7 @@ export function AIModelKeyTab({
             <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
               {keyStatus === "stored" ? (
                 <span className="text-sm font-medium text-emerald-700">
-                  Encrypted &amp; stored!
+                  Encrypted & stored!
                 </span>
               ) : null}
               {audit?.stored ? (
@@ -390,46 +594,44 @@ export function AIModelKeyTab({
                   ? "Encrypting…"
                   : audit?.stored
                     ? "Replace key"
-                    : "Encrypt &amp; store"}
+                    : "Encrypt & Store"}
               </button>
             </div>
-          </>
-        )}
-      </section>
+          </section>
 
-      <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
-        <h3 className="mb-1 font-bold">Decrypt audit log</h3>
-        <p className="mb-5 text-xs text-muted">
-          Every time your managed key is used to serve a recruiter, a row lands
-          here (timestamp + a short non-reversible hash). Retained for 30 days.
-          No raw identifiers, no key material is ever stored.
-        </p>
-        {auditError ? (
-          <p className="text-xs text-rose-700">{auditError}</p>
-        ) : !audit || audit.entries.length === 0 ? (
-          <p className="text-xs text-muted">
-            No decrypt events in the last 30 days.
-          </p>
-        ) : (
-          <ul className="thin-scroll max-h-72 overflow-y-auto rounded-xl border border-border-base">
-            {audit.entries.map((entry, i) => (
-              <li
-                key={`${entry.decryptedAt}-${i}`}
-                className="flex items-center justify-between border-b border-border-base px-3 py-2 text-xs last:border-b-0"
-              >
-                <span className="font-mono">
-                  {formatTimestamp(entry.decryptedAt)}
-                </span>
-                <span className="text-muted">
-                  {entry.ipHashSuffix
-                    ? `from …${entry.ipHashSuffix}`
-                    : "from unknown"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
+            <h3 className="mb-1 font-bold">Decrypt audit log</h3>
+            <p className="mb-5 text-xs text-muted">
+              Every time your managed key is used to serve a recruiter, a row
+              lands here (timestamp + a short non-reversible hash). Retained for
+              30 days. No raw identifiers, no key material is ever stored.
+            </p>
+            {auditError ? (
+              <p className="text-xs text-rose-700">{auditError}</p>
+            ) : !audit || audit.entries.length === 0 ? (
+              <p className="text-xs text-muted">
+                No decrypt events in the last 30 days.
+              </p>
+            ) : (
+              <ul className="thin-scroll max-h-72 overflow-y-auto rounded-xl border border-border-base">
+                {audit.entries.map((entry, i) => (
+                  <li
+                    key={`${entry.decryptedAt}-${i}`}
+                    className="flex items-center justify-between border-b border-border-base px-3 py-2 text-xs last:border-b-0"
+                  >
+                    <span className="font-mono">
+                      {formatTimestamp(entry.decryptedAt)}
+                    </span>
+                    <span className="text-muted">
+                      {entry.ipHashSuffix
+                        ? `from …${entry.ipHashSuffix}`
+                        : "from unknown"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </>
       ) : (
         <section className="rounded-2xl border border-border-base bg-white p-6 text-sm text-muted shadow-soft">
@@ -439,50 +641,6 @@ export function AIModelKeyTab({
       )}
     </div>
   );
-}
-
-function ManagedKeyStatusPill({ audit }: { audit: AuditResponse | null }) {
-  if (!audit) {
-    return (
-      <span className="text-[11px] font-semibold text-muted">Loading…</span>
-    );
-  }
-  if (!audit.stored) {
-    return (
-      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-muted">
-        Not stored
-      </span>
-    );
-  }
-  const last = audit.lastDecryptedAt
-    ? formatRelative(audit.lastDecryptedAt)
-    : "never used";
-  return (
-    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-      Encrypted · last decrypted {last}
-    </span>
-  );
-}
-
-function formatTimestamp(iso: string): string {
-  try {
-    return new Date(iso).toISOString().replace("T", " ").slice(0, 19) + " UTC";
-  } catch {
-    return iso;
-  }
-}
-
-function formatRelative(iso: string): string {
-  try {
-    const then = new Date(iso).getTime();
-    const diffSec = Math.floor((Date.now() - then) / 1000);
-    if (diffSec < 60) return "moments ago";
-    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min ago`;
-    if (diffSec < 86_400) return `${Math.floor(diffSec / 3600)}h ago`;
-    return `${Math.floor(diffSec / 86_400)}d ago`;
-  } catch {
-    return "recently";
-  }
 }
 
 function isProviderName(

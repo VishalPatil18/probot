@@ -13,11 +13,11 @@ The bot replies with what's in your data and only what's in your data. If you di
 
 ## What we built
 
-ProBot uses retrieval-augmented generation (RAG): your data is chunked, embedded into a private vector store, and the most relevant pieces are handed to your chosen LLM with strict instructions to cite, not invent. Your key never leaves your browser; your data never leaves your account.
+ProBot uses retrieval-augmented generation (RAG): your data is chunked, embedded into a private vector store, and the most relevant pieces are handed to your chosen LLM with strict instructions to cite, not invent. Your key stays encrypted end-to-end; your data never leaves your account.
 
 ## Four rules we don't break
 
-1. **You own the keys.** Your LLM key lives in your browser. The server never sees it.
+1. **You own the keys.** Your LLM key is envelope-encrypted at rest and never logged in plaintext.
 2. **You own the data.** Export or delete everything any time.
 3. **MIT-licensed, end to end.** Read it, fork it, and [self-host your bot](/self-hosted-bot/index).
 4. **Zero dollars, zero meters.** Free isn't a marketing tier - it's the only tier.

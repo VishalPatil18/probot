@@ -205,7 +205,7 @@ export default async function DashboardPage() {
             rel="noopener noreferrer"
             className="mt-4 block rounded-lg py-2 text-center text-sm font-semibold text-brand transition-colors hover:bg-blue-50"
           >
-            Full embed guide →
+            Full embed guide
           </a>
         </div>
       </div>

@@ -68,11 +68,11 @@ export function Pagination({
             href={buildHref(nextPage)}
             className="rounded-lg border border-border-base px-3 py-1.5 font-medium hover:bg-gray-50"
           >
-            Next →
+            Next
           </Link>
         ) : (
           <span className="rounded-lg border border-border-base px-3 py-1.5 font-medium text-muted opacity-50">
-            Next →
+            Next
           </span>
         )}
       </div>

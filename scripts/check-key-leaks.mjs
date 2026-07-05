@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Stage 7 Phase 7: CI key-leak grep guard.
+// CI key-leak grep guard.
 //
 // Greps every file under src/ for patterns that mean "the LLM API key
 // might be flowing into a logger or response body." Anything matched is

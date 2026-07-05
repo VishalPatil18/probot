@@ -29,7 +29,7 @@ import { PERSONALITY_PRESETS } from "@/lib/bots/schemas";
 //   Account            - read-only user display (write endpoints are a future addition)
 //   Bot configuration  - status toggle + name/headline/personality/theme
 //                         + suggested questions; PATCHes /api/bots/[botId]
-//   Knowledge base     - list + delete + upload + re-index (slice-2 endpoints)
+//   Knowledge base     - list + delete + upload + re-index
 //   Security & privacy - rate-limit display + Coming Soon panels
 //   AI model & key     - entire tab Coming Soon (future editor)
 

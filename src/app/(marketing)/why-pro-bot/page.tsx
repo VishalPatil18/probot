@@ -47,8 +47,7 @@ const ROWS: Row[] = [
   },
   {
     feature: "Keys never logged",
-    detail:
-      "Your key lives in your browser, or envelope-encrypted if you opt in.",
+    detail: "Envelope-encrypted at rest, used per request, and discarded server-side.",
     probot: true,
     generic: false,
   },

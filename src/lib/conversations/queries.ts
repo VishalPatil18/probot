@@ -3,7 +3,7 @@ import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { bots, conversations, db, messages } from "@/lib/db";
 
 // Shared conversation queries. Called by both the API
-// routes and the slice-6.3 RSC dashboard pages.
+// routes and the dashboard pages.
 //
 // **Caller contract - tenancy is the caller's responsibility.** These
 // functions take a `botId` and trust the caller has already verified the
@@ -14,7 +14,7 @@ import { bots, conversations, db, messages } from "@/lib/db";
 const FIRST_USER_MESSAGE_CHAR_LIMIT = 200;
 
 // LATERAL subquery: for each conversation row, fetch the first user-role
-// message truncated to 200 chars. Covered by the slice-6.1 composite
+// message truncated to 200 chars. Covered by the composite
 // index `messages_conv_created_idx` so the subquery is a sub-ms
 // index scan per outer row.
 const FIRST_USER_MESSAGE_SQL = sql<string | null>`(

@@ -55,9 +55,6 @@ export function SecurityTab({ username, pendingDeletion }: Props) {
                 window.
               </p>
             </div>
-            <span className="text-sm font-semibold text-muted">
-              Until deleted
-            </span>
           </div>
         </div>
       </section>

@@ -11,14 +11,14 @@ Every bot has a **deployment mode** that decides where its chat runtime lives. T
 | --- | --- | --- |
 | Where the chat runs | pro-bot.dev | Your `probot-bot` runtime |
 | Public chat URL | `pro-bot.dev/u/<username>/chat` | Your own domain |
-| Where your LLM key lives | Your browser (encrypted) | Your runtime's env |
+| Where your LLM key lives | Envelope-encrypted on pro-bot.dev | Your runtime's env |
 | Dashboard, knowledge, leads | Managed platform | Managed platform |
 | Cost | Free | Free (you pay only your own infra + LLM provider) |
 | Setup | None - sign up and build | Mint a token + deploy `probot-bot` |
 
 ## How your LLM key is handled
 
-In **managed** mode your LLM API key never leaves your browser as plaintext by default. It's held in a hardened browser store (IndexedDB + a non-extractable Web Crypto key) and sent per-request in the `x-llm-api-key` header, used once server-side, and discarded. It is never written to the database and never logged. (You can optionally opt in to [managed key storage](/guides/managed-key-storage), where the key is envelope-encrypted at rest.)
+In **managed** mode your LLM API key is envelope-encrypted at rest: a per-bot Data Encryption Key (AES-256-GCM) wraps the key itself, and a Key Encryption Key (KEK) held outside the database wraps the DEK. On each chat request the server unwraps the DEK, decrypts the key in memory, calls the provider, and discards the plaintext - a database-only leak reveals nothing usable. See [BYO-key flow](/concepts/byo-key) for the full detail.
 
 In **self-hosted** mode the chat runs in your own [`probot-bot`](/self-hosted-bot/index) runtime, so your LLM key lives in *your* runtime's environment and never touches pro-bot.dev at all.
 
@@ -28,4 +28,4 @@ Choose a self-hosted bot when you want the chat served from your own domain, wan
 
 ## When managed is enough
 
-For most job seekers the managed mode is the fastest path: there's nothing to deploy, the key stays in your browser by default, and you can [export](/guides/account-deletion#export-your-data) or [delete](/guides/account-deletion) everything at any time.
+For most job seekers the managed mode is the fastest path: there's nothing to deploy, the key stays envelope-encrypted on pro-bot.dev, and you can [export](/guides/account-deletion#export-your-data) or [delete](/guides/account-deletion) everything at any time.

@@ -104,10 +104,9 @@ export const botPatchInput = z
       .array(z.string().max(200, "Each question must be ≤ 200 chars"))
       .max(6, "At most 6 suggested questions")
       .optional(),
-    // Bot configuration tab includes a live/off status toggle.
-    // Inactive bots reject chat requests (the chat route already
-    // gates on `bots.is_active`) and don't accept lead capture (slice
-    // 6.2 endpoint also gates on it). Adding here so the settings page
+    // Live/off status toggle. Inactive bots reject chat requests (the chat
+    // route gates on `bots.is_active`) and don't accept lead capture (the
+    // export endpoint gates on it too). Exposed here so the settings page
     // can flip the bit.
     isActive: z.boolean().optional(),
     themeColor: themeColorSchema.optional(),

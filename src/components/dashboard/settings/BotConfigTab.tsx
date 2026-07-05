@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type { Personality } from "@/lib/bots/schemas";
 import {
@@ -18,6 +18,10 @@ import {
 } from "@/lib/ai/rate-limit";
 
 import { AvatarUploader } from "./AvatarUploader";
+import { LabeledInput } from "./fields/LabeledInput";
+import { RateLimitField } from "./fields/RateLimitField";
+import { SaveButton } from "./fields/SaveButton";
+import { Toggle } from "./fields/Toggle";
 import { ThemeColorField } from "./ThemeColorField";
 
 import { DeleteBotModal } from "../DeleteBotModal";
@@ -101,7 +105,7 @@ export function BotConfigTab({
 }: Props) {
   const router = useRouter();
   // State seeded from props once; subsequent prop changes do NOT clobber
-  // user edits (same pattern as slice-6.5 BotSettingsForm).
+  // in-progress user edits.
   const [isActive, setIsActive] = useState(initialIsActive);
   // The status toggle auto-saves on click (independent of "Save bot settings"),
   // so we track its own committed baseline. The main dirty/patch diff uses this
@@ -731,146 +735,6 @@ export function BotConfigTab({
         onConfirm={handleDeleteBot}
       />
     </div>
-  );
-}
-
-// Subtle, per-section save control. Right-aligned below a section's fields,
-// enabled only when that section has unsaved edits. Shows a brief "Saved"
-// confirmation and an inline error for its own section.
-function SaveButton({
-  dirty,
-  saving,
-  saved,
-  error,
-  onClick,
-}: {
-  dirty: boolean;
-  saving: boolean;
-  saved: boolean;
-  error: string | null;
-  onClick: () => void;
-}) {
-  return (
-    <div className="mt-5 border-t border-border-base pt-4">
-      {error ? (
-        <p role="alert" className="mb-2 text-right text-xs text-rose-700">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex items-center justify-end gap-2">
-        {saved ? (
-          <span className="text-xs font-medium text-emerald-700">Saved</span>
-        ) : null}
-        <button
-          type="button"
-          onClick={onClick}
-          disabled={!dirty || saving}
-          className="rounded-lg border border-border-base px-4 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Save
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function LabeledInput({
-  label,
-  value,
-  onChange,
-  maxLength,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  maxLength: number;
-  placeholder?: string;
-}) {
-  // `useId` gives us a stable, unique id per LabeledInput instance so the
-  // `<label htmlFor>` and `<input id>` pair correctly under React Strict
-  // Mode + SSR. Without this pairing, screen readers and testing-library
-  // queries (`getByLabelText`) can't associate the two.
-  const inputId = useId();
-  return (
-    <div>
-      <label htmlFor={inputId} className="mb-1.5 block text-xs font-semibold">
-        {label}
-      </label>
-      <input
-        id={inputId}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        maxLength={maxLength}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-      />
-    </div>
-  );
-}
-
-function RateLimitField({
-  label,
-  placeholderDefault,
-  value,
-  onChange,
-  max,
-}: {
-  label: string;
-  placeholderDefault: number;
-  value: string;
-  onChange: (v: string) => void;
-  max: number;
-}) {
-  const inputId = useId();
-  return (
-    <div>
-      <label htmlFor={inputId} className="mb-1.5 block text-xs font-semibold">
-        {label}
-      </label>
-      <input
-        id={inputId}
-        type="text"
-        inputMode="numeric"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={`default ${placeholderDefault.toLocaleString()}`}
-        className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-      />
-      <p className="mt-1 text-[11px] text-muted">
-        Max {max.toLocaleString()}
-      </p>
-    </div>
-  );
-}
-
-function Toggle({
-  checked,
-  onChange,
-  ariaLabel,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  ariaLabel: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={ariaLabel}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-block h-6 w-10 rounded-full transition-colors ${
-        checked ? "bg-success" : "bg-neutral-200"
-      }`}
-    >
-      <span
-        className={`absolute left-0.5 top-0.5 inline-block size-5 rounded-full bg-white shadow transition-transform ${
-          checked ? "translate-x-4" : "translate-x-0"
-        }`}
-      />
-    </button>
   );
 }
 

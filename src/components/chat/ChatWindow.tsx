@@ -9,7 +9,11 @@ import {
   readLeadCaptureState,
   writeLeadCaptureState,
 } from "@/lib/client/lead-capture-state";
-import { getApiKey, getAzureCreds } from "@/lib/client/llm-key-store";
+import {
+  getApiKey,
+  getAzureCreds,
+  getOllamaBaseUrl,
+} from "@/lib/client/llm-key-store";
 import { getOrCreateSessionId } from "@/lib/client/session-id-store";
 
 import { LeadCaptureCard } from "./LeadCaptureCard";
@@ -129,13 +133,25 @@ export function ChatWindow({
     el.style.height = `${el.scrollHeight}px`;
   }, [input]);
 
+  // Return focus to the input the moment the loading state flips off, so
+  // the visitor can start typing the follow-up immediately without clicking
+  // back into the textarea. Guarded on `!loading` so we don't steal focus
+  // while the reply is still streaming in.
+  useEffect(() => {
+    if (loading) return;
+    textareaRef.current?.focus({ preventScroll: true });
+  }, [loading]);
+
   async function send(text: string) {
     const trimmed = text.trim();
     if (trimmed.length === 0 || loading) return;
     setShowSuggestionList(false);
 
+    // Ollama runs locally and needs no key - only a base URL. Every other
+    // provider requires the BYO key.
+    const isOllama = llmProvider === "ollama";
     const apiKey = await getApiKey();
-    if (!apiKey) {
+    if (!apiKey && !isOllama) {
       setMissingKey(true);
       return;
     }
@@ -145,6 +161,16 @@ export function ChatWindow({
     if (llmProvider === "azure") {
       azureCreds = await getAzureCreds();
       if (!azureCreds) {
+        setMissingKey(true);
+        return;
+      }
+    }
+
+    // Ollama needs the base URL where its local server is reachable.
+    let ollamaBaseUrl: string | null = null;
+    if (isOllama) {
+      ollamaBaseUrl = await getOllamaBaseUrl();
+      if (!ollamaBaseUrl) {
         setMissingKey(true);
         return;
       }
@@ -161,11 +187,15 @@ export function ChatWindow({
     // BYO credentials ride ONLY in headers - never in the JSON body.
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "x-llm-api-key": apiKey,
+      // Ollama ignores the key but the header contract still requires a value.
+      "x-llm-api-key": apiKey ?? "ollama-local",
     };
     if (azureCreds) {
       headers["x-llm-azure-endpoint"] = azureCreds.endpoint;
       headers["x-llm-azure-api-version"] = azureCreds.apiVersion;
+    }
+    if (ollamaBaseUrl) {
+      headers["x-llm-ollama-base-url"] = ollamaBaseUrl;
     }
     // RAG: include the optional OpenAI embedding key. Absent →
     // server skips retrieval and falls back to full-context. Same security
@@ -340,10 +370,7 @@ export function ChatWindow({
           })}
 
           {loading && (
-            <LoadingAnimation
-              messages={loadingMessages}
-              botImage={botImage}
-            />
+            <LoadingAnimation messages={loadingMessages} botImage={botImage} />
           )}
         </div>
       </div>
@@ -366,7 +393,10 @@ export function ChatWindow({
             </div>
           )}
           {hasSuggestions && !conversationStarted && (
-            <SuggestedQuestions questions={suggestedQuestions} onSelect={send} />
+            <SuggestedQuestions
+              questions={suggestedQuestions}
+              onSelect={send}
+            />
           )}
 
           {hasSuggestions && showSuggestionList && (
@@ -444,9 +474,16 @@ export function ChatWindow({
               ↑
             </button>
           </form>
-          <p className="text-[10px] text-muted text-center mt-2">
-            ProBot answers are grounded in {botName}&apos;s data and may be
-            imperfect · {input.length}/{INPUT_MAX}
+          <p className="mt-2 text-center text-[10px] text-muted">
+            <a
+              href="https://pro-bot.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-brand transition-colors hover:underline"
+            >
+              Powered by ProBot
+            </a>{" "}
+            · {input.length}/{INPUT_MAX}
           </p>
         </div>
       </div>
@@ -468,7 +505,11 @@ function ChatHeader({
       <div className="mx-auto flex max-w-3xl items-center gap-4 px-5 py-3.5">
         <div className="relative shrink-0">
           <span className="block rounded-full ring-2 ring-[color:var(--bot-accent)] ring-offset-2 ring-offset-white">
-            <BotAvatarIcon image={botImage} name={botName} sizeClass="size-11" />
+            <BotAvatarIcon
+              image={botImage}
+              name={botName}
+              sizeClass="size-11"
+            />
           </span>
           <span
             aria-hidden

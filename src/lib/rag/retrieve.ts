@@ -6,8 +6,7 @@ import type { EmbeddingProvider } from "@/lib/ai/embeddings";
 
 // Retrieval defaults. Top-5 with a cosine similarity floor of 0.5
 // - below this, results are treated as irrelevant and the chat route falls
-// back to `bots.context_text` (full-context path). Matches the
-// blueprint locked in claude/plan.md §3.
+// back to `bots.context_text` (full-context path).
 export const DEFAULT_TOP_K = 5;
 export const DEFAULT_SIMILARITY_FLOOR = 0.5;
 

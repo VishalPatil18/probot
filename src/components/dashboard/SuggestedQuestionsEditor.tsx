@@ -15,7 +15,7 @@ const MAX_CHARS = 200;
 // wizard step has different copy / spacing).
 //
 // Editing in place is intentionally out of scope - users delete + re-add.
-// Cap enforced at 6 to match the slice-5 `botInput` schema; Add button
+// Cap enforced at 6 to match the `botInput` schema; Add button
 // disables when the cap is hit so the UI matches the server contract.
 export function SuggestedQuestionsEditor({ value, onChange }: Props) {
   const [draft, setDraft] = useState("");

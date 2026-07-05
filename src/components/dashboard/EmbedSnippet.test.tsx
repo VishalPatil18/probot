@@ -19,27 +19,46 @@ describe("EmbedSnippet", () => {
     expect(screen.getByText("Email signature")).toBeInTheDocument();
   });
 
+  // Each snippet is displayed via tokenized <span> children (one span per
+  // syntactic piece for the HTML-highlighted look), so we assert against the
+  // reassembled textContent of the panel's <pre> block rather than a single
+  // text node. Whitespace is normalised because the pretty-printed markup
+  // introduces newlines + indent that the raw snippet doesn't have.
+  function normalize(s: string): string {
+    return s.replace(/\s+/g, "");
+  }
+
   it("shows the public chat URL", () => {
-    render(<EmbedSnippet {...baseProps} />);
-    expect(
-      screen.getByText("https://pro-bot.dev/u/jane-doe/chat"),
-    ).toBeInTheDocument();
+    const { container } = render(<EmbedSnippet {...baseProps} />);
+    const urlPanel = container.querySelector("#embed-panel-url pre");
+    expect(urlPanel).not.toBeNull();
+    expect(normalize(urlPanel?.textContent ?? "")).toContain(
+      "https://pro-bot.dev/u/jane-doe/chat",
+    );
   });
 
   it("renders the <script> embed snippet with the botId injected", () => {
-    render(<EmbedSnippet {...baseProps} />);
-    const snippet = screen.getByText(
-      /<script src="https:\/\/pro-bot\.dev\/widget\.js" data-bot-id="11111111-1111-1111-1111-111111111111"><\/script>/,
+    const { container } = render(<EmbedSnippet {...baseProps} />);
+    const embedPanel = container.querySelector("#embed-panel-embed pre");
+    expect(embedPanel).not.toBeNull();
+    const text = normalize(embedPanel?.textContent ?? "");
+    expect(text).toContain(`src="https://pro-bot.dev/widget.js"`);
+    expect(text).toContain(
+      `data-bot-id="11111111-1111-1111-1111-111111111111"`,
     );
-    expect(snippet).toBeInTheDocument();
   });
 
   it("renders the signature badge HTML in a pre block", () => {
-    render(<EmbedSnippet {...baseProps} />);
-    // The signature snippet is rendered verbatim in a <pre><code> block.
-    expect(
-      screen.getByText(/Chat with my AI · pro-bot\.dev\/u\/jane-doe/),
-    ).toBeInTheDocument();
+    const { container } = render(<EmbedSnippet {...baseProps} />);
+    const signaturePanel = container.querySelector(
+      "#embed-panel-signature pre",
+    );
+    expect(signaturePanel).not.toBeNull();
+    // The panel keeps whitespace for legibility; assert on the reassembled
+    // textContent instead of a single text node.
+    expect(signaturePanel?.textContent ?? "").toContain(
+      "Chat with my AI · pro-bot.dev/u/jane-doe",
+    );
   });
 
   it("uses the bot's theme color in the signature template", () => {

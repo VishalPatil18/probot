@@ -91,8 +91,8 @@ export default function PrivacyPage() {
                   the content you upload.
                 </li>
                 <li>
-                  Your LLM API key is stored in your browser. It never reaches
-                  our servers.
+                  Your LLM API key is kept encrypted with envelope encryption.
+                  It is never logged in plaintext.
                 </li>
                 <li>
                   We do not sell your data. We do not share it for advertising.
@@ -195,11 +195,10 @@ export default function PrivacyPage() {
                     What we do NOT collect
                   </h3>
                   <p>
-                    Your LLM API key is stored only in your browser&apos;s local
-                    storage. It is never transmitted to our servers, and we
-                    cannot see it. We do not run analytics or behavioural
-                    trackers. We do not collect your IP address for marketing.
-                    We do not buy data about you from anyone.
+                    Your LLM API key is kept encrypted with envelope encryption
+                    and never logged in plaintext. We do not run analytics or
+                    behavioural trackers. We do not collect your IP address for
+                    marketing. We do not buy data about you from anyone.
                   </p>
                 </div>
               </div>
@@ -445,10 +444,9 @@ export default function PrivacyPage() {
               <h2 className="font-display text-2xl font-bold mb-4">Security</h2>
               <p className="text-muted">
                 Data is transmitted over HTTPS. Account passwords (when used)
-                are hashed with bcrypt. Sensitive credentials such as LLM API
-                keys are stored only in your browser, not on our servers. No
-                system is perfectly secure, however, and we cannot guarantee
-                absolute security. If you become aware of a vulnerability,
+                are hashed with bcrypt. LLM API keys are envelope-encrypted at
+                rest and never logged in plaintext. No system is perfectly
+                secure, however, and we cannot guarantee absolute security. If you become aware of a vulnerability,
                 please report it to{" "}
                 <a
                   href={`mailto:${CONTACT_EMAIL}`}

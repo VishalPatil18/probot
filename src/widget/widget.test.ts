@@ -23,6 +23,7 @@ import {
   readScriptConfig,
   renderBubbleInner,
   renderDialogInner,
+  renderMarkdown,
   safeThemeColor,
   type WidgetConfig,
 } from "./widget";
@@ -176,6 +177,64 @@ describe("renderBubbleInner", () => {
   });
 });
 
+describe("renderMarkdown", () => {
+  it("wraps a plain line in a paragraph", () => {
+    expect(renderMarkdown("hello world")).toBe("<p>hello world</p>");
+  });
+
+  it("renders bold, italic, and inline code", () => {
+    const out = renderMarkdown("**b**, *i*, `c`");
+    expect(out).toContain("<strong>b</strong>");
+    expect(out).toContain("<em>i</em>");
+    expect(out).toContain("<code>c</code>");
+  });
+
+  it("renders links with target=_blank and rel=noopener", () => {
+    const out = renderMarkdown("see [docs](https://pro-bot.dev/docs)");
+    expect(out).toContain(
+      '<a href="https://pro-bot.dev/docs" target="_blank" rel="noopener noreferrer">docs</a>',
+    );
+  });
+
+  it("collapses non-http(s)/mailto link schemes to # (defuses javascript: URLs)", () => {
+    const out = renderMarkdown("[x](javascript:alert(1))");
+    expect(out).not.toContain("javascript:");
+    expect(out).toContain('href="#"');
+  });
+
+  it("HTML-escapes tag-shaped LLM output so <script> can't execute", () => {
+    const out = renderMarkdown("hi <script>alert(1)</script>");
+    expect(out).not.toContain("<script>alert(1)</script>");
+    expect(out).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  });
+
+  it("renders unordered lists", () => {
+    const out = renderMarkdown("- one\n- two");
+    expect(out).toBe("<ul><li>one</li><li>two</li></ul>");
+  });
+
+  it("renders ordered lists", () => {
+    const out = renderMarkdown("1. one\n2. two");
+    expect(out).toBe("<ol><li>one</li><li>two</li></ol>");
+  });
+
+  it("renders fenced code blocks and escapes their contents", () => {
+    const out = renderMarkdown("```\n<x>\n```");
+    expect(out).toBe("<pre><code>&lt;x&gt;</code></pre>");
+  });
+
+  it("renders headings", () => {
+    expect(renderMarkdown("# h1")).toBe("<h1>h1</h1>");
+    expect(renderMarkdown("### h3")).toBe("<h3>h3</h3>");
+  });
+
+  it("does not double-render markdown inside inline code", () => {
+    const out = renderMarkdown("`**not bold**`");
+    expect(out).toContain("<code>**not bold**</code>");
+    expect(out).not.toContain("<strong>not bold</strong>");
+  });
+});
+
 describe("renderDialogInner", () => {
   it("includes the owner's display name and bot headline", () => {
     const html = renderDialogInner(FULL_CONFIG, "https://pro-bot.dev");
@@ -242,7 +301,7 @@ describe("renderDialogInner", () => {
     expect(html).not.toContain("Suggested questions");
   });
 
-  it("renders only the first 4 suggested questions", () => {
+  it("renders only the first 5 suggested-question chips", () => {
     const config: WidgetConfig = {
       ...FULL_CONFIG,
       bot: {
@@ -251,9 +310,16 @@ describe("renderDialogInner", () => {
       },
     };
     const html = renderDialogInner(config, "https://pro-bot.dev");
-    expect(html).toContain("<li>a</li>");
-    expect(html).toContain("<li>d</li>");
-    expect(html).not.toContain("<li>e</li>");
+    expect(html).toContain('data-question="a"');
+    expect(html).toContain('data-question="e"');
+    expect(html).not.toContain('data-question="f"');
+  });
+
+  it("renders an input row bound to the send form", () => {
+    const html = renderDialogInner(FULL_CONFIG, "https://pro-bot.dev");
+    expect(html).toContain('data-role="form"');
+    expect(html).toContain('data-role="input"');
+    expect(html).toContain('data-role="send"');
   });
 
   it("falls back to username when owner.name is null", () => {
@@ -265,15 +331,16 @@ describe("renderDialogInner", () => {
     expect(html).toContain("jane-doe");
   });
 
-  it("renders a placeholder div when owner.image is null", () => {
+  it("renders a placeholder avatar when neither bot.image nor owner.image is set", () => {
     const config: WidgetConfig = {
       ...FULL_CONFIG,
+      bot: { ...FULL_CONFIG.bot, image: null },
       owner: { ...FULL_CONFIG.owner, image: null },
     };
     const html = renderDialogInner(config, "https://pro-bot.dev");
-    // No <img> tag - the placeholder is a <div class="probot-avatar"...>
+    // No <img> tag - the placeholder is the theme-tinted fallback circle.
     expect(html).not.toContain('<img class="probot-avatar"');
-    expect(html).toContain('<div class="probot-avatar"');
+    expect(html).toContain("probot-avatar-fallback");
   });
 });
 
@@ -344,16 +411,19 @@ describe("mount (DOM integration)", () => {
     expect(document.querySelector("[data-probot-widget]")).toBeNull();
   });
 
-  it("does nothing when fetch fails", async () => {
+  it("still mounts the bubble when fetch fails", async () => {
+    // Behavior change: previously the widget bailed silently on any fetch
+    // failure. The bubble now renders first (with the fallback dialog) so
+    // visitors always see the entry point.
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(null, { status: 500 })),
     );
     await mount(makeScript());
-    expect(document.querySelector("[data-probot-widget]")).toBeNull();
+    expect(document.querySelector("[data-probot-widget]")).not.toBeNull();
   });
 
-  it("does nothing when parseConfig rejects the response", async () => {
+  it("still mounts the bubble when parseConfig rejects the response", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -361,7 +431,7 @@ describe("mount (DOM integration)", () => {
       ),
     );
     await mount(makeScript());
-    expect(document.querySelector("[data-probot-widget]")).toBeNull();
+    expect(document.querySelector("[data-probot-widget]")).not.toBeNull();
   });
 
   it("attaches a host element with a closed shadow root on the happy path", async () => {

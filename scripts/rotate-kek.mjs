@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Stage 7 Phase 7: KEK rotation runbook entrypoint.
+// KEK rotation runbook entrypoint.
 //
 // Operator flow:
 //   1. Generate a new 32-byte base64 key:

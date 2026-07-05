@@ -4,6 +4,7 @@ import {
   KeyTransportError,
   readApiKey,
   readAzureCreds,
+  readOllamaBaseUrl,
   redactKey,
 } from "./key-transport";
 
@@ -193,5 +194,55 @@ describe("redactKey", () => {
 
   it("does not throw on empty input", () => {
     expect(redactKey("")).toBe("***");
+  });
+});
+
+describe("readOllamaBaseUrl", () => {
+  const OLLAMA_HEADER = "x-llm-ollama-base-url";
+
+  function ollamaHeaders(value: string | null): Headers {
+    const h = new Headers();
+    if (value !== null) h.set(OLLAMA_HEADER, value);
+    return h;
+  }
+
+  it("returns null when the header is absent (not fatal at this layer)", () => {
+    expect(readOllamaBaseUrl(ollamaHeaders(null))).toBeNull();
+  });
+
+  it("accepts a localhost http URL", () => {
+    expect(readOllamaBaseUrl(ollamaHeaders("http://localhost:11434"))).toBe(
+      "http://localhost:11434",
+    );
+  });
+
+  it("accepts a loopback IP http URL", () => {
+    expect(readOllamaBaseUrl(ollamaHeaders("http://127.0.0.1:11434"))).toBe(
+      "http://127.0.0.1:11434",
+    );
+  });
+
+  it("accepts a remote https URL", () => {
+    expect(readOllamaBaseUrl(ollamaHeaders("https://ollama.example.com"))).toBe(
+      "https://ollama.example.com",
+    );
+  });
+
+  it("rejects a non-loopback http URL", () => {
+    expect(() =>
+      readOllamaBaseUrl(ollamaHeaders("http://ollama.example.com")),
+    ).toThrow(KeyTransportError);
+  });
+
+  it("rejects a malformed URL", () => {
+    expect(() => readOllamaBaseUrl(ollamaHeaders("not-a-url"))).toThrow(
+      KeyTransportError,
+    );
+  });
+
+  it("rejects an empty header value", () => {
+    expect(() => readOllamaBaseUrl(ollamaHeaders("   "))).toThrow(
+      KeyTransportError,
+    );
   });
 });

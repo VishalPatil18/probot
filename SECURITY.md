@@ -58,7 +58,7 @@ The following are **not** vulnerabilities for this project:
 - Anything in Supabase, Next.js, NextAuth, react-markdown, or other upstream dependencies - please report those to the upstream maintainers.
 - Self-XSS that requires the user to paste attacker-controlled JavaScript into their own browser console.
 - Missing security headers on `localhost` dev builds.
-- Rate-limiting in the local dev configuration (the in-memory `Map` is per-process and resets on restart - that is intentional for Stage 1; Stage 7 replaces it with Upstash Redis).
+- Rate-limiting in the local dev configuration (the in-memory `Map` is per-process and resets on restart; a persistent Upstash Redis store is planned for production).
 - An LLM provider returning unsafe content despite our sanitization, where the failure is on the provider side (e.g. Azure OpenAI hallucinating a credential). Report content-safety incidents to the LLM provider; we'll layer additional defenses in `sanitize-output.ts` if a pattern emerges.
 
 If you're unsure whether something qualifies, send it anyway - we'd rather sort it out together than miss a real issue.
@@ -71,7 +71,7 @@ If you're unsure whether something qualifies, send it anyway - we'd rather sort 
 | Tagged releases ≥ current minor | Yes                 |
 | Anything older                  | No - please upgrade |
 
-Stage 1 is pre-1.0; supported versions will tighten once we cut a v1.0.0 release at the end of Stage 7.
+This is pre-1.0; supported versions will tighten once we cut a v1.0.0 release.
 
 ## Cryptographic and credential hygiene
 
