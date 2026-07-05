@@ -17,7 +17,7 @@ Anthropic (Claude), OpenAI, Azure OpenAI, and Google Gemini. See [Models & keys]
 
 ## Where is my API key stored?
 
-In your browser by default (encrypted), sent per request and never logged. You can opt in to [managed, envelope-encrypted server storage](/guides/managed-key-storage).
+Kept encrypted with envelope encryption; sent per request, used once server-side, and never logged in plaintext. See [Managed key storage](/guides/managed-key-storage) for the encryption details.
 
 ## Will the bot make things up?
 
@@ -29,7 +29,7 @@ Only what they voluntarily submit in the lead form (name, email, company, option
 
 ## Can recruiters see my LLM key?
 
-Never. On the public chat and the embed widget, the key stays server-side (or in your browser for your own session) - it's never exposed to a visitor.
+Never. The key is envelope-encrypted server-side, decrypted only in memory for one chat request, and never exposed to a visitor.
 
 ## Can I run the chat myself?
 

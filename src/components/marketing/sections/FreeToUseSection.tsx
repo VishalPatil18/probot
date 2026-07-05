@@ -41,9 +41,9 @@ export function FreeToUseSection() {
                   className="!text-xl text-success"
                 />
                 <span>
-                  <strong className="text-ink">Keys stored locally.</strong>{" "}
-                  Your credentials live on your machine and are{" "}
-                  <em>never</em> sent to or tracked by ProBot.
+                  <strong className="text-ink">Keys stay encrypted.</strong>{" "}
+                  Envelope-encrypted at rest, decrypted in memory for one
+                  request, then <em>discarded</em>. Never logged in plaintext.
                 </span>
               </li>
               <li className="flex gap-3 text-sm">
@@ -90,7 +90,7 @@ export function FreeToUseSection() {
               </div>
               <pre className="p-5 font-mono text-[12px] leading-relaxed text-blue-200 overflow-x-auto thin-scroll">
                 <span className="text-white/40">
-                  // Your key never leaves this machine
+                  // Envelope-encrypted, never logged in plaintext
                 </span>
                 {"\n{\n  "}
                 <span className="text-blue-300">&quot;provider&quot;</span>

@@ -4,10 +4,7 @@ import { EMBED_SNIPPET } from "./constants";
 
 export function FeaturesSection() {
   return (
-    <section
-      id="features"
-      className="dot-pattern border-b border-border-base"
-    >
+    <section id="features" className="dot-pattern border-b border-border-base">
       <div className="mx-auto max-w-[1180px] px-6 py-20">
         <div className="max-w-2xl mb-14">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-3">
@@ -29,8 +26,8 @@ export function FeaturesSection() {
               </h3>
               <p className="text-sm text-muted leading-relaxed max-w-md">
                 Each question is embedded and matched against the top-3 most
-                relevant chunks of your data. If it&apos;s not in your
-                history, the bot says so and points to you directly.
+                relevant chunks of your data. If it&apos;s not in your history,
+                the bot says so and points to you directly.
               </p>
             </div>
             <div className="mt-6 mx-8 mb-8 rounded-xl border border-border-base bg-bg-app/50 p-4 font-mono text-[11px] space-y-1.5">
@@ -58,9 +55,8 @@ export function FeaturesSection() {
             </h3>
             <p className="text-sm text-white/60 leading-relaxed mb-6">
               Inherits a battle-tested defense stack: 40+ prompt-injection
-              patterns, unicode homoglyph normalization, output
-              sanitization, and per-bot rate limiting. Your LLM key never
-              leaves your machine.
+              patterns, unicode homoglyph normalization, output sanitization,
+              and per-bot rate limiting. Your LLM key never leaves your machine.
             </p>
             <div className="mt-auto grid grid-cols-2 gap-2 text-[11px]">
               {[
@@ -103,8 +99,8 @@ export function FeaturesSection() {
               Automatic lead capture
             </h3>
             <p className="text-sm text-muted leading-relaxed">
-              After a few messages, the bot politely asks recruiters for
-              their email - and notifies you, with full context.
+              After a few messages, the bot politely asks recruiters for their
+              email - and notifies you, with full context.
             </p>
           </div>
           {/* BYO model */}
@@ -116,8 +112,8 @@ export function FeaturesSection() {
               Bring your own model
             </h3>
             <p className="text-sm text-muted leading-relaxed mb-4">
-              Pick Claude, Gemini, OpenAI, or Azure - whatever you prefer.
-              Your key is{" "}
+              Pick Claude, Gemini, OpenAI, or Azure - whatever you prefer. Your
+              key is{" "}
               <strong className="text-ink">
                 envelope-encrypted on our infra or never sent at all
               </strong>{" "}

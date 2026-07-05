@@ -37,7 +37,7 @@ ProBot is **bring-your-own-key (BYO key)**: you connect your own LLM provider ac
 1. Create an API key in your provider's console (links above).
 2. In ProBot, open **AI model & key** (sidebar → *Manage model & key*, or Settings → AI model & key).
 3. Pick the provider + model and paste your key.
-4. The key is stored **in your browser** (encrypted IndexedDB) and sent per request in the `x-llm-api-key` header - it never lands in our database or logs.
+4. The key is **envelope-encrypted at rest** (AES-256-GCM DEK wrapped by a KEK held outside the database), decrypted in memory for one chat request, then discarded. It is never logged in plaintext.
 
 ### Azure specifics
 
@@ -45,7 +45,7 @@ Azure also needs your **endpoint** and (optionally) an **API version**; these ri
 
 ### Ollama specifics
 
-Ollama needs no key - just the **base URL** of your Ollama server (default `http://localhost:11434`) and the **model name** you've pulled (e.g. `llama3.2`). The base URL is stored in your browser and sent per request in the `x-llm-ollama-base-url` header. Plain `http://` is allowed only for localhost; any remote Ollama must be served over `https://`.
+Ollama needs no key - just the **base URL** of your Ollama server (default `http://localhost:11434`) and the **model name** you've pulled (e.g. `llama3.2`). Plain `http://` is allowed only for localhost; any remote Ollama must be served over `https://`.
 
 ### Grok specifics
 
@@ -53,7 +53,7 @@ Grok works like OpenAI - paste your xAI key and type the model id (e.g. `grok-4.
 
 ## Where your key lives
 
-By default the key stays in your browser. If you'd rather not re-enter it on every device, you can opt in to **managed key storage**, where it's stored server-side with [envelope encryption](/guides/managed-key-storage) - the operator's key-encryption key (or yours, when self-hosting) is required to decrypt, so a database leak is useless.
+Keys are stored server-side with [envelope encryption](/guides/managed-key-storage): each key is wrapped with a per-bot data-encryption key (DEK), which is itself wrapped by a key-encryption key (KEK) held outside the database. A database-only leak is useless without the KEK.
 
 ## Optional: embeddings key
 

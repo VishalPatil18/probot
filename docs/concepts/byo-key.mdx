@@ -1,132 +1,74 @@
 ---
 title: BYO-key flow
-description: "Exactly where your LLM API key lives, where it travels, and where it never goes."
+description: "How your LLM API key is encrypted, where it moves, and where it never goes."
 ---
 
-ProBot is **bring-your-own-key**. There are two ways your Anthropic / OpenAI / Azure / Google key can be handled, and you choose:
+ProBot is **bring-your-own-key**. You supply an Anthropic / OpenAI / Azure / Google key; ProBot keeps it envelope-encrypted at rest, decrypts it in memory for one chat request, and discards it. The key is **never logged**, **never echoed in an error message**, and **never returned in a response**. A `canary-key` test enforces this at both the route layer and the provider adapter layer - if a regression ever leaks the key, the build fails.
 
-- **Default - browser-held (zero server trust).** The key lives only in your browser and is sent per chat request; ProBot's server forwards it to the provider and forgets it. Nothing is persisted.
-- **Opt-in - managed storage.** You can choose to have ProBot store the key for you, **envelope-encrypted at rest**, so chats work without your browser holding the key. The operator holds the key-encryption key (KEK); see [Managed key storage](/guides/managed-key-storage).
+## Encryption at rest
 
-Either way, the key is **never logged**, **never echoed in error messages**, and (in the default mode) **never persisted**. A `canary-key` test enforces this at both the route layer and the provider adapter layer - if a regression ever leaks the key into a response body or log line, the build fails.
+On the hosted deployment, each key is protected by two layers:
 
-## Default mode: browser-held
+- A per-bot **DEK** (Data Encryption Key, AES-256-GCM) encrypts the key itself.
+- A **KEK** (Key Encryption Key) loaded from the `PROBOT_KEY_ENCRYPTION_KEY` env var wraps the DEK. The KEK never touches the database.
 
-In the default mode your key:
+The wrapped DEK + ciphertext live in the `encrypted_llm_keys` table (one row per bot). A database-only leak is useless without the KEK. Rotating the KEK re-wraps every DEK without touching the ciphertext keys themselves - see [KEY-STORAGE.md](https://github.com/vishalpatil18/probot/blob/main/KEY-STORAGE.md).
 
-- Lives in your browser in a **hardened store** - IndexedDB encrypted with a non-extractable Web Crypto **AES-256-GCM** key (`secure-key-store.ts`), not plaintext `localStorage`. (An older `localStorage` entry, `probot.llm.key.v1`, is read **once** and migrated into the encrypted store, then deleted.)
-- Rides the `x-llm-api-key` request header - **never the JSON body**.
-- Is forwarded straight to the provider's HTTPS endpoint, used once, and discarded.
+## How a chat request resolves the key
+
+The chat route accepts an optional `x-llm-api-key` header (used by the owner's own dashboard test chat and by self-hosted deployments) and falls back to the managed encrypted key otherwise:
+
+1. **Header present** (owner testing from their own browser, self-hosted runtime) - used directly.
+2. **Managed encrypted key** - unwrapped with the KEK, decrypted in memory, used once, discarded.
+3. **Neither** - request fails with `missing_llm_key`.
+
+Recruiters chatting on the public URL or through the embed widget never have a header key - path 2 handles them. Every managed decrypt also writes a **decrypt audit log** row (timestamp + non-reversible hash) so anomalies are observable.
 
 ```mermaid
 sequenceDiagram
-    participant U as User (browser)
-    participant KS as Encrypted IndexedDB
-    participant App as ChatWindow.tsx
+    participant U as Recruiter (browser)
     participant Route as /api/chat/[botId]
+    participant DB as encrypted_llm_keys
     participant Prov as Anthropic / OpenAI / Azure
 
-    Note over U,KS: Bot Factory Step 4 / Model & key settings
-    U->>KS: setApiKey(key)  (AES-256-GCM, non-extractable Web Crypto key)
-
-    Note over U,Prov: Later, chat request
-    U->>App: send("hello")
-    App->>KS: await getApiKey()
-    KS-->>App: apiKey
-    App->>Route: fetch(POST, headers: { x-llm-api-key: apiKey }, body: { message, conversationId })
-    Route->>Route: readApiKey(headers)
-    Route->>Route: sanitize input, look up bot
+    U->>Route: POST { message, sessionId }  (no key header)
+    Route->>DB: lookup encrypted row for botId
+    DB-->>Route: { wrappedDek, ciphertext }
+    Route->>Route: unwrap DEK with KEK; decrypt key in memory
     Route->>Prov: provider.complete({ apiKey, system, userMessage })
     Prov-->>Route: { reply }
-    Route->>Route: sanitize output
-    Route-->>App: { reply }
-    App-->>U: render reply
+    Route->>Route: sanitize output; write decrypt audit row
+    Route->>Route: discard plaintext key (stack frame GC'd)
+    Route-->>U: { reply }
 ```
-
-## Optional mode: managed storage
-
-If you opt in to [managed key storage](/guides/managed-key-storage), your key is wrapped with **envelope encryption** and stored as ciphertext in the `encrypted_llm_keys` table - never as plaintext. On each chat request the server decrypts it just long enough to call the provider, then discards it, and records a row in a **decrypt audit log** (timestamp + a short non-reversible hash). The operator holds the KEK; when you self-host, *you* hold it.
-
-The chat route makes the `x-llm-api-key` header **optional** and resolves the key by priority:
-
-1. **Header** (your browser, or a self-hosted runtime / local test) - always wins.
-2. **Managed encrypted key** in `encrypted_llm_keys` - decrypted server-side with the KEK.
-3. Otherwise the request fails.
-
-Azure is the one exception: its multi-secret credential (key + endpoint + apiVersion) is header-only, so Azure bots always use the browser-held path.
 
 ## Where the key is
 
-| Surface                            | Default (browser-held) | Managed storage (opt-in)                          |
-| ---------------------------------- | ---------------------- | ------------------------------------------------- |
-| Browser encrypted IndexedDB        | ✅ AES-256-GCM         | Optional                                          |
-| HTTP request header                | ✅ `x-llm-api-key`     | Not required                                      |
-| HTTPS connection to provider       | ✅ TLS in transit      | ✅ TLS in transit                                 |
-| **JSON request body**              | ❌ never               | ❌ never                                          |
-| **Server logs**                    | ❌ never               | ❌ never                                          |
-| **Postgres rows**                  | ❌ no row written      | ✅ ciphertext only, in `encrypted_llm_keys`       |
-| **Error responses**               | ❌ never echoed        | ❌ never echoed                                   |
-| **Server memory**                  | Transient - one request | Transient - decrypted per request, then discarded |
+| Surface                            | State                                     |
+| ---------------------------------- | ----------------------------------------- |
+| `encrypted_llm_keys` (Postgres)    | ✅ AES-256-GCM ciphertext, wrapped DEK    |
+| HTTPS connection to provider       | ✅ TLS in transit                         |
+| Server memory during one request   | Plaintext, then discarded                 |
+| **JSON request body**              | ❌ never                                  |
+| **Server logs**                    | ❌ never                                  |
+| **Error responses**                | ❌ never echoed                           |
+| **KEK in the database**            | ❌ held only in the deployment env        |
 
-> The JSON body is `{ message, conversationId }` - the key is never a body field in either mode.
+> The JSON body is `{ message, sessionId }` - the key is never a body field on any surface.
 
 ## Why this shape
 
-A traditional "AI chatbot service" stores your API key server-side and calls the provider on your behalf, with no way to opt out. That gives the service a persistent secret to leak, a surface to subpoena or breach, and an incentive to bill you per request.
+A traditional "AI chatbot service" stores your API key server-side in plaintext, calls the provider on your behalf, and gives you no visibility. That leaves a persistent, subpoenable secret sitting in a shared database.
 
-ProBot's **default** mode inverts all three - the server is a **stateless forwarder**: no secret to leak, no per-request billing (you pay the provider directly), no vendor lock-in (switch providers in your browser any time). The **managed** mode is a deliberate, opt-in trade: you accept ciphertext-at-rest storage in exchange for chats that don't depend on your browser holding the key - and because it's envelope-encrypted, a database-only breach still exposes nothing usable without the KEK.
+ProBot's design inverts that:
 
-## How the key actually moves (default mode)
+- **Ciphertext at rest, plaintext for microseconds.** A DB dump alone reveals nothing. Only a running server with the KEK can decrypt.
+- **No key column in `bots` or `users`.** The `encrypted_llm_keys` table is the *only* place a key ever appears, and only as ciphertext.
+- **You pay the provider directly.** Envelope encryption doesn't change your billing relationship - ProBot never proxies charges.
 
-### 1. Capture - Bot Factory Step 4 / Model & key settings
+## Provider adapter - per-request client
 
-When you save your key, the client calls `setApiKey(key)`, which writes it to the encrypted store:
-
-```ts
-// simplified - src/lib/client/llm-key-store.ts
-await setApiKey(key); // → secure-key-store: AES-256-GCM in IndexedDB
-```
-
-### 2. Chat send - read and attach
-
-`ChatWindow.tsx` reads the key on each send (async) and attaches it as a header:
-
-```ts
-const key = await getApiKey();
-if (!key) throw new Error("No LLM key configured");
-
-const res = await fetch(`/api/chat/${botId}`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "x-llm-api-key": key,
-  },
-  body: JSON.stringify({ message, conversationId }),
-});
-```
-
-### 3. Route handler - resolve, forward, discard
-
-```ts
-// src/app/api/chat/[botId]/route.ts (excerpt)
-// Header is optional; falls back to the managed encrypted key.
-const headerApiKey = readApiKey(request.headers); // null if absent
-const apiKey = headerApiKey ?? decryptKey(storedManagedKey);
-// …
-await provider.complete({
-  system,
-  userMessage: sanitized.message,
-  apiKey, // <- forwarded to provider; in default mode, never stored
-  model,
-  extras,
-});
-```
-
-After the request resolves, the handler's stack frame (including `apiKey`) is garbage-collected. There is no caching, no in-memory store, no global.
-
-### 4. Provider adapter - per-request client
-
-Each adapter (Anthropic, OpenAI, Azure) constructs a **new client per request** with the supplied key:
+Every adapter (Anthropic, OpenAI, Azure, Google, Grok) constructs a **new client per request** with the decrypted key. There is no `let cachedClient`, no `Map<userId, Client>`, no global. The `canary-key` test plants a known canary string as the plaintext key and asserts it appears **only** in the outbound HTTPS payload - never in a response, never in a log mock, never in an error.
 
 ```ts
 // src/lib/ai/providers/anthropic.ts (simplified)
@@ -137,32 +79,34 @@ async complete({ apiKey, system, userMessage, model }) {
 }
 ```
 
-No `let cachedClient` outside the function. No `Map<userId, Client>`. The `canary-key` test plants a known canary string as an api key and asserts it appears **only** in the outbound HTTPS payload - never in a response, never in a log mock.
+## Implementation footnotes
+
+- **Azure keys are header-only.** Azure's multi-secret credential (key + endpoint + apiVersion) isn't supported by managed storage in this release, so Azure bots require the owner to be online with the credentials in their browser store, or self-hosting via `probot-bot`. Other providers all go through managed encryption.
+- **Self-hosting the runtime.** If you'd rather not trust any operator, run the `probot-bot` runtime on your own infrastructure - the plaintext key lives entirely inside your deployment. See [Self-hosted bot](/self-hosted-bot/index).
+- **Owner test chat.** When the owner tests their bot from the dashboard, the browser passes the key as `x-llm-api-key`. The dashboard mirrors the key into a browser-side encrypted store (IndexedDB + non-extractable Web Crypto key) so the owner doesn't re-paste it on every reload.
 
 ## Failure modes (and how the key is protected in each)
 
-| Failure                       | What happens                                                                                                                         | Key safe? |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------- |
+| Failure                       | What happens                                                                                                                       | Key safe? |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | User pastes wrong key         | Provider returns 401 → adapter throws `ProviderError("invalid_key")` → route returns `{ error: "invalid_llm_key" }`. Key not echoed. | ✅        |
-| Provider rate-limits          | `ProviderError("rate_limit")` → `429 provider_rate_limit`                                                                            | ✅        |
-| Provider is down              | `ProviderError("provider_unavailable")` → `502`                                                                                      | ✅        |
-| Managed KEK unavailable       | Decrypt fails → `503 managed_storage_unavailable`. No partial key exposure.                                                          | ✅        |
-| Network drops mid-request     | Handler aborts; no persistence anywhere (default mode)                                                                               | ✅        |
-| User runs **Clear site data** | Encrypted store wiped; next chat shows "No LLM key configured" (unless managed storage is on)                                        | ✅        |
+| Provider rate-limits          | `ProviderError("rate_limit")` → `429 provider_rate_limit`                                                                          | ✅        |
+| Provider is down              | `ProviderError("provider_unavailable")` → `502`                                                                                    | ✅        |
+| KEK unavailable at boot       | The route returns `503 managed_storage_unavailable`. No partial key exposure.                                                      | ✅        |
+| Network drops mid-request     | Handler aborts; plaintext key is GC'd with the stack frame.                                                                        | ✅        |
 
 ## Threat model
 
-BYO-key protects you against:
+BYO-key with envelope encryption protects you against:
 
-- **Server-side breach of ProBot.** In default mode there is no key column, cache, or log. In managed mode the stored value is ciphertext only - useless without the KEK.
-- **Cross-tenant leakage.** Every request constructs a fresh provider client.
-- **Vendor lock-in / surprise billing.** You hold the contract with Anthropic / OpenAI / Azure.
+- **Server-side breach of ProBot's database.** Ciphertext + wrapped DEK are useless without the KEK.
+- **Cross-tenant leakage.** Every request constructs a fresh provider client with the just-decrypted key.
+- **Vendor lock-in / surprise billing.** You hold the contract with Anthropic / OpenAI / Azure directly.
 
 BYO-key does **not** protect you against:
 
-- **Compromised browser** (a malicious extension reading the encrypted store's decrypted output in-page).
-- **XSS on the ProBot frontend.** The frontend mitigates this with `react-markdown` + no `rehype-raw`, but if you find one, please report via [SECURITY.md](https://github.com/vishalpatil18/probot/blob/main/SECURITY.md).
-- **Phishing.** A lookalike `probot-app.com` could capture pasted keys.
-- **Full infrastructure compromise in managed mode.** Anyone with deploy access can read the KEK; if that's your threat model, use default (browser-held) mode or self-host. See [Managed key storage](/guides/managed-key-storage).
+- **Full infrastructure compromise.** Anyone with deploy access can read the KEK. If that's your threat model, self-host the `probot-bot` runtime.
+- **XSS on the ProBot frontend.** The frontend mitigates this with `react-markdown` + no `rehype-raw`; if you find a gap, please report via [SECURITY.md](https://github.com/vishalpatil18/probot/blob/main/SECURITY.md).
+- **Phishing.** A lookalike domain could capture pasted keys.
 
 For the input/output sanitization layer, see [Security](/concepts/security).

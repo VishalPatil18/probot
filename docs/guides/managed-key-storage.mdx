@@ -3,17 +3,11 @@ title: Managed key storage
 description: "How ProBot's optional server-side LLM-key storage works: envelope encryption with a KEK that never lives in the database."
 ---
 
-By default your LLM API key stays in your browser and is sent per request. If you'd rather not re-enter it on every device, you can opt in to **managed key storage**, where the key is encrypted and stored on the server. This page explains exactly what that means.
+Your LLM API key is stored server-side with **envelope encryption** so recruiters can chat with your bot at any time, even when your browser is closed. This page explains exactly what "envelope-encrypted" means and what a database leak would (and wouldn't) reveal.
 
-## The default: browser-only
+## Envelope encryption
 
-Without opting in, your key lives in a hardened browser store - IndexedDB plus a **non-extractable** Web Crypto AES-256-GCM key. DevTools, casual storage exports, and stolen browser snapshots see ciphertext, not your key. The key is sent per request in the `x-llm-api-key` header, used once, and discarded server-side.
-
-The residual risk is malicious JavaScript on the same origin (XSS), which could call `decrypt()` directly - so ProBot ships no `rehype-raw`, sanitizes all rendered markdown, and keeps a strict origin.
-
-## The opt-in: envelope encryption
-
-When you store a key server-side, ProBot uses **envelope encryption** rather than a single static secret:
+Rather than a single static secret, ProBot uses two keys stacked:
 
 1. A **KEK** (Key Encryption Key) - a 32-byte symmetric key - lives only in the `PROBOT_KEY_ENCRYPTION_KEY` environment variable. Never in the database, never in git, never in a DB backup.
 2. A fresh **DEK** (Data Encryption Key) is generated per bot. The DEK encrypts your LLM key with AES-256-GCM.

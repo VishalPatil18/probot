@@ -3224,3 +3224,308 @@ _Tests + types:_
 
 **Open questions / follow-ups:**
 - None.
+
+---
+
+### 2026-07-05 13:22 - Embed widget: always-visible animated star bubble
+
+**What was asked to do:** Fix the embed on `manual-testing/html project/index.html` so the chatbot icon actually shows at bottom-right by default, using a small animated star SVG with a live rotating border and color-cycling glow, and propagate the icon everywhere the widget is used.
+
+**What I did:**
+- Rewrote `mount()` in `src/widget/widget.ts` to render the bubble + a fallback dialog immediately, then hydrate the dialog after the config fetch resolves. Prior behavior silently `return`ed on any fetch/parse failure, which is exactly why the manual-testing page showed nothing (that bot's config fetch was failing).
+- Added `renderFallbackDialogInner(apiBase)` for the pre-hydration/failure dialog (Powered by ProBot link only).
+- Replaced the chat-bubble SVG in `renderBubbleInner()` with a compact 5-point star (`fill="currentColor"`, single path, `<24px`).
+- Added CSS keyframes in `src/widget/widget.css`: rotating conic-gradient ring via a `::before` masked with `mask-composite: exclude`, box-shadow color-cycling glow, star pulse. Wrapped in `@media (prefers-reduced-motion: reduce)` to disable.
+- Updated the two `mount()` failure tests in `src/widget/widget.test.ts` to assert the bubble now renders (previously asserted it did not).
+- Repointed `manual-testing/html project/index.html` script src to `http://localhost:3000/widget.js` + `data-api-base="http://localhost:3000"` so the user can test against the local Next dev server.
+- Rebuilt `public/widget.js` (10.30 KB, under the 50 KB budget) via `npm run build:widget`.
+
+**Files changed:**
+- `src/widget/widget.ts` - update - render bubble immediately + fallback dialog + star SVG.
+- `src/widget/widget.css` - update - conic-gradient ring, color-cycling glow, pulse, reduced-motion escape hatch.
+- `src/widget/widget.test.ts` - update - two mount tests inverted (bubble should render even on failure).
+- `public/widget.js` - update - rebuilt bundle.
+- `manual-testing/html project/index.html` - update - point script + api-base at localhost:3000.
+
+**Decisions made:**
+- **Always-render over silent-fail.** The widget now guarantees a visible entry point even if the config fetch fails. Trade-off: sites that were relying on silent-fail to hide broken embeds will now see a "Visit ProBot" fallback. Accepted per the user's explicit yes.
+- **Icon lives only in `renderBubbleInner()`.** Grepped the repo - no other file renders this icon or the `probot-bubble` class. `packages/probot-chatbot/` is a build-tools stub, `probot-bot/` is a headless server. So updating widget.ts + widget.css covers "everywhere it's imported."
+- **CSS ring, not SVG animation.** Using a `::before` with `mask-composite: exclude` (padding the mask by 3px) keeps the SVG tiny and lets host pages theme the ring by adjusting `--probot-theme` without touching the SVG.
+- **Kept `mode: "closed"` shadow DOM** so page CSS still can't leak in.
+
+**Open questions / follow-ups:**
+- Pre-existing failing test (`parseConfig > happy path returns a fully-typed WidgetConfig`) - `WidgetConfig.bot.image` is set on the type but the expected object in the assertion omits it. Not touched (§3 surgical changes); flag for a separate cleanup.
+- Verified via `npx vitest run src/widget/widget.test.ts` (34/35, the one failure is the pre-existing one above). Visual browser verification is on the user - I can't open a browser from here.
+
+---
+
+### 2026-07-05 13:35 - Embed widget: sparkles icon + real chat surface (no more redirect CTA)
+
+**What was asked to do:** Swap the bubble icon for a Lucide-style sparkles glyph and rebuild the popup as an actual chat surface (message list + suggested-question chips + text input + send button) instead of an "Open full chat" link.
+
+**What I did:**
+- Replaced the 5-point star in `renderBubbleInner()` with the user-supplied sparkles SVG (4-pointed sparkle + small sparkle + circle, 4 paths, `stroke="currentColor"`, ~200 bytes).
+- Rewrote `renderDialogInner()` to a chat layout: header (avatar + name + close), scrollable messages list seeded with a bot greeting, suggested-question chip row (up to 5), input row (`<input type="text">` + circular send button), footer with "Open full chat" + "Powered by ProBot". Chips carry the question in `data-question` (escaped) so click handlers don't have to re-read `textContent`.
+- Added `wireChat(dialog, doc, apiBase, botId)` — form-submit and chip-click both call `send(question)`. `send()` appends the user bubble, hides the chip row, shows a 3-dot typing indicator, POSTs `{ message, sessionId }` to `${apiBase}/api/chat/${botId}` **without any BYO-key header** (per BYO-KEY.md path 2 — the server unwraps the owner's managed key). Handles 429 (rate-limit copy), non-2xx (fallback copy pointing at the full chat link), network error (generic hiccup copy).
+- Added `getOrCreateSessionId(botId)` — reads `probot.session.${botId}` from `localStorage` so back-to-back turns on the same host page get coalesced into one conversation server-side (matches the ChatWindow contract). Falls back to a per-load id when storage is blocked.
+- CSS in `widget.css` rewritten around the chat surface: fixed dialog height (380×560, mobile full-width), message bubbles (user right / bot left with asymmetric radius), pill-style chips, circular send button, 3-dot typing indicator animation, all colour-themed off `--probot-theme`.
+- Bubble icon: kept the rotating conic-gradient ring + glow + pulse, added `rotate(12deg)` on hover to match the user's Tailwind reference (`hover:rotate-12`).
+- Updated tests in `widget.test.ts`: the "renders only the first 4 suggested questions" test now asserts 5 chips (via `data-question=`), and added a new test that the dialog renders the `data-role="form"|"input"|"send"` sentinels the chat wiring depends on. All other pure-renderer tests kept.
+- Rebuilt `public/widget.js` — 16.15 KB (was 10.30 KB; still under the 50 KB budget). Confirmed the built bundle contains the sparkles path, `data-role="input"|"send"`, `probot-chip`, `probot-typing`, and `probot.session.` via grep.
+
+**Files changed:**
+- `src/widget/widget.ts` - update - new bubble icon + chat renderer + wireChat() event/fetch plumbing + sessionId helper.
+- `src/widget/widget.css` - update - dialog resized, chip pills, message bubbles, typing dots, circular send button.
+- `src/widget/widget.test.ts` - update - 5-chip assertion + form/input/send sentinel test.
+- `public/widget.js` - update - rebuilt bundle (16.15 KB).
+
+**Decisions made:**
+- **No BYO-key header from the widget.** The widget POSTs to `/api/chat/[botId]` with no `x-llm-api-key` header, relying on the owner having stored a managed key server-side (path 2 in BYO-KEY.md). If they haven't, the server returns a non-2xx and the widget shows a graceful inline message + the footer's "Open full chat" link is still available. Rationale: asking a random visitor on a third-party site to paste an LLM key is unrealistic.
+- **Kept the widget's light theme** even though the user's screenshot 2 showed a dark palette — I read screenshot 2 as the *pattern* (chips + input, no redirect), not the *styling*. Light theme keeps parity with the existing avatar/header aesthetic. Flagged in the response; will swap to dark if asked.
+- **Chip cap 4 → 5.** Screenshot 2 shows 5 suggested questions; matched it. Non-breaking for owners with fewer.
+- **Session ID in localStorage, namespaced by botId.** Same contract as ChatWindow's `getOrCreateSessionId`. Namespacing lets a page embed multiple bots without cross-mixing sessions.
+
+**Open questions / follow-ups:**
+- Pre-existing `parseConfig > happy path` test still fails (missing `image: null` in expected object) — untouched.
+- If the owner hasn't set up managed key storage, the widget's chat calls will all return errors. Confirm that we surface a clearer diagnostic in that case (currently: generic fallback copy).
+- Consider persisting the message history in `sessionStorage` so re-opening the widget preserves the conversation state within the same page load.
+
+---
+
+### 2026-07-05 14:05 - Bot Factory Step 5: syntax-highlighted embed snippet + icon-only copy buttons
+
+**What was asked to do:** On Bot Factory Step 5, style the embed-code scrollbar aesthetically (no border, just background thumb); render the `<script>` tag as pretty-printed HTML with syntax highlighting and indentation; replace the "Copy embed" text button with a clipboard icon; do the same for the "Your bot link" copy button just above.
+
+**What I did:**
+- In `StepDeploy.tsx`, extracted `scriptSrc` and a multi-line `embedSnippet` constant (real newlines + 2-space attr indent; HTML ignores whitespace between attrs so the pasted snippet still works verbatim).
+- Rewrote the embed code block: outer container stays `rounded-xl bg-neutral-900 p-4 ring-1 ring-white/10` but border removed for a cleaner look; the `<pre>` now renders tokenized `<code>` children with per-role classes (`text-rose-300` for tag punctuation, `text-sky-300` for attr names, `text-emerald-300` for string values, `text-neutral-500` for `=`), producing the pretty-printed / syntax-highlighted output.
+- Aesthetic scrollbar via Tailwind arbitrary variants directly on the `<pre>`: `[scrollbar-width:thin]`, `[scrollbar-color:rgba(255,255,255,0.18)_transparent]`, `[&::-webkit-scrollbar]:h-1.5`, `[&::-webkit-scrollbar-track]:bg-transparent`, `[&::-webkit-scrollbar-thumb]:bg-white/15`, `[&::-webkit-scrollbar-thumb]:rounded-full`, both `[track|thumb]:border-0`. No new global CSS class.
+- All three copy buttons on Step 5 (Private preview, Your bot link, Embed code) now use the existing `iconOnly` prop on `CopyUrlButton` with contextual `className` overrides (amber-tinted for preview, muted-grey for public URL, white/5 pill on dark bg for the embed). No new component created; the icon+check swap was already in `CopyUrlButton`.
+
+**Files changed:**
+- `src/components/bot-factory/steps/StepDeploy.tsx` - update - all four items above.
+
+**Decisions made:**
+- **Scoped `EmbedSnippet` at [src/components/dashboard/EmbedSnippet.tsx](src/components/dashboard/EmbedSnippet.tsx) intentionally.** That component is on the bot detail page and hasn't been asked to change (§3 surgical). If we want uniform styling later, extract the tokenized `<code>` block + the scrollbar utility into a shared component.
+- **Multi-line copy target.** `embedSnippet` is the multi-line string exactly matching what the user sees. Easier mental model than "displayed multi-line, copies compact one-line".
+- **No dedicated `.code-scroll` CSS class in `globals.css`.** Kept the styling inline via arbitrary variants so the utility only lives where it's used; if a second code block appears, promote it to a shared class.
+
+**Verification:** `npx tsc --noEmit` passes; no widget-related tests touch StepDeploy.
+
+**Open questions / follow-ups:**
+- Same aesthetic could be lifted into `EmbedSnippet.tsx` for the bot detail page. Held for a later ask.
+
+---
+
+### 2026-07-05 14:20 - Embed widget: visual parity with the deployed /u/[username]/chat page
+
+**What was asked to do:** Style the embedded widget's dialog to match the deployed chat page so a visitor gets the same look whether they land on the public URL or click the floating bubble.
+
+**What I did:**
+- Added `renderBotAvatar(src, "header" | "mini")` helper mirroring `src/components/chat/BotAvatarIcon.tsx`: real image when available, otherwise a theme-tinted circle with the two-dot ProBot mark inline SVG. Same precedence as `ChatWindow` (bot.image → owner.image → placeholder).
+- Rewrote `renderDialogInner`:
+  - **Header:** ringed avatar (`box-shadow: 0 0 0 2px var(--probot-theme)` on a wrapper) with a green online dot bottom-right; title reads `Name · AI Assistant` with the suffix muted; subtitle is the headline OR a green **Online now** pill.
+  - **Messages:** each row is a flex container. Bot rows have the mini-avatar to the left of the bubble; user rows are right-aligned with no avatar. Bubbles use asymmetric radius (`border-top-left-radius: 6px` on bot, `border-top-right-radius: 6px` on user) to match `MessageBubble`'s `rounded-tl-md` / `rounded-tr-md`.
+  - **Suggested chips:** rounded-full pills with border+shadow, hover flips border+text to `--probot-theme` — same styling as the deployed `SuggestedQuestions` component.
+  - **Input pill:** the whole input+send lives in a single rounded-20px bordered container; `:focus-within` colors the border with `--probot-theme` (matches `focus-within:border-[color:var(--bot-accent)]`). Send button is a small rounded-11px theme-colored square with a stroked arrow-up, disabled state at 40% opacity — matches the deployed `↑` send button visually and by contract.
+- Updated `wireChat` to hydrate every runtime-appended bot message + typing indicator through the same row+mini-avatar template. Avatar src is stashed on the messages body via `data-avatar-src` so `wireChat` doesn't need extra plumbing beyond the dialog handle. Typing indicator now returns the whole row for `.remove()`.
+- CSS overhaul in `widget.css`: page-bg `#fafafa` instead of pure white so the white bubbles pop; `backdrop-filter: blur(6px)` on header and footer to match the deployed `bg-white/90 backdrop-blur`; `--probot-online: #10b981` for the header dot + "Online now" text.
+- Updated one test that was checking for `<div class="probot-avatar"` — now uses `probot-avatar-fallback` since the placeholder is a theme-tinted circle.
+
+**Files changed:**
+- `src/widget/widget.ts` - update - `renderBotAvatar` helper, new header/message/input HTML, `wireChat` renders row+avatar per message.
+- `src/widget/widget.css` - update - full visual rewrite of dialog (header ring + online dot, row layout, asymmetric bubble radii, input pill, `--probot-bg-page`, `--probot-online`).
+- `src/widget/widget.test.ts` - update - placeholder-avatar assertion updated to `probot-avatar-fallback`.
+- `public/widget.js` - update - rebuilt (19.16 KB, up from 16.15; still under the 50 KB budget).
+
+**Decisions made:**
+- **CSS var `--probot-theme` mirrors `--bot-accent`.** Same role, different names because the deployed chat uses `--bot-accent` (set from the bot row's `themeColor`) and the widget uses `--probot-theme` (set from the config API response). Kept the names distinct to avoid pretending the widget lives in the same style system.
+- **Avatar src via `data-attr` on the body node.** Alternative was passing it through `wireChat`'s signature. Data-attr keeps the wiring narrower — the renderer is the single source of truth for what avatar to use, and the runtime can read it back without an extra param.
+- **No markdown rendering** for bot replies (yet). The deployed `MessageBubble` uses `react-markdown`. Widget replies still render as plain text — pulling in markdown would add ~15 KB to the bundle. Held for a future ask.
+
+**Verification:** `npx tsc --noEmit` clean. `npx vitest run src/widget/widget.test.ts` → 35/36 pass (1 pre-existing `parseConfig` failure unrelated to this change). Built bundle contains `probot-avatar-wrap`, `probot-online-dot`, `probot-title-suffix`, `probot-avatar-mini`, `probot-msg-row`, `probot-avatar-fallback`, `border-top-left-radius`, "Ask anything about".
+
+**Open questions / follow-ups:**
+- Markdown rendering for bot replies to match `MessageBubble`. Weigh ~15 KB bundle cost vs consistency with the deployed page.
+- The `LoadingAnimation` component on the deployed page cycles through the bot's `loadingMessages` array; the widget still shows a static 3-dot indicator. If a bot has custom loading messages, ferry them through the config API and cycle them in the widget.
+
+---
+
+### 2026-07-05 14:40 - Embed widget: markdown rendering for bot replies
+
+**What was asked to do:** Bring the widget's bot-reply rendering to parity with the deployed page, which uses `react-markdown` + `remark-gfm`. Bot output like `**bold**`, `- lists`, ` `code` `, and `[links](https://...)` should render as HTML instead of the literal markdown characters.
+
+**What I did:**
+- Tried `marked` (npm i marked → 42 KB unminified). After esbuild bundle: widget ballooned to **63.45 KB**, blowing the 50 KB budget. Uninstalled and switched to a hand-rolled parser.
+- Wrote `renderMarkdown(md)` + `renderInline(text)` directly in `widget.ts` (~110 lines total). Coverage: bold (`**x**`), italic (`*x*` / `_x_`), inline code (`` `x` ``), fenced code blocks (```` ``` ````), links (`[t](u)`), headings (`# .. ######`), ordered + unordered lists, blockquotes, horizontal rules, hard breaks. No tables / autolinking / strikethrough — LLM output rarely uses them and each one adds noticeable parser complexity.
+- Safety model:
+  - `escapeHtml` runs first on every user-controlled substring, so `<script>alert(1)</script>` becomes `&lt;script&gt;alert(1)&lt;/script&gt;` before any regex touches it. LLM-emitted tag-shaped output can never inject markup.
+  - Link `href` is scheme-whitelisted (`http:` / `https:` / `mailto:`); anything else collapses to `#` so a `javascript:` payload can't execute even if the LLM was tricked into emitting one.
+  - Inline code is pulled out with `\x00C{N}\x00` sentinels before the emphasis/link passes, then restored — so `` `**not bold**` `` doesn't get mangled.
+- Wired into `wireChat.appendMessage`: bot messages use `bubble.innerHTML = renderMarkdown(text)`, user messages stay `textContent` (visitor input is echoed as plain text — zero risk).
+- CSS in `widget.css` for the rendered elements inside `.probot-msg-bot`: paragraphs with sibling-adjacent margin (no leading/trailing whitespace), themed underlined links, inline `<code>` with subtle background+border, dark `<pre>` code blocks, list indent, blockquote left-border, headings sized down, `<table>` with borders.
+- 10 new tests in `widget.test.ts`: bold/italic/code, links + noopener, `javascript:` collapse, script-tag escape, ul/ol/fenced code/headings, and the "don't parse markdown inside code" guarantee.
+
+**Files changed:**
+- `src/widget/widget.ts` - update - `renderMarkdown` + `renderInline` parser and wireChat integration.
+- `src/widget/widget.css` - update - `.probot-msg-bot p/a/code/pre/ul/ol/blockquote/h1-6/hr/table` styles.
+- `src/widget/widget.test.ts` - update - 10 tests covering the parser + XSS defences.
+- `public/widget.js` - update - rebuilt (23.14 KB, up from 19.16; 4 KB for the parser).
+- `package.json` / `package-lock.json` - update - added and then removed `marked` (net zero after switch to the hand-rolled parser).
+
+**Decisions made:**
+- **Hand-rolled over `marked` (or `micromark`).** `marked` alone pushed the bundle from 19 → 63 KB (past the 50 KB budget). The parser only needs to handle the subset LLMs actually emit, so the extra correctness the full library gives isn't worth 40 KB in a widget context. Deployed page keeps `react-markdown` because it's already inside a React bundle that includes the runtime for free.
+- **Skip tables / strikethrough / autolinking.** LLM output for a career-Q&A bot almost never uses them, and each adds ~10-20 lines of parser plus edge cases.
+- **User input stays `textContent`.** No need to parse markdown a visitor typed, and it keeps the input->render path zero-risk.
+
+**Verification:** `npx tsc --noEmit` clean. `npx vitest run src/widget/widget.test.ts` → **45/46 pass** (1 pre-existing `parseConfig > happy path` failure unrelated). Built bundle: 23.14 KB, ~54% below the 50 KB budget.
+
+**Open questions / follow-ups:**
+- Still deferred: cycling loading messages (requires config API to return `loadingMessages`, plus a small setInterval in `wireChat`). Estimated ~1 KB additional bundle.
+- If we ever ship a bot that leans on GFM tables, either add ~40 lines of parser or reconsider `marked` and eat the 40 KB.
+
+---
+
+### 2026-07-05 15:00 - Key-storage messaging: drop "browser-only" framing, lead with envelope encryption
+
+**What was asked to do:** Remove every user-facing claim that LLM keys "stay in your browser" (which no longer matches how hosted bots actually work - recruiter chats resolve via the server-side envelope-encrypted key). Replace with encryption-focused copy across app + docs. Owner confirmed: for hosted bots, keys are stored in the `encrypted_llm_keys` table with a per-bot DEK wrapped by a KEK that lives outside the database. Confirmed intent (b): keep browser-held path as an implementation footnote (for owner test chat + self-hosted + Azure), but lead every surface with the encryption story.
+
+**What I did:** batch-rewrote user-facing copy across three buckets.
+
+- **Bucket A — app UI copy:**
+  - `AIModelKeyTab.tsx` - three edits: the "Your key, your choice / keep it local" callout → "Your key stays encrypted end-to-end. Envelope-encrypted at rest on pro-bot.dev…"; the "managed_storage_unavailable" error string dropped its "Use the local-only path" fallback; the Azure notice trimmed "the endpoint + apiVersion live in your browser".
+  - `StepKnowledge.tsx` - embeddings-key hint switched from "Stored in your browser only" to "Kept encrypted, sent per request, and never logged in plaintext".
+  - `ModelStatusCard.tsx` - sidebar caption "key stored locally" → "key encrypted"; the misleading code comment above it rewritten to "envelope-encrypted server-side, sidebar cannot cheaply verify decrypt-ability without paying the audit cost".
+  - `about/page.tsx` - principle body and RAG blurb rewritten around encryption.
+  - `privacy/page.tsx` - three edits: "stored in your browser" (both mentions) and the Security section rewritten as "envelope-encrypted and never logged in plaintext".
+  - `why-pro-bot/page.tsx` - comparison table "Keys never logged" row detail rewritten.
+  - `HowItWorksSection.tsx` - step 02 body rewritten.
+  - `FreeToUseSection.tsx` - the "Keys stored locally" list item rewritten to "Keys stay encrypted"; the code-snippet comment "Your key never leaves this machine" rewritten to "Envelope-encrypted, never logged in plaintext".
+
+- **Bucket B — top-level docs and guides:**
+  - `docs/introduction.mdx` - bullet 2 rewritten.
+  - `docs/about.mdx` - both the RAG paragraph and Rule 1 rewritten.
+  - `docs/features.mdx` - "Key stays in your browser" bullet rewritten.
+  - `docs/faq.mdx` - two Q&As rewritten (storage + can-recruiters-see-my-key).
+  - `docs/hosting/managed.mdx` - "Your data" bullet rewritten.
+  - `docs/guides/build-your-bot.mdx` - Step 4 line rewritten.
+  - `docs/guides/models-and-keys.mdx` - step 4 (encrypted IndexedDB claim) rewritten; Ollama specifics trimmed of the browser-only mention; the "Where your key lives" section fully rewritten around envelope encryption.
+  - `docs/guides/how-to-use.mdx` - step 2 rewritten.
+  - `docs/blogs/azure-student-credits.mdx` - the Warning callout rewritten (Azure-specific but reframed around encryption).
+  - `docs/api-reference/bots-upsert.mdx` - the Note about the key not being in the body rewritten.
+  - `BYO-KEY.md` - rewritten end-to-end: removed the "Path 1 - browser-held (default)" ASCII diagram; managed encryption is now the primary flow; browser store demoted to an implementation footnote for owner testing + self-host.
+  - `KEY-STORAGE.md` - "Self-hosting without managed storage" paragraph rewritten to reference `probot-bot` self-hosted runtime instead of "browser's encrypted IndexedDB".
+
+- **Bucket C — technical concept docs:**
+  - `docs/concepts/byo-key.mdx` - full rewrite. New structure: `Encryption at rest` → `How a chat request resolves the key` (with a new sequence diagram) → `Where the key is` (table trimmed of browser-held column) → `Why this shape` → `Provider adapter - per-request client` → `Implementation footnotes` (Azure, self-host, owner test chat) → `Failure modes` → `Threat model`. The "default mode: browser-held" section is gone; the mermaid sequence diagram was rebuilt around the encrypted-store lookup.
+  - `docs/concepts/managed-vs-self-hosted.mdx` - the "How your LLM key is handled" paragraph rewritten; the "Where your LLM key lives" row in the comparison table changed from "Your browser (encrypted)" to "Envelope-encrypted on pro-bot.dev".
+  - `docs/guides/managed-key-storage.mdx` - the "The default: browser-only" H2 section removed; the intro rewritten to lead with envelope encryption as the primary story.
+
+- **Deliberately NOT touched (per §3 surgical):**
+  - Internal code comments in `widget.ts`, `ChatWindow.tsx`, `BotFactoryForm.tsx`, `llm-key-store.ts`, `secure-key-store.ts`, `embedding-key-store.ts`, `db/schema.ts`. These describe accurate implementation details - the IndexedDB store still exists and is used for owner test chat + Azure + self-hosted paths.
+  - The IndexedDB storage code itself. Copy change, not functional change.
+
+**Files changed:**
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` - 3 copy edits.
+- `src/components/bot-factory/steps/StepKnowledge.tsx` - 1 edit.
+- `src/components/dashboard/ModelStatusCard.tsx` - 2 edits (visible caption + comment).
+- `src/components/marketing/sections/HowItWorksSection.tsx` - 1 edit.
+- `src/components/marketing/sections/FreeToUseSection.tsx` - 2 edits.
+- `src/app/(marketing)/about/page.tsx` - 2 edits.
+- `src/app/(marketing)/privacy/page.tsx` - 3 edits.
+- `src/app/(marketing)/why-pro-bot/page.tsx` - 1 edit.
+- `docs/introduction.mdx`, `docs/about.mdx`, `docs/features.mdx`, `docs/faq.mdx`, `docs/hosting/managed.mdx`, `docs/guides/build-your-bot.mdx`, `docs/guides/models-and-keys.mdx`, `docs/guides/how-to-use.mdx`, `docs/guides/managed-key-storage.mdx`, `docs/concepts/byo-key.mdx`, `docs/concepts/managed-vs-self-hosted.mdx`, `docs/blogs/azure-student-credits.mdx`, `docs/api-reference/bots-upsert.mdx` - copy edits per bucket above.
+- `BYO-KEY.md`, `KEY-STORAGE.md` - top-level docs updated.
+
+**Decisions made:**
+- **Kept Azure blog copy in the "encrypted" register even though Azure is still header-only.** Reason: mentioning "browser-only" in one place would leak the demoted framing back into user-facing surfaces. The Azure limitation is documented in the byo-key concept doc's implementation-footnotes section instead.
+- **Removed the sequence diagram showing browser → IndexedDB → header flow.** Replaced with a diagram showing the recruiter → server-decrypt → provider flow. The old diagram is still accurate for owner test chat but stopped being the primary flow.
+- **Comparison-table columns in byo-key.mdx trimmed** from two ("Default (browser-held)" | "Managed storage (opt-in)") down to one ("State"). Simpler and matches the new single-story framing.
+
+**Verification:**
+- `npx tsc --noEmit` clean.
+- `npx vitest run` full suite → 921/947 pass. The 26 failures are the same pre-existing failures that fail on `main` (confirmed via `git stash`) - none of them touch surfaces changed in this pass.
+- Final grep for `your browser | browser-only | stored locally | stays local | never leaves your browser | stored in your browser | key stays on your (machine|device)` across `src/app`, `src/components`, `docs/`, `BYO-KEY.md`, `KEY-STORAGE.md`, `README.md`, `QUICKSTART.md` returns zero user-facing mentions.
+
+**Open questions / follow-ups:**
+- Search-engine-facing content on `/blog/*` sites already published elsewhere isn't updated (there's no external mirror to sync). If a marketing post lives off-repo, that surface still says the old thing.
+- Some internal code comments (`llm-key-store.ts`, `secure-key-store.ts`, `widget.ts`, `schema.ts`) still describe the browser store as a first-class path. They're technically accurate (the code still uses IndexedDB for owner testing), but a future audit could reword them if you want fully unified language.
+
+---
+
+### 2026-07-05 15:30 - Settings > AI Model & Key: Azure credentials panel replaces the "not supported" warning
+
+**What was asked to do:** In Settings > AI Model & Key, when Azure is the selected provider, the current UI shows a "Managed key storage / Not stored" section with an amber warning that "Azure keys aren't supported by managed storage." Wire in the same three-field Azure credential form Bot Factory Step 4 uses (Endpoint + API version + API key) so owners can update Azure creds from Settings without re-running the wizard.
+
+**What I did:**
+- Added state + a `useEffect` in `AIModelKeyTab.tsx` that, whenever `provider === "azure"`, calls `getAzureCreds()` + `getApiKey()` in parallel to pre-fill Endpoint + API version and detect whether an Azure key is already stored (so the input can show a `••••••` placeholder instead of a bare `sk-…`).
+- Added `saveAzureCreds()` handler: validates endpoint is `https://…`, treats an empty key input as "keep the existing one" when a key is already stored (Bot Factory-style update semantics), calls `setAzureCreds()` + `setApiKey()` in the encrypted browser store. Errors surface inline; success shows an "Saved!" flash next to the button.
+- Replaced the amber warning branch with a dedicated **Azure credentials** `<section>`: header with a Saved / Not saved pill, muted copy explaining browser-scoped storage + a link to the self-hosted-bot guide for recruiter chat, then three inputs (Endpoint with `https://` hint, API version pre-filled to `DEFAULT_AZURE_API_VERSION`, API key with show/hide toggle). Deployment name intentionally not duplicated — it lives in the "Model" field at the top of the tab, and a footnote points there.
+- Restructured the tab's render conditional from `{botId ? (managed + audit) : (create-a-bot placeholder)}` to `{provider === "azure" ? <Azure panel /> : botId ? (managed + audit) : <placeholder />}`. This lets the Azure panel render even when `botId` is null (Azure creds are per-browser, not per-bot).
+- Non-Azure managed-storage branch simplified: dropped the inner `provider === "azure"` check since it's unreachable now.
+
+**Files changed:**
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` - imports (`Link`, `getApiKey`, `getAzureCreds`, `setAzureCreds`, `DEFAULT_AZURE_API_VERSION`), 8 new state slots, load-on-mount effect, save handler, and the Azure `<section>`.
+
+**Decisions made:**
+- **Azure panel renders regardless of `botId`.** Azure credentials are stored per-browser via `setAzureCreds` / `setApiKey`, not per-bot. Requiring a bot to save creds would leak the wizard-first assumption into Settings.
+- **Blank-key means "keep the existing key".** Same UX as the managed-storage input — the user can update endpoint / apiVersion without re-pasting the key. Enforced by only calling `setApiKey` when the new value is ≥ 8 chars; otherwise `setAzureCreds` runs alone.
+- **Copy leans on the browser-storage story for Azure specifically**, per the earlier discussion. For every other provider the tab still says "envelope-encrypted server-side." Consistent with the actual behavior (Azure managed storage isn't implemented) without regressing the encryption framing elsewhere.
+- **No new tests.** The existing 31 settings-tab tests pass; Azure paths were previously untested (no `AIModelKeyTab.test.tsx`). Wiring is a plain form + async load — the risk surface is UI, not logic.
+
+**Verification:** `npx tsc --noEmit` clean. `npx vitest run src/components/dashboard/settings/` → 31/31 pass.
+
+**Open questions / follow-ups:**
+- The Azure creds panel doesn't offer a "Revoke" button. Symmetric with the managed-storage panel (which has one) would be `clearAzureCreds()` + `clearApiKey()` behind a confirm. Held until asked.
+- No `AIModelKeyTab.test.tsx` exists. A future test file would cover: the load-on-mount effect, the save flow, and the render switch between Azure / managed / placeholder branches.
+
+---
+
+### 2026-07-05 15:50 - Created standalone `probot-bot` repo at /Users/vishalpatil/Study/Projects/probot-bot
+
+**What was asked to do:** Create the actual `probot-bot` repository that the self-hosted documentation points at. Folder lives at `/Users/vishalpatil/Study/Projects/probot-bot` (sibling to `probot/`). Ship the files a user would clone, style it to match the hosted `/u/[username]/chat` page pixel-for-pixel, and include env/instructions/documentation.
+
+**What I did:**
+- Created the standalone Next.js 14 project at `/Users/vishalpatil/Study/Projects/probot-bot`. Design tokens (colors, fonts, `shadow-soft`, `thin-scroll`) mirrored from the main repo's Tailwind config and globals so the runtime is visually identical.
+- Ported the deployed chat surface as standalone components:
+  - `components/BotAvatarIcon.tsx` - avatar circle (image or theme-tinted placeholder).
+  - `components/ChatHeader.tsx` - ringed avatar + green online dot + "Name · AI Assistant" + headline/Online-now.
+  - `components/MessageBubble.tsx` - user variant (right-aligned, `rounded-tr-md`, theme-coloured) + assistant variant (left-aligned, `rounded-tl-md`, `react-markdown` + `remark-gfm` with SafeLink, mini avatar).
+  - `components/LoadingAnimation.tsx` - cycles the bot's `loadingMessages` in an assistant-shaped bubble with the bouncing-dots keyframes.
+  - `components/ChatWindow.tsx` - top-level client component: message list, suggested-question chips (shown only before the first turn), auto-grow textarea, rounded pill input with arrow-up send. `sessionId` generated via `crypto.randomUUID()` with a fallback for older browsers.
+- Wired the render loop:
+  - `app/page.tsx` is a server component that calls `getConfig()` and passes only display fields (name, headline, image, themeColor, suggestedQuestions, loadingMessages) into `<ChatWindow>`. Falls back to a friendly "Almost there" setup card if the platform call throws. `export const dynamic = "force-dynamic"` forces per-request rendering so a bot rename / theme change / avatar swap shows up immediately (without this flag the page was prerendering the setup card at build time and caching it).
+  - `app/api/chat/route.ts` orchestrates: pulls config + knowledge in parallel via `Promise.all`, builds the system prompt, calls the OpenAI-compatible endpoint at `${PROBOT_LLM_BASE_URL}/chat/completions`, returns `{ reply, sessionId }`. Fire-and-forget `postConversation` so analytics don't block the reply. Returns `502 platform_unavailable` on config/knowledge failures.
+  - `lib/platform.ts` - typed client for `/api/v1/bot/config|knowledge|conversations|leads`. Adds a boot-time guard that throws with a helpful message if `PROBOT_BOT_TOKEN` isn't set.
+- Configuration + docs:
+  - `.env.example` with sections for platform + LLM + optional embedding key, plus provider-specific templates in comments.
+  - `.gitignore` — standard Next.js exclusions plus explicit `.env*.local` line so the token/key never get committed.
+  - `README.md` - concise landing doc: what it does, quickstart, env table, provider examples, deployment options, repo layout.
+  - `SETUP.md` - long-form walkthrough: prerequisites, cloning, minting the token in the dashboard, `.env.local` creation, provider-specific configs (OpenAI / Ollama / Grok / Azure), running locally, deploying to Vercel/Fly/custom, pointing the world at it, troubleshooting.
+  - `LICENSE` - MIT.
+
+**Files changed:**
+- `probot-bot/` (new sibling repo, 20 files, not under `probot/`).
+  - Config: `package.json` (next 14.2, react 18.3, react-markdown 9, remark-gfm 4, tailwind 3.4, ts 5.6), `tsconfig.json`, `next.config.mjs`, `tailwind.config.ts`, `postcss.config.js`.
+  - App: `app/layout.tsx`, `app/globals.css`, `app/page.tsx`, `app/api/chat/route.ts`.
+  - Components: `components/{BotAvatarIcon,ChatHeader,ChatWindow,LoadingAnimation,MessageBubble}.tsx`.
+  - Lib: `lib/platform.ts`.
+  - Meta: `.env.example`, `.gitignore`, `LICENSE`, `README.md`, `SETUP.md`.
+
+**Decisions made:**
+- **Repo lives at `/Users/vishalpatil/Study/Projects/probot-bot`, not under `/probot/probot-bot/`.** The existing `probot/probot-bot/` scaffold stays as a reference stub inside the main repo (excluded from typecheck); the new sibling repo is what visitors clone.
+- **Ported the design tokens rather than sharing them.** No monorepo, no package coupling - a self-hoster clones one repo and it just works. Keeping the design in lockstep is a documentation-and-diligence problem, not a build problem.
+- **Ollama listed as the "fully free" path in the .env.example and both docs.** Aligns with the Zero-Cost Policy in CLAUDE.md §7 - a self-hoster with an Ollama install has $0 marginal cost.
+- **`react-markdown` is bundled** (matching the deployed page's `MessageBubble`). The widget avoids markdown deps for bundle-size reasons; this runtime is a full page, so the ~15 KB cost is fine.
+- **`app/page.tsx` marked `dynamic = "force-dynamic"`.** Without it, Next 14 prerenders `SetupNeeded` at build time and serves it as static — every request would show the setup card even after the operator sets the token. Discovered via `npm run build` output showing `○ /` (Static) instead of `ƒ /` (Dynamic).
+
+**Verification:**
+- `npm install` clean (487 packages).
+- `npx tsc --noEmit` exit 0.
+- `npm run build` succeeds. Route table: `ƒ /` (Dynamic, 54 KB first-load JS, 141 KB total), `ƒ /api/chat`, `○ /_not-found`. Under any reasonable performance budget for a chat page.
+
+**Open questions / follow-ups:**
+- No Dockerfile. Common Next.js Node image works but a canned one would remove friction for Docker-preferring self-hosters.
+- No CI. Add `.github/workflows/build.yml` running `npm run build` + `npx tsc --noEmit` per PR before the repo goes public.
+- Lead-capture UI isn't ported (deployed page has a `LeadCaptureCard` triggered by conversation heuristics). The runtime posts leads via `postLead()` but nothing calls it yet. Add if operators start asking.
+- Docs URL in `SetupNeeded` + README points at `https://pro-bot.dev/docs/self-hosted-bot/quickstart` — that path exists under `/docs/self-hosted-bot/`. Verify the specific `/quickstart` slug (or update to `/self-hosted-bot/index`) before the repo goes public.

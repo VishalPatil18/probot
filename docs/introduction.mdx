@@ -5,9 +5,9 @@ description: "ProBot turns your resume into a recruiter-facing AI bot you can sh
 
 ## What ProBot is
 
-ProBot is an open-source, BYO-key service for job seekers: you turn your resume and bio into your own recruiter-facing AI bot. You paste your resume and bio, pick an LLM provider (Anthropic, OpenAI, Azure OpenAI, or Google), and paste **your own API key**. ProBot keeps the key only in your browser's `localStorage` and forwards it on each chat request. The server never sees, logs, or persists it.
+ProBot is an open-source, BYO-key service for job seekers: you turn your resume and bio into your own recruiter-facing AI bot. You paste your resume and bio, pick an LLM provider (Anthropic, OpenAI, Gemini or Azure hosted models), and paste **your own API key**. ProBot keeps the key encrypted and forwards it on each chat request. The server never sees it in plain text or logs it.
 
-Recruiters then chat with your bot at a public URL or via an embeddable `<script>` widget.
+Recruiters then chat with your bot at a public URL or via an embeddable `<script>` widget on your portfolio or on the probot hosted site.
 
 <Tip>New here? Watch a one-minute live demo below!</Tip>
 <Frame>
@@ -50,7 +50,7 @@ Recruiters then chat with your bot at a public URL or via an embeddable `<script
 Most "AI chatbot for your resume" products either ask you to upload your resume to an opaque service or bill you per recruiter conversation. ProBot does neither:
 
 - **The hosted version is free:** You pay only your own provider (Anthropic, OpenAI, Azure, or Google) at their normal per-token rate.
-- **Your key stays on your device:** It rides each chat request as an `x-llm-api-key` header straight from your browser to the provider. ProBot's server forwards it; it never stores it.
+- **Your key stays encrypted:** Envelope-encrypted at rest, decrypted in memory for one chat request, then discarded. Never logged in plaintext.
 - **The code is open:** [MIT-licensed on GitHub](https://github.com/vishalpatil18/probot) - fork it, self-host it, or audit the key path yourself.
 
 ## What you can do today

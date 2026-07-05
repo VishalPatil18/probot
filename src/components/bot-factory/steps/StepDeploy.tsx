@@ -29,6 +29,14 @@ export function StepDeploy({
   const previewUrl = previewToken
     ? `${publicUrl}?preview=${encodeURIComponent(previewToken)}`
     : null;
+  const scriptSrc = `${origin}/widget.js`;
+  // Multi-line snippet copied verbatim so the user pastes exactly what they see.
+  // HTML ignores the whitespace between attrs, so this behaves identically to
+  // the compact one-line form.
+  const embedSnippet = `<script
+  src="${scriptSrc}"
+  data-bot-id="${createdBotId ?? ""}"
+></script>`;
   return (
     <section>
       <StepHeading
@@ -72,7 +80,11 @@ export function StepDeploy({
               <span className="text-sm font-mono flex-1 truncate">
                 {previewUrl}
               </span>
-              <CopyUrlButton url={previewUrl} />
+              <CopyUrlButton
+                url={previewUrl}
+                iconOnly
+                className="rounded-lg px-2 py-1.5 text-amber-900 hover:bg-amber-100"
+              />
             </div>
             <p className="text-[11px] text-muted mt-1.5">
               Token-signed; only people you share this link with can chat with
@@ -98,7 +110,11 @@ export function StepDeploy({
               <span className="text-sm font-mono flex-1 truncate">
                 {publicUrl}
               </span>
-              <CopyUrlButton url={publicUrl} />
+              <CopyUrlButton
+                url={publicUrl}
+                iconOnly
+                className="rounded-lg px-2 py-1.5 text-muted hover:bg-neutral-100 hover:text-neutral-900"
+              />
             </div>
           </div>
         ) : null}
@@ -108,14 +124,27 @@ export function StepDeploy({
             <label className="text-[11px] font-bold text-muted uppercase tracking-wider">
               Embed code
             </label>
-            <div className="mt-1.5 rounded-xl border border-border-base bg-neutral-900 p-3.5 ring-1 ring-white/10">
+            <div className="mt-1.5 rounded-xl bg-neutral-900 p-4 ring-1 ring-white/10">
               <div className="flex items-start gap-2">
-                <pre className="flex-1 overflow-x-auto font-mono text-xs leading-relaxed text-neutral-100">
-                  <code>{`<script src="${origin}/widget.js" data-bot-id="${createdBotId}"></script>`}</code>
+                <pre className="flex-1 min-w-0 overflow-x-auto font-mono text-xs leading-relaxed text-neutral-100">
+                  <code>
+                    <span className="text-rose-300">{"<script"}</span>
+                    {"\n  "}
+                    <span className="text-sky-300">src</span>
+                    <span className="text-neutral-500">=</span>
+                    <span className="text-emerald-300">{`"${scriptSrc}"`}</span>
+                    {"\n  "}
+                    <span className="text-sky-300">data-bot-id</span>
+                    <span className="text-neutral-500">=</span>
+                    <span className="text-emerald-300">{`"${createdBotId}"`}</span>
+                    {"\n"}
+                    <span className="text-rose-300">{"></script>"}</span>
+                  </code>
                 </pre>
                 <CopyUrlButton
-                  url={`<script src="${origin}/widget.js" data-bot-id="${createdBotId}"></script>`}
-                  label="Copy embed"
+                  url={embedSnippet}
+                  iconOnly
+                  className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-neutral-200 hover:bg-white/10"
                 />
               </div>
             </div>

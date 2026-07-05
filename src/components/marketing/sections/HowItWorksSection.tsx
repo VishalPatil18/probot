@@ -24,7 +24,7 @@ export function HowItWorksSection() {
               num: "02",
               icon: "network_intelligence",
               title: "Plug in your own LLM",
-              body: "Add your API key for Claude, Gemini, OpenAI, or any supported model. ProBot indexes your data into a private vector store - your key stays on your machine.",
+              body: "Add your API key for Claude, Gemini, OpenAI, or any supported model. ProBot indexes your data into a private vector store - your key is envelope-encrypted and never logged in plaintext.",
             },
             {
               num: "03",

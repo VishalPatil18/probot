@@ -25,8 +25,8 @@ Rotate quarterly (or after any suspected exposure):
 ## Self-hosting without managed storage
 
 Self-host operators who don't enable managed mode leave `PROBOT_KEY_ENCRYPTION_KEY`
-unset. The dashboard's "store key on server" path returns `503`, and users
-authenticate every chat from the browser's encrypted IndexedDB store instead -
-the key never leaves their machine.
+unset. The dashboard's "store key on server" path returns `503`. Chats then
+need to be served by the self-hosted `probot-bot` runtime, where the operator
+holds the plaintext key themselves and pro-bot.dev never touches it.
 
 See [BYO-KEY.md](BYO-KEY.md) for the end-to-end key flow.

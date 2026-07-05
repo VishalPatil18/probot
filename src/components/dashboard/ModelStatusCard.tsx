@@ -9,10 +9,10 @@ type Props = {
 };
 
 // Sidebar widget showing the user's BYO LLM selection. The active dot
-// indicates the key is configured locally (the actual key never leaves
-// the browser, so the server cannot truly verify "active" beyond
-// "they set a provider preference"). Links to the AI model & key tab
-// (Coming Soon - wires up later).
+// only reflects "provider preference is set" - the actual key is
+// envelope-encrypted server-side and the sidebar cannot cheaply verify
+// decrypt-ability without paying the audit cost. Links to the AI model
+// & key tab.
 export function ModelStatusCard({ provider, model, manageHref }: Props) {
   const { name, model: modelLabel } = describeProvider(provider, model);
   return (
@@ -36,7 +36,7 @@ export function ModelStatusCard({ provider, model, manageHref }: Props) {
       </div>
       <p className="mb-3 flex items-center gap-1.5 text-[11px] text-white/60">
         <span className="size-1.5 rounded-full bg-emerald-400" />
-        {name} · key stored locally
+        {name} · key encrypted
       </p>
       <Link
         href={manageHref}

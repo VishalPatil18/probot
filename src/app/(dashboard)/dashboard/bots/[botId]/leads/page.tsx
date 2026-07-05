@@ -140,7 +140,7 @@ export default async function LeadsListPage({ params, searchParams }: Props) {
                       href={`/dashboard/bots/${bot.id}/conversations/${l.conversationId}`}
                       className="mt-2 inline-block text-xs font-semibold text-muted hover:text-text-base"
                     >
-                      View conversation →
+                      View conversation
                     </Link>
                   ) : null}
                 </div>

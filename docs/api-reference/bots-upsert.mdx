@@ -41,9 +41,9 @@ Cookie: next-auth.session-token=<jwt>
 | `llmModel`           | string (optional)                                      | ≤ 60 chars; provider-specific model id or Azure deployment |
 
 <Note>
-  The LLM API key is **not** part of this body and **must not** be sent here. It
-  lives in the browser's `localStorage` and rides the `x-llm-api-key` header on
-  `/api/chat/[botId]` requests. See [BYO-key flow](/concepts/byo-key).
+  The LLM API key is **not** part of this body and **must not** be sent here.
+  It's envelope-encrypted at rest via a separate endpoint and never rides in a
+  chat body. See [BYO-key flow](/concepts/byo-key).
 </Note>
 
 ## Behaviour

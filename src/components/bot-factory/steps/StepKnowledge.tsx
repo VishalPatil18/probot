@@ -231,8 +231,8 @@ export function StepKnowledge({
               <p className="text-[11px] text-muted">
                 When provided, your knowledge is embedded with OpenAI and the
                 bot uses semantic search at chat time for more accurate answers.
-                Stored in your browser only, never on our servers. Leave blank
-                to use full-context (default).
+                Kept encrypted, sent per request, and never logged in plaintext.
+                Leave blank to use full-context (default).
               </p>
             </div>
           )}

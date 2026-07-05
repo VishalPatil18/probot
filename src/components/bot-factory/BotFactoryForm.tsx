@@ -13,7 +13,11 @@ import {
   setOllamaBaseUrl,
 } from "@/lib/client/llm-key-store";
 
-import { DEFAULT_AZURE_API_VERSION, ENABLED_PROVIDERS, TOTAL_STEPS } from "./constants";
+import {
+  DEFAULT_AZURE_API_VERSION,
+  ENABLED_PROVIDERS,
+  TOTAL_STEPS,
+} from "./constants";
 import {
   collectFailures,
   type IngestFailure,
@@ -307,6 +311,15 @@ export function BotFactoryForm({
   }
 
   function back() {
+    // Step 1 has nowhere to go inside the wizard, so the button acts as
+    // "Cancel" and returns to the dashboard. Steps 2-4 walk back through
+    // the wizard. Step 5 hides the button entirely - once the bot is
+    // deployed there is no editing the create-flow retroactively; edits
+    // happen from bot settings.
+    if (step === 1) {
+      router.push("/dashboard");
+      return;
+    }
     if (step > 1) setStep(step - 1);
   }
 
@@ -404,9 +417,9 @@ export function BotFactoryForm({
               <button
                 type="button"
                 onClick={back}
-                className={`btn btn-secondary ${step === 1 || step === 5 ? "invisible" : ""}`}
+                className={`btn btn-secondary ${step === 5 ? "invisible" : ""}`}
               >
-                Back
+                {step === 1 ? "Cancel" : "Back"}
               </button>
               <button
                 type="button"
@@ -429,6 +442,6 @@ export function BotFactoryForm({
 function nextLabel(step: number, submitting: boolean): string {
   if (submitting) return "Saving…";
   if (step === 4) return "Save as draft";
-  if (step === 5) return "Open chat →";
-  return "Continue →";
+  if (step === 5) return "Open chat";
+  return "Continue";
 }

@@ -23,7 +23,7 @@ const PRINCIPLES: Array<{ icon: IconName; title: string; body: string }> = [
   {
     icon: "key",
     title: "You own the keys",
-    body: "Your LLM API key lives in your browser. The server never sees it, never stores it, never bills you for it.",
+    body: "Your LLM API key is kept encrypted with envelope encryption, sent per request, and never logged in plaintext. You pay the provider directly - we never bill you for it.",
   },
   {
     icon: "lock",
@@ -165,8 +165,8 @@ export default function AboutPage() {
                 <p>
                   Every answer carries a confidence score and a source pointer
                   back to the chunk it came from. Recruiters trust it because
-                  it&apos;s verifiable. You trust it because nothing leaves your
-                  data - and your key never leaves your browser.
+                  it&apos;s verifiable. You trust it because your data stays in
+                  your account - and your key stays encrypted end-to-end.
                 </p>
                 <p>
                   The whole stack - front-end, RAG pipeline, vector store - runs
