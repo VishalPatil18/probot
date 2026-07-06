@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { PUBLIC_CORS_HEADERS, corsPreflight } from "@/lib/bots/cors-headers";
 import { bots, db, users } from "@/lib/db";
+import { toPublicImageUrl } from "@/lib/uploads/image-upload";
 
 // CORS preflight for the embeddable widget. next.config.js sets
 // the CORS headers on GET responses; this OPTIONS export answers the
@@ -62,14 +63,17 @@ export async function GET(
         name: bot.name,
         headline: bot.headline,
         themeColor: bot.themeColor,
-        image: bot.image,
+        // Absolutized so cross-origin widget consumers get a working URL.
+        // Also self-heals rows written by older builds with a hard-coded
+        // http://localhost:3000 prefix — see toPublicImageUrl.
+        image: toPublicImageUrl(bot.image),
         suggestedQuestions: bot.suggestedQuestions ?? [],
         loadingMessages: bot.loadingMessages,
       },
       owner: {
         username: owner.username,
         name: owner.name,
-        image: owner.image,
+        image: toPublicImageUrl(owner.image),
       },
     },
     {

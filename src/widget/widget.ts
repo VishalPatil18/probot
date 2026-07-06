@@ -344,18 +344,46 @@ export function renderDialogInner(
   const headerAvatarHtml = renderBotAvatar(avatarSrc, "header");
   const miniAvatarHtml = renderBotAvatar(avatarSrc, "mini");
 
-  const suggestedHtml =
-    bot.suggestedQuestions.length > 0
-      ? `<div class="probot-suggested" data-role="suggestions">
+  const hasSuggestions = bot.suggestedQuestions.length > 0;
+  const suggestedChipsHtml = hasSuggestions
+    ? `<div class="probot-suggested" data-role="suggestions">
+         ${bot.suggestedQuestions
+           .slice(0, 5)
+           .map(
+             (q) =>
+               `<button type="button" class="probot-chip" data-action="ask" data-question="${escapeHtml(q)}">${escapeHtml(q)}</button>`,
+           )
+           .join("")}
+       </div>`
+    : "";
+
+  // Dropdown panel + toggle button mirror the deployed /u/[username]/chat
+  // page (see src/components/chat/ChatWindow.tsx). Both start hidden; once
+  // the visitor sends their first message the chips disappear and the
+  // toggle button is revealed by wireChat().
+  const suggestedListHtml = hasSuggestions
+    ? `<div class="probot-suggest-list" data-role="suggest-list" hidden>
+         <p class="probot-suggest-list-heading">Suggested questions</p>
+         <ul class="probot-suggest-list-items">
            ${bot.suggestedQuestions
-             .slice(0, 5)
              .map(
                (q) =>
-                 `<button type="button" class="probot-chip" data-action="ask" data-question="${escapeHtml(q)}">${escapeHtml(q)}</button>`,
+                 `<li><button type="button" class="probot-suggest-list-item" data-action="ask" data-question="${escapeHtml(q)}">${escapeHtml(q)}</button></li>`,
              )
              .join("")}
-         </div>`
-      : "";
+         </ul>
+       </div>`
+    : "";
+
+  const suggestedToggleHtml = hasSuggestions
+    ? `<button type="button" class="probot-suggest-toggle" data-role="suggest-toggle" aria-label="Suggested questions" aria-expanded="false" hidden>
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+           <path d="M9 18h6"/>
+           <path d="M10 22h4"/>
+           <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/>
+         </svg>
+       </button>`
+    : "";
 
   const subtitleHtml = bot.headline
     ? `<div class="probot-subtitle">${escapeHtml(bot.headline)}</div>`
@@ -383,9 +411,11 @@ export function renderDialogInner(
           <div class="probot-msg probot-msg-bot">Hi! I'm ${escapeHtml(bot.name)}, ${escapeHtml(displayName)}'s AI. Ask me anything.</div>
         </div>
       </div>
-      ${suggestedHtml}
+      ${suggestedChipsHtml}
     </div>
+    ${suggestedListHtml}
     <form class="probot-inputbar" data-role="form" novalidate>
+      ${suggestedToggleHtml}
       <input
         type="text"
         class="probot-input"
@@ -429,23 +459,56 @@ export function readScriptConfig(
   return { botId, apiBase };
 }
 
+// The server validates sessionId as a strict RFC 4122 UUID (Zod .uuid() in
+// src/app/api/chat/[botId]/pipeline.ts). Any other shape 400s, so both the
+// generator and the localStorage-cache path must guarantee UUID output.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// v4 UUID, preferring crypto.randomUUID and falling back to
+// crypto.getRandomValues (universally available where any Crypto namespace
+// exists). Mirrors src/lib/client/session-id-store.ts. Throws only in the
+// extreme-legacy runtime with no Crypto at all — callers catch and let the
+// chat request degrade gracefully.
+function newUuid(): string {
+  const c: Crypto | undefined =
+    typeof crypto !== "undefined" ? crypto : undefined;
+  if (c && typeof c.randomUUID === "function") {
+    return c.randomUUID();
+  }
+  if (!c || typeof c.getRandomValues !== "function") {
+    throw new Error("no crypto namespace available");
+  }
+  const bytes = new Uint8Array(16);
+  c.getRandomValues(bytes);
+  // RFC 4122 §4.4: set version (4) and variant (10xx) bits.
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
+    "",
+  );
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 // Per-tab conversation ID persisted in localStorage so back-to-back turns
 // on the same host page get coalesced into one conversation server-side.
 // The key is namespaced by botId because a page could embed multiple bots.
+// Revalidates the stored value against UUID_RE on every read so a stale
+// non-UUID (from an older widget build's fallback path) gets replaced
+// instead of pinning the visitor to a permanent 400.
 function getOrCreateSessionId(botId: string): string {
   const key = `probot.session.${botId}`;
   try {
     const existing = window.localStorage.getItem(key);
-    if (existing) return existing;
-    const created =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    if (existing && UUID_RE.test(existing)) return existing;
+    const created = newUuid();
     window.localStorage.setItem(key, created);
     return created;
   } catch {
-    // Private-mode / blocked storage - fall back to a per-load id.
-    return `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Private-mode / blocked storage - fall back to a per-load UUID. Still
+    // a valid UUID so the chat request goes through; conversation
+    // coalescence is lost for this pageview only.
+    return newUuid();
   }
 }
 
@@ -470,6 +533,28 @@ export async function mount(
   const style = doc.createElement("style");
   style.textContent = __WIDGET_CSS__;
   shadow.appendChild(style);
+
+  // Defensive avatar-load guard. Any bot/owner avatar `<img>` that 404s (stale
+  // localhost URL still cached upstream, deleted uploads, network flake, etc.)
+  // gets swapped for the theme-tinted ProBot placeholder so a visitor never
+  // sees the browser's default broken-image icon. `error` doesn't bubble in
+  // the composed tree, so the listener uses the capture phase to catch it at
+  // the shadow root regardless of where the failing img lives.
+  shadow.addEventListener(
+    "error",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLImageElement)) return;
+      const isHeader = target.classList.contains("probot-avatar");
+      const isMini = target.classList.contains("probot-avatar-mini");
+      if (!isHeader && !isMini) return;
+      const wrapper = doc.createElement("div");
+      wrapper.innerHTML = renderBotAvatar(null, isHeader ? "header" : "mini");
+      const fallbackEl = wrapper.firstElementChild;
+      if (fallbackEl) target.replaceWith(fallbackEl);
+    },
+    true,
+  );
 
   const root = doc.createElement("div");
   root.className = "probot-root";
@@ -540,8 +625,21 @@ function wireChat(
   const suggestions = dialog.querySelector<HTMLElement>(
     '[data-role="suggestions"]',
   );
+  const suggestList = dialog.querySelector<HTMLElement>(
+    '[data-role="suggest-list"]',
+  );
+  const suggestToggle = dialog.querySelector<HTMLButtonElement>(
+    '[data-role="suggest-toggle"]',
+  );
   const sendBtn = dialog.querySelector<HTMLButtonElement>('[data-role="send"]');
   if (!form || !input || !messages || !sendBtn) return;
+
+  function setSuggestListOpen(open: boolean): void {
+    if (!suggestList || !suggestToggle) return;
+    suggestList.hidden = !open;
+    suggestToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    suggestToggle.classList.toggle("probot-suggest-toggle-active", open);
+  }
 
   const sessionId = getOrCreateSessionId(botId);
   // Read the avatar url the renderer stashed on the body node so appended bot
@@ -608,8 +706,12 @@ function wireChat(
     if (!trimmed || inFlight) return;
 
     // Once the visitor engages, hide the suggestion chips so the message
-    // list is the sole focus.
+    // list is the sole focus. Reveal the input-bar toggle so they can
+    // still reopen the list from inside the conversation, and collapse
+    // any open dropdown so it doesn't linger over the new message.
     if (suggestions) suggestions.hidden = true;
+    if (suggestToggle) suggestToggle.hidden = false;
+    setSuggestListOpen(false);
 
     appendMessage("user", trimmed);
     input!.value = "";
@@ -668,8 +770,19 @@ function wireChat(
 
   dialog.addEventListener("click", (event) => {
     const target = event.target as HTMLElement | null;
-    if (target?.dataset.action === "ask") {
-      const q = target.dataset.question ?? target.textContent ?? "";
+    if (!target) return;
+    // The button lives inside the input pill; walk up to it so a click
+    // on the inner <svg>/<path> still counts as a toggle click.
+    const toggleEl = target.closest<HTMLElement>(
+      '[data-role="suggest-toggle"]',
+    );
+    if (toggleEl) {
+      setSuggestListOpen(suggestList?.hidden !== false ? true : false);
+      return;
+    }
+    const askEl = target.closest<HTMLElement>('[data-action="ask"]');
+    if (askEl) {
+      const q = askEl.dataset.question ?? askEl.textContent ?? "";
       void send(q);
     }
   });

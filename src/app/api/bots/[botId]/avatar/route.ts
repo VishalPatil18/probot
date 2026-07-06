@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { botAvatars, bots, db } from "@/lib/db";
-import { appBaseUrl, parseImageUpload } from "@/lib/uploads/image-upload";
+import { parseImageUpload, toPublicImageUrl } from "@/lib/uploads/image-upload";
 
 // POST /api/bots/[botId]/avatar - owner-gated upload of a bot's profile picture.
 // Bytes go into `bot_avatars` (one row per bot, upserted) and `bots.image` is
@@ -31,8 +31,11 @@ export async function POST(
   const { buffer, contentType } = parsed;
   const botId = owner.bot.id;
 
-  // `?v=` busts any cached copy of the stable avatar URL after a re-upload.
-  const imageUrl = `${appBaseUrl()}/api/bot-avatar/${botId}?v=${Date.now()}`;
+  // Root-relative on purpose: decouples the stored value from the writer's
+  // deployment origin so a bot uploaded on `next dev` still renders in
+  // production. `?v=` busts any cached copy of the stable avatar URL after a
+  // re-upload.
+  const storedImage = `/api/bot-avatar/${botId}?v=${Date.now()}`;
 
   await db.transaction(async (tx) => {
     await tx
@@ -42,8 +45,10 @@ export async function POST(
         target: botAvatars.botId,
         set: { data: buffer, contentType, updatedAt: new Date() },
       });
-    await tx.update(bots).set({ image: imageUrl }).where(eq(bots.id, botId));
+    await tx.update(bots).set({ image: storedImage }).where(eq(bots.id, botId));
   });
 
-  return NextResponse.json({ image: imageUrl });
+  // Return the display-ready (absolutized) URL so the client updates its UI
+  // without a re-fetch through the config API.
+  return NextResponse.json({ image: toPublicImageUrl(storedImage) });
 }

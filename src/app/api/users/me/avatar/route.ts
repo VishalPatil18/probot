@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth/auth";
 import { db, userAvatars, users } from "@/lib/db";
-import { appBaseUrl, parseImageUpload } from "@/lib/uploads/image-upload";
+import { parseImageUpload, toPublicImageUrl } from "@/lib/uploads/image-upload";
 
 // POST /api/users/me/avatar - upload a custom profile photo. The bytes are
 // stored in `user_avatars` (one row per user, upserted) and `users.image` is
@@ -32,9 +32,11 @@ export async function POST(request: Request): Promise<Response> {
   }
   const { buffer, contentType } = parsed;
 
-  // `?v=` busts any cached copy of the (otherwise stable) avatar URL so a new
-  // upload shows immediately on the chat header and dashboard.
-  const imageUrl = `${appBaseUrl()}/api/avatar/${userId}?v=${Date.now()}`;
+  // Root-relative on purpose: decouples the stored value from the writer's
+  // deployment origin so a bot uploaded on `next dev` still renders in
+  // production. `?v=` busts any cached copy of the (otherwise stable) avatar
+  // URL so a new upload shows immediately on the chat header and dashboard.
+  const storedImage = `/api/avatar/${userId}?v=${Date.now()}`;
 
   await db.transaction(async (tx) => {
     await tx
@@ -44,8 +46,10 @@ export async function POST(request: Request): Promise<Response> {
         target: userAvatars.userId,
         set: { data: buffer, contentType, updatedAt: new Date() },
       });
-    await tx.update(users).set({ image: imageUrl }).where(eq(users.id, userId));
+    await tx.update(users).set({ image: storedImage }).where(eq(users.id, userId));
   });
 
-  return NextResponse.json({ image: imageUrl });
+  // Return the display-ready (absolutized) URL so the client updates its UI
+  // without a re-fetch through the config API.
+  return NextResponse.json({ image: toPublicImageUrl(storedImage) });
 }

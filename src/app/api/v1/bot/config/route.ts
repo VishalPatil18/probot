@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireBotToken } from "@/lib/bot-tokens/service";
+import { toPublicImageUrl } from "@/lib/uploads/image-upload";
 
 // GET /api/v1/bot/config
 //
@@ -22,7 +23,9 @@ export async function GET(request: Request): Promise<Response> {
     headline: bot.headline,
     personality: bot.personality,
     themeColor: bot.themeColor,
-    image: bot.image,
+    // Self-hosted runtimes consume this cross-origin (their own domain), so
+    // absolutize against the deployment origin and self-heal legacy rows.
+    image: toPublicImageUrl(bot.image),
     suggestedQuestions: bot.suggestedQuestions ?? [],
     loadingMessages: bot.loadingMessages ?? [],
     isActive: bot.isActive,

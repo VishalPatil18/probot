@@ -1,4 +1,4 @@
-import { get_encoding, type Tiktoken } from "tiktoken";
+import { getEncoding, type Tiktoken } from "js-tiktoken";
 
 import { IngestionError } from "./errors";
 
@@ -19,17 +19,14 @@ export interface ChunkOptions {
 let cachedEncoder: Tiktoken | null = null;
 function getEncoder(): Tiktoken {
   if (!cachedEncoder) {
-    cachedEncoder = get_encoding("cl100k_base");
+    cachedEncoder = getEncoding("cl100k_base");
   }
   return cachedEncoder;
 }
 
 // Test-only reset. Re-acquires the encoder on the next call.
 export function __resetEncoder(): void {
-  if (cachedEncoder) {
-    cachedEncoder.free();
-    cachedEncoder = null;
-  }
+  cachedEncoder = null;
 }
 
 // Splits `text` into overlapping token-bounded chunks using the cl100k_base
@@ -52,7 +49,6 @@ export function chunkText(text: string, opts: ChunkOptions = {}): Chunk[] {
 
   const enc = getEncoder();
   const tokens = enc.encode(trimmed);
-  const decoder = new TextDecoder("utf-8");
 
   if (tokens.length <= targetTokens) {
     return [
@@ -68,8 +64,7 @@ export function chunkText(text: string, opts: ChunkOptions = {}): Chunk[] {
   while (start < tokens.length) {
     const end = Math.min(start + targetTokens, tokens.length);
     const window = tokens.slice(start, end);
-    const bytes = enc.decode(window);
-    const decoded = decoder.decode(bytes).trim();
+    const decoded = enc.decode(window).trim();
     if (decoded.length > 0) {
       chunks.push({
         contentText: decoded,

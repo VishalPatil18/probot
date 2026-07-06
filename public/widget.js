@@ -1,15 +1,15 @@
 /* ProBot widget · MIT · v1 */
-"use strict";(()=>{function H(o){var c,i,s,d,l,f,h,m,b,y,w,k;let t=o.replace(/\r\n?/g,`
+"use strict";(()=>{function I(o){var i,s,r,u,l,m,f,h,b,E,$,y;let t=o.replace(/\r\n?/g,`
 `).split(`
-`),n=[],e=0;for(;e<t.length;){let v=(c=t[e])!=null?c:"";if(/^```/.test(v)){let r=[];for(e++;e<t.length&&!/^```/.test((i=t[e])!=null?i:"");)r.push((s=t[e])!=null?s:""),e++;e++,n.push(`<pre><code>${g(r.join(`
-`))}</code></pre>`);continue}let E=v.match(/^(#{1,6})\s+(.+)$/);if(E){let r=E[1].length;n.push(`<h${r}>${C(E[2])}</h${r}>`),e++;continue}if(/^([-*_])\1{2,}\s*$/.test(v)){n.push("<hr>"),e++;continue}if(/^>/.test(v)){let r=[];for(;e<t.length&&/^>/.test((d=t[e])!=null?d:"");)r.push(((l=t[e])!=null?l:"").replace(/^>\s?/,"")),e++;n.push(`<blockquote>${C(r.join("<br>"))}</blockquote>`);continue}if(/^[-*]\s+/.test(v)){let r=[];for(;e<t.length&&/^[-*]\s+/.test((f=t[e])!=null?f:"");){let u=((h=t[e])!=null?h:"").replace(/^[-*]\s+/,"");r.push(`<li>${C(u)}</li>`),e++}n.push(`<ul>${r.join("")}</ul>`);continue}if(/^\d+\.\s+/.test(v)){let r=[];for(;e<t.length&&/^\d+\.\s+/.test((m=t[e])!=null?m:"");){let u=((b=t[e])!=null?b:"").replace(/^\d+\.\s+/,"");r.push(`<li>${C(u)}</li>`),e++}n.push(`<ol>${r.join("")}</ol>`);continue}if(v.trim()===""){e++;continue}let a=[];for(;e<t.length&&((y=t[e])!=null?y:"").trim()!==""&&!/^(#{1,6}\s|>|\`\`\`|[-*]\s|\d+\.\s|([-*_])\2{2,}\s*$)/.test((w=t[e])!=null?w:"");)a.push((k=t[e])!=null?k:""),e++;n.push(`<p>${C(a.join("<br>"))}</p>`)}return n.join("")}function C(o){let t=g(o),n=[];return t=t.replace(/`([^`\n]+)`/g,(e,c)=>`\0C${n.push(`<code>${c}</code>`)-1}\0`),t=t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(e,c,i)=>`<a href="${/^(https?:|mailto:)/i.test(i)?i:"#"}" target="_blank" rel="noopener noreferrer">${c}</a>`),t=t.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>"),t=t.replace(/(^|\W)_(.+?)_(\W|$)/g,"$1<em>$2</em>$3"),t=t.replace(/\*(.+?)\*/g,"<em>$1</em>"),t=t.replace(/\x00C(\d+)\x00/g,(e,c)=>{var i;return(i=n[Number(c)])!=null?i:""}),t}function g(o){return o.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}var L=/^#[0-9a-fA-F]{6}$/,M="#7c5cff";function x(o){return typeof o=="string"&&L.test(o)?o:M}function A(o){if(!o||typeof o!="object")return null;let t=o,n=t.bot,e=t.owner;if(!n||!e)return null;let c=n.id,i=n.name,s=e.username;if(typeof c!="string"||typeof i!="string"||typeof s!="string")return null;let d=Array.isArray(n.suggestedQuestions)?n.suggestedQuestions.filter(l=>typeof l=="string"&&l.length>0):[];return{bot:{id:c,name:i,headline:typeof n.headline=="string"?n.headline:null,themeColor:x(n.themeColor),image:typeof n.image=="string"?n.image:null,suggestedQuestions:d},owner:{username:s,name:typeof e.name=="string"?e.name:null,image:typeof e.image=="string"?e.image:null}}}function I(){return`
+`),e=[],n=0;for(;n<t.length;){let c=(i=t[n])!=null?i:"";if(/^```/.test(c)){let p=[];for(n++;n<t.length&&!/^```/.test((s=t[n])!=null?s:"");)p.push((r=t[n])!=null?r:""),n++;n++,e.push(`<pre><code>${g(p.join(`
+`))}</code></pre>`);continue}let C=c.match(/^(#{1,6})\s+(.+)$/);if(C){let p=C[1].length;e.push(`<h${p}>${H(C[2])}</h${p}>`),n++;continue}if(/^([-*_])\1{2,}\s*$/.test(c)){e.push("<hr>"),n++;continue}if(/^>/.test(c)){let p=[];for(;n<t.length&&/^>/.test((u=t[n])!=null?u:"");)p.push(((l=t[n])!=null?l:"").replace(/^>\s?/,"")),n++;e.push(`<blockquote>${H(p.join("<br>"))}</blockquote>`);continue}if(/^[-*]\s+/.test(c)){let p=[];for(;n<t.length&&/^[-*]\s+/.test((m=t[n])!=null?m:"");){let L=((f=t[n])!=null?f:"").replace(/^[-*]\s+/,"");p.push(`<li>${H(L)}</li>`),n++}e.push(`<ul>${p.join("")}</ul>`);continue}if(/^\d+\.\s+/.test(c)){let p=[];for(;n<t.length&&/^\d+\.\s+/.test((h=t[n])!=null?h:"");){let L=((b=t[n])!=null?b:"").replace(/^\d+\.\s+/,"");p.push(`<li>${H(L)}</li>`),n++}e.push(`<ol>${p.join("")}</ol>`);continue}if(c.trim()===""){n++;continue}let _=[];for(;n<t.length&&((E=t[n])!=null?E:"").trim()!==""&&!/^(#{1,6}\s|>|\`\`\`|[-*]\s|\d+\.\s|([-*_])\2{2,}\s*$)/.test(($=t[n])!=null?$:"");)_.push((y=t[n])!=null?y:""),n++;e.push(`<p>${H(_.join("<br>"))}</p>`)}return e.join("")}function H(o){let t=g(o),e=[];return t=t.replace(/`([^`\n]+)`/g,(n,i)=>`\0C${e.push(`<code>${i}</code>`)-1}\0`),t=t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(n,i,s)=>`<a href="${/^(https?:|mailto:)/i.test(s)?s:"#"}" target="_blank" rel="noopener noreferrer">${i}</a>`),t=t.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>"),t=t.replace(/(^|\W)_(.+?)_(\W|$)/g,"$1<em>$2</em>$3"),t=t.replace(/\*(.+?)\*/g,"<em>$1</em>"),t=t.replace(/\x00C(\d+)\x00/g,(n,i)=>{var s;return(s=e[Number(i)])!=null?s:""}),t}function g(o){return o.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}var B=/^#[0-9a-fA-F]{6}$/,A="#7c5cff";function j(o){return typeof o=="string"&&B.test(o)?o:A}function q(o){if(!o||typeof o!="object")return null;let t=o,e=t.bot,n=t.owner;if(!e||!n)return null;let i=e.id,s=e.name,r=n.username;if(typeof i!="string"||typeof s!="string"||typeof r!="string")return null;let u=Array.isArray(e.suggestedQuestions)?e.suggestedQuestions.filter(l=>typeof l=="string"&&l.length>0):[];return{bot:{id:i,name:s,headline:typeof e.headline=="string"?e.headline:null,themeColor:j(e.themeColor),image:typeof e.image=="string"?e.image:null,suggestedQuestions:u},owner:{username:r,name:typeof n.name=="string"?n.name:null,image:typeof n.image=="string"?n.image:null}}}function P(){return`
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>
       <path d="M20 2v4"/>
       <path d="M22 4h-4"/>
       <circle cx="4" cy="20" r="2"/>
     </svg>
-  `}function S(o){return`
+  `}function U(o){return`
     <header class="probot-header">
       <div class="probot-avatar" aria-hidden="true"></div>
       <div class="probot-titles">
@@ -31,43 +31,56 @@
         Powered by ProBot
       </a>
     </footer>
-  `}function _(o,t){let n=t==="header"?"probot-avatar":"probot-avatar-mini";return o?`<img class="${n}" src="${g(o)}" alt="" />`:`<div class="${n} probot-avatar-fallback" aria-hidden="true">
+  `}function M(o,t){let e=t==="header"?"probot-avatar":"probot-avatar-mini";return o?`<img class="${e}" src="${g(o)}" alt="" />`:`<div class="${e} probot-avatar-fallback" aria-hidden="true">
       <svg viewBox="0 0 40 40" fill="none">
         <circle cx="14" cy="20" r="3.4" fill="#fff"/>
         <circle cx="26" cy="20" r="3.4" fill="#fff" opacity="0.65"/>
       </svg>
-    </div>`}function B(o,t){var m,b;let{bot:n,owner:e}=o,c=(m=e.name)!=null?m:e.username,i=`${t}/u/${encodeURIComponent(e.username)}/chat`,s=(b=n.image)!=null?b:e.image,d=_(s,"header"),l=_(s,"mini"),f=n.suggestedQuestions.length>0?`<div class="probot-suggested" data-role="suggestions">
-           ${n.suggestedQuestions.slice(0,5).map(y=>`<button type="button" class="probot-chip" data-action="ask" data-question="${g(y)}">${g(y)}</button>`).join("")}
-         </div>`:"",h=n.headline?`<div class="probot-subtitle">${g(n.headline)}</div>`:'<div class="probot-subtitle probot-subtitle-online">Online now</div>';return`
+    </div>`}function D(o,t){var $,y;let{bot:e,owner:n}=o,i=($=n.name)!=null?$:n.username,s=`${t}/u/${encodeURIComponent(n.username)}/chat`,r=(y=e.image)!=null?y:n.image,u=M(r,"header"),l=M(r,"mini"),m=e.suggestedQuestions.length>0,f=m?`<div class="probot-suggested" data-role="suggestions">
+         ${e.suggestedQuestions.slice(0,5).map(c=>`<button type="button" class="probot-chip" data-action="ask" data-question="${g(c)}">${g(c)}</button>`).join("")}
+       </div>`:"",h=m?`<div class="probot-suggest-list" data-role="suggest-list" hidden>
+         <p class="probot-suggest-list-heading">Suggested questions</p>
+         <ul class="probot-suggest-list-items">
+           ${e.suggestedQuestions.map(c=>`<li><button type="button" class="probot-suggest-list-item" data-action="ask" data-question="${g(c)}">${g(c)}</button></li>`).join("")}
+         </ul>
+       </div>`:"",b=m?`<button type="button" class="probot-suggest-toggle" data-role="suggest-toggle" aria-label="Suggested questions" aria-expanded="false" hidden>
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+           <path d="M9 18h6"/>
+           <path d="M10 22h4"/>
+           <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/>
+         </svg>
+       </button>`:"",E=e.headline?`<div class="probot-subtitle">${g(e.headline)}</div>`:'<div class="probot-subtitle probot-subtitle-online">Online now</div>';return`
     <header class="probot-header">
       <div class="probot-avatar-wrap">
-        ${d}
+        ${u}
         <span class="probot-online-dot" aria-hidden="true"></span>
       </div>
       <div class="probot-titles">
         <div class="probot-title">
-          ${g(c)}
+          ${g(i)}
           <span class="probot-title-suffix">\xB7 AI Assistant</span>
         </div>
-        ${h}
+        ${E}
       </div>
       <button type="button" class="probot-close" aria-label="Close" data-action="close">\xD7</button>
     </header>
-    <div class="probot-body" data-role="body" data-avatar-src="${g(s!=null?s:"")}">
+    <div class="probot-body" data-role="body" data-avatar-src="${g(r!=null?r:"")}">
       <div class="probot-messages" data-role="messages">
         <div class="probot-msg-row probot-msg-row-bot">
           ${l}
-          <div class="probot-msg probot-msg-bot">Hi! I'm ${g(n.name)}, ${g(c)}'s AI. Ask me anything.</div>
+          <div class="probot-msg probot-msg-bot">Hi! I'm ${g(e.name)}, ${g(i)}'s AI. Ask me anything.</div>
         </div>
       </div>
       ${f}
     </div>
+    ${h}
     <form class="probot-inputbar" data-role="form" novalidate>
+      ${b}
       <input
         type="text"
         class="probot-input"
         data-role="input"
-        placeholder="Ask anything about ${g(n.name)}\u2026"
+        placeholder="Ask anything about ${g(e.name)}\u2026"
         autocomplete="off"
         maxlength="1000"
       />
@@ -79,7 +92,7 @@
       </button>
     </form>
     <footer class="probot-footer">
-      <a href="${g(i)}" target="_blank" rel="noopener noreferrer">
+      <a href="${g(s)}" target="_blank" rel="noopener noreferrer">
         Open full chat \u2197
       </a>
       <span class="probot-footer-sep">\xB7</span>
@@ -87,7 +100,7 @@
         Powered by ProBot
       </a>
     </footer>
-  `}function P(o){if(!o)return null;let t=o.getAttribute("data-bot-id");if(!t)return null;let n=o.getAttribute("data-api-base"),e=typeof n=="string"&&/^https?:\/\//.test(n)?n.replace(/\/$/,""):"https://pro-bot.dev";return{botId:t,apiBase:e}}function j(o){let t=`probot.session.${o}`;try{let n=window.localStorage.getItem(t);if(n)return n;let e=typeof crypto!="undefined"&&"randomUUID"in crypto?crypto.randomUUID():`sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;return window.localStorage.setItem(t,e),e}catch(n){return`sess-${Date.now()}-${Math.random().toString(36).slice(2)}`}}async function D(o,t=document){let n=P(o);if(!n)return;let e=t.createElement("div");e.setAttribute("data-probot-widget",""),t.body.appendChild(e);let c=e.attachShadow({mode:"closed"}),i=t.createElement("style");i.textContent=`/*
+  `}function N(o){if(!o)return null;let t=o.getAttribute("data-bot-id");if(!t)return null;let e=o.getAttribute("data-api-base"),n=typeof e=="string"&&/^https?:\/\//.test(e)?e.replace(/\/$/,""):"https://pro-bot.dev";return{botId:t,apiBase:n}}var R=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;function x(){var n,i;let o=typeof crypto!="undefined"?crypto:void 0;if(o&&typeof o.randomUUID=="function")return o.randomUUID();if(!o||typeof o.getRandomValues!="function")throw new Error("no crypto namespace available");let t=new Uint8Array(16);o.getRandomValues(t),t[6]=((n=t[6])!=null?n:0)&15|64,t[8]=((i=t[8])!=null?i:0)&63|128;let e=Array.from(t,s=>s.toString(16).padStart(2,"0")).join("");return`${e.slice(0,8)}-${e.slice(8,12)}-${e.slice(12,16)}-${e.slice(16,20)}-${e.slice(20)}`}function O(o){let t=`probot.session.${o}`;try{let e=window.localStorage.getItem(t);if(e&&R.test(e))return e;let n=x();return window.localStorage.setItem(t,n),n}catch(e){return x()}}async function W(o,t=document){let e=N(o);if(!e)return;let n=t.createElement("div");n.setAttribute("data-probot-widget",""),t.body.appendChild(n);let i=n.attachShadow({mode:"closed"}),s=t.createElement("style");s.textContent=`/*
  * ProBot widget styles. All selectors are scoped to the Shadow DOM root the
  * widget creates - there is no \`:host { all: initial }\` reset because
  * \`mode: "closed"\` already isolates from host-page styles.
@@ -153,14 +166,19 @@
   inset: -3px;
   border-radius: 50%;
   padding: 3px;
+  /* Black + white spotlight sweep: a mostly-dark ring with a single bright
+   * arc that rotates around, mimicking a searchlight beam. Peak brightness
+   * at 0deg fades to near-black by 60deg and stays dark for the rest of
+   * the circle before wrapping back to bright at 360deg \u2014 combined with
+   * \`probot-spin\` it reads as one continuously travelling spot. */
   background: conic-gradient(
     from 0deg,
-    #7c5cff,
-    #ff5cae,
-    #ffb85c,
-    #5cffb8,
-    #5caeff,
-    #7c5cff
+    #ffffff 0deg,
+    #4a4a4a 30deg,
+    #0a0a0a 60deg,
+    #0a0a0a 300deg,
+    #4a4a4a 330deg,
+    #ffffff 360deg
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -201,13 +219,13 @@
   0%,
   100% {
     box-shadow:
-      0 8px 22px rgba(124, 92, 255, 0.45),
-      0 0 0 rgba(255, 92, 174, 0);
+      0 8px 22px rgba(0, 0, 0, 0.32),
+      0 0 0 rgba(255, 255, 255, 0);
   }
   50% {
     box-shadow:
-      0 10px 30px rgba(255, 92, 174, 0.55),
-      0 0 22px rgba(124, 92, 255, 0.45);
+      0 10px 30px rgba(0, 0, 0, 0.4),
+      0 0 22px rgba(255, 255, 255, 0.35);
   }
 }
 
@@ -637,6 +655,97 @@
   transform: scale(0.98);
 }
 
+/* --- suggested-questions dropdown (input-bar toggle) --- */
+
+.probot-suggest-list {
+  margin: 0 14px 8px;
+  background: var(--probot-surface);
+  border: 1px solid var(--probot-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+.probot-suggest-list[hidden] {
+  display: none;
+}
+
+.probot-suggest-list-heading {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--probot-border);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--probot-muted);
+}
+
+.probot-suggest-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.probot-suggest-list-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--probot-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease-out,
+    color 0.12s ease-out;
+}
+
+.probot-suggest-list-item:hover {
+  background: #fafafa;
+  color: var(--probot-theme);
+}
+
+.probot-suggest-toggle {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--probot-border);
+  background: transparent;
+  color: var(--probot-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition:
+    color 0.15s ease-out,
+    border-color 0.15s ease-out;
+}
+
+.probot-suggest-toggle[hidden] {
+  display: none;
+}
+
+.probot-suggest-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.probot-suggest-toggle:hover {
+  color: var(--probot-theme);
+  border-color: var(--probot-theme);
+}
+
+.probot-suggest-toggle-active {
+  color: var(--probot-theme);
+  border-color: var(--probot-theme);
+}
+
 /* --- input pill --- */
 
 .probot-inputbar {
@@ -644,7 +753,7 @@
   align-items: center;
   gap: 8px;
   margin: 0 14px 10px;
-  padding: 6px 6px 6px 14px;
+  padding: 6px 6px 6px 10px;
   border: 1px solid var(--probot-border);
   background: var(--probot-surface);
   border-radius: 20px;
@@ -787,4 +896,4 @@
     max-height: calc(100vh - 110px);
   }
 }
-`,c.appendChild(i);let s=t.createElement("div");s.className="probot-root",s.style.setProperty("--probot-theme",M);let d=t.createElement("button");d.type="button",d.className="probot-bubble",d.setAttribute("aria-label","Open chat"),d.innerHTML=I();let l=t.createElement("div");l.className="probot-dialog",l.hidden=!0,l.innerHTML=S(n.apiBase),d.addEventListener("click",()=>{l.hidden=!l.hidden}),l.addEventListener("click",m=>{let b=m.target;(b==null?void 0:b.dataset.action)==="close"&&(l.hidden=!0)}),s.appendChild(d),s.appendChild(l),c.appendChild(s);let f;try{let m=await fetch(`${n.apiBase}/api/bots/${encodeURIComponent(n.botId)}/config`,{headers:{Accept:"application/json"}});if(!m.ok)return;f=await m.json()}catch(m){return}let h=A(f);h&&(s.style.setProperty("--probot-theme",h.bot.themeColor),d.setAttribute("aria-label",`Open chat with ${h.bot.name}`),l.innerHTML=B(h,n.apiBase),q(l,t,n.apiBase,n.botId))}function q(o,t,n,e){let c=o.querySelector('[data-role="form"]'),i=o.querySelector('[data-role="input"]'),s=o.querySelector('[data-role="messages"]'),d=o.querySelector('[data-role="body"]'),l=o.querySelector('[data-role="suggestions"]'),f=o.querySelector('[data-role="send"]');if(!c||!i||!s||!f)return;let h=j(e),m=(d==null?void 0:d.dataset.avatarSrc)||null,b=!1;function y(){s.scrollTop=s.scrollHeight}function w(a,r){let u=t.createElement("div");if(u.className=`probot-msg-row probot-msg-row-${a}`,a==="bot"){let $=t.createElement("div");$.innerHTML=_(m,"mini");let T=$.firstElementChild;T&&u.appendChild(T)}let p=t.createElement("div");return p.className=`probot-msg probot-msg-${a}`,a==="bot"?p.innerHTML=H(r):p.textContent=r,u.appendChild(p),s.appendChild(u),y(),p}function k(){let a=t.createElement("div");a.className="probot-msg-row probot-msg-row-bot probot-typing-row";let r=t.createElement("div");r.innerHTML=_(m,"mini");let u=r.firstElementChild;u&&a.appendChild(u);let p=t.createElement("div");return p.className="probot-msg probot-msg-bot probot-typing",p.setAttribute("aria-label","Assistant is typing"),p.innerHTML="<span></span><span></span><span></span>",a.appendChild(p),s.appendChild(a),y(),a}function v(a){b=a,i.disabled=a,f.disabled=a}async function E(a){let r=a.trim();if(!r||b)return;l&&(l.hidden=!0),w("user",r),i.value="",v(!0);let u=k();try{let p=await fetch(`${n}/api/chat/${encodeURIComponent(e)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:r,sessionId:h})});if(u.remove(),p.status===429){w("bot","This bot is getting a lot of questions right now. Please try again in a minute.");return}if(!p.ok){w("bot","I can't answer here right now. Try the full chat linked below.");return}let $=await p.json(),T=typeof $.reply=="string"&&$.reply.length>0?$.reply:"I didn't get a reply. Please try again.";w("bot",T)}catch(p){u.remove(),w("bot","Network hiccup - please check your connection and try again.")}finally{v(!1),i.focus()}}c.addEventListener("submit",a=>{a.preventDefault(),E(i.value)}),o.addEventListener("click",a=>{var u,p;let r=a.target;if((r==null?void 0:r.dataset.action)==="ask"){let $=(p=(u=r.dataset.question)!=null?u:r.textContent)!=null?p:"";E($)}})}typeof document!="undefined"&&D(document.currentScript);})();
+`,i.appendChild(s),i.addEventListener("error",h=>{let b=h.target;if(!(b instanceof HTMLImageElement))return;let E=b.classList.contains("probot-avatar"),$=b.classList.contains("probot-avatar-mini");if(!E&&!$)return;let y=t.createElement("div");y.innerHTML=M(null,E?"header":"mini");let c=y.firstElementChild;c&&b.replaceWith(c)},!0);let r=t.createElement("div");r.className="probot-root",r.style.setProperty("--probot-theme",A);let u=t.createElement("button");u.type="button",u.className="probot-bubble",u.setAttribute("aria-label","Open chat"),u.innerHTML=P();let l=t.createElement("div");l.className="probot-dialog",l.hidden=!0,l.innerHTML=U(e.apiBase),u.addEventListener("click",()=>{l.hidden=!l.hidden}),l.addEventListener("click",h=>{let b=h.target;(b==null?void 0:b.dataset.action)==="close"&&(l.hidden=!0)}),r.appendChild(u),r.appendChild(l),i.appendChild(r);let m;try{let h=await fetch(`${e.apiBase}/api/bots/${encodeURIComponent(e.botId)}/config`,{headers:{Accept:"application/json"}});if(!h.ok)return;m=await h.json()}catch(h){return}let f=q(m);f&&(r.style.setProperty("--probot-theme",f.bot.themeColor),u.setAttribute("aria-label",`Open chat with ${f.bot.name}`),l.innerHTML=D(f,e.apiBase),F(l,t,e.apiBase,e.botId))}function F(o,t,e,n){let i=o.querySelector('[data-role="form"]'),s=o.querySelector('[data-role="input"]'),r=o.querySelector('[data-role="messages"]'),u=o.querySelector('[data-role="body"]'),l=o.querySelector('[data-role="suggestions"]'),m=o.querySelector('[data-role="suggest-list"]'),f=o.querySelector('[data-role="suggest-toggle"]'),h=o.querySelector('[data-role="send"]');if(!i||!s||!r||!h)return;function b(a){!m||!f||(m.hidden=!a,f.setAttribute("aria-expanded",a?"true":"false"),f.classList.toggle("probot-suggest-toggle-active",a))}let E=O(n),$=(u==null?void 0:u.dataset.avatarSrc)||null,y=!1;function c(){r.scrollTop=r.scrollHeight}function C(a,v){let w=t.createElement("div");if(w.className=`probot-msg-row probot-msg-row-${a}`,a==="bot"){let k=t.createElement("div");k.innerHTML=M($,"mini");let T=k.firstElementChild;T&&w.appendChild(T)}let d=t.createElement("div");return d.className=`probot-msg probot-msg-${a}`,a==="bot"?d.innerHTML=I(v):d.textContent=v,w.appendChild(d),r.appendChild(w),c(),d}function _(){let a=t.createElement("div");a.className="probot-msg-row probot-msg-row-bot probot-typing-row";let v=t.createElement("div");v.innerHTML=M($,"mini");let w=v.firstElementChild;w&&a.appendChild(w);let d=t.createElement("div");return d.className="probot-msg probot-msg-bot probot-typing",d.setAttribute("aria-label","Assistant is typing"),d.innerHTML="<span></span><span></span><span></span>",a.appendChild(d),r.appendChild(a),c(),a}function p(a){y=a,s.disabled=a,h.disabled=a}async function L(a){let v=a.trim();if(!v||y)return;l&&(l.hidden=!0),f&&(f.hidden=!1),b(!1),C("user",v),s.value="",p(!0);let w=_();try{let d=await fetch(`${e}/api/chat/${encodeURIComponent(n)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:v,sessionId:E})});if(w.remove(),d.status===429){C("bot","This bot is getting a lot of questions right now. Please try again in a minute.");return}if(!d.ok){C("bot","I can't answer here right now. Try the full chat linked below.");return}let k=await d.json(),T=typeof k.reply=="string"&&k.reply.length>0?k.reply:"I didn't get a reply. Please try again.";C("bot",T)}catch(d){w.remove(),C("bot","Network hiccup - please check your connection and try again.")}finally{p(!1),s.focus()}}i.addEventListener("submit",a=>{a.preventDefault(),L(s.value)}),o.addEventListener("click",a=>{var k,T;let v=a.target;if(!v)return;if(v.closest('[data-role="suggest-toggle"]')){b((m==null?void 0:m.hidden)!==!1);return}let d=v.closest('[data-action="ask"]');if(d){let S=(T=(k=d.dataset.question)!=null?k:d.textContent)!=null?T:"";L(S)}})}typeof document!="undefined"&&W(document.currentScript);})();
