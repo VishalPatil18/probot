@@ -64,14 +64,19 @@
   inset: -3px;
   border-radius: 50%;
   padding: 3px;
+  /* Black + white spotlight sweep: a mostly-dark ring with a single bright
+   * arc that rotates around, mimicking a searchlight beam. Peak brightness
+   * at 0deg fades to near-black by 60deg and stays dark for the rest of
+   * the circle before wrapping back to bright at 360deg — combined with
+   * `probot-spin` it reads as one continuously travelling spot. */
   background: conic-gradient(
     from 0deg,
-    #7c5cff,
-    #ff5cae,
-    #ffb85c,
-    #5cffb8,
-    #5caeff,
-    #7c5cff
+    #ffffff 0deg,
+    #4a4a4a 30deg,
+    #0a0a0a 60deg,
+    #0a0a0a 300deg,
+    #4a4a4a 330deg,
+    #ffffff 360deg
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -112,13 +117,13 @@
   0%,
   100% {
     box-shadow:
-      0 8px 22px rgba(124, 92, 255, 0.45),
-      0 0 0 rgba(255, 92, 174, 0);
+      0 8px 22px rgba(0, 0, 0, 0.32),
+      0 0 0 rgba(255, 255, 255, 0);
   }
   50% {
     box-shadow:
-      0 10px 30px rgba(255, 92, 174, 0.55),
-      0 0 22px rgba(124, 92, 255, 0.45);
+      0 10px 30px rgba(0, 0, 0, 0.4),
+      0 0 22px rgba(255, 255, 255, 0.35);
   }
 }
 
@@ -548,6 +553,97 @@
   transform: scale(0.98);
 }
 
+/* --- suggested-questions dropdown (input-bar toggle) --- */
+
+.probot-suggest-list {
+  margin: 0 14px 8px;
+  background: var(--probot-surface);
+  border: 1px solid var(--probot-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+.probot-suggest-list[hidden] {
+  display: none;
+}
+
+.probot-suggest-list-heading {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--probot-border);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--probot-muted);
+}
+
+.probot-suggest-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.probot-suggest-list-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--probot-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease-out,
+    color 0.12s ease-out;
+}
+
+.probot-suggest-list-item:hover {
+  background: #fafafa;
+  color: var(--probot-theme);
+}
+
+.probot-suggest-toggle {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--probot-border);
+  background: transparent;
+  color: var(--probot-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition:
+    color 0.15s ease-out,
+    border-color 0.15s ease-out;
+}
+
+.probot-suggest-toggle[hidden] {
+  display: none;
+}
+
+.probot-suggest-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.probot-suggest-toggle:hover {
+  color: var(--probot-theme);
+  border-color: var(--probot-theme);
+}
+
+.probot-suggest-toggle-active {
+  color: var(--probot-theme);
+  border-color: var(--probot-theme);
+}
+
 /* --- input pill --- */
 
 .probot-inputbar {
@@ -555,7 +651,7 @@
   align-items: center;
   gap: 8px;
   margin: 0 14px 10px;
-  padding: 6px 6px 6px 14px;
+  padding: 6px 6px 6px 10px;
   border: 1px solid var(--probot-border);
   background: var(--probot-surface);
   border-radius: 20px;

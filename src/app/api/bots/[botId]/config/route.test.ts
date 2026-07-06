@@ -25,6 +25,7 @@ const bot = {
   name: "Jane Doe",
   headline: "Senior ML Engineer",
   themeColor: "#7c5cff",
+  image: null,
   suggestedQuestions: ["What does she do?", "Tell me about her ML work."],
   loadingMessages: ["Thinking…"],
 };
@@ -57,6 +58,7 @@ describe("GET /api/bots/[botId]/config", () => {
         name: "Jane Doe",
         headline: "Senior ML Engineer",
         themeColor: "#7c5cff",
+        image: null,
         suggestedQuestions: [
           "What does she do?",
           "Tell me about her ML work.",

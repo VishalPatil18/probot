@@ -36,12 +36,40 @@ export function sniffImageType(buf: Buffer): string | null {
   return null;
 }
 
-// Absolute origin for building public serve URLs (so stored image URLs work in
-// OG meta tags, not just same-origin <img>). Mirrors tokens.ts base logic.
+// Absolute origin for building public serve URLs (OG meta tags, cross-origin
+// widget config responses). Mirrors tokens.ts base logic. Must NEVER be used
+// at write time - avatar rows are stored as root-relative paths so a bot
+// created on localhost still renders in production after redeploy.
 export function appBaseUrl(): string {
   const base =
     process.env.NEXTAUTH_URL ?? process.env.APP_URL ?? "http://localhost:3000";
   return base.endsWith("/") ? base.slice(0, -1) : base;
+}
+
+// Normalizes a stored image URL into a form safe to hand to a cross-origin
+// consumer (widget, self-hosted runtime). Handles three shapes:
+//   1. null / empty        -> null
+//   2. absolute URL        -> passed through unchanged (Cloudinary OAuth, etc.)
+//   3. root-relative path  -> prepended with appBaseUrl()
+//
+// Also self-heals legacy rows that were persisted with a hard-coded
+// `http://localhost:3000` prefix (a bug in older builds where `appBaseUrl()`
+// was called at write time inside `next dev`). Those get their dev prefix
+// stripped and re-absolutized against the current deployment origin. No DB
+// migration required - every reader that goes through this helper fixes the
+// row for the caller.
+export function toPublicImageUrl(raw: string | null | undefined): string | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+
+  // Self-heal known dev-origin leaks. Match any localhost:* variant defensively
+  // so a different dev port (e.g. 3001) also gets rewritten.
+  const stripped = raw.replace(/^https?:\/\/localhost(?::\d+)?/i, "");
+
+  // Root-relative → absolutize against the current deployment origin.
+  if (stripped.startsWith("/")) return `${appBaseUrl()}${stripped}`;
+
+  // Absolute (Cloudinary, external OAuth avatar) → trust as-is.
+  return stripped;
 }
 
 // Pulls the "file" field from a multipart form and validates it. Returns the

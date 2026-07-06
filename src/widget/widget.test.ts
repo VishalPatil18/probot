@@ -301,7 +301,10 @@ describe("renderDialogInner", () => {
     expect(html).not.toContain("Suggested questions");
   });
 
-  it("renders only the first 5 suggested-question chips", () => {
+  it("caps the chip row at 5 but includes every question in the toggle dropdown", () => {
+    // Chips live in the pre-conversation body and are real-estate constrained,
+    // so they're sliced to 5. The input-bar toggle opens a scrollable list
+    // (parity with the deployed page) that must include everything.
     const config: WidgetConfig = {
       ...FULL_CONFIG,
       bot: {
@@ -310,9 +313,20 @@ describe("renderDialogInner", () => {
       },
     };
     const html = renderDialogInner(config, "https://pro-bot.dev");
-    expect(html).toContain('data-question="a"');
-    expect(html).toContain('data-question="e"');
-    expect(html).not.toContain('data-question="f"');
+    const chipSection = html.match(
+      /<div class="probot-suggested"[\s\S]*?<\/div>/,
+    )?.[0];
+    expect(chipSection).toBeDefined();
+    expect(chipSection).toContain('data-question="a"');
+    expect(chipSection).toContain('data-question="e"');
+    expect(chipSection).not.toContain('data-question="f"');
+
+    const listSection = html.match(
+      /<div class="probot-suggest-list"[\s\S]*?<\/div>/,
+    )?.[0];
+    expect(listSection).toBeDefined();
+    expect(listSection).toContain('data-question="a"');
+    expect(listSection).toContain('data-question="f"');
   });
 
   it("renders an input row bound to the send form", () => {
