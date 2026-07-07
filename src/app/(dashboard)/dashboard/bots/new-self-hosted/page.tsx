@@ -22,7 +22,7 @@ export default async function NewSelfHostedBotPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl px-6 py-14">
+    <div className="max-w-xl px-6 py-14 lg:px-8">
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-3">
         Register a self-hosted bot
       </p>

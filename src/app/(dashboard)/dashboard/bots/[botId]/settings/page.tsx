@@ -5,10 +5,6 @@ import { notFound } from "next/navigation";
 import { AccountTab } from "@/components/dashboard/settings/AccountTab";
 import { AIModelKeyTab } from "@/components/dashboard/settings/AIModelKeyTab";
 import { BotConfigTab } from "@/components/dashboard/settings/BotConfigTab";
-import {
-  DeployTab,
-  type DeploymentMode,
-} from "@/components/dashboard/settings/DeployTab";
 import { KnowledgeTab } from "@/components/dashboard/settings/KnowledgeTab";
 import { SecurityTab } from "@/components/dashboard/settings/SecurityTab";
 import {
@@ -95,18 +91,16 @@ export default async function BotSettingsPage({
   const accountEmail = session.user.email ?? "";
   const accountInitials = computeInitials(accountName);
 
-  const mode: DeploymentMode =
-    (bot.deploymentMode as DeploymentMode) ?? "managed";
+  const mode = (bot.deploymentMode as "managed" | "self_hosted") ?? "managed";
 
   // Self-hosted bots are configured in the consumer's webapp via the
-  // probot-self-hosted npm package, so the dashboard only exposes Deployment
-  // (tokens) + Account. Bot config, knowledge, model/key, and security tabs
-  // would be misleading here - they map to platform-side state the widget
-  // no longer uses.
+  // probot-self-hosted npm package, so the dashboard only exposes Account +
+  // Security. Bot config, knowledge, and model/key tabs would be misleading
+  // here - they map to platform-side state the widget no longer uses.
   const visibleTabs: SettingsTabKey[] =
     mode === "self_hosted"
-      ? ["deploy", "account", "security"]
-      : ["bot", "kb", "model", "deploy", "account", "security"];
+      ? ["account", "security"]
+      : ["bot", "kb", "model", "account", "security"];
 
   return (
     <div className="max-w-[900px] px-6 py-8 lg:px-8">
@@ -163,15 +157,6 @@ export default async function BotSettingsPage({
             botId={bot.id}
             provider={userRow?.llmProvider ?? null}
             model={userRow?.llmModel ?? null}
-          />
-        </SettingsTabPanel>
-
-        <SettingsTabPanel tab="deploy">
-          <DeployTab
-            botId={bot.id}
-            botName={bot.name}
-            ownerUsername={session.user.username}
-            mode={mode}
           />
         </SettingsTabPanel>
       </SettingsTabs>

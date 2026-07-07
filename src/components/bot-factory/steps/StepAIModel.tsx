@@ -29,19 +29,6 @@ export function StepAIModel({
       />
 
       <div className="space-y-5">
-        <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 text-[13px] leading-relaxed">
-          Your key is sent over HTTPS once, envelope-encrypted at rest, and only
-          decrypted inside a chat request. Never logged in plaintext. Ollama
-          needs no key at all. Prefer to keep the key entirely in your own
-          infrastructure? Register a{" "}
-          <a
-            href="/dashboard/bots/new-self-hosted"
-            className="text-brand font-semibold hover:underline"
-          >
-            self-hosted bot
-          </a>{" "}
-          instead and use the <code>probot-self-hosted</code> npm package.
-        </div>
         <div>
           <label className="block text-xs font-semibold mb-2">Provider</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -181,8 +168,8 @@ export function StepAIModel({
                 autoComplete="off"
               />
               <p className="text-[11px] text-muted mt-1.5">
-                The model you&apos;ve pulled in Ollama (e.g. llama3.2,
-                qwen2.5). No API key needed - it runs on your machine.
+                The model you&apos;ve pulled in Ollama (e.g. llama3.2, qwen2.5).
+                No API key needed - it runs on your machine.
               </p>
             </div>
           </>

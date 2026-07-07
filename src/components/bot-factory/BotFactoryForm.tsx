@@ -209,8 +209,15 @@ export function BotFactoryForm({
       // Envelope-encrypt the LLM key on pro-bot.dev so the embed widget can
       // actually answer questions. Only fires when a real provider key is
       // supplied (Ollama doesn't need one). Non-fatal — if the store fails,
-      // the bot still saves as a draft and the owner sees an inline error
-      // explaining they need to store the key from Settings before publishing.
+      // the bot still saves as a draft. The key is already stashed in the
+      // owner's browser (via `setApiKey` above) so the dashboard test chat
+      // works either way; the only cost of a failure is that the embed
+      // widget can't answer visitors until the owner retries from Settings.
+      //
+      // Deliberately ignore the `managed_storage_unavailable` (503) case:
+      // that fires when the deployment lacks a KEK (typical local-dev
+      // setup) - not something the user can fix by re-pasting the key, so
+      // surfacing an alarming error just confuses them.
       if (
         form.llmProvider !== "ollama" &&
         form.apiKey.trim().length >= 8
@@ -220,10 +227,22 @@ export function BotFactoryForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ apiKey: form.apiKey.trim() }),
         }).catch(() => null);
-        if (!keyRes || !keyRes.ok) {
+        if (!keyRes) {
           setError(
-            "Your bot was saved as a draft, but we couldn't store your API key on our server. Open Settings → AI Model & Key to try again before publishing.",
+            "Your bot was saved as a draft, but we couldn't reach the server to store your API key. Open Settings → AI Model & Key to try again before publishing.",
           );
+        } else if (!keyRes.ok) {
+          const keyBody = (await keyRes.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          // 503 managed_storage_unavailable = KEK not configured on this
+          // deployment; the browser-side stash already covers the owner's
+          // test chat, so treat it as a non-error.
+          if (keyBody.error !== "managed_storage_unavailable") {
+            setError(
+              "Your bot was saved as a draft, but we couldn't store your API key on our server. Open Settings → AI Model & Key to try again before publishing.",
+            );
+          }
         }
       }
 

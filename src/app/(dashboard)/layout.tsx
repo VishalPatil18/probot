@@ -124,8 +124,16 @@ export default async function DashboardLayout({
             never scrolls. Mobile: no flex/h-screen, document scroll. */}
         <div className="flex-1 lg:ml-64 lg:flex lg:h-screen lg:flex-col">
           <Topbar
-            publicUrl={selectedBotId ? publicUrl : null}
-            liveBotUrl={selectedBotId ? publicUrl : null}
+            publicUrl={
+              selectedBotId && selectedBot?.deploymentMode !== "self_hosted"
+                ? publicUrl
+                : null
+            }
+            liveBotUrl={
+              selectedBotId && selectedBot?.deploymentMode !== "self_hosted"
+                ? publicUrl
+                : null
+            }
           />
           <main className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {showLegalBanner ? <LegalBanner /> : null}

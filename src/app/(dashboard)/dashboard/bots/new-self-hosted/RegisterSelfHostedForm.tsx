@@ -5,8 +5,8 @@ import { useState } from "react";
 
 // Client half of the self-hosted register page. POSTs to /api/bots/self-hosted,
 // shows the minted token exactly once (raw secret can never be retrieved
-// again), then routes to Settings → Deployment where the owner can mint
-// additional tokens or revoke this one.
+// again), then routes back to the dashboard. Additional tokens require
+// re-registering the bot.
 export function RegisterSelfHostedForm() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -84,7 +84,7 @@ export function RegisterSelfHostedForm() {
           <button
             type="button"
             onClick={() =>
-              router.push(`/dashboard/bots/${minted.botId}/settings?tab=deploy`)
+              router.push(`/dashboard`)
             }
             className="btn btn-primary"
           >
