@@ -4,12 +4,14 @@ import { NextResponse } from "next/server";
 import { generateRawToken, hashToken } from "@/lib/auth/tokens";
 import { type Bot, botTokens, bots, db } from "@/lib/db";
 
-// Bot-token service. A self-hosted `probot-bot` runtime authenticates
-// to /api/v1/bot/* with one of these tokens. The raw token is shown to the
-// owner exactly once at mint time; only its SHA-256 hash is stored (same model
-// as the password-reset / email-verification tokens), so a DB dump can't be
-// replayed. Revocation is a soft-delete (`revoked_at`) so the audit row
-// survives while the auth path rejects instantly.
+// Bot-token service. A self-hosted webapp (using the `probot-self-hosted`
+// npm package) authenticates to /api/v1/bot/{conversations,leads} with one
+// of these tokens so its transcripts and captured leads flow back to the
+// owner's ProBot dashboard for analytics. The raw token is shown to the
+// owner exactly once at mint time; only its SHA-256 hash is stored (same
+// model as the password-reset / email-verification tokens), so a DB dump
+// can't be replayed. Revocation is a soft-delete (`revoked_at`) so the
+// audit row survives while the auth path rejects instantly.
 
 const TOKEN_PREFIX = "pbt_";
 const BEARER_RE = /^Bearer\s+(pbt_[0-9a-f]{64})$/i;

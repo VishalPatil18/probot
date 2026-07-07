@@ -132,9 +132,10 @@ export const bots = pgTable(
     // published bots are unaffected.
     isActive: boolean("is_active").notNull().default(false),
     // Where the bot's chat runtime lives. 'managed' = served by this
-    // platform (public /u/<username>/chat + embed widget). 'self_hosted' = the
-    // owner runs the `probot-bot` runtime on their own infra and talks to the
-    // platform over /api/v1/bot/* with a bot token. Default keeps every
+    // platform (public /u/<username>/chat + embed widget). 'self_hosted' =
+    // the owner embeds the `probot-self-hosted` npm package in their own
+    // webapp; the chat runs entirely there and only conversation/lead
+    // analytics are POSTed back to the platform. Default keeps every
     // existing bot on the managed path.
     deploymentMode: varchar("deployment_mode", { length: 16 })
       .notNull()
@@ -619,12 +620,14 @@ export const botAvatars = pgTable("bot_avatars", {
 }).enableRLS();
 
 // bot_tokens
-// API tokens a self-hosted `probot-bot` runtime uses to authenticate
-// to /api/v1/bot/*. The raw token (`pbt_<hex>`) is shown to the owner exactly
-// once at mint time; only its SHA-256 hash is persisted, so a DB dump cannot be
-// replayed. `revoked_at` is a soft-delete: revoking flips it so the auth path
-// rejects instantly without losing the audit row. `last_seen_at` is bumped on
-// each authenticated call so the dashboard can show liveness.
+// API tokens a self-hosted webapp (using the `probot-self-hosted` npm
+// package) uses to authenticate to /api/v1/bot/{conversations,leads} so its
+// analytics land in the owner's dashboard. The raw token (`pbt_<hex>`) is
+// shown to the owner exactly once at mint time; only its SHA-256 hash is
+// persisted, so a DB dump cannot be replayed. `revoked_at` is a
+// soft-delete: revoking flips it so the auth path rejects instantly without
+// losing the audit row. `last_seen_at` is bumped on each authenticated call
+// so the dashboard can show liveness.
 export const botTokens = pgTable(
   "bot_tokens",
   {

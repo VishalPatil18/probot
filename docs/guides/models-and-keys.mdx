@@ -26,7 +26,7 @@ ProBot is **bring-your-own-key (BYO key)**: you connect your own LLM provider ac
   **Ollama** provider - the model runs on your own machine, so there's no API
   key and no per-message cost. The catch: the server that runs the chat must be
   able to reach your Ollama. That's automatic when you
-  [self-host your bot](/self-hosted-bot/index) (Ollama at `http://localhost:11434`);
+  [self-host your bot](/self-hosted-bot/index) with the npm package (point `createOpenAIHandler` at `http://localhost:11434/v1`);
   on the managed site at pro-bot.dev you'd need to expose Ollama at a public
   `https://` URL. **Grok**, by contrast, uses xAI's paid API - it's free to
   *operate* (you bring your own key) but xAI bills you for usage.

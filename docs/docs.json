@@ -32,7 +32,8 @@
               "guides/themes-and-avatar",
               "guides/analytics-and-leads",
               "guides/notifications",
-              "embed-share"
+              "embed-share",
+              "guides/embed-styling"
             ]
           },
           {
@@ -47,9 +48,7 @@
             "group": "Hosting & deployment",
             "pages": [
               "guides/deployment",
-              "hosting/managed",
-              "self-hosted-bot/index",
-              "self-hosted-bot/api-reference"
+              "hosting/managed"
             ]
           },
           {
@@ -92,6 +91,38 @@
               "api-reference/auth-register",
               "api-reference/bots-upsert",
               "api-reference/chat"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Self-hosted bot",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "self-hosted-bot/index"
+            ]
+          },
+          {
+            "group": "Framework examples",
+            "pages": [
+              "self-hosted-bot/nextjs",
+              "self-hosted-bot/react",
+              "self-hosted-bot/vanilla"
+            ]
+          },
+          {
+            "group": "Dashboard integration",
+            "pages": [
+              "self-hosted-bot/dashboard-integration",
+              "self-hosted-bot/api-reference"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "self-hosted-bot/troubleshooting"
             ]
           }
         ]

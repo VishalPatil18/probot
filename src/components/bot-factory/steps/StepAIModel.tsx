@@ -25,15 +25,23 @@ export function StepAIModel({
       <StepHeading
         step={4}
         title="Choose your AI model."
-        subtitle="ProBot runs on your own model. Pick a provider and connect it - credentials stay on this device and are never tracked by ProBot."
+        subtitle="Pick a provider and paste the key. Your key is envelope-encrypted on pro-bot.dev and only decrypted inside a chat request."
       />
-      <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 mb-6 text-[13px] leading-relaxed">
-        Your credentials stay on this device, used only to call the model
-        directly - <strong>never</strong> sent to or logged by ProBot. Ollama
-        runs locally and needs no key at all.
-      </div>
 
       <div className="space-y-5">
+        <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 text-[13px] leading-relaxed">
+          Your key is sent over HTTPS once, envelope-encrypted at rest, and only
+          decrypted inside a chat request. Never logged in plaintext. Ollama
+          needs no key at all. Prefer to keep the key entirely in your own
+          infrastructure? Register a{" "}
+          <a
+            href="/dashboard/bots/new-self-hosted"
+            className="text-brand font-semibold hover:underline"
+          >
+            self-hosted bot
+          </a>{" "}
+          instead and use the <code>probot-self-hosted</code> npm package.
+        </div>
         <div>
           <label className="block text-xs font-semibold mb-2">Provider</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

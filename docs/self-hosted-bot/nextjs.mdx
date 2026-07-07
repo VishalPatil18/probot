@@ -1,0 +1,100 @@
+---
+title: Next.js example
+description: "Drop probot-self-hosted into a Next.js app-router project with a server-side chat proxy holding your LLM key."
+---
+
+A minimal Next.js 14 App Router setup. The chatbot component runs in the
+browser; the LLM key stays on the server behind a route handler.
+
+## 1. Install
+
+```bash
+npm i probot-self-hosted
+```
+
+## 2. Server-side chat proxy
+
+Create `app/api/probot-chat/route.ts` and hold the LLM key here - not in
+any client component.
+
+```ts
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+const send = createOpenAIHandler({
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: "gpt-4o-mini",
+  // baseUrl: "https://api.x.ai/v1", // for Grok, Together, LM Studio, Ollama, etc.
+});
+
+export async function POST(req: Request) {
+  const { system, messages } = await req.json();
+  try {
+    const reply = await send({ system, messages });
+    return Response.json({ reply });
+  } catch (err) {
+    return Response.json({ error: String(err) }, { status: 500 });
+  }
+}
+```
+
+## 3. Client widget
+
+```tsx
+"use client";
+
+import { ProbotBot } from "probot-self-hosted";
+
+export function BotWidget() {
+  return (
+    <ProbotBot
+      name="Ada"
+      headline="Ask me about my work"
+      personality="professional"
+      themeColor="#2563eb"
+      context={`I'm Ada Lovelace, a mathematician…`}
+      suggestedQuestions={["What projects are you working on?"]}
+      captureLead
+      sendMessage={async ({ system, messages }) => {
+        const res = await fetch("/api/probot-chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ system, messages }),
+        });
+        return (await res.json()).reply;
+      }}
+      dashboard={{ token: process.env.NEXT_PUBLIC_PROBOT_TOKEN! }}
+    />
+  );
+}
+```
+
+## 4. Mount it
+
+```tsx
+// app/layout.tsx
+import { BotWidget } from "@/components/BotWidget";
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        {children}
+        <BotWidget />
+      </body>
+    </html>
+  );
+}
+```
+
+## Environment variables
+
+```bash
+# .env.local
+OPENAI_API_KEY=sk-…           # server-side only, never NEXT_PUBLIC_
+NEXT_PUBLIC_PROBOT_TOKEN=pbt_…  # optional, for dashboard analytics
+```
+
+<Warning>
+  Never prefix your LLM key with `NEXT_PUBLIC_` - that inlines it into the
+  browser bundle. Keep it on the server behind `/api/probot-chat`.
+</Warning>

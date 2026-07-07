@@ -34,9 +34,11 @@ there is no plaintext key on any surface the visitor or the operator can read.
 ## Self-hosting without managed storage
 
 Operators who don't set the KEK env var (`PROBOT_KEY_ENCRYPTION_KEY`) get the
-managed-storage path disabled: `POST /api/bots/[botId]/llm-key` returns 503,
-and chats need to be served by the self-hosted `probot-bot` runtime where the
-operator holds the plaintext key themselves. See [self-hosted-bot docs](docs/self-hosted-bot/index.mdx).
+managed-storage path disabled: `POST /api/bots/[botId]/llm-key` returns 503.
+Bot owners can register a self-hosted bot and embed the
+[`probot-self-hosted`](packages/probot-self-hosted) npm package in their own
+web app instead - the LLM key lives entirely in the owner's backend and
+never touches pro-bot.dev. See [self-hosted-bot docs](docs/self-hosted-bot/index.mdx).
 
 ## Guarantees
 

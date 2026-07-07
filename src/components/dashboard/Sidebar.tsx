@@ -8,6 +8,7 @@ import { SidebarNavLink } from "./SidebarNavLink";
 type SidebarBot = {
   id: string;
   name: string;
+  deploymentMode?: "managed" | "self_hosted";
 };
 
 type SidebarUser = {

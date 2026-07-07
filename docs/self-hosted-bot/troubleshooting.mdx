@@ -1,0 +1,65 @@
+---
+title: Troubleshooting
+description: "Common issues when integrating probot-self-hosted, and how to fix them."
+---
+
+## The widget doesn't render
+
+- Confirm `<ProbotBot />` is inside a client component. On Next.js App
+  Router, that means the containing file starts with `"use client";`.
+- Check the console for React errors. The widget bundles its own styles;
+  if you see missing icons or broken layout, another global stylesheet is
+  overriding `.probot-*` classes.
+- Verify React 18+ is in your dependency tree (`peerDependencies` require
+  it).
+
+## Every reply says "chat_failed"
+
+- `sendMessage` threw. Open Network → your `/api/probot-chat` route and
+  inspect the response.
+- A common cause is the OpenAI-compatible endpoint returning `401` because
+  the API key env var is missing or wrong.
+- Make sure your handler returns `{ reply: "…" }` shaped JSON. The widget
+  reads `.reply`.
+
+## Conversations don't appear in the dashboard
+
+- Did you pass `dashboard.token`? Without it the widget never contacts the
+  platform.
+- Confirm the token starts with `pbt_` and is not the wrong bot's token.
+- Rotate the token if it has been revoked. **Settings → Deployment** shows
+  its `Last seen` timestamp - if it never advances, the widget is not
+  calling home (usually a CORS or firewall issue in production).
+
+## Suspicious "your key is exposed" warnings
+
+If a security scanner flags your LLM key, it's likely because you set it as
+`NEXT_PUBLIC_OPENAI_API_KEY` (or the Vite equivalent). Move it to a
+server-only env var and call it from your API route via
+`createOpenAIHandler` - never from the browser bundle.
+
+## Chats work locally but fail in production
+
+- Update `apiUrl` if you're pointing at a self-managed mirror of the
+  ProBot platform (default is `https://pro-bot.dev`).
+- Vercel and other edge platforms enforce short function timeouts. If your
+  LLM call takes longer than 10s, move the handler to a Node runtime
+  (`export const runtime = "nodejs";`).
+
+## I want to disable the floating chat bubble
+
+The default UI is a fixed bottom-right FAB. To use your own UI, call
+`useProbotChat(config)` instead of `<ProbotBot />` and render the messages
+however you like. The [React example](/self-hosted-bot/react) shows a
+headless version.
+
+## Migrating from the old cloned runtime
+
+Earlier releases shipped a separate `probot-bot` runtime repo you cloned
+and deployed. That model is discontinued. Replace it with the npm package:
+
+1. `npm i probot-self-hosted` in your web app.
+2. Move the LLM-key env vars from the old runtime to your web app's server.
+3. Drop the runtime deployment and its domain routing.
+4. Your existing `pbt_…` tokens keep working - the platform still trusts
+   them for the `/api/v1/bot/{conversations,leads}` endpoints.

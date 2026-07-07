@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -45,8 +45,9 @@ export async function POST(request: Request): Promise<Response> {
       })
       .where(eq(users.id, userId));
 
+    // Bot Factory is managed-only. Never coalesce onto a self-hosted row.
     const existing = await tx.query.bots.findFirst({
-      where: eq(bots.userId, userId),
+      where: and(eq(bots.userId, userId), eq(bots.deploymentMode, "managed")),
     });
 
     if (existing) {
@@ -92,6 +93,8 @@ export async function POST(request: Request): Promise<Response> {
         // brand-new bot id, then UPDATEd onto the same row in the next
         // statement (we need the id before we can mint the token).
         isActive: false,
+        // Bot Factory only creates managed bots. Self-hosted bots go through
+        // /api/bots/self-hosted, which sets deployment_mode explicitly.
         ...(input.contextTokenCap !== undefined
           ? { contextTokenCap: input.contextTokenCap }
           : {}),

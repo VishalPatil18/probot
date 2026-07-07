@@ -58,39 +58,6 @@
   animation: probot-glow 3.2s ease-in-out infinite;
 }
 
-.probot-bubble::before {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  padding: 3px;
-  /* Black + white spotlight sweep: a mostly-dark ring with a single bright
-   * arc that rotates around, mimicking a searchlight beam. Peak brightness
-   * at 0deg fades to near-black by 60deg and stays dark for the rest of
-   * the circle before wrapping back to bright at 360deg — combined with
-   * `probot-spin` it reads as one continuously travelling spot. */
-  background: conic-gradient(
-    from 0deg,
-    #ffffff 0deg,
-    #4a4a4a 30deg,
-    #0a0a0a 60deg,
-    #0a0a0a 300deg,
-    #4a4a4a 330deg,
-    #ffffff 360deg
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  animation: probot-spin 3s linear infinite;
-  z-index: -1;
-  pointer-events: none;
-}
-
 .probot-bubble:hover {
   transform: scale(1.08) rotate(12deg);
 }
@@ -105,12 +72,6 @@
   animation: probot-pulse 2.4s ease-in-out infinite;
   filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.55));
   transition: transform 0.3s ease-out;
-}
-
-@keyframes probot-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @keyframes probot-glow {
@@ -139,7 +100,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .probot-bubble,
-  .probot-bubble::before,
   .probot-bubble svg {
     animation: none;
   }

@@ -1,31 +1,52 @@
 ---
 title: Managed vs self-hosted
-description: "Two ways to run your bot's chat - served by pro-bot.dev or by your own probot-bot runtime - and how your LLM key is handled in each."
+value: "Two ways to run your bot - fully served by pro-bot.dev, or embedded in your own webapp via an npm package - and how your LLM key is handled in each."
+description: "Two ways to run your bot - fully served by pro-bot.dev, or embedded in your own webapp via an npm package - and how your LLM key is handled in each."
 ---
 
-Every bot has a **deployment mode** that decides where its chat runtime lives. The dashboard, knowledge base, conversations, and leads always live on the managed platform; the only thing that moves is where the chat itself runs and where your LLM key lives.
+Every bot has a **deployment mode**, decided at creation. Managed bots come
+from the Bot Factory and are served by pro-bot.dev. Self-hosted bots are
+registered from the sidebar bot switcher and embed inside your own web
+app via the `probot-self-hosted` npm package.
 
 ## At a glance
 
-| | **Managed (pro-bot.dev)** | **Self-hosted bot** |
+| | **Managed (pro-bot.dev)** | **Self-hosted (npm package)** |
 | --- | --- | --- |
-| Where the chat runs | pro-bot.dev | Your `probot-bot` runtime |
-| Public chat URL | `pro-bot.dev/u/<username>/chat` | Your own domain |
-| Where your LLM key lives | Envelope-encrypted on pro-bot.dev | Your runtime's env |
-| Dashboard, knowledge, leads | Managed platform | Managed platform |
+| Where the chat runs | pro-bot.dev | Inside your web app |
+| Public chat URL | `pro-bot.dev/u/<username>/chat` | Wherever you render `<ProbotBot />` |
+| Where your LLM key lives | Envelope-encrypted on pro-bot.dev | Your web app's backend |
+| Bot config source of truth | ProBot dashboard | Your code |
+| Dashboard tabs | All (Bot config, Knowledge, Model & Key, Deployment, Account, Security) | Deployment + Account + Security only |
+| Conversations & leads on dashboard | ✓ | ✓ (optional, via `dashboard.token`) |
 | Cost | Free | Free (you pay only your own infra + LLM provider) |
-| Setup | None - sign up and build | Mint a token + deploy `probot-bot` |
+| Setup | None - sign up and build | `npm i probot-self-hosted` |
 
 ## How your LLM key is handled
 
-In **managed** mode your LLM API key is envelope-encrypted at rest: a per-bot Data Encryption Key (AES-256-GCM) wraps the key itself, and a Key Encryption Key (KEK) held outside the database wraps the DEK. On each chat request the server unwraps the DEK, decrypts the key in memory, calls the provider, and discards the plaintext - a database-only leak reveals nothing usable. See [BYO-key flow](/concepts/byo-key) for the full detail.
+In **managed** mode your LLM API key is envelope-encrypted at rest: a
+per-bot Data Encryption Key (AES-256-GCM) wraps the key itself, and a Key
+Encryption Key (KEK) held outside the database wraps the DEK. On each chat
+request the server unwraps the DEK, decrypts the key in memory, calls the
+provider, and discards the plaintext - a database-only leak reveals nothing
+usable. See [BYO-key flow](/concepts/byo-key) for the full detail.
 
-In **self-hosted** mode the chat runs in your own [`probot-bot`](/self-hosted-bot/index) runtime, so your LLM key lives in *your* runtime's environment and never touches pro-bot.dev at all.
+In **self-hosted** mode the widget calls a `sendMessage` function you
+provide, which typically POSTs to a same-origin `/api/…` route on your own
+backend. Your LLM key lives there and never touches pro-bot.dev. Use the
+`createOpenAIHandler` helper (server-only) to call any OpenAI-compatible
+endpoint.
 
-## When to self-host the bot
+## When to self-host
 
-Choose a self-hosted bot when you want the chat served from your own domain, want zero trust in any operator for the chat path, or want a tiny, auditable runtime you control. Everything you need is in [Self-hosting your bot](/self-hosted-bot/index).
+Choose a self-hosted bot when you want the chat inside your own web app,
+your LLM key entirely under your control, and the bot config
+version-controlled with the rest of your code. Everything you need is in
+[Self-hosting your bot](/self-hosted-bot/index).
 
 ## When managed is enough
 
-For most job seekers the managed mode is the fastest path: there's nothing to deploy, the key stays envelope-encrypted on pro-bot.dev, and you can [export](/guides/account-deletion#export-your-data) or [delete](/guides/account-deletion) everything at any time.
+For most job seekers the managed mode is the fastest path: there's nothing
+to install, the key stays envelope-encrypted on pro-bot.dev, and you can
+[export](/guides/account-deletion#export-your-data) or
+[delete](/guides/account-deletion) everything at any time.

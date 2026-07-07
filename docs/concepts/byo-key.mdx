@@ -16,9 +16,9 @@ The wrapped DEK + ciphertext live in the `encrypted_llm_keys` table (one row per
 
 ## How a chat request resolves the key
 
-The chat route accepts an optional `x-llm-api-key` header (used by the owner's own dashboard test chat and by self-hosted deployments) and falls back to the managed encrypted key otherwise:
+The chat route accepts an optional `x-llm-api-key` header (used by the owner's own dashboard test chat) and falls back to the managed encrypted key otherwise:
 
-1. **Header present** (owner testing from their own browser, self-hosted runtime) - used directly.
+1. **Header present** (owner testing from their own browser) - used directly.
 2. **Managed encrypted key** - unwrapped with the KEK, decrypted in memory, used once, discarded.
 3. **Neither** - request fails with `missing_llm_key`.
 
@@ -81,8 +81,8 @@ async complete({ apiKey, system, userMessage, model }) {
 
 ## Implementation footnotes
 
-- **Azure keys are header-only.** Azure's multi-secret credential (key + endpoint + apiVersion) isn't supported by managed storage in this release, so Azure bots require the owner to be online with the credentials in their browser store, or self-hosting via `probot-bot`. Other providers all go through managed encryption.
-- **Self-hosting the runtime.** If you'd rather not trust any operator, run the `probot-bot` runtime on your own infrastructure - the plaintext key lives entirely inside your deployment. See [Self-hosted bot](/self-hosted-bot/index).
+- **Azure keys are header-only.** Azure's multi-secret credential (key + endpoint + apiVersion) isn't supported by managed storage in this release, so Azure bots require the owner to be online with the credentials in their browser store, or a self-hosted bot via the `probot-self-hosted` npm package. Other providers all go through managed encryption.
+- **Self-hosting the bot.** If you'd rather not trust any operator, install the [`probot-self-hosted`](/self-hosted-bot/index) npm package in your own web app - the plaintext key lives entirely inside your backend and never touches pro-bot.dev.
 - **Owner test chat.** When the owner tests their bot from the dashboard, the browser passes the key as `x-llm-api-key`. The dashboard mirrors the key into a browser-side encrypted store (IndexedDB + non-extractable Web Crypto key) so the owner doesn't re-paste it on every reload.
 
 ## Failure modes (and how the key is protected in each)
@@ -105,7 +105,7 @@ BYO-key with envelope encryption protects you against:
 
 BYO-key does **not** protect you against:
 
-- **Full infrastructure compromise.** Anyone with deploy access can read the KEK. If that's your threat model, self-host the `probot-bot` runtime.
+- **Full infrastructure compromise.** Anyone with deploy access can read the KEK. If that's your threat model, self-host the bot with the [`probot-self-hosted`](/self-hosted-bot/index) npm package - your LLM key never touches pro-bot.dev.
 - **XSS on the ProBot frontend.** The frontend mitigates this with `react-markdown` + no `rehype-raw`; if you find a gap, please report via [SECURITY.md](https://github.com/vishalpatil18/probot/blob/main/SECURITY.md).
 - **Phishing.** A lookalike domain could capture pasted keys.
 

@@ -68,7 +68,7 @@ export async function POST(
         {
           error: "managed_storage_unavailable",
           message:
-            "This deployment hasn't enabled managed key storage. Use the self-hosted path or contact the operator.",
+            "This deployment hasn't enabled managed key storage. Register a self-hosted bot and use the probot-self-hosted npm package, or contact the operator.",
         },
         { status: 503 },
       );

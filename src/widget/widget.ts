@@ -609,6 +609,37 @@ export async function mount(
   wireChat(dialog, doc, config.apiBase, config.botId);
 }
 
+// Parse the `error` code from a non-2xx chat response. Returns null when
+// the body isn't JSON or lacks an `error` string — the caller falls back
+// to the generic copy.
+async function readErrorCode(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { error?: unknown };
+    return typeof body.error === "string" ? body.error : null;
+  } catch {
+    return null;
+  }
+}
+
+// Map server error codes to visitor-facing copy. Deliberately vague on the
+// operational classes (breaker/storage) so a stranger doesn't learn the
+// internals; explicit on the setup classes so the owner's own testing
+// surfaces the real cause instead of a generic dead-end message.
+function messageForErrorCode(code: string | null): string {
+  switch (code) {
+    case "missing_llm_key":
+      return "This bot isn't set up yet — its owner needs to save an AI key before it can answer.";
+    case "managed_key_provider_mismatch":
+      return "This bot's saved key doesn't match its selected AI provider. The owner needs to re-save it.";
+    case "managed_storage_unavailable":
+      return "The AI key service is temporarily unavailable. Please try again shortly.";
+    case "provider_unavailable":
+      return "This bot's AI provider isn't available right now. Try the full chat linked below.";
+    default:
+      return "I can't answer here right now. Try the full chat linked below.";
+  }
+}
+
 // Wire up the chat surface inside the (already-rendered) dialog. Kept
 // separate from `mount` so the pure-HTML renderer can be unit-tested
 // without exercising fetch/event plumbing.
@@ -738,10 +769,8 @@ function wireChat(
         return;
       }
       if (!res.ok) {
-        appendMessage(
-          "bot",
-          "I can't answer here right now. Try the full chat linked below.",
-        );
+        const code = await readErrorCode(res);
+        appendMessage("bot", messageForErrorCode(code));
         return;
       }
 

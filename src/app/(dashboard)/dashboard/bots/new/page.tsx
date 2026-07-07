@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
@@ -29,8 +29,14 @@ export default async function NewBotPage() {
   });
   if (!userRow) redirect("/login");
 
+  // Bot Factory is managed-only. Self-hosted bots live under
+  // /dashboard/bots/new-self-hosted and never enter this upsert path, so we
+  // scope the "existing bot" lookup to the managed one.
   const existing = await db.query.bots.findFirst({
-    where: eq(bots.userId, session.user.id),
+    where: and(
+      eq(bots.userId, session.user.id),
+      eq(bots.deploymentMode, "managed"),
+    ),
   });
 
   const initialLlmProvider: ProviderName | undefined = isProviderName(

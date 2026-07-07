@@ -1,0 +1,71 @@
+---
+title: Dashboard analytics link
+description: "Register a self-hosted bot in the ProBot dashboard to see its conversations and captured leads. Config on the dashboard is read-only for self-hosted bots."
+---
+
+Linking your self-hosted webapp to the ProBot dashboard is optional. When
+enabled, every finished conversation and captured lead is POSTed to the
+platform's `/api/v1/bot/{conversations,leads}` endpoints so it appears in
+your dashboard's analytics.
+
+## Register the bot
+
+1. In the sidebar bot switcher, open the dropdown and click **Register
+   self-hosted bot**.
+2. Enter a name (and optional headline). We create a lightweight dashboard
+   entry and mint your first token.
+3. **Copy the `pbt_…` token now** - it's shown once.
+
+The dashboard entry has no Bot Configuration, Knowledge, or AI Model tabs
+- those tabs would be misleading for a self-hosted bot, whose real config
+lives in your web app. You only see Deployment (tokens), Account, and
+Security & Privacy.
+
+## Wire the token
+
+Pass it as `dashboard.token`:
+
+```tsx
+<ProbotBot
+  /* ...other config... */
+  dashboard={{ token: process.env.NEXT_PUBLIC_PROBOT_TOKEN! }}
+/>
+```
+
+You can also override the platform URL for staging or self-managed
+mirrors:
+
+```tsx
+dashboard={{
+  token: "pbt_…",
+  apiUrl: "https://probot-staging.example.com",
+}}
+```
+
+## What appears in the dashboard
+
+- **Conversations**: full transcripts grouped by session, exportable as
+  CSV or JSON.
+- **Leads**: emails captured through the widget's optional lead form (or
+  any `onLead` you handle yourself), deduped on `(bot, email)`.
+- **Analytics tiles**: totals, growth %, model / provider distribution.
+
+## What is NOT on the dashboard
+
+- No persona editor, knowledge base, model picker, or theme picker for
+  self-hosted bots. Those live in your code.
+- No public `/u/<username>/chat` URL - the widget lives inside your
+  webapp.
+- No embed widget snippet - you already have the component.
+
+## Rotating and revoking tokens
+
+Open **Settings → Deployment** on a self-hosted bot to mint additional
+tokens (per environment - staging vs production) and revoke any of them.
+Revoked tokens fail authentication on the next call, no redeploy needed.
+
+## Multiple tokens
+
+Mint one token per deployment environment - staging, production, preview -
+so you can revoke one without disturbing the others. `last_seen_at` in the
+dashboard tells you which token is actually in use.

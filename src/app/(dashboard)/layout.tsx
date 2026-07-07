@@ -49,7 +49,12 @@ export default async function DashboardLayout({
 
   const [ownedBots, analytics, userRow] = await Promise.all([
     db
-      .select({ id: bots.id, name: bots.name, updatedAt: bots.updatedAt })
+      .select({
+        id: bots.id,
+        name: bots.name,
+        updatedAt: bots.updatedAt,
+        deploymentMode: bots.deploymentMode,
+      })
       .from(bots)
       .where(eq(bots.userId, userId))
       .orderBy(desc(bots.updatedAt)),
@@ -70,7 +75,11 @@ export default async function DashboardLayout({
     !userRow?.lastLegalAckDate ||
     userRow.lastLegalAckDate < LEGAL_EFFECTIVE_AT;
 
-  const botList = ownedBots.map((b) => ({ id: b.id, name: b.name }));
+  const botList = ownedBots.map((b) => ({
+    id: b.id,
+    name: b.name,
+    deploymentMode: (b.deploymentMode as "managed" | "self_hosted") ?? "managed",
+  }));
   const fallbackId = botList[0]?.id ?? null;
   const selectedBotId = resolveSelectedBotId(
     botList.map((b) => b.id),

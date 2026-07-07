@@ -12,7 +12,6 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
-  // Default: token list load returns empty.
   fetchMock.mockResolvedValue(jsonResponse({ tokens: [] }));
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -22,29 +21,34 @@ afterEach(() => {
 });
 
 describe("DeployTab", () => {
-  it("shows both deployment-mode cards", async () => {
-    render(
-      <DeployTab botId="bot-1" ownerUsername="vishal" initialMode="managed" />,
-    );
-    expect(
-      screen.getByRole("button", { name: /managed/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /self-hosted/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("reveals the token section only in self-hosted mode", async () => {
+  it("shows the managed status card for managed bots", () => {
     render(
       <DeployTab
         botId="bot-1"
+        botName="Ada"
         ownerUsername="vishal"
-        initialMode="self_hosted"
+        mode="managed"
+      />,
+    );
+    expect(screen.getByText(/managed by pro-bot\.dev/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /generate token/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reveals tokens + npm snippet for self-hosted bots", async () => {
+    render(
+      <DeployTab
+        botId="bot-1"
+        botName="Ada"
+        ownerUsername="vishal"
+        mode="self_hosted"
       />,
     );
     expect(
       await screen.findByRole("button", { name: /generate token/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/probot-self-hosted/i)).toBeInTheDocument();
   });
 
   it("mints a token and shows the secret exactly once", async () => {
@@ -61,12 +65,13 @@ describe("DeployTab", () => {
     render(
       <DeployTab
         botId="bot-1"
+        botName="Ada"
         ownerUsername="vishal"
-        initialMode="self_hosted"
+        mode="self_hosted"
       />,
     );
 
-    await user.type(screen.getByPlaceholderText(/vercel production/i), "Prod");
+    await user.type(screen.getByPlaceholderText(/production/i), "Prod");
     await user.click(screen.getByRole("button", { name: /generate token/i }));
 
     await waitFor(() =>

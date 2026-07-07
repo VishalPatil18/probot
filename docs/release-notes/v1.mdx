@@ -14,5 +14,5 @@ Version 1.0 builds on the Beta with UX polish, trust pages, SEO, performance, a 
 - **Marketing & trust pages** - Why ProBot, Hire-me, and a landing demo modal.
 - **SEO & docs** - site-wide metadata, OG images, structured data, robots + sitemap, reorganized docs.
 - **Performance & scale** - shared-state rate limiter + circuit breaker (Upstash, in-memory fallback), `circuit_open` alerting; removed a multi-MB icon font for far lighter pages.
-- **Self-hosted bot architecture** - a tiny `probot-bot` runtime + versioned `/api/v1/bot/*` API + per-bot tokens.
+- **Self-hosted bot architecture** - the `probot-self-hosted` npm package embeds the whole chatbot in your web app (persona, knowledge, LLM key all in your code); the dashboard is optional and read-only, receiving only conversation/lead analytics via a versioned `/api/v1/bot/*` API with per-bot tokens.
 - **Richer leads** - the lead form now collects name, email, company, and LinkedIn.

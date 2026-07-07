@@ -14,7 +14,7 @@ import {
   getDailyConversationCounts,
 } from "@/lib/analytics/queries";
 import { authOptions } from "@/lib/auth/auth";
-import { bots, db } from "@/lib/db";
+import { bots, db, encryptedLlmKeys, users } from "@/lib/db";
 import { listRecentConversationsForUser } from "@/lib/conversations/queries";
 import { listRecentLeadsForUser } from "@/lib/leads/queries";
 import { resolveSelectedBotId } from "@/lib/server/selected-bot";
@@ -85,6 +85,26 @@ export default async function DashboardPage() {
     ownedBots.find((b) => b.id === selectedBotId) ?? ownedBots[0] ?? null;
 
   const origin = getOrigin();
+
+  // Embed widget calls /api/chat with no BYO-key header, so it depends
+  // on either a stored managed key or a provider that doesn't need one
+  // (Ollama). Warn the owner when neither is true — otherwise every
+  // visitor question 400s with `missing_llm_key`.
+  let embedNeedsKeySetup = false;
+  if (selectedBot) {
+    const [ownerRow, storedKey] = await Promise.all([
+      db.query.users.findFirst({
+        where: eq(users.id, userId),
+        columns: { llmProvider: true },
+      }),
+      db.query.encryptedLlmKeys.findFirst({
+        where: eq(encryptedLlmKeys.botId, selectedBot.id),
+        columns: { botId: true },
+      }),
+    ]);
+    embedNeedsKeySetup =
+      ownerRow?.llmProvider !== "ollama" && !storedKey;
+  }
 
   // `ownedBots` is already pre-filtered by `eq(bots.userId, userId)` and
   // includes the themeColor column we need for the embed snippet - so
@@ -190,12 +210,32 @@ export default async function DashboardPage() {
             Add it anywhere recruiters find you.
           </p>
           {selectedBot ? (
-            <EmbedSnippet
-              botId={selectedBot.id}
-              username={username}
-              themeColor={selectedBot.themeColor}
-              origin={origin}
-            />
+            <>
+              {embedNeedsKeySetup ? (
+                <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">
+                    Your embed can&apos;t answer questions yet.
+                  </p>
+                  <p className="mt-1">
+                    The widget uses a managed AI key (visitors don&apos;t bring
+                    their own). Save one under{" "}
+                    <Link
+                      href={`/dashboard/bots/${selectedBot.id}/settings?tab=model`}
+                      className="font-semibold text-amber-900 underline"
+                    >
+                      Settings → AI Model &amp; Key
+                    </Link>{" "}
+                    to activate it.
+                  </p>
+                </div>
+              ) : null}
+              <EmbedSnippet
+                botId={selectedBot.id}
+                username={username}
+                themeColor={selectedBot.themeColor}
+                origin={origin}
+              />
+            </>
           ) : (
             <p className="text-sm text-muted">No bot selected.</p>
           )}

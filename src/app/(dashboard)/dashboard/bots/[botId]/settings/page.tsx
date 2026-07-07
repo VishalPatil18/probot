@@ -14,6 +14,7 @@ import { SecurityTab } from "@/components/dashboard/settings/SecurityTab";
 import {
   SettingsTabPanel,
   SettingsTabs,
+  type SettingsTabKey,
 } from "@/components/dashboard/settings/SettingsTabs";
 import { getPendingDeletion } from "@/lib/account/delete";
 import { authOptions } from "@/lib/auth/auth";
@@ -94,9 +95,22 @@ export default async function BotSettingsPage({
   const accountEmail = session.user.email ?? "";
   const accountInitials = computeInitials(accountName);
 
+  const mode: DeploymentMode =
+    (bot.deploymentMode as DeploymentMode) ?? "managed";
+
+  // Self-hosted bots are configured in the consumer's webapp via the
+  // probot-self-hosted npm package, so the dashboard only exposes Deployment
+  // (tokens) + Account. Bot config, knowledge, model/key, and security tabs
+  // would be misleading here - they map to platform-side state the widget
+  // no longer uses.
+  const visibleTabs: SettingsTabKey[] =
+    mode === "self_hosted"
+      ? ["deploy", "account", "security"]
+      : ["bot", "kb", "model", "deploy", "account", "security"];
+
   return (
     <div className="max-w-[900px] px-6 py-8 lg:px-8">
-      <SettingsTabs>
+      <SettingsTabs tabs={visibleTabs}>
         <SettingsTabPanel tab="account">
           <AccountTab
             name={session.user.name ?? ""}
@@ -155,8 +169,9 @@ export default async function BotSettingsPage({
         <SettingsTabPanel tab="deploy">
           <DeployTab
             botId={bot.id}
+            botName={bot.name}
             ownerUsername={session.user.username}
-            initialMode={(bot.deploymentMode as DeploymentMode) ?? "managed"}
+            mode={mode}
           />
         </SettingsTabPanel>
       </SettingsTabs>

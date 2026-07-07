@@ -68,6 +68,12 @@ export const botInput = z.object({
       `Custom instructions must be ≤ ${CUSTOM_INSTRUCTIONS_MAX} chars`,
     )
     .optional(),
+  // Chat-runtime location. Persisted to `bots.deployment_mode`. Bot Factory
+  // never sets this - it always creates `managed` bots. The dedicated
+  // "Register self-hosted bot" endpoint is the only path that writes
+  // "self_hosted". Kept optional here so an older client omitting the
+  // field still validates.
+  deploymentMode: z.enum(["managed", "self_hosted"]).optional(),
 });
 
 export type BotInput = z.infer<typeof botInput>;

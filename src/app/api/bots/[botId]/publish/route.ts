@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
-import { bots, db } from "@/lib/db";
+import { bots, db, encryptedLlmKeys, users } from "@/lib/db";
 
 // POST /api/bots/[botId]/publish
 //
@@ -27,6 +27,34 @@ export async function POST(
     // Already published - idempotent success rather than 409 so a double-tap
     // on the Publish button doesn't surface a confusing error.
     return NextResponse.json({ bot: { id: bot.id, isActive: true } });
+  }
+
+  // Managed-mode bots need a stored envelope-encrypted key before going live
+  // — the embed widget POSTs /api/chat with no key header and would 400 on
+  // every visitor question. Ollama is exempt (adapter uses a placeholder).
+  // Self-hosted bots are always active from creation and never route through
+  // this endpoint (their chat runs entirely in the consumer's webapp).
+  if (bot.deploymentMode !== "self_hosted") {
+    const ownerRow = await db.query.users.findFirst({
+      where: eq(users.id, bot.userId),
+      columns: { llmProvider: true },
+    });
+    if (ownerRow?.llmProvider !== "ollama") {
+      const storedKey = await db.query.encryptedLlmKeys.findFirst({
+        where: eq(encryptedLlmKeys.botId, bot.id),
+        columns: { botId: true },
+      });
+      if (!storedKey) {
+        return NextResponse.json(
+          {
+            error: "needs_managed_key",
+            message:
+              "Store an encrypted API key in Settings → AI Model & Key before publishing.",
+          },
+          { status: 400 },
+        );
+      }
+    }
   }
 
   const [updated] = await db

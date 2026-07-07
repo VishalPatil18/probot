@@ -279,13 +279,12 @@ export default function AboutPage() {
                 Never leaves your server.
               </h3>
               <p className="text-sm text-muted leading-relaxed mb-4">
-                Run the tiny <code>probot-bot</code> runtime under your own
-                domain. Your LLM key goes into your runtime&apos;s environment as
-                a config value. ProBot never sees it - your bot calls the LLM
-                provider directly from your infra, while the dashboard,
-                knowledge, and leads stay on the managed platform. The right pick
-                if you can&apos;t trust any operator (including us) with the key,
-                ever.
+                Install the <code>probot-self-hosted</code> npm package in your
+                web app and render <code>&lt;ProbotBot /&gt;</code>. Your LLM key
+                lives in your own backend and never touches pro-bot.dev.
+                Optionally link the widget to your ProBot dashboard for
+                conversation and lead analytics. The right pick if you
+                can&apos;t trust any operator (including us) with the key, ever.
               </p>
               <ul className="space-y-2 text-sm text-muted">
                 <li className="flex gap-2">

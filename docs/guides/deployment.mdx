@@ -1,32 +1,42 @@
 ---
 title: Deployment modes
-description: "Run your bot the easy way (managed) or on your own infrastructure (self-hosted)."
+description: "Run your bot the easy way (managed) or embed it directly in your web app (self-hosted, via an npm package)."
 ---
 
-Each bot has a **deployment mode**, set in **Settings → Deployment**. It decides where the chat runtime lives.
+Each bot has a **deployment mode**, decided at creation. It cannot be
+switched later - the two modes have very different config surfaces.
 
-## Managed (default)
+## Managed (default, from Bot Factory)
 
 The bot is served entirely by pro-bot.dev:
 
 - Public chat at `pro-bot.dev/u/<username>/chat`
 - One-line [embed widget](/embed-share)
-- Nothing to deploy or maintain
+- Nothing to install or maintain
 
 This is the right choice for almost everyone. See [Managed hosting](/hosting/managed).
 
-## Self-hosted
+## Self-hosted (via npm package)
 
-You run the tiny [`probot-bot`](/self-hosted-bot/index) runtime on your own infrastructure; it talks to the ProBot platform over a versioned API using a **bot token** you mint in the dashboard. Your LLM key lives in your runtime and never touches the platform.
+Install [`probot-self-hosted`](https://www.npmjs.com/package/probot-self-hosted)
+in your own web app and render `<ProbotBot />`. Persona, knowledge,
+provider, and theme all live in your code; your LLM key stays in your
+backend. Optionally link the widget to the ProBot dashboard for
+conversation and lead analytics.
 
-Switching to self-hosted:
+Registering a self-hosted bot:
 
-1. Set the mode to **Self-hosted**.
-2. **Generate a token** (shown once - copy it).
-3. Deploy `probot-bot` with that token. See [Self-hosting your bot](/self-hosted-bot/index).
+1. Open the sidebar bot switcher in the dashboard and click **Register
+   self-hosted bot**.
+2. Enter a name; we create the analytics entry and mint your first token
+   (shown once).
+3. `npm i probot-self-hosted` in your web app and render `<ProbotBot />`
+   with the token in `dashboard.token`.
 
-Revoke the token any time to instantly cut the runtime off.
+See [Self-hosting your bot](/self-hosted-bot/index) for the full walk-through.
 
 ## Comparison
 
-See [Managed vs self-hosted](/concepts/managed-vs-self-hosted) for the full trade-offs, and [Self-hosting your bot](/self-hosted-bot/index) for the `probot-bot` runtime details.
+See [Managed vs self-hosted](/concepts/managed-vs-self-hosted) for the full
+trade-offs, and [Self-hosting your bot](/self-hosted-bot/index) for the npm
+package details.

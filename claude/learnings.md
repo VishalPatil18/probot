@@ -2004,3 +2004,94 @@ The heuristic that would have saved a build cycle: **grep the library source for
 
 The fix is either (a) a library with much smaller total surface (like `snarkdown` — 1 KB but allows raw HTML pass-through, an XSS problem) or (b) hand-rolling the subset you need. The ProBot widget went with (b) because the subset was small and the XSS risk had to be controlled anyway.
 
+### Self-hosted chatbot: npm package vs cloned runtime
+
+> Why scrap the "clone a repo and deploy a runtime" model in favor of an npm package? What are the tradeoffs?
+
+The original self-host story was a separate Next.js app (`probot-bot/`) that the developer cloned, configured with env vars (`PROBOT_BOT_TOKEN`, `PROBOT_API_URL`, `OPENAI_API_KEY`), and deployed to their own domain. The runtime authenticated to the platform over `/api/v1/bot/{config,knowledge,conversations,leads}` — the platform kept the persona and knowledge; the runtime kept the LLM key and orchestrated the LLM call.
+
+That model has three friction points that motivate the npm-package rewrite:
+
+1. **Two deploys instead of one.** Every persona tweak needed a redeploy of the cloned runtime, even though the change lived in the platform's dashboard. Devs end up copy-pasting env vars around; junior devs leak keys in front-end bundles.
+2. **Divided ownership of the config surface.** Persona lived on pro-bot.dev, LLM key lived in the runtime env, embed styling lived in yet a third place. Nobody could reason about the whole thing at once.
+3. **Platform stays in the chat critical path.** Every visitor message hit `/api/v1/bot/knowledge` before the runtime could reply. A platform outage broke self-hosted bots too — the exact opposite of "self-hosted" ownership.
+
+The npm package (`probot-self-hosted`) collapses those:
+
+- **One deploy.** `npm i probot-self-hosted`, render `<ProbotBot />`, ship your app. Persona / knowledge / theme are props in your codebase, version-controlled next to everything else.
+- **One trust boundary.** The LLM key lives in the developer's own backend (behind a `sendMessage` proxy or the `createOpenAIHandler` server helper). The platform's role shrinks to accepting analytics writes on two endpoints.
+- **Platform is never in the chat critical path.** If pro-bot.dev is down, the widget still answers; only the async fire-and-forget "report this conversation to the dashboard" calls fail.
+
+**Cost of the trade.** The package can't ship a "no code required" story — you have to wire a `sendMessage` and a server-side route. That is the correct floor: browser-only self-host is inherently unsafe (LLM keys shouldn't live in bundles), so the API surface makes the safe path the default and the unsafe path unrepresentable, not just discouraged in docs.
+
+**Concrete example.** For a Next.js App Router site:
+
+```ts
+// app/api/probot-chat/route.ts — server-only, holds the LLM key
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+const send = createOpenAIHandler({
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: "gpt-4o-mini",
+});
+export async function POST(req: Request) {
+  const { system, messages } = await req.json();
+  return Response.json({ reply: await send({ system, messages }) });
+}
+```
+
+```tsx
+// app/layout.tsx — client, no LLM key anywhere
+"use client";
+import { ProbotBot } from "probot-self-hosted";
+
+<ProbotBot
+  name="Ada"
+  context="…your knowledge…"
+  sendMessage={async ({ system, messages }) => {
+    const res = await fetch("/api/probot-chat", {
+      method: "POST",
+      body: JSON.stringify({ system, messages }),
+    });
+    return (await res.json()).reply;
+  }}
+  dashboard={{ token: process.env.NEXT_PUBLIC_PROBOT_TOKEN! }}
+/>;
+```
+
+The `dashboard.token` is intentionally public-safe: a leaked `pbt_…` can only write conversation/lead analytics for one bot and is revocable in one click from **Settings → Deployment**. The LLM API key never appears in a client bundle.
+
+**IIFE / script-tag path.** For pages without a bundler, esbuild emits a self-contained `dist/probot-self-hosted.iife.js` that bundles React and exposes `window.ProbotSelfHosted.mount(el, config)`. Same `sendMessage` contract — the server-side proxy stays exactly the same regardless of whether the client is React or plain HTML.
+
+### Deployment-mode as a birth attribute (not a runtime toggle)
+
+> Why make `deployment_mode` non-switchable after bot creation?
+
+Managed and self-hosted bots live in different worlds: managed bots have a persona editor, a knowledge base, an envelope-encrypted LLM key, and a public `/u/<username>/chat` URL. Self-hosted bots have none of those — the whole config lives in the developer's code, and the platform only stores tokens + analytics.
+
+If we let owners flip the mode after creation:
+
+- Flipping managed → self-hosted leaves an orphaned envelope-encrypted key row, orphaned knowledge chunks, and a `/u/<username>/chat` URL that suddenly 404s. The dashboard would need to keep showing all those tabs anyway (in case they flip back), so the UI never simplifies.
+- Flipping self-hosted → managed asks the platform to conjure a persona / knowledge / provider config out of thin air, or to force the owner through Bot Factory a second time.
+
+Both directions have a "what do we do with the old state" problem that adds complexity every consumer has to reason about. Making mode a birth attribute means:
+
+- The dashboard tab strip is a pure function of the mode. Self-hosted → `['deploy','account','security']`. Managed → `['bot','kb','model','deploy','account','security']`. No conditional rendering inside a tab, no "is this tab meaningful for this mode" logic scattered across components.
+- The upsert in `/api/bots` and the "load my existing bot" query in `/dashboard/bots/new` scope to `AND deployment_mode='managed'` — one clause each, no runtime coordination between the endpoints.
+- The API surface is smaller: no `PATCH /deployment` route to authorize, no state-machine to test, no "what happens if a token exists on a bot that's currently managed" edge case.
+
+**Cost of the trade.** A user who registered a self-hosted bot but wants managed has to delete + recreate. That's a rare operation (people generally know which path they want before creation), and the simplicity elsewhere pays for it many times over. The `RegisterSelfHostedForm` copy also makes it very clear that the choice is at creation — nobody accidentally locks themselves in.
+
+**Related pattern.** This is the same reasoning as making auth provider (email/password vs OAuth) a birth attribute in NextAuth: switching later requires either data loss or a complex merge, and users almost never actually want to. Cheaper to enforce the invariant at creation than to build the flip.
+
+### Scoping upserts by a discriminator column
+
+> Why does the Bot Factory upsert now say `AND deployment_mode = 'managed'`?
+
+Before this change, `/api/bots` POST did an upsert with `WHERE user_id = ?` — implicit "one bot per user". Once self-hosted bots share the same `bots` table with `deployment_mode` as the discriminator, that lookup becomes ambiguous: a user with both a managed bot and a self-hosted bot could have Bot Factory silently overwrite the wrong row's name / persona / theme.
+
+The fix is one line: `AND deployment_mode = 'managed'`. Same shape at `/dashboard/bots/new/page.tsx` where the server component loads the existing bot to hydrate the wizard.
+
+**General rule.** When a table starts hosting rows for two different flows via a discriminator column, every query that assumes "single row per parent FK" needs to add the discriminator to its `WHERE` — otherwise cross-flow interference is a matter of when, not if. Grep the codebase for `.findFirst({ where: eq(bots.userId, ...) })` (and equivalents) as a starter checklist; any that model a per-user singleton for a specific flow need the extra clause.
+
+This is a variant of the "polymorphic table" antipattern: if you find yourself doing this in more than two or three places, split the tables. Two flows sharing a table is fine; five flows sharing a table is the pattern telling you it wants to be normalized.
+

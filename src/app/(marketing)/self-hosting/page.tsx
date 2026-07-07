@@ -5,11 +5,12 @@ import { buildMetadata } from "@/lib/seo/site";
 export const metadata = buildMetadata({
   title: "Self-host your bot",
   description:
-    "Run your bot's chat on your own infrastructure with the tiny probot-bot runtime, so your LLM key never touches pro-bot.dev.",
+    "Install the probot-self-hosted npm package to embed a ProBot chatbot directly in your web app - no separate runtime to clone, your LLM key stays in your infra.",
   path: "/self-hosting",
 });
 
 const DOCS_QUICKSTART = "https://pro-bot.dev/docs/self-hosted-bot/index";
+const NPM_PACKAGE = "https://www.npmjs.com/package/probot-self-hosted";
 
 export default function SelfHostingPage() {
   return (
@@ -18,35 +19,52 @@ export default function SelfHostingPage() {
         Self-hosting guide
       </p>
       <h1 className="font-display text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.05] mb-4">
-        Run your bot on your own infra.
+        Drop the bot into your webapp.
       </h1>
       <p className="text-muted text-lg leading-relaxed mb-10">
-        Self-hosting in ProBot means running <strong>your bot&apos;s chat</strong>{" "}
-        on your own infrastructure - not operating the whole platform. You deploy
-        the tiny <code>probot-bot</code> runtime under your own domain; pro-bot.dev
-        keeps handling the dashboard, knowledge, conversations, and leads. Your
-        LLM key lives in your runtime and never touches pro-bot.dev.
+        Self-hosting used to mean cloning a separate runtime repo. Now it&apos;s
+        one npm package:{" "}
+        <a
+          href={NPM_PACKAGE}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-brand font-semibold hover:underline"
+        >
+          probot-self-hosted
+        </a>
+        . Install it in your web app, render <code>&lt;ProbotBot /&gt;</code>,
+        and the whole bot - persona, knowledge, provider, theme - is
+        configured in your code. Your LLM key stays in your own backend and
+        never touches pro-bot.dev. Register the bot in your ProBot dashboard
+        (optional) to get conversation and lead analytics.
       </p>
 
       <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-3">How it works</h2>
         <ol className="text-muted leading-relaxed space-y-3 list-decimal pl-5">
           <li>
-            A visitor chats with your <code>probot-bot</code> runtime on your
-            domain.
+            <code>npm i probot-self-hosted</code> in your project.
           </li>
           <li>
-            The runtime asks the platform for the relevant knowledge and your
-            bot&apos;s persona over the versioned <code>/api/v1/bot/*</code> API,
-            authenticated with a bot token.
+            Render <code>&lt;ProbotBot /&gt;</code> with your bot config
+            (name, headline, personality, knowledge, theme, suggested
+            questions).
           </li>
           <li>
-            The runtime calls <strong>your</strong> LLM provider directly - using
-            the key in your own environment - and replies.
+            Implement a <code>sendMessage</code> that proxies through your own
+            <code>/api/…</code> route - the LLM key lives on your server, not
+            in the browser.
           </li>
           <li>
-            It posts the transcript and any captured lead back to the platform,
-            so they appear in your ProBot dashboard exactly like a managed bot.
+            (Optional) Register the bot at{" "}
+            <Link
+              href="/dashboard/bots/new-self-hosted"
+              className="text-brand font-semibold hover:underline"
+            >
+              Dashboard → Register self-hosted bot
+            </Link>{" "}
+            for a token, then set <code>dashboard.token</code> so conversations
+            and leads flow into your dashboard for analytics.
           </li>
         </ol>
       </section>
@@ -57,51 +75,40 @@ export default function SelfHostingPage() {
         </h2>
         <ul className="text-muted leading-relaxed space-y-2 list-disc pl-5">
           <li>
-            A ProBot account with a bot already created (build it in the
-            dashboard first).
+            An existing web app (React, Next.js, Vite, or plain HTML via the
+            vanilla build).
           </li>
           <li>
-            A Node 20+ host for the runtime - Vercel, Render, Fly.io, Railway, a
-            VM, or Docker. The runtime is tiny, so a free tier is plenty.
+            An LLM API key (OpenAI, Anthropic, Grok, Ollama, or any
+            OpenAI-compatible endpoint), reached from your backend - not the
+            browser.
           </li>
-          <li>An LLM API key from Anthropic, OpenAI, Google, or Azure.</li>
+          <li>Optional: a ProBot account, if you want dashboard analytics.</li>
         </ul>
       </section>
 
       <section className="mb-10">
-        <h2 className="font-display text-2xl font-bold mb-3">Steps</h2>
-        <ol className="text-muted leading-relaxed space-y-3 list-decimal pl-5">
-          <li>
-            In the dashboard, open <strong>Settings &rarr; Deployment</strong>{" "}
-            and switch the bot to <strong>Self-hosted</strong>.
-          </li>
-          <li>
-            <strong>Generate a bot token</strong>. It&apos;s shown once - copy it
-            somewhere safe.
-          </li>
-          <li>
-            Deploy the <code>probot-bot</code> runtime with that token in its{" "}
-            <code>PROBOT_BOT_TOKEN</code> environment variable and your LLM key in
-            its provider key variable.
-          </li>
-          <li>
-            Point your domain at the runtime. Revoke the token any time to
-            instantly cut it off.
-          </li>
-        </ol>
-      </section>
-
-      <section className="mb-10">
-        <h2 className="font-display text-2xl font-bold mb-3">Why self-host</h2>
+        <h2 className="font-display text-2xl font-bold mb-3">Why an npm package</h2>
         <ul className="text-muted leading-relaxed space-y-2 list-disc pl-5">
-          <li>You want the chat served from your own domain.</li>
-          <li>You want zero trust in any operator for the chat path.</li>
-          <li>You want a tiny, auditable deployment surface you control.</li>
+          <li>
+            One install, one deploy - no separate runtime repo, no extra
+            infrastructure to babysit.
+          </li>
+          <li>
+            All bot configuration lives in your codebase, version-controlled
+            with the rest of your app.
+          </li>
+          <li>
+            Your LLM key stays entirely in your own backend - never posted to,
+            stored on, or logged by pro-bot.dev.
+          </li>
+          <li>Analytics on the dashboard are read-only for self-hosted bots.</li>
         </ul>
       </section>
 
       <p className="text-muted leading-relaxed mb-10">
-        Full setup, environment variables, and the API contract live in the{" "}
+        Full setup, framework examples (Next.js, Vite, Vue, vanilla), and the
+        API contract live in the{" "}
         <a
           href={DOCS_QUICKSTART}
           target="_blank"
@@ -114,11 +121,8 @@ export default function SelfHostingPage() {
       </p>
 
       <p className="text-sm text-muted mt-12">
-        Questions about the deployment? See{" "}
-        <Link
-          href="/about"
-          className="text-brand font-semibold hover:underline"
-        >
+        Questions about the setup? See{" "}
+        <Link href="/about" className="text-brand font-semibold hover:underline">
           About
         </Link>{" "}
         for contact info.

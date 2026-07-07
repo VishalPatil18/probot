@@ -206,6 +206,27 @@ export function BotFactoryForm({
       setPreviewToken(body.bot.previewToken ?? null);
       setPublished(body.bot.isActive ?? false);
 
+      // Envelope-encrypt the LLM key on pro-bot.dev so the embed widget can
+      // actually answer questions. Only fires when a real provider key is
+      // supplied (Ollama doesn't need one). Non-fatal — if the store fails,
+      // the bot still saves as a draft and the owner sees an inline error
+      // explaining they need to store the key from Settings before publishing.
+      if (
+        form.llmProvider !== "ollama" &&
+        form.apiKey.trim().length >= 8
+      ) {
+        const keyRes = await fetch(`/api/bots/${body.bot.id}/llm-key`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ apiKey: form.apiKey.trim() }),
+        }).catch(() => null);
+        if (!keyRes || !keyRes.ok) {
+          setError(
+            "Your bot was saved as a draft, but we couldn't store your API key on our server. Open Settings → AI Model & Key to try again before publishing.",
+          );
+        }
+      }
+
       // Upload the bot picture now the row exists (id known). Non-fatal: on
       // failure the bot simply keeps the default ProBot icon.
       if (form.botImageFile) {
@@ -334,8 +355,13 @@ export function BotFactoryForm({
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
+          message?: string;
         };
-        setError(body.error ?? "Could not publish your bot. Try again.");
+        // The publish endpoint uses `message` for human copy on the
+        // needs_managed_key guard; fall through to the raw code otherwise.
+        setError(
+          body.message ?? body.error ?? "Could not publish your bot. Try again.",
+        );
         return;
       }
       setPublished(true);

@@ -1,0 +1,57 @@
+---
+title: Vanilla HTML / script tag
+description: "Use probot-self-hosted on a plain HTML page - no React app, no bundler, just a script tag."
+---
+
+Even without a React app or a bundler, you can drop the widget onto any
+HTML page with a single script tag. React comes bundled inside the IIFE
+build.
+
+## Markup
+
+```html
+<!doctype html>
+<html>
+  <body>
+    <div id="probot"></div>
+
+    <script src="https://unpkg.com/probot-self-hosted/dist/probot-self-hosted.iife.js"></script>
+    <script>
+      ProbotSelfHosted.mount("#probot", {
+        name: "Ada",
+        headline: "Ask me about my work",
+        personality: "professional",
+        themeColor: "#2563eb",
+        context: "I'm Ada Lovelace, a mathematician…",
+        suggestedQuestions: ["What are you working on?"],
+        sendMessage: async ({ system, messages }) => {
+          const res = await fetch("/api/probot-chat", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ system, messages }),
+          });
+          const data = await res.json();
+          return data.reply;
+        },
+        // Optional analytics
+        dashboard: { token: "pbt_…" },
+      });
+    </script>
+  </body>
+</html>
+```
+
+## Server route
+
+You still need a server-side handler for `/api/probot-chat` that holds your
+LLM key. See the [Next.js](/self-hosted-bot/nextjs) or
+[React + Express](/self-hosted-bot/react) example for a template - any
+language works.
+
+<Warning>
+  The IIFE build is convenient, but the `dashboard.token` you pass here is
+  visible to anyone who views the page source. That is by design - it can
+  only write conversation and lead analytics for one bot, and you can revoke
+  it instantly. Never put your LLM API key in this script; keep it on your
+  server.
+</Warning>

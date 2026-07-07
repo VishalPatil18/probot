@@ -1,88 +1,144 @@
 ---
 title: Self-hosting your bot
-description: "Run your bot's chat on your own infrastructure with the tiny probot-bot runtime, while the platform handles knowledge, conversations, and leads."
+description: "Install the probot-self-hosted npm package to embed a ProBot chatbot directly in your web app. Your LLM key stays in your own backend; optional dashboard link gives you conversation and lead analytics."
 ---
 
-Self-hosting in ProBot means running **your bot's chat** on your own infrastructure - not operating the whole platform. You deploy the tiny [`probot-bot`](https://github.com/vishalpatil18/probot-bot) runtime under your own domain; pro-bot.dev keeps doing the heavy lifting - knowledge retrieval, conversation logging, and lead capture. Your LLM key stays in your runtime; the platform never sees it.
+Self-hosting a ProBot chatbot means installing the
+[`probot-self-hosted`](https://www.npmjs.com/package/probot-self-hosted)
+npm package in your web app and configuring the bot in code. There is no
+separate runtime repo to clone, no extra hosting to babysit, and no LLM key
+ever leaves your own backend.
 
 ## When to choose this
 
-- You want the chat served from your own domain/infrastructure.
-- You want zero trust in any operator for the chat path.
-- You want a tiny, auditable deployment surface (not the whole platform).
+- You want the chat to run entirely inside your own web app.
+- You want zero trust in any operator for the chat path or the LLM key.
+- You want the bot config, persona, and knowledge to live in your codebase,
+  version-controlled with the rest of your app.
 
-For most people the **managed** mode (served at `pro-bot.dev/u/<username>/chat` and via the embed widget) is simpler - nothing to deploy. See [Managed vs self-hosted](/concepts/managed-vs-self-hosted).
+For most people the **managed** mode (served at
+`pro-bot.dev/u/<username>/chat` and via the embed widget) is simpler -
+nothing to install. See [Managed vs self-hosted](/concepts/managed-vs-self-hosted).
 
 ## How it fits together
 
 ```mermaid
 flowchart LR
-    Visitor["Visitor"] --> Runtime["probot-bot runtime<br/>(your infra)"]
-    Runtime -->|"Bearer pbt_…"| Platform["ProBot platform<br/>/api/v1/bot/*"]
-    Runtime -->|"your LLM key"| LLM["LLM provider"]
-    Platform --> DB[("Knowledge / conversations / leads")]
-    DB --> Dashboard["Your ProBot dashboard"]
+    Visitor["Visitor"] --> Widget["ProbotBot component<br/>(your web app)"]
+    Widget -->|"POST"| YourApi["Your API route<br/>(your server)"]
+    YourApi -->|"your LLM key"| LLM["LLM provider"]
+    Widget -.->|"Bearer pbt_… (optional)"| Platform["ProBot platform<br/>/api/v1/bot/*"]
+    Platform --> DB[("Conversations / leads")]
+    DB --> Dashboard["Your ProBot dashboard<br/>(analytics only)"]
 ```
 
-1. A visitor chats with your runtime.
-2. The runtime asks the platform for the relevant knowledge + your bot's persona.
-3. The runtime calls **your** LLM provider and replies.
-4. The runtime posts the transcript + any lead back to the platform, so they appear in your ProBot dashboard exactly like a managed bot.
+1. A visitor chats with `<ProbotBot />` inside your web app.
+2. The component calls a `sendMessage` function you provide - typically a
+   fetch to `/api/probot-chat` on your own server, which calls the LLM
+   provider with your key.
+3. If you pass a `dashboard.token`, the component POSTs the finished
+   transcript and any captured lead to the ProBot platform's versioned API
+   so they appear in your dashboard for analytics. Config on the dashboard
+   is read-only for self-hosted bots.
 
 ## Setup
 
-Five steps from a managed bot to a self-hosted one.
+Five steps from `npm i` to a working chatbot.
 
 <Steps>
-  <Step title="Build a bot">
-    Create a bot in the ProBot dashboard as usual (resume, persona, knowledge).
-  </Step>
-  <Step title="Switch to self-hosted">
-    Open the bot's **Settings → Deployment** and select **Self-hosted**.
-  </Step>
-  <Step title="Mint a token">
-    Click **Generate token**, give it a name (e.g. "Vercel production"), and
-    **copy the `pbt_…` secret now** - it's shown only once.
-  </Step>
-  <Step title="Configure the runtime">
-    Clone [`probot-bot`](https://github.com/vishalpatil18/probot-bot), copy
-    `.env.example` to `.env.local`, and set:
-
+  <Step title="Install the package">
     ```bash
-    PROBOT_API_URL=https://pro-bot.dev
-    PROBOT_BOT_TOKEN=pbt_xxxxxxxx…   # the token from step 3
-    OPENAI_API_KEY=sk-…              # your own LLM key (runtime calls the model)
+    npm i probot-self-hosted
     ```
   </Step>
-  <Step title="Deploy">
-    `npm install && npm run build`, then deploy to Vercel or any Node 20+ host.
-    Point your domain at it and share the link.
+  <Step title="Wire a server-side chat proxy">
+    Create an API route that holds your LLM key and calls the provider:
+
+    ```ts
+    // app/api/probot-chat/route.ts (Next.js example)
+    import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+    const send = createOpenAIHandler({
+      apiKey: process.env.OPENAI_API_KEY!,
+      model: "gpt-4o-mini",
+    });
+
+    export async function POST(req: Request) {
+      const { system, messages } = await req.json();
+      const reply = await send({ system, messages });
+      return Response.json({ reply });
+    }
+    ```
+  </Step>
+  <Step title="Render the widget">
+    ```tsx
+    "use client";
+    import { ProbotBot } from "probot-self-hosted";
+
+    export function Widget() {
+      return (
+        <ProbotBot
+          name="Ada"
+          headline="Ask me about my work"
+          personality="professional"
+          themeColor="#2563eb"
+          context={`I'm Ada Lovelace, a mathematician…`}
+          suggestedQuestions={["What are you working on?"]}
+          captureLead
+          sendMessage={async ({ system, messages }) => {
+            const res = await fetch("/api/probot-chat", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ system, messages }),
+            });
+            return (await res.json()).reply;
+          }}
+        />
+      );
+    }
+    ```
+  </Step>
+  <Step title="Register the bot (optional, for analytics)">
+    Open the ProBot dashboard → **Register self-hosted bot** in the sidebar
+    bot switcher. You get a `pbt_…` token, shown once. Copy it.
+  </Step>
+  <Step title="Link the dashboard">
+    Pass the token to the widget:
+
+    ```tsx
+    <ProbotBot
+      /* ...same as above... */
+      dashboard={{ token: process.env.NEXT_PUBLIC_PROBOT_TOKEN! }}
+    />
+    ```
+
+    Every completed conversation and captured lead now shows up in your
+    dashboard's Conversations and Leads tabs.
   </Step>
 </Steps>
 
-### Verify
-
-Chat with your deployed runtime, then open your ProBot dashboard - the
-conversation (and any captured lead) appears under that bot, just like a managed
-one.
-
-### Revoking access
-
-To cut a runtime off, go back to **Settings → Deployment** and **Revoke** the
-token. The platform rejects it on the next call immediately - no redeploy
-needed.
-
 <Warning>
-  Keep `PROBOT_BOT_TOKEN` and `OPENAI_API_KEY` server-side only. Never expose
-  them to the browser. If a token leaks, revoke it and mint a new one.
+  Keep your LLM API key server-side only. `sendMessage` should always call
+  your own API route (which holds the key) - never pass the raw key into a
+  browser-rendered component. `createOpenAIHandler` is server-only.
 </Warning>
+
+## Framework examples
+
+- [Next.js (App Router)](/self-hosted-bot/nextjs)
+- [React + Vite](/self-hosted-bot/react)
+- [Vanilla HTML script tag](/self-hosted-bot/vanilla)
+- [Dashboard integration](/self-hosted-bot/dashboard-integration)
+- [Troubleshooting](/self-hosted-bot/troubleshooting)
 
 ## Security model
 
-Authentication is a **per-bot token** (`pbt_…`), minted in the dashboard and
-shown once. A leaked token grants only read-only knowledge for that one bot plus
-conversation/lead writes for it - no cross-tenant access. Revoke it from the
-dashboard and the platform rejects it instantly.
+The optional dashboard token (`pbt_…`) grants conversation + lead writes for
+one bot. A leaked token cannot mint tokens, read knowledge, or affect other
+bots or tenants. Revoke it from **Dashboard → Settings → Deployment** and
+the platform rejects it instantly. Your LLM API key is out of scope for the
+platform entirely - it never leaves your backend.
 
-Next: the [bot runtime API reference](/self-hosted-bot/api-reference) for the
-full `/api/v1/bot/*` contract.
+Next: the [dashboard API reference](/self-hosted-bot/api-reference) for the
+`/api/v1/bot/{conversations,leads}` contract used by the optional analytics
+link.
