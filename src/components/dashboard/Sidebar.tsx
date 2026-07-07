@@ -55,15 +55,24 @@ export function Sidebar({
   // Conversations / Leads) and Embed & share are dead-ends until a bot exists,
   // so we hide them and show only the Create-bot CTA + Account.
   const hasBots = bots.length > 0;
+  const selectedBot = bots.find((b) => b.id === selectedBotId) ?? null;
+  // Bot Configuration is only meaningful for managed bots; self-hosted bots
+  // configure themselves in their own web app via the npm package.
+  const showBotConfigLink =
+    selectedBotId !== null && selectedBot?.deploymentMode !== "self_hosted";
   // Settings is reachable with or without a bot: the bot-scoped settings page
   // when a bot exists, else the account-only /dashboard/settings route.
   const settingsHref = selectedBotId
     ? `/dashboard/bots/${selectedBotId}/settings`
     : "/dashboard/settings";
-  // "Manage model & key" opens the AI Model & Key settings tab directly.
-  const modelHref = selectedBotId
-    ? `/dashboard/bots/${selectedBotId}/settings?tab=model`
-    : "/dashboard/settings?tab=model";
+  // "Manage model & key" now opens the AI Model & Key tab under Bot
+  // Configuration (moved out of Settings). For self-hosted bots there is no
+  // configuration page - fall back to the account-only settings tab so the
+  // sidebar profile-row link doesn't 404.
+  const modelHref =
+    selectedBotId && selectedBot?.deploymentMode !== "self_hosted"
+      ? `/dashboard/bots/${selectedBotId}/configuration?tab=model`
+      : "/dashboard/settings";
   return (
     <aside className="flex h-full flex-col">
       {/* Fixed `h-16` matches the topbar height so the sidebar's brand
@@ -125,6 +134,11 @@ export function Sidebar({
               rightBadge={counts.leads > 0 ? formatCount(counts.leads) : null}
               badgeTone={counts.leads > 0 ? "brand" : "muted"}
             />
+            <SidebarNavLink
+              href="/dashboard/notifications"
+              icon="bell"
+              label="Notifications"
+            />
           </>
         ) : null}
 
@@ -134,12 +148,11 @@ export function Sidebar({
           icon="build"
           label={hasBots ? "Bot Factory" : "Create bot"}
         />
-        {hasBots ? (
+        {showBotConfigLink ? (
           <SidebarNavLink
-            href={EMBED_GUIDE_URL}
-            icon="code"
-            label="Embed & share"
-            external
+            href={`/dashboard/bots/${selectedBotId}/configuration`}
+            icon="tune"
+            label="Bot Configuration"
           />
         ) : null}
 
@@ -223,6 +236,25 @@ function SidebarIcon({ name }: { name: string }) {
       <>
         <circle cx="12" cy="12" r="3" />
         <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" />
+      </>
+    ),
+    bell: (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </>
+    ),
+    tune: (
+      <>
+        <line x1="4" y1="21" x2="4" y2="14" />
+        <line x1="4" y1="10" x2="4" y2="3" />
+        <line x1="12" y1="21" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12" y2="3" />
+        <line x1="20" y1="21" x2="20" y2="16" />
+        <line x1="20" y1="12" x2="20" y2="3" />
+        <line x1="1" y1="14" x2="7" y2="14" />
+        <line x1="9" y1="8" x2="15" y2="8" />
+        <line x1="17" y1="16" x2="23" y2="16" />
       </>
     ),
   };

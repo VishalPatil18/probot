@@ -11,7 +11,6 @@ const ROUTES = [
   "/why-pro-bot",
   "/hire-me",
   "/about",
-  "/self-hosting",
   "/privacy",
   "/terms",
 ];

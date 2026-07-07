@@ -27,9 +27,6 @@ const baseProps = {
   initialIsActive: true,
   initialThemeColor: "#7c5cff",
   initialCustomInstructions: "",
-  initialRateLimitPerMinute: null,
-  initialRateLimitPerDay: null,
-  initialRateLimitMaxChars: null,
   previewToken: null,
 };
 
@@ -173,21 +170,6 @@ describe("BotConfigTab", () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toEqual({ customInstructions: "Always reply in lowercase." });
-  });
-
-  it("rate-limit field sends a numeric override; blank means revert to default (null)", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, { bot: {} }));
-    render(<BotConfigTab {...baseProps} initialRateLimitPerMinute={20} />);
-    const perMinute = screen.getByLabelText(/per minute/i);
-    fireEvent.change(perMinute, { target: { value: "" } });
-    fireEvent.click(saveButtonIn(/rate limits/i));
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-    });
-    const body = JSON.parse(
-      (fetchMock.mock.calls[0]?.[1] as RequestInit).body as string,
-    ) as Record<string, unknown>;
-    expect(body).toEqual({ rateLimitPerMinute: null });
   });
 
   it("draft bot with previewToken shows the Publish banner", () => {

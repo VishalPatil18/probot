@@ -49,7 +49,7 @@ export default async function DashboardPage() {
       getAnalyticsForUser(userId),
       getDailyConversationCounts({ userId, days: 7 }),
       listRecentLeadsForUser({ userId, limit: 5 }),
-      listRecentConversationsForUser({ userId, limit: 3 }),
+      listRecentConversationsForUser({ userId, limit: 5 }),
     ]);
 
   // Greeting empty state - user has zero bots; collapse the dashboard

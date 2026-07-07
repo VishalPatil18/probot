@@ -31,7 +31,7 @@ export function RecentConversationsList({ conversations, totalCount }: Props) {
       <div className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <h3 className="mb-4 font-bold">Recent conversations</h3>
         <p className="rounded-xl border-2 border-dashed border-border-base p-6 text-center text-sm text-muted">
-          No conversations yet - share your bot URL to get started.
+          No recent conversations yet. Start a new conversation to see it here.
         </p>
       </div>
     );
@@ -77,12 +77,14 @@ export function RecentConversationsList({ conversations, totalCount }: Props) {
           </Link>
         ))}
       </div>
-      {totalCount > conversations.length && conversations[0] ? (
+      {conversations[0] ? (
         <Link
           href={`/dashboard/bots/${conversations[0].botId}/conversations`}
           className="mt-4 block rounded-lg py-2 text-center text-sm font-semibold text-brand transition-colors hover:bg-blue-50"
         >
-          View all {totalCount} conversations
+          {totalCount > conversations.length
+            ? `View all ${totalCount} conversations`
+            : "View all conversations"}
         </Link>
       ) : null}
     </div>

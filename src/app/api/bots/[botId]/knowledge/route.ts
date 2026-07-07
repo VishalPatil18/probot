@@ -5,6 +5,7 @@ import { EmbeddingError } from "@/lib/ai/embeddings";
 import { KeyTransportError, readEmbeddingApiKey } from "@/lib/ai/key-transport";
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { db, knowledgeBase } from "@/lib/db";
+import { emitNotification } from "@/lib/notifications/emit";
 import {
   assembleAndSaveBotContext,
   deleteSource,
@@ -243,6 +244,27 @@ export async function POST(
 
   const result = await assembleAndSaveBotContext(bot.id);
   const sources = await summarizeSources(bot.id);
+
+  // One notification per upload batch (not per file) so a 5-PDF upload
+  // doesn't produce 5 identical inbox rows. Skipped when the batch
+  // touched nothing that persisted (all files failed pre-parse).
+  const successfulFiles = fileResults.filter((f) => f.ok).length;
+  if (processedSources.length > 0) {
+    void emitNotification({
+      userId: bot.userId,
+      botId: bot.id,
+      kind: "knowledge_updated",
+      payload: {
+        botId: bot.id,
+        botName: bot.name,
+        sourcesTouched: processedSources.length,
+        filesAdded: successfulFiles,
+        includesManualText: processedSources.includes(MANUAL_TEXT_SOURCE),
+        totalTokens: result.totalTokens,
+        truncated: result.truncated,
+      },
+    });
+  }
 
   return NextResponse.json({
     sources,

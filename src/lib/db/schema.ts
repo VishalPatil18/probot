@@ -555,10 +555,14 @@ export const leads = pgTable(
 // notifications
 // In-app notifications surfaced by the dashboard bell. No email transport in
 // the current flow - that lands once Resend is wired for auth emails.
-// `kind` is extensible; only 'lead_captured' is emitted currently. CHECK
-// constraint mirrors the messages.role pattern so a typo cannot silently
-// corrupt the unread badge query. Partial index on `read_at IS NULL` keeps
-// the unread-count query O(unread) instead of O(total notifications).
+// `kind` is extensible; today the emitters cover 'lead_captured' (any new
+// recruiter lead), 'conversation_started' (a fresh chat session lands on a
+// bot, from either the managed public URL or a self-hosted webapp), and
+// 'knowledge_updated' (an owner uploaded/re-ingested knowledge base
+// content). The CHECK constraint mirrors the messages.role pattern so a
+// typo cannot silently corrupt the unread badge query. Partial index on
+// `read_at IS NULL` keeps the unread-count query O(unread) instead of
+// O(total notifications).
 export const notifications = pgTable(
   "notifications",
   {
@@ -580,7 +584,7 @@ export const notifications = pgTable(
       .where(sql`${table.readAt} IS NULL`),
     kindCheck: check(
       "notifications_kind_check",
-      sql`${table.kind} IN ('lead_captured')`,
+      sql`${table.kind} IN ('lead_captured','conversation_started','knowledge_updated')`,
     ),
   }),
 ).enableRLS();

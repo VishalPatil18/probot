@@ -280,8 +280,8 @@ export default function AboutPage() {
               </h3>
               <p className="text-sm text-muted leading-relaxed mb-4">
                 Install the <code>probot-self-hosted</code> npm package in your
-                web app and render <code>&lt;ProbotBot /&gt;</code>. Your LLM key
-                lives in your own backend and never touches pro-bot.dev.
+                web app and render <code>&lt;ProbotBot /&gt;</code>. Your LLM
+                key lives in your own backend and never touches pro-bot.dev.
                 Optionally link the widget to your ProBot dashboard for
                 conversation and lead analytics. The right pick if you
                 can&apos;t trust any operator (including us) with the key, ever.
@@ -311,22 +311,17 @@ export default function AboutPage() {
                   </span>
                 </li>
               </ul>
-              <Link
-                href="/self-hosting"
+              <a
+                href="https://pro-bot.dev/docs/self-hosted-bot"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline"
               >
                 Self-hosting guide
                 <Icon name="arrow_forward" className="!text-base" />
-              </Link>
+              </a>
             </div>
           </div>
-          <p className="text-xs text-muted mt-6 max-w-2xl">
-            Honest caveat: managed mode protects against database leaks and code
-            leaks, but NOT against full infrastructure compromise of pro-bot.dev
-            (anyone with deploy access can read the KEK). If that&apos;s the
-            threat you&apos;re defending against, self-hosting your bot is the
-            right answer - that&apos;s exactly why the option exists.
-          </p>
         </div>
       </section>
 

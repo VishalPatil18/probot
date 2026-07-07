@@ -51,6 +51,16 @@ export async function POST(request: Request): Promise<Response> {
     });
 
     if (existing) {
+      // Re-saving a still-draft bot needs to hydrate Step 5 with a
+      // preview token so the Publish button renders. If the row lost
+      // its previewToken (nulled at publish time) or never had one,
+      // mint a fresh one here — only for draft bots; published rows
+      // deliberately keep `previewToken=null`.
+      const nextPreviewToken =
+        existing.isActive
+          ? existing.previewToken
+          : (existing.previewToken ?? mintPreviewToken(existing.id, userId));
+
       const [updated] = await tx
         .update(bots)
         .set({
@@ -59,6 +69,7 @@ export async function POST(request: Request): Promise<Response> {
           personality: input.personality,
           contextText: input.contextText,
           suggestedQuestions: input.suggestedQuestions,
+          previewToken: nextPreviewToken,
           ...(input.contextTokenCap !== undefined
             ? { contextTokenCap: input.contextTokenCap }
             : {}),

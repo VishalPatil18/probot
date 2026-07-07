@@ -9,6 +9,14 @@ type NotificationPayload = {
   botId?: string;
   botName?: string;
   contextSummary?: string | null;
+  sessionId?: string;
+  conversationId?: string;
+  origin?: "self_hosted" | "managed";
+  sourcesTouched?: number;
+  filesAdded?: number;
+  includesManualText?: boolean;
+  totalTokens?: number;
+  truncated?: boolean;
 };
 
 type NotificationItem = {
@@ -32,6 +40,42 @@ type Props = {
   onAllRead: () => void;
   onItemRead: (id: string) => void;
 };
+
+// Kind-aware headline + body. Kept in sync with the same function on the
+// full inbox page (`NotificationsInbox.tsx`); the dropdown intentionally
+// re-implements it locally so the two surfaces can evolve independently
+// (compact wording here, wordier there).
+function describe(n: NotificationItem): { title: string; body: string } {
+  const bot = n.payload.botName ?? "your bot";
+  if (n.kind === "lead_captured") {
+    return {
+      title: n.payload.email ?? "New lead",
+      body: n.payload.contextSummary ?? "",
+    };
+  }
+  if (n.kind === "conversation_started") {
+    return {
+      title: `New conversation on ${bot}`,
+      body:
+        n.payload.origin === "self_hosted"
+          ? "A visitor started chatting from a self-hosted embed."
+          : "A visitor started chatting from the public chat.",
+    };
+  }
+  if (n.kind === "knowledge_updated") {
+    const files = n.payload.filesAdded ?? 0;
+    return {
+      title: `Knowledge updated on ${bot}`,
+      body:
+        files > 0
+          ? `${files} file${files === 1 ? "" : "s"} ingested.`
+          : n.payload.includesManualText
+            ? "Pasted text ingested."
+            : "Knowledge base changed.",
+    };
+  }
+  return { title: n.kind, body: "" };
+}
 
 function relTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -107,9 +151,12 @@ export function NotificationDropdown({
       onItemRead(item.id);
     }
     const botId = item.botId ?? item.payload.botId;
-    const leadId = item.payload.leadId;
-    if (item.kind === "lead_captured" && botId && leadId) {
+    if (item.kind === "lead_captured" && botId) {
       router.push(`/dashboard/bots/${botId}/leads`);
+    } else if (item.kind === "conversation_started" && botId) {
+      router.push(`/dashboard/bots/${botId}/conversations`);
+    } else if (item.kind === "knowledge_updated" && botId) {
+      router.push(`/dashboard/bots/${botId}/configuration?tab=kb`);
     }
     onClose();
   }
@@ -168,44 +215,44 @@ export function NotificationDropdown({
           </p>
         ) : (
           <ul className="divide-y divide-border-base">
-            {items?.map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => handleItemClick(item)}
-                  className={`w-full px-4 py-3 text-left transition hover:bg-gray-50 ${
-                    item.readAt ? "" : "bg-brand/5"
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {!item.readAt ? (
-                      <span
-                        aria-label="unread"
-                        className="mt-1.5 inline-block size-2 shrink-0 rounded-full bg-brand"
-                      />
-                    ) : (
-                      <span className="mt-1.5 inline-block size-2 shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-text-base">
-                        {item.payload.email ?? "New lead"}
-                      </p>
-                      {item.payload.contextSummary ? (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-muted">
-                          {item.payload.contextSummary}
+            {items?.map((item) => {
+              const { title, body } = describe(item);
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleItemClick(item)}
+                    className={`w-full px-4 py-3 text-left transition hover:bg-gray-50 ${
+                      item.readAt ? "" : "bg-brand/5"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {!item.readAt ? (
+                        <span
+                          aria-label="unread"
+                          className="mt-1.5 inline-block size-2 shrink-0 rounded-full bg-brand"
+                        />
+                      ) : (
+                        <span className="mt-1.5 inline-block size-2 shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-text-base">
+                          {title}
                         </p>
-                      ) : null}
-                      <p className="mt-1 text-xs text-muted">
-                        {item.payload.botName
-                          ? `${item.payload.botName} · `
-                          : ""}
-                        {relTime(item.createdAt)}
-                      </p>
+                        {body ? (
+                          <p className="mt-0.5 line-clamp-2 text-xs text-muted">
+                            {body}
+                          </p>
+                        ) : null}
+                        <p className="mt-1 text-xs text-muted">
+                          {relTime(item.createdAt)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              </li>
-            ))}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

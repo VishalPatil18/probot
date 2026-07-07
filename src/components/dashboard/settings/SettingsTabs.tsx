@@ -8,7 +8,9 @@ export type SettingsTabKey =
   | "bot"
   | "kb"
   | "security"
-  | "model";
+  | "model"
+  | "advanced"
+  | "notifications";
 
 type Tab = {
   key: SettingsTabKey;
@@ -19,7 +21,9 @@ const TABS: Tab[] = [
   { key: "bot", label: "Bot configuration" },
   { key: "kb", label: "Knowledge base" },
   { key: "model", label: "AI model & API key" },
+  { key: "advanced", label: "Advanced" },
   { key: "account", label: "Account" },
+  { key: "notifications", label: "Notifications" },
   { key: "security", label: "Security & privacy" },
 ];
 

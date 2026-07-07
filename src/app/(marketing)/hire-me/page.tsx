@@ -106,32 +106,32 @@ export default function HireMePage() {
           </p>
         </div>
 
-        <div className="mt-8 max-w-3xl flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-3 pt-2">
           <a
             href={PORTFOLIO_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-secondary !px-6 !py-3 !text-base"
+            className="btn btn-secondary"
           >
-            <Icon name="portfolio" className="text-red-600" />
+            <Icon name="portfolio" className="!text-base text-brand" />
             Portfolio
           </a>
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-secondary !px-6 !py-3 !text-base"
+            className="btn btn-secondary"
           >
-            <Icon name="github" className="text-gray-900" />
+            <Icon name="github" className="!text-base text-brand" />
             GitHub
           </a>
           <a
             href={LINKEDIN_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-secondary !px-6 !py-3 !text-base"
+            className="btn btn-secondary"
           >
-            <Icon name="linkedin" className="text-brand" />
+            <Icon name="linkedin" className="!text-base text-brand" />
             LinkedIn
           </a>
           <a

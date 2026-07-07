@@ -123,6 +123,8 @@ export async function POST(
     sessionId: parsed.sessionId,
     userMessage: sanitized.message,
     reply,
+    ownerUserId: botRow.userId,
+    botName: botRow.name,
   });
 
   // 13. Done

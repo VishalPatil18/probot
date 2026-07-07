@@ -32,6 +32,7 @@ import {
   messages,
   users,
 } from "@/lib/db";
+import { emitNotification } from "@/lib/notifications/emit";
 import { alertCircuitOpen } from "@/lib/server/alert";
 import { retrieveRelevant } from "@/lib/rag/retrieve";
 
@@ -586,9 +587,12 @@ export async function persistConversation(args: {
   sessionId: string;
   userMessage: string;
   reply: string;
+  ownerUserId?: string;
+  botName?: string;
 }): Promise<string | undefined> {
-  const { botId, sessionId, userMessage, reply } = args;
+  const { botId, sessionId, userMessage, reply, ownerUserId, botName } = args;
   let conversationId: string | undefined;
+  let wasNewConversation = false;
   try {
     await db.transaction(async (tx) => {
       const [convo] = await tx
@@ -601,9 +605,17 @@ export async function persistConversation(args: {
             lastMessageAt: new Date(),
           },
         })
-        .returning({ id: conversations.id });
+        .returning({
+          id: conversations.id,
+          // Postgres exposes xmax=0 on a freshly INSERTed row and non-zero
+          // when the ON CONFLICT branch ran an UPDATE. This lets us fire
+          // a "new conversation" notification only for the first turn,
+          // rather than on every subsequent message.
+          isInsert: sql<boolean>`xmax = 0`,
+        });
       if (!convo) return;
       conversationId = convo.id;
+      wasNewConversation = convo.isInsert === true;
       await tx.insert(messages).values([
         {
           conversationId: convo.id,
@@ -613,6 +625,15 @@ export async function persistConversation(args: {
         { conversationId: convo.id, role: "assistant", content: reply },
       ]);
     });
+    if (wasNewConversation && ownerUserId) {
+      // Fire-and-forget - never block the chat reply on notification insert.
+      void emitNotification({
+        userId: ownerUserId,
+        botId,
+        kind: "conversation_started",
+        payload: { botId, botName, sessionId, conversationId },
+      });
+    }
   } catch (err) {
     // Swallow - analytics persistence never blocks chat. Log so operators
     // can still spot pool exhaustion / missing migrations / etc. before
