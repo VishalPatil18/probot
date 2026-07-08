@@ -11,7 +11,7 @@ export const metadata = buildMetadata({
 const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
-const EMAIL = "vishalpatil.imp@gmail.com";
+const EMAIL = "hire.vishalpatil@gmail.com";
 const CNBC_ARTICLE_URL =
   "https://www.cnbc.com/2026/04/30/these-2-job-seekers-built-ai-chatbots-to-talk-to-recruiters-for-them.html";
 

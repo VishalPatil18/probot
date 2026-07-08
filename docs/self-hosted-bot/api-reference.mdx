@@ -1,63 +1,268 @@
 ---
 title: Dashboard analytics API (v1)
-description: "The /api/v1/bot/{conversations,leads} endpoints the probot-self-hosted npm package calls when you link your dashboard for analytics."
+description: "Complete HTTP contract for /api/v1/bot/conversations and /api/v1/bot/leads - authentication, request bodies, response shapes, status codes, error codes, rate limits, and curl examples for testing."
 ---
 
-The `probot-self-hosted` widget only talks to the platform when you supply
-a `dashboard.token` - and even then, only to record analytics. Two
-endpoints; both authenticated with the bot token minted in the dashboard:
+The `probot-self-hosted` widget only talks to the ProBot platform when
+you supply a `dashboard.token`. And even then, only two write-only
+endpoints under `/api/v1/bot/*`.
+
+Both are authenticated with the `pbt_…` bot token minted in your
+dashboard:
 
 ```
-Authorization: Bearer pbt_<64 hex>
+Authorization: Bearer pbt_<64 hex characters>
 ```
 
-A missing or malformed header returns `401 missing_bot_token`; an unknown or
-revoked token returns `401 invalid_bot_token`. The token resolves to exactly
-one bot, so no `botId` is ever passed in the request.
+- A missing or malformed header → **`401 missing_bot_token`**.
+- An unknown, revoked, or expired token → **`401 invalid_bot_token`**.
+- The token resolves to exactly one bot, so **no `botId` is ever passed**
+  in a request body or path parameter.
 
 <Info>
-  This contract is pinned to **v1**. Breaking changes will ship as `/api/v2`
-  with a deprecation window, so a deployed webapp can rely on a stable shape.
+  This contract is pinned to **v1**. Breaking changes will ship as
+  `/api/v2` with a documented deprecation window, so a deployed widget or
+  server-side client can rely on a stable shape.
 </Info>
 
-## POST /api/v1/bot/conversations
+## Base URL
 
-Persist a chat turn's transcript so it appears in the owner's dashboard.
-UPSERTs on `(bot, sessionId)`, so resending the same session coalesces.
+Production:
+
+```
+https://pro-bot.dev
+```
+
+Point elsewhere by setting `dashboard.apiUrl` on `<ProbotBot />`, or by
+overriding your custom SDK's base URL. Useful for staging mirrors or when
+running the platform locally for tests.
+
+## Endpoints
+
+### POST `/api/v1/bot/conversations`
+
+Persists one chat session's transcript so it appears in the owner's
+dashboard. UPSERTs on `(bot, sessionId)`, so **the same `sessionId` sent
+twice coalesces into one conversation row** and the message count
+increments.
+
+**Request:**
 
 ```json
-// request
 {
-  "sessionId": "uuid",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
   "messages": [
-    { "role": "user", "content": "…" },
-    { "role": "assistant", "content": "…" }
+    { "role": "user", "content": "What's your favourite project?" },
+    { "role": "assistant", "content": "The Analytical Engine, hands down." }
   ]
 }
-
-// response
-{ "conversationId": "uuid" }
 ```
 
-## POST /api/v1/bot/leads
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `sessionId` | `string` (UUID v4) | ✔ | Must be a valid UUID. The widget generates one per mount via `crypto.randomUUID()`. Reuse the same one across turns in a session to coalesce. |
+| `messages` | `Array<{role,content}>` | ✔ | 1–20 turns. `role` ∈ `"user" \| "assistant"`. `content` 1–8000 chars each. |
 
-Capture a recruiter lead. Idempotent on `(bot, conversationId, email)`.
+**Success response** (`201 Created`):
 
 ```json
-// request
-{ "email": "recruiter@acme.com", "conversationId": "uuid (optional)", "contextSummary": "… (optional)" }
-
-// response
-{ "lead": { "id": "…", "email": "…", "capturedAt": "…" }, "deduped": false }
+{ "conversationId": "e14b1e0a-…-…-…-…" }
 ```
 
-A duplicate returns `200` with `"deduped": true`; a fresh capture returns
-`201`.
+**Failure responses:**
+
+| Status | Body | When |
+| --- | --- | --- |
+| `400` | `{ "error": "invalid_json" }` | Body was not valid JSON. |
+| `400` | `{ "error": "validation_failed", "details": {…} }` | Schema mismatch. `details` is Zod's `flatten()` output. |
+| `401` | `{ "error": "missing_bot_token" }` | No `Authorization` header. |
+| `401` | `{ "error": "invalid_bot_token" }` | Token unknown or revoked. |
+| `500` | `{ "error": "persistence_failed" }` | Server-side insert failed. Widget swallows and retries on the next turn (via idempotent upsert). |
+
+**curl:**
+
+```bash
+curl -s https://pro-bot.dev/api/v1/bot/conversations \
+  -H "Authorization: Bearer pbt_your_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "'$(uuidgen)'",
+    "messages": [
+      { "role": "user", "content": "hi" },
+      { "role": "assistant", "content": "hello" }
+    ]
+  }' | jq
+```
+
+**Side effects:**
+
+- Emits a `conversation_started` notification (once, on first insert)
+  visible in the owner's dashboard bell.
+- Bumps the bot's aggregate `total_conversations` and
+  `total_messages` counters (surfaced on the dashboard overview).
+
+### POST `/api/v1/bot/leads`
+
+Captures a recruiter lead. Idempotent on `(bot, conversationId, email)` -
+a duplicate submission returns 200 with `deduped: true` instead of
+creating a second row.
+
+**Request:**
+
+```json
+{
+  "email": "recruiter@acme.com",
+  "conversationId": "e14b1e0a-…-…-…-…",
+  "contextSummary": "Asked about ML infra experience."
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `email` | `string` | ✔ | Must parse as an email. Max 320 chars (RFC 5321). |
+| `conversationId` | `string` (UUID v4) | | If set, the lead is tied to the conversation for the dashboard's context view. Usually the value returned by the preceding `/conversations` call. |
+| `contextSummary` | `string` | | Free-form 500-char note shown alongside the lead in the dashboard. Optional. |
+
+**Fresh capture response** (`201 Created`):
+
+```json
+{
+  "lead": {
+    "id": "c5f3a8e4-…-…-…-…",
+    "email": "recruiter@acme.com",
+    "capturedAt": "2026-07-08T14:22:31.417Z"
+  },
+  "deduped": false
+}
+```
+
+**Duplicate capture response** (`200 OK`):
+
+```json
+{
+  "lead": {
+    "id": "c5f3a8e4-…-…-…-…",
+    "email": "recruiter@acme.com",
+    "capturedAt": "2026-07-08T14:22:31.417Z"
+  },
+  "deduped": true
+}
+```
+
+The `lead.id` in the deduped response is the ORIGINAL row's id, not a
+newly-minted one. That lets a client optimistically build "leads I've
+touched" state without knowing whether the platform had the row before.
+
+**Failure responses:**
+
+| Status | Body | When |
+| --- | --- | --- |
+| `400` | `{ "error": "invalid_json" }` | Body was not valid JSON. |
+| `400` | `{ "error": "validation_failed", "details": {…} }` | Schema mismatch. |
+| `401` | `{ "error": "missing_bot_token" }` | No auth header. |
+| `401` | `{ "error": "invalid_bot_token" }` | Token unknown or revoked. |
+
+**curl:**
+
+```bash
+curl -s https://pro-bot.dev/api/v1/bot/leads \
+  -H "Authorization: Bearer pbt_your_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "recruiter@acme.com",
+    "conversationId": "e14b1e0a-…-…-…-…"
+  }' | jq
+```
+
+**Side effects:**
+
+- Emits a `lead_captured` notification.
+- If the bot owner has `notify_leads_email` enabled, best-effort sends an
+  email to their account address.
+
+## Rate limits
+
+Both endpoints are rate-limited per bot via the same underlying rate
+limiter used for the managed `/api/chat/[botId]` path:
+
+- Default 10 requests / minute per bot.
+- Default 50 requests / day per bot.
+- Overrideable per-bot via the dashboard's Bot Configuration → Advanced
+  → Rate limits.
+- On rejection: `429 rate_limited` with a `Retry-After` header.
+
+The widget's fire-and-forget calls swallow 429s silently - your local
+chat continues to work. If you're POSTing from your own server-side
+integration and hitting 429s, either bump the per-bot limit in the
+dashboard or batch calls yourself.
 
 ## What's not exposed
 
-Self-hosted bots configure themselves in your codebase, so there is no
-platform-side `config` or `knowledge` endpoint - unlike the earlier runtime
-model, the platform never serves persona or retrieval to a self-hosted bot.
+Deliberately absent from this contract:
+
+- **`GET /config`** - self-hosted bots configure themselves in your
+  codebase, so there is no platform-side `config` endpoint. The widget
+  never reads config from us.
+- **`POST /knowledge`** - knowledge lives in your `<ProbotBot />` props.
+  No retrieval-as-a-service call.
+- **`PUT` / `PATCH` / `DELETE` on conversations or leads** - the
+  contract is write-only. Data mutations happen through the owner's
+  dashboard, not the token surface.
+
 This keeps the surface auditable: two endpoints, both write-only, both
 scoped to a single bot.
+
+## Debugging tips
+
+**Confirm your token works** before wiring the widget:
+
+```bash
+# Should return 400 validation_failed (empty body), not 401.
+curl -s -o /dev/null -w "%{http_code}\n" https://pro-bot.dev/api/v1/bot/conversations \
+  -H "Authorization: Bearer pbt_your_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+# Expected: 400
+```
+
+If you get `401`, the token is wrong or revoked. Double-check the
+dashboard's Token list.
+
+**Watch analytics land in real-time**: register a bot, mint a token, then
+in one terminal send a conversation POST, and in another watch the
+dashboard - the row shows up within a couple of seconds.
+
+## Client SDK
+
+If you'd rather not hand-roll the fetch calls, `probot-self-hosted`
+ships helpers:
+
+```ts
+import {
+  reportConversation,
+  reportLead,
+} from "probot-self-hosted";
+
+const link = { token: "pbt_…" };
+
+const conversationId = await reportConversation(
+  link,
+  "550e8400-e29b-41d4-a716-446655440000",
+  [
+    { role: "user", content: "hi" },
+    { role: "assistant", content: "hello" },
+  ],
+);
+// conversationId: "e14b1e0a-…" | null on failure
+
+const ok = await reportLead(
+  link,
+  "recruiter@acme.com",
+  conversationId ?? undefined,
+);
+// ok: true | false
+```
+
+Both helpers swallow failures and return `null` / `false` - matching the
+widget's "analytics never breaks chat" contract. Wrap with your own
+try/catch if you want to surface failures to the caller.

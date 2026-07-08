@@ -1,71 +1,248 @@
 ---
-title: Dashboard analytics link
-description: "Register a self-hosted bot in the ProBot dashboard to see its conversations and captured leads. Config on the dashboard is read-only for self-hosted bots."
+title: Dashboard integration
+description: "Register a self-hosted bot in the ProBot dashboard, mint tokens, wire them into the widget, understand what shows up in analytics, and rotate or revoke tokens over time."
 ---
 
-Linking your self-hosted webapp to the ProBot dashboard is optional. When
-enabled, every finished conversation and captured lead is POSTed to the
-platform's `/api/v1/bot/{conversations,leads}` endpoints so it appears in
-your dashboard's analytics.
+Linking your self-hosted web app to the ProBot dashboard is **optional**.
+When you enable it, every finished conversation and captured lead is POSTed
+to the platform's `/api/v1/bot/{conversations,leads}` endpoints so it
+appears in your dashboard's analytics tabs. Bot **configuration** on the
+dashboard remains read-only for self-hosted bots - the source of truth
+stays in your code.
 
-## Register the bot
+## When to use it
 
-1. In the sidebar bot switcher, open the dropdown and click **Register
-   self-hosted bot**.
-2. Enter a name (and optional headline). We create a lightweight dashboard
-   entry and mint your first token.
-3. **Copy the `pbt_…` token now** - it's shown once.
+Enable dashboard analytics when you want:
 
-The dashboard entry has no Bot Configuration, Knowledge, or AI Model tabs
-- those tabs would be misleading for a self-hosted bot, whose real config
-lives in your web app. You only see Deployment (tokens), Account, and
-Security & Privacy.
+- **A single view of conversation volume** across staging, production,
+  preview deploys, or multiple sites embedding the same bot.
+- **Lead capture** with dedupe on `(bot, email)` so a recruiter who fills
+  out the form twice doesn't clutter your inbox.
+- **Historical transcripts** you can review later without persisting them
+  yourself.
+- **Email + push notifications** on new leads (managed by the same
+  dashboard prefs you use for managed bots).
 
-## Wire the token
+Skip it if:
 
-Pass it as `dashboard.token`:
+- Your bot is on a private staging environment where you don't want
+  transcripts leaving your infrastructure at all.
+- You already have your own analytics pipeline and don't want a second
+  copy.
 
-```tsx
-<ProbotBot
-  /* ...other config... */
-  dashboard={{ token: process.env.NEXT_PUBLIC_PROBOT_TOKEN! }}
-/>
-```
+## Register a self-hosted bot
 
-You can also override the platform URL for staging or self-managed
-mirrors:
+<Steps>
+  <Step title="Open the dashboard">
+    Sign in at [pro-bot.dev/dashboard](https://pro-bot.dev/dashboard).
+  </Step>
+  <Step title="Open the bot switcher">
+    Click the bot switcher at the top-left of the sidebar (shows your
+    currently selected bot's name). A dropdown appears with your existing
+    bots and two footer options: **Create New Bot** (Coming soon;
+    multi-bot managed creation) and **Register self-hosted bot**.
+  </Step>
+  <Step title="Fill in the register form">
+    Click **Register self-hosted bot**. On the register page:
 
-```tsx
-dashboard={{
-  token: "pbt_…",
-  apiUrl: "https://probot-staging.example.com",
-}}
-```
+    - **Bot name** (required). This is what shows up in the dashboard's
+      analytics tabs and in the header of your notification emails. It
+      does NOT have to match the `name` prop you pass to `<ProbotBot />`
+      - the widget's name is what visitors see; this name is for you.
+    - **Headline** (optional). Free-form label for your own bookkeeping.
+    - **Token label** (optional, default `"Default"`). A short label
+      shown next to the token in the dashboard so you can tell tokens
+      apart later. Something like `"Production"` or `"Vercel preview"`.
+
+    Click **Register bot**.
+  </Step>
+  <Step title="Copy the token">
+    The next screen shows a `pbt_…` string in a dark code block. **This is
+    the ONLY time the raw token is shown.** Copy it now; the dashboard
+    only stores its SHA-256 hash, so if you lose it, revoke and mint a new
+    one.
+
+    Two convenience buttons:
+
+    - **Copy token** copies to your clipboard.
+    - **Open dashboard** returns to the main dashboard where the new bot
+      is now selectable in the sidebar switcher.
+  </Step>
+  <Step title="Wire the token into your widget">
+    Add it to your web app's env vars:
+
+    ```bash
+    # Next.js (.env.local)
+    NEXT_PUBLIC_PROBOT_TOKEN=pbt_xxxxxxxx…
+
+    # Vite (.env.local)
+    VITE_PROBOT_TOKEN=pbt_xxxxxxxx…
+    ```
+
+    Then reference it in your `<ProbotBot />` render:
+
+    ```tsx
+    <ProbotBot
+      /* ...other config... */
+      dashboard={{ token: process.env.NEXT_PUBLIC_PROBOT_TOKEN! }}
+    />
+    ```
+
+    You can also point the widget at a staging or self-managed mirror of
+    the platform by overriding the API URL:
+
+    ```tsx
+    dashboard={{
+      token: "pbt_…",
+      apiUrl: "https://probot-staging.example.com",
+    }}
+    ```
+  </Step>
+</Steps>
+
+Deploy your web app. The next visitor who has a full conversation will
+land in your dashboard's Conversations tab within a few seconds.
 
 ## What appears in the dashboard
 
-- **Conversations**: full transcripts grouped by session, exportable as
-  CSV or JSON.
-- **Leads**: emails captured through the widget's optional lead form (or
-  any `onLead` you handle yourself), deduped on `(bot, email)`.
-- **Analytics tiles**: totals, growth %, model / provider distribution.
+The dashboard shows analytics-only rows for self-hosted bots. Concretely:
 
-## What is NOT on the dashboard
+- **Overview page** - conversation totals, weekly deltas, message
+  counts, lead counts, all rolled up per bot. Same metric tiles as
+  managed bots.
+- **Conversations tab** - full transcripts grouped by `sessionId`.
+  Clicking a row opens the read-only conversation viewer with all user +
+  assistant messages, timestamps, and the aggregated message count.
+- **Leads tab** - every recruiter lead the widget captured, deduped on
+  `(bot, email)` inside a 24-hour window. Exportable as CSV or JSON via
+  the standard export controls.
+- **Notifications inbox** - `lead_captured` and `conversation_started`
+  events appear in the same bell + `/dashboard/notifications` inbox as
+  managed bots. Email notifications on new leads honour the same
+  `notify_leads_email` account preference.
 
-- No persona editor, knowledge base, model picker, or theme picker for
-  self-hosted bots. Those live in your code.
-- No public `/u/<username>/chat` URL - the widget lives inside your
-  webapp.
-- No embed widget snippet - you already have the component.
+## What is intentionally NOT on the dashboard
 
-## Rotating and revoking tokens
+Self-hosted bots hide these tabs because the state they'd edit isn't
+plumbed through to your widget:
 
-Open **Settings → Deployment** on a self-hosted bot to mint additional
-tokens (per environment - staging vs production) and revoke any of them.
-Revoked tokens fail authentication on the next call, no redeploy needed.
+- **Bot Configuration** - persona, headline, theme, suggested questions,
+  custom instructions. These live in your `<ProbotBot />` props.
+- **Knowledge base** - the `context` / `contextChunks` props are your
+  knowledge base. Editing anything here would have no effect on the
+  widget.
+- **AI Model & API Key** - the LLM key lives in your backend; the
+  platform never sees it. There's nothing to edit here.
 
-## Multiple tokens
+Trying to visit a legacy `?tab=bot`, `?tab=kb`, or `?tab=model` URL
+redirects to the Bot Configuration page for a managed bot, or 404s for a
+self-hosted one.
 
-Mint one token per deployment environment - staging, production, preview -
-so you can revoke one without disturbing the others. `last_seen_at` in the
-dashboard tells you which token is actually in use.
+Interactive tabs for a self-hosted bot: **Account**, **Notifications**,
+**Security & Privacy**.
+
+## Payload sent to the dashboard
+
+Every finished conversation triggers one call:
+
+```
+POST https://pro-bot.dev/api/v1/bot/conversations
+Authorization: Bearer pbt_…
+Content-Type: application/json
+
+{
+  "sessionId": "auto-generated UUID (per widget mount)",
+  "messages": [
+    { "role": "user", "content": "…" },
+    { "role": "assistant", "content": "…" }
+  ]
+}
+```
+
+The endpoint UPSERTs on `(bot, sessionId)`, so resending the same session
+coalesces into one conversation row. Message counts and `last_message_at`
+increment on the upsert path.
+
+If the visitor submits their email via the lead form:
+
+```
+POST https://pro-bot.dev/api/v1/bot/leads
+Authorization: Bearer pbt_…
+Content-Type: application/json
+
+{
+  "email": "recruiter@acme.com",
+  "conversationId": "the just-created conversation UUID",
+  "contextSummary": null
+}
+```
+
+Both calls are **fire-and-forget** from the widget. A platform outage
+never breaks the local chat - visitors still get replies from your
+backend; only the analytics writes fail.
+
+See the full contract in [API reference](/self-hosted-bot/api-reference).
+
+## Managing tokens over time
+
+### Rotation
+
+There's no dedicated rotate endpoint; the safe rotation pattern is:
+
+1. Register a new self-hosted bot **or** treat the existing bot as-is and
+   mint a new token (multi-token support is coming; for now the register
+   flow mints one initial token per bot).
+2. Update the token env var in your web app.
+3. Redeploy.
+4. Once the new token is verified (check `Last seen` on the token row is
+   advancing), revoke the old token.
+
+### Revocation
+
+Revoking a token in the dashboard causes the platform to reject it on the
+next call - immediately, no redeploy needed. The widget will silently
+stop landing analytics rows; the local chat keeps working.
+
+Revoke a token when:
+
+- The env var containing it leaked (accidentally committed to a public
+  repo, exposed on a CI log, etc.).
+- You're decommissioning a deployment (a staging environment you're
+  retiring, a preview branch you're deleting).
+- The token was issued to a contractor or agency whose access ends.
+
+<Info>
+  Revocation is a soft-delete: the token row is kept for audit purposes,
+  its `revokedAt` timestamp gets set, and the auth path returns
+  `invalid_bot_token` on any request presenting it.
+</Info>
+
+### Multi-environment strategy
+
+For staging vs production, the recommended pattern is:
+
+- **Same bot, one token per environment.** Set
+  `NEXT_PUBLIC_PROBOT_TOKEN` differently in staging vs production. Both
+  environments feed the same bot's analytics rows.
+- **Separate bots per environment.** Register two self-hosted bots
+  (`"Ada (prod)"` and `"Ada (staging)"`) so the analytics for the two
+  don't mix. This is heavier but cleaner if staging traffic is noisy or
+  synthetic.
+
+## Account deletion of self-hosted bots
+
+Deleting a self-hosted bot from the dashboard (Bot Advanced → Danger zone)
+does two things:
+
+1. Revokes all its tokens.
+2. Removes all conversation, message, lead, and notification rows for that
+   bot.
+
+Your web app keeps working (the widget's chat path doesn't depend on the
+dashboard); it just stops landing new analytics rows until you register a
+new bot and update the token.
+
+Deleting your entire ProBot account revokes all tokens across all
+self-hosted bots and hard-deletes everything after the 7-day grace period.
+Your web app's chat continues to work the whole time - the LLM key never
+depended on us.

@@ -6,7 +6,7 @@
 export const OPERATOR_NAME = "Vishal Patil";
 export const OPERATOR_DESCRIPTION =
   "an individual, non-commercial maintainer of an open-source project";
-export const CONTACT_EMAIL = "vishalpatil.imp@gmail.com";
+export const CONTACT_EMAIL = "hire.vishalpatil@gmail.com";
 export const JURISDICTION = "State of Maryland, United States";
 export const MINIMUM_AGE = 16;
 // Total elapsed time between "user clicks Delete account" and "data is gone":

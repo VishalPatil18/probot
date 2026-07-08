@@ -1,10 +1,19 @@
 ---
 title: Next.js example
-description: "Drop probot-self-hosted into a Next.js app-router project with a server-side chat proxy holding your LLM key."
+description: "A complete Next.js 14 App Router integration of probot-self-hosted, including the server-side chat proxy, client widget, env vars, mounting into the root layout, and streaming considerations."
 ---
 
-A minimal Next.js 14 App Router setup. The chatbot component runs in the
-browser; the LLM key stays on the server behind a route handler.
+This is an end-to-end walkthrough for a fresh Next.js 14+ App Router
+project. Every file you need lives below - copy it, adjust the persona,
+ship.
+
+## Assumptions
+
+- Next.js `14.x` or later, App Router (`app/` directory).
+- Node 20+ (for `Response.json`, `fetch`).
+- An LLM API key (OpenAI, Grok, Ollama, LM Studio, or any other
+  OpenAI-compatible endpoint).
+- Optional: a `pbt_…` bot token if you want dashboard analytics.
 
 ## 1. Install
 
@@ -12,37 +21,106 @@ browser; the LLM key stays on the server behind a route handler.
 npm i probot-self-hosted
 ```
 
-## 2. Server-side chat proxy
+The package's peer deps (`react`, `react-dom`) come from your existing
+Next.js install.
 
-Create `app/api/probot-chat/route.ts` and hold the LLM key here - not in
-any client component.
+## 2. Environment variables
+
+Create `.env.local` at the project root (never commit this file):
+
+```bash
+# .env.local
+
+# Server-only. This is the LLM API key. It must NEVER be prefixed
+# NEXT_PUBLIC_* - that would bake it into the client bundle.
+OPENAI_API_KEY=sk-…
+
+# Optional. Client-side. Grants conversation + lead writes for one bot on
+# the ProBot dashboard. Safe to inline: it's revocable and scoped.
+NEXT_PUBLIC_PROBOT_TOKEN=pbt_…
+```
+
+Add `.env.local` to `.gitignore` if it isn't already.
+
+## 3. Server-side chat proxy
+
+Create `app/api/probot-chat/route.ts`. This route holds the LLM key and is
+the only place your web app calls the provider:
 
 ```ts
+// app/api/probot-chat/route.ts
 import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+// Force Node runtime; the OpenAI-compatible fetch call can take longer
+// than the edge runtime's default timeout window on some hosts.
+export const runtime = "nodejs";
 
 const send = createOpenAIHandler({
   apiKey: process.env.OPENAI_API_KEY!,
   model: "gpt-4o-mini",
-  // baseUrl: "https://api.x.ai/v1", // for Grok, Together, LM Studio, Ollama, etc.
+  // Optional overrides:
+  // baseUrl: "https://api.x.ai/v1",         // e.g. Grok
+  // baseUrl: "http://localhost:11434/v1",   // e.g. local Ollama
+  // temperature: 0.5,
+  // maxTokens: 800,
 });
 
 export async function POST(req: Request) {
-  const { system, messages } = await req.json();
+  let body: { system?: string; messages?: unknown };
   try {
-    const reply = await send({ system, messages });
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  if (typeof body.system !== "string" || !Array.isArray(body.messages)) {
+    return Response.json({ error: "invalid_shape" }, { status: 400 });
+  }
+
+  try {
+    const reply = await send({
+      system: body.system,
+      messages: body.messages as { role: "user" | "assistant"; content: string }[],
+    });
     return Response.json({ reply });
   } catch (err) {
-    return Response.json({ error: String(err) }, { status: 500 });
+    // The handler throws Error("llm_<status>") on non-2xx responses from
+    // the provider. Bubble a generic error to the client so we don't leak
+    // provider details.
+    console.error("[probot-chat]", err);
+    return Response.json({ error: "chat_failed" }, { status: 500 });
   }
 }
 ```
 
-## 3. Client widget
+<Info>
+  Use `export const runtime = "nodejs";` if you're on Vercel and your LLM
+  responses might take longer than the edge runtime's response budget. The
+  Node runtime has a much longer default timeout.
+</Info>
+
+## 4. Client widget
+
+Create `components/BotWidget.tsx`:
 
 ```tsx
+// components/BotWidget.tsx
 "use client";
 
 import { ProbotBot } from "probot-self-hosted";
+
+// If your knowledge base is large, host it as a static JSON import or a
+// generated file. Keeping the string inline (like this example) is fine
+// for a few paragraphs but bloats the client bundle when it's kilobytes.
+const CONTEXT = `
+I'm Ada Lovelace, a mathematician…
+
+## Skills
+Notation, mechanical computation, punch-card design.
+
+## Recent work
+Bernoulli numbers on the Analytical Engine.
+`.trim();
 
 export function BotWidget() {
   return (
@@ -51,16 +129,24 @@ export function BotWidget() {
       headline="Ask me about my work"
       personality="professional"
       themeColor="#2563eb"
-      context={`I'm Ada Lovelace, a mathematician…`}
-      suggestedQuestions={["What projects are you working on?"]}
+      suggestedQuestions={[
+        "What are you working on?",
+        "What's your background?",
+        "Are you open to collaborating?",
+      ]}
+      context={CONTEXT}
+      customInstructions="Never quote salary numbers; redirect to email."
       captureLead
-      sendMessage={async ({ system, messages }) => {
+      sendMessage={async ({ system, messages, signal }) => {
         const res = await fetch("/api/probot-chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ system, messages }),
+          signal,
         });
-        return (await res.json()).reply;
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "chat_failed");
+        return data.reply;
       }}
       dashboard={{ token: process.env.NEXT_PUBLIC_PROBOT_TOKEN! }}
     />
@@ -68,15 +154,26 @@ export function BotWidget() {
 }
 ```
 
-## 4. Mount it
+Notice: `sendMessage` passes the `AbortSignal` through so a component
+unmount (e.g. route change while a reply is in flight) cancels the pending
+fetch cleanly.
+
+## 5. Mount into the root layout
+
+Mount the widget once, in `app/layout.tsx`, so every page carries the
+floating chat bubble:
 
 ```tsx
 // app/layout.tsx
 import { BotWidget } from "@/components/BotWidget";
 
-export default function RootLayout({ children }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html>
+    <html lang="en">
       <body>
         {children}
         <BotWidget />
@@ -86,15 +183,166 @@ export default function RootLayout({ children }) {
 }
 ```
 
-## Environment variables
+That's it - `npm run dev`, visit `http://localhost:3000`, click the chat
+bubble.
 
-```bash
-# .env.local
-OPENAI_API_KEY=sk-…           # server-side only, never NEXT_PUBLIC_
-NEXT_PUBLIC_PROBOT_TOKEN=pbt_…  # optional, for dashboard analytics
+## Loading the knowledge base from a file
+
+Inlining a multi-KB string bloats the client bundle. Store the knowledge
+as a JSON or Markdown file and import it:
+
+```tsx
+// components/BotWidget.tsx
+"use client";
+
+import { ProbotBot } from "probot-self-hosted";
+// Next.js transpiles the JSON import; the string ends up in the client bundle.
+import knowledge from "@/data/bot-knowledge.json";
+
+export function BotWidget() {
+  return (
+    <ProbotBot
+      name="Ada"
+      contextChunks={knowledge.chunks}
+      // …
+    />
+  );
+}
 ```
 
-<Warning>
-  Never prefix your LLM key with `NEXT_PUBLIC_` - that inlines it into the
-  browser bundle. Keep it on the server behind `/api/probot-chat`.
-</Warning>
+If the knowledge is genuinely large (100+ KB), pull it server-side via a
+server component that passes it as a prop to the client widget - keeps
+your first-paint JS budget lean.
+
+## Restricting the proxy to your origin
+
+Next.js API routes accept cross-origin requests by default. If your bot's
+knowledge is sensitive, add a same-origin check:
+
+```ts
+// app/api/probot-chat/route.ts (fragment)
+
+const ALLOWED_ORIGINS = new Set([
+  process.env.NEXT_PUBLIC_SITE_ORIGIN, // e.g. "https://example.com"
+]);
+
+export async function POST(req: Request) {
+  const origin = req.headers.get("origin");
+  if (origin && !ALLOWED_ORIGINS.has(origin)) {
+    return Response.json({ error: "forbidden_origin" }, { status: 403 });
+  }
+  // …rest of handler
+}
+```
+
+For an embed-anywhere widget, add CORS headers instead of blocking:
+
+```ts
+const cors = {
+  "access-control-allow-origin": origin ?? "*",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+};
+```
+
+## Adding per-visitor rate limiting
+
+Every visitor turn = one LLM call = one bill. Rate-limit the proxy per
+IP:
+
+```ts
+// app/api/probot-chat/route.ts (fragment)
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, "1 m"),
+});
+
+export async function POST(req: Request) {
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const { success } = await ratelimit.limit(ip);
+  if (!success) {
+    return Response.json({ error: "rate_limited" }, { status: 429 });
+  }
+  // …rest of handler
+}
+```
+
+Both Upstash Redis + Ratelimit have generous free tiers; free tier is
+plenty for a portfolio bot.
+
+## Streaming responses
+
+The stock `createOpenAIHandler` is non-streaming (returns the full reply
+after the LLM finishes). If you want typewriter-style streaming, implement
+`sendMessage` yourself with an incremental `TransformStream`:
+
+```ts
+// app/api/probot-chat/route.ts (streaming variant)
+export async function POST(req: Request) {
+  const { system, messages } = await req.json();
+  const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      stream: true,
+      messages: [{ role: "system", content: system }, ...messages],
+    }),
+  });
+  return new Response(upstream.body, {
+    headers: { "content-type": "text/event-stream" },
+  });
+}
+```
+
+You'd then swap the built-in `<ProbotBot />` for the headless
+`useProbotChat` hook and drive tokens in yourself. See the
+[React example](/self-hosted-bot/react#headless-usage) for the hook API.
+
+## Testing locally
+
+```bash
+# 1. Start the dev server
+npm run dev
+
+# 2. Hit the proxy directly to confirm it works before touching the widget
+curl -s http://localhost:3000/api/probot-chat \
+  -H "content-type: application/json" \
+  -d '{"system":"You are a test bot. Reply with the word OK.","messages":[{"role":"user","content":"hi"}]}' | jq
+# Expected: { "reply": "OK" }
+```
+
+If the curl returns `{ "reply": … }`, the widget will work. If it returns
+`{ "error": … }`, fix the proxy first - the widget won't magically make
+a broken server route work.
+
+## Deploying
+
+Vercel:
+
+1. Set env vars in the Vercel dashboard: `OPENAI_API_KEY` (encrypted) and
+   `NEXT_PUBLIC_PROBOT_TOKEN` (public).
+2. Push to your production branch.
+
+Any other host (Fly, Railway, self-managed VPS):
+
+1. Set the same env vars in your platform's secrets store.
+2. Ensure the process running Next.js has network egress to the LLM
+   provider (`api.openai.com`, `api.x.ai`, etc.).
+3. Confirm `/api/probot-chat` responds under production DNS before
+   flipping traffic.
+
+## Full example repo
+
+The above files map to a working Next.js 14 project. If you want a
+scaffolded starter with all this pre-wired, see the
+[`packages/probot-self-hosted`](https://github.com/vishalpatil18/probot/tree/main/packages/probot-self-hosted)
+directory in the ProBot monorepo - the package README's Quick example
+covers the same setup in a condensed form.
