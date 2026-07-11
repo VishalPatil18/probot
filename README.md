@@ -92,6 +92,7 @@ Register the bot in your ProBot dashboard (sidebar → **Register self-hosted bo
 - [ARCHITECTURE.md](ARCHITECTURE.md) - the stack and how a chat request flows.
 - [BYO-KEY.md](BYO-KEY.md) - where your LLM key goes (and doesn't).
 - [KEY-STORAGE.md](KEY-STORAGE.md) - managed key storage and KEK rotation.
+- [MANUAL_TESTING.md](MANUAL_TESTING.md) - test both npm packages end-to-end on your machine before shipping a PR.
 
 ## Contributing
 

@@ -3728,3 +3728,63 @@ _Tests + types:_
 **Open questions / follow-ups.**
 - The new success screen shares almost every className with `StepDeploy`'s embed-code block. If a third "show a copyable secret" surface appears (rotate-token modal in Settings → Deployment could be one), consider extracting a shared `<SecretBlock>` component then. Not yet.
 - The Bot Factory bottom-nav pattern (`flex items-center justify-between mt-10 pt-6 border-t border-border-base` + Cancel/Primary) is now used in three places (BotFactoryForm, this form, this form's success view). Same "wait for a third distinct caller" rule.
+
+---
+
+### 2026-07-11 — Multi-provider adapters + Shadow DOM isolation for `probot-self-hosted`, plus polish batch
+
+Consolidated entry covering a stack of small changes on top of the self-hosted-register UI restyle.
+
+#### Package-side: model choice parity + isolation
+
+**Prompt.** Give the self-hosted npm package the same "any provider, any model, switch at any time" flexibility that pro-bot.dev's managed widget has (Anthropic/OpenAI/Google/Grok/Azure/Ollama), and make the widget's visual language consistent across managed and self-hosted regardless of which package renders it.
+
+**What I did.**
+- Added two new server-side adapters to `probot-self-hosted`, symmetric with the existing `createOpenAIHandler`:
+  - `packages/probot-self-hosted/src/adapters/anthropic.ts` — CREATE. `createAnthropicHandler({ apiKey, model, maxTokens?, temperature?, baseUrl?, fetchImpl? }) → SendMessage` using `@anthropic-ai/sdk`. Signal is threaded through for abort semantics.
+  - `packages/probot-self-hosted/src/adapters/google.ts` — CREATE. `createGoogleHandler(...)` using `@google/generative-ai`. Handles Gemini's "systemInstruction on model config, not messages" quirk and remaps the `"assistant"` role to `"model"` for chat history (Gemini's role vocabulary).
+- `packages/probot-self-hosted/src/index.ts` — exports both new adapters.
+- `packages/probot-self-hosted/package.json` — new `exports` subpaths (`./adapters/anthropic`, `./adapters/google`) + **optional** peer deps `@anthropic-ai/sdk` (>=0.30) and `@google/generative-ai` (>=0.20). Consumers only install what they use; zero bundle cost for OpenAI-only setups.
+- `packages/probot-self-hosted/build.mjs` — added the two new entry points; added both SDK names to `shared.external` so the adapter bundles stay unbundled at the SDK boundary.
+- Wrapped the React widget in a **Shadow DOM** (open mode) via a new `ShadowContainer` component in `ProbotBot.tsx`. Uses `useLayoutEffect` + `createPortal` (React 18 pattern). Matches the isolation model of the managed embed widget (which uses `attachShadow({ mode: "closed" })` in `src/widget/widget.ts`).
+- `packages/probot-self-hosted/src/widget.css` — verbatim copy of `src/widget/widget.css` (source of truth stays in the app, this copy exists so the npm package builds standalone). Added a "kept in sync" comment at the top of both files.
+
+**Why the Shadow DOM change was necessary.** `widget.css` starts with `* { box-sizing: border-box; margin: 0; padding: 0 }` — designed to zero out defaults inside the managed widget's shadow. Without a shadow boundary in the npm package, that universal selector leaked to the entire host page (collapsed h1/p margins in the vanilla test). Shadow DOM restores per-widget isolation identical to the managed widget.
+
+**Files touched (recent chain of small tasks, not just the adapters):**
+- `src/components/bot-factory/BotFactoryForm.tsx` — Step 5 "Open chat" button now routes to `/u/{username}/chat?preview={token}` when the bot is unpublished (previously always the public URL, which would render "Bot not found" for drafts).
+- `src/components/CookieConsent.tsx` — CREATE. Site-wide bottom-fixed consent banner (`bg-ink`, `bg-brand` Accept), persists dismissal in `localStorage["probot.cookie-consent"] = "accepted"`. Mounts in root `layout.tsx` so `/`, `/login`, `/dashboard`, `/u/[username]/chat` all show it once.
+- `src/app/layout.tsx` — imports and renders `<CookieConsent />`.
+- `src/components/marketing/DemoVideoModal.tsx` — restyled from a floating close-X into a **macOS window frame**: rounded shell, gradient title bar (`from-neutral-700 to-neutral-800`), three traffic-light dots on the left. Red dot is the functional close (`aria-label="Close"`), yellow + green are decorative `aria-hidden` spans. Title "ProBot Demo" centered. Native video controls (including unmute) inside the video body untouched.
+- `src/app/globals.css` + `src/components/marketing/LandingScrollbarBehavior.tsx` + `src/app/page.tsx` — landing-page-only auto-hiding scrollbar. Client component toggles `.landing-scrollbar` on `<html>` on mount and `.is-scrolling` on scroll (700 ms debounce). CSS scoped to `html.landing-scrollbar` overrides the global `:hover` reveal so the thumb only appears during actual scroll activity.
+- `manual-testing/` — 3 mini-projects: `chatbot-script-tag/` (script-tag widget test), `self-hosted-vanilla/` (IIFE `window.ProbotSelfHosted.mount` test with echo `sendMessage`), `self-hosted-react/` (Vite React harness with Echo / OpenAI / Dashboard-linked mode toggle; OpenAI mode runs `createOpenAIHandler` inside a Vite dev middleware — same-process, no CORS, no second terminal). Top-level `manual-testing/README.md` indexes all three.
+- `manual-testing/self-hosted-vanilla/package.json` — added a `prestart` npm script that copies the freshly-built IIFE from `packages/probot-self-hosted/dist/` into the test folder before `serve` boots. Fixes a static-server parent-directory-traversal 404: `serve` blocks `../../packages/...` paths.
+- `tsconfig.json` — added `manual-testing` to the `exclude` array. Root tsc was globbing into `manual-testing/self-hosted-react/vite.config.ts` and hitting a duplicate-vite-types conflict (nested `node_modules`). Should have been added when the harness was first created.
+
+**Docs.**
+- `packages/probot-self-hosted/README.md` — new **Choose a model** section with a provider matrix, OpenAI-compatible examples (Grok/Ollama/Azure), and an env-var-driven `resolveHandler()` factory.
+- `packages/probot-chatbot/README.md` — new short **Choose a model** paragraph pointing owners at the pro-bot.dev dashboard (Settings → AI Model & Key). Cross-links `probot-self-hosted` for developers who want to own the transport.
+- `docs/self-hosted-bot/models-and-keys.mdx` — CREATE. Full provider guide: per-provider key-provisioning links, suggested first model per provider (highlights Gemini free tier + Ollama as $0 paths), OpenAI-compatible-endpoint recipes, runtime-switch factory pattern, and a "where does the key live" security callout.
+- `docs/docs.json` — registered `self-hosted-bot/models-and-keys` in the **Self-hosted bot → Overview** nav group.
+
+**Decisions.**
+- **Symmetric factory shape** for every adapter (`create<Provider>Handler(opts) → SendMessage`). Reason: developers just need a `SendMessage`; keeping the surface uniform makes the `resolveHandler()` switch factory clean and readable.
+- **Optional peer deps** for the Anthropic and Google SDKs. Reason: the "just OpenAI" case is by far the most common; nobody who only ships OpenAI should carry either SDK. Same pattern react/react-dom already use.
+- **Gemini role-remap inside the adapter, not in the widget.** Reason: keeps `ChatMessage` (`role: "user" | "assistant"`) stable across providers. If a future adapter (Cohere, Mistral) needs its own role vocabulary, translation stays local to that adapter.
+- **`probot-chatbot` unchanged for model choice.** Rejected: exposing a `data-model` attribute on the `<script>` tag. That would let the embedding page pick which key gets billed — wrong owner. Dashboard is the only correct control surface.
+- **Shadow DOM for the React component, not just the vanilla mount.** Reason: consumers using `<ProbotBot />` inside React apps (with Tailwind preflight, etc.) mostly wouldn't notice the leak — but consumers embedding in a plain HTML page via the IIFE definitely would. Applying the shadow inside `ProbotBot` itself fixes both call sites in one place.
+- **`open` shadow mode**, not `closed`. Reason: dev inspectability via `element.shadowRoot`. The managed widget uses `closed` for defense-in-depth against JS on the host page reaching into it; that's more paranoid than most third-party sites need. Consumer-facing package leans toward friendliness.
+- **Two physical copies of `widget.css`.** Rejected: cross-package `readFileSync(../../src/widget/widget.css)` at build time. Cleaner for the monorepo, but breaks standalone package builds and pins spooky cross-package coupling. The manual sync burden is small (widget.css changes rarely).
+- **Bug fix vs. package fix judgement (vanilla test host page):** the widget rendered correctly (bubble, dialog, chips) — the visible "different styling" the user reported was the widget's `*` reset leaking to the host page. Fix goes in the **package**, not the test, because the same leak would happen in any consumer app. Shadow DOM is the right fix.
+
+**Verification.**
+- `npx tsc --noEmit -p tsconfig.json` clean at repo root and inside the package.
+- `node build.mjs` from the package folder emits all six adapter bundles (`anthropic.{mjs,cjs,d.ts}`, `google.{mjs,cjs,d.ts}`, plus existing `openai.*` + `index.*` + `vanilla.*` + IIFE at 165 KB).
+- Vanilla test: headless-Chrome screenshot before/after the Shadow DOM change confirmed the host page's h1/p regain their default margins while the widget itself renders byte-identical to the pre-fix state (same bubble, ringed avatar, chips, footer).
+- Docs.json parses.
+
+**Open questions / follow-ups.**
+- The React harness (`manual-testing/self-hosted-react/`) still only demos OpenAI. Extending it to Anthropic/Google requires the harness to install the extra SDKs. If we want a "try every provider from one harness" experience, add a checkbox that toggles the middleware's adapter — but only after `npm install @anthropic-ai/sdk @google/generative-ai` runs in the harness folder.
+- The two copies of `widget.css` (source-of-truth in `src/widget/`, checked-in mirror in `packages/probot-self-hosted/src/`) rely on the sync comment at the top of each. If either copy drifts, both `probot-chatbot` and `probot-self-hosted` diverge visually. Consider a CI check that `diff`s the two files and fails on mismatch. Not urgent.
+- Publishing `probot-self-hosted@0.2` (new adapters + shadow DOM + package.json exports changes) is a manual `npm publish` from the package folder. Bump version first.
+- The `manual-testing/` folder is still in root `.gitignore` (line 41). If we want the test harnesses versioned, remove that line — otherwise every collaborator recreates them locally.
