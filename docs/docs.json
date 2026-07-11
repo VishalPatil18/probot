@@ -82,7 +82,8 @@
           {
             "group": "Overview",
             "pages": [
-              "self-hosted-bot/index"
+              "self-hosted-bot/index",
+              "self-hosted-bot/models-and-keys"
             ]
           },
           {

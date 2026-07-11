@@ -45,6 +45,16 @@
       "types": "./dist/adapters/openai.d.ts",
       "import": "./dist/adapters/openai.mjs",
       "require": "./dist/adapters/openai.cjs"
+    },
+    "./adapters/anthropic": {
+      "types": "./dist/adapters/anthropic.d.ts",
+      "import": "./dist/adapters/anthropic.mjs",
+      "require": "./dist/adapters/anthropic.cjs"
+    },
+    "./adapters/google": {
+      "types": "./dist/adapters/google.d.ts",
+      "import": "./dist/adapters/google.mjs",
+      "require": "./dist/adapters/google.cjs"
     }
   },
   "files": [
@@ -57,10 +67,14 @@
     "prepublishOnly": "node build.mjs"
   },
   "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.30",
+    "@google/generative-ai": ">=0.20",
     "react": ">=18",
     "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": { "optional": true },
+    "@google/generative-ai": { "optional": true },
     "react": { "optional": true },
     "react-dom": { "optional": true }
   },

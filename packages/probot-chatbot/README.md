@@ -56,6 +56,14 @@ The widget reads `data-bot-id` from its own (or any) `<script>` tag on the page 
 
 The widget is a tiny (~8 KB), dependency-free, iframe-isolated chat surface. It talks to the bot owner's hosted chat endpoint, so **your LLM key is never exposed to the embedding site** - the visitor uses the owner's hosted endpoint, not the key.
 
+## Choose a model
+
+Model choice for a hosted bot lives in the ProBot dashboard — **Settings → AI Model & Key**. Pick from Anthropic (Claude), OpenAI (GPT), Google (Gemini), Grok (xAI), Azure OpenAI, or Ollama, paste the API key, save. The widget picks up the new model on the next visitor turn — no code change, no redeploy, and the same `<script>` embed stays valid.
+
+The API key you paste is stored server-side (envelope-encrypted) and never leaves the platform. Recruiters chatting with your bot never see it.
+
+Want to run the widget without ProBot picking the model for you? Use the [self-hosted npm package (`probot-self-hosted`)](https://npmjs.com/package/probot-self-hosted) instead — you wire `sendMessage` to whichever provider you want, and your LLM key stays in your own backend.
+
 ## Links
 
 - npm: [npmjs.com/package/probot-chatbot](https://www.npmjs.com/package/probot-chatbot) (`npm i probot-chatbot`)

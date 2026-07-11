@@ -9,7 +9,12 @@ const shared = {
   sourcemap: true,
   target: ["es2020"],
   platform: "neutral",
-  external: ["react", "react-dom"],
+  external: [
+    "react",
+    "react-dom",
+    "@anthropic-ai/sdk",
+    "@google/generative-ai",
+  ],
   loader: { ".css": "text" },
   logLevel: "info",
 };
@@ -18,6 +23,8 @@ const entries = [
   { in: "src/index.ts", outBase: "dist/index" },
   { in: "src/vanilla.ts", outBase: "dist/vanilla" },
   { in: "src/adapters/openai.ts", outBase: "dist/adapters/openai" },
+  { in: "src/adapters/anthropic.ts", outBase: "dist/adapters/anthropic" },
+  { in: "src/adapters/google.ts", outBase: "dist/adapters/google" },
 ];
 
 for (const e of entries) {

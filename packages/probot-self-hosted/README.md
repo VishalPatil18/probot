@@ -60,6 +60,100 @@ export async function POST(req: Request) {
 }
 ```
 
+## Choose a model
+
+The widget itself is model-agnostic — the `sendMessage` prop is the seam
+between your bot UI and whichever provider you want to call. `probot-self-
+hosted` ships three server-only adapters that all return the same
+`SendMessage` shape, so switching providers is a one-line change.
+
+| Provider | Adapter | Import path | Extra dep |
+|---|---|---|---|
+| OpenAI | `createOpenAIHandler` | `probot-self-hosted/adapters/openai` | none |
+| Anthropic (Claude) | `createAnthropicHandler` | `probot-self-hosted/adapters/anthropic` | `@anthropic-ai/sdk` |
+| Google (Gemini) | `createGoogleHandler` | `probot-self-hosted/adapters/google` | `@google/generative-ai` |
+| Grok, Ollama, Azure OpenAI, LM Studio, together.ai, DeepSeek, Mistral… | `createOpenAIHandler` with `baseUrl` | `probot-self-hosted/adapters/openai` | none |
+
+The Anthropic and Google SDKs are **optional peer dependencies**: install
+them only if you use those adapters. If you only ship OpenAI (or an
+OpenAI-compatible endpoint), there's zero extra bundle cost.
+
+### OpenAI-compatible providers (Grok, Ollama, Azure, …)
+
+Every provider whose API mimics OpenAI's `POST /v1/chat/completions` works
+through the same `createOpenAIHandler` — just point `baseUrl` at their host
+and pass the right API key + model:
+
+```ts
+// Grok (xAI)
+createOpenAIHandler({
+  baseUrl: "https://api.x.ai/v1",
+  apiKey: process.env.XAI_API_KEY!,
+  model: "grok-4",
+});
+
+// Ollama (local, no key needed)
+createOpenAIHandler({
+  baseUrl: "http://localhost:11434/v1",
+  apiKey: "ollama",
+  model: "llama3.2",
+});
+
+// Azure OpenAI (baseUrl points at your deployment)
+createOpenAIHandler({
+  baseUrl: "https://<resource>.openai.azure.com/openai/deployments/<name>",
+  apiKey: process.env.AZURE_OPENAI_KEY!,
+  model: "<deployment-name>",
+});
+```
+
+### Switch providers at runtime
+
+Wrap the handler choice in a factory keyed on an env var (or a request
+header, or a feature flag) and swap without touching the React tree:
+
+```ts
+// app/api/probot-chat/route.ts
+import type { SendMessage } from "probot-self-hosted";
+import { createAnthropicHandler } from "probot-self-hosted/adapters/anthropic";
+import { createGoogleHandler } from "probot-self-hosted/adapters/google";
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+function resolveHandler(): SendMessage {
+  switch (process.env.PROBOT_PROVIDER) {
+    case "anthropic":
+      return createAnthropicHandler({
+        apiKey: process.env.ANTHROPIC_API_KEY!,
+        model: process.env.PROBOT_MODEL ?? "claude-haiku-4-5",
+      });
+    case "google":
+      return createGoogleHandler({
+        apiKey: process.env.GOOGLE_API_KEY!,
+        model: process.env.PROBOT_MODEL ?? "gemini-2.5-flash",
+      });
+    default:
+      return createOpenAIHandler({
+        apiKey: process.env.OPENAI_API_KEY!,
+        model: process.env.PROBOT_MODEL ?? "gpt-4o-mini",
+      });
+  }
+}
+
+const send = resolveHandler();
+export async function POST(req: Request) {
+  const { system, messages } = await req.json();
+  const reply = await send({ system, messages });
+  return Response.json({ reply });
+}
+```
+
+Setting `PROBOT_PROVIDER=anthropic PROBOT_MODEL=claude-sonnet-4-5` and
+redeploying swaps the model. The widget doesn't care — same `sendMessage`
+contract on the client.
+
+Full provider matrix, key-provisioning instructions, and cost notes:
+[pro-bot.dev/docs/self-hosted-bot/models-and-keys](https://pro-bot.dev/docs/self-hosted-bot/models-and-keys).
+
 ## Vanilla HTML (script tag)
 
 ```html

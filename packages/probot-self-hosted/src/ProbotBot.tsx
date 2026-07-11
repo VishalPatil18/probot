@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { reportLead } from "./adapters/dashboard";
 import { useProbotChat } from "./hooks/useProbotChat";
@@ -11,8 +12,36 @@ const DEFAULT_THEME = "#2563eb";
 // Drop-in React chat widget. Mirrors the DOM + class shape of the ProBot
 // managed embed widget (see `src/widget/widget.ts` in the probot repo) so
 // the visual language is identical across managed and self-hosted bots.
-// The full stylesheet ships inline via a bundled `<style>` tag; class names
-// are all `probot-*` prefixed so host-page collisions are unlikely.
+// The full stylesheet ships inline via a bundled `<style>` tag; the whole
+// widget renders inside a Shadow DOM so host-page CSS can't reach in and
+// the widget's own reset (`* { margin: 0; padding: 0 }`) can't leak out.
+// This matches the isolation model of the managed embed widget on
+// pro-bot.dev.
+
+// Renders children into an open Shadow DOM attached to a host `<div>`.
+// Uses `useLayoutEffect` so the shadow is attached before the browser
+// paints, avoiding a visible flash of the empty host element. Portals the
+// React tree through `createPortal` so React state/effects continue to
+// work the same way from the caller's perspective.
+function ShadowContainer({ children }: { children: ReactNode }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [shadow, setShadow] = useState<ShadowRoot | null>(null);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    // React StrictMode double-invokes effects in dev; guard against a
+    // second attachShadow that would throw "Shadow root already exists".
+    const existing = host.shadowRoot;
+    setShadow(existing ?? host.attachShadow({ mode: "open" }));
+  }, []);
+
+  return (
+    <div ref={hostRef}>
+      {shadow ? createPortal(children, shadow) : null}
+    </div>
+  );
+}
 export function ProbotBot(config: ProbotBotConfig) {
   const [open, setOpen] = useState(false);
   const [suggestListOpen, setSuggestListOpen] = useState(false);
@@ -62,10 +91,11 @@ export function ProbotBot(config: ProbotBotConfig) {
   const bubbleAriaLabel = open ? "Close chat" : `Open chat with ${displayName}`;
 
   return (
-    <div className="probot-root" style={themedRoot}>
-      <style>{widgetCss}</style>
+    <ShadowContainer>
+      <div className="probot-root" style={themedRoot}>
+        <style>{widgetCss}</style>
 
-      <div className="probot-dialog" hidden={!open}>
+        <div className="probot-dialog" hidden={!open}>
         <header className="probot-header">
           <div className="probot-avatar-wrap">
             <BotAvatar variant="header" src={config.avatarUrl} />
@@ -219,17 +249,18 @@ export function ProbotBot(config: ProbotBotConfig) {
             Powered by ProBot
           </a>
         </footer>
-      </div>
+        </div>
 
-      <button
-        type="button"
-        className="probot-bubble"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={bubbleAriaLabel}
-      >
-        <SparklesIcon />
-      </button>
-    </div>
+        <button
+          type="button"
+          className="probot-bubble"
+          onClick={() => setOpen((v) => !v)}
+          aria-label={bubbleAriaLabel}
+        >
+          <SparklesIcon />
+        </button>
+      </div>
+    </ShadowContainer>
   );
 }
 

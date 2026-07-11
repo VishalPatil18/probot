@@ -1,0 +1,219 @@
+---
+title: "Choose a model & set up keys"
+description: "Pick any LLM provider for a self-hosted bot, wire the API key in your own backend, and switch providers without touching the widget."
+---
+
+The `probot-self-hosted` npm package is model-agnostic. The React widget
+never touches an API key — you own the transport, we own the UI. This page
+walks through every supported provider, where to get its key, which
+adapter to import, and how to switch providers at runtime.
+
+## Which adapter to import
+
+<CardGroup cols={2}>
+  <Card title="OpenAI" icon="brain">
+    `createOpenAIHandler` — GPT models via the official OpenAI API.
+  </Card>
+  <Card title="Anthropic (Claude)" icon="sparkles">
+    `createAnthropicHandler` — Claude models via Anthropic's API.
+  </Card>
+  <Card title="Google (Gemini)" icon="google">
+    `createGoogleHandler` — Gemini models via Google's Generative AI API.
+  </Card>
+  <Card title="OpenAI-compatible" icon="plug">
+    `createOpenAIHandler` with `baseUrl` — Grok, Ollama, Azure OpenAI, LM
+    Studio, together.ai, DeepSeek, Mistral, and any other API that speaks
+    the OpenAI Chat Completions protocol.
+  </Card>
+</CardGroup>
+
+The Anthropic and Google adapters are shipped behind **optional peer
+dependencies** — install the SDK only when you actually use that
+provider. If you only ship OpenAI, there is zero extra bundle cost.
+
+## Provider matrix
+
+| Provider | Where to get the key | Suggested model | Notes |
+|---|---|---|---|
+| OpenAI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | `gpt-4o-mini` (cheap), `gpt-4o` (strongest) | Paid API. Set `OPENAI_API_KEY`. |
+| Anthropic | [console.anthropic.com](https://console.anthropic.com) → API keys | `claude-haiku-4-5` (cheap), `claude-sonnet-4-5` (strongest) | Paid API. Requires `@anthropic-ai/sdk`. |
+| Google Gemini | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) | `gemini-2.5-flash` (free tier!), `gemini-2.5-pro` | **Free tier available.** Requires `@google/generative-ai`. |
+| Grok (xAI) | [console.x.ai](https://console.x.ai) | `grok-4` | OpenAI-compatible — use `createOpenAIHandler`. |
+| Azure OpenAI | Azure portal → your OpenAI resource → Keys | Your deployment name | OpenAI-compatible — use `createOpenAIHandler` with `baseUrl`. |
+| Ollama | No key — runs locally | Whatever you pulled (e.g. `llama3.2`) | Free, local, no key. |
+| LM Studio / together.ai / DeepSeek / Mistral | Provider dashboard | Provider's model id | All OpenAI-compatible — one adapter, different `baseUrl`. |
+
+<Tip>
+  Gemini's free tier and local Ollama are the two genuinely $0 paths.
+  Great for prototyping or side projects.
+</Tip>
+
+## Wiring examples
+
+### OpenAI
+
+```ts
+// app/api/probot-chat/route.ts
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+const send = createOpenAIHandler({
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: "gpt-4o-mini",
+});
+
+export async function POST(req: Request) {
+  const { system, messages } = await req.json();
+  return Response.json({ reply: await send({ system, messages }) });
+}
+```
+
+### Anthropic (Claude)
+
+```bash
+npm install @anthropic-ai/sdk
+```
+
+```ts
+import { createAnthropicHandler } from "probot-self-hosted/adapters/anthropic";
+
+const send = createAnthropicHandler({
+  apiKey: process.env.ANTHROPIC_API_KEY!,
+  model: "claude-haiku-4-5",
+});
+```
+
+### Google Gemini
+
+```bash
+npm install @google/generative-ai
+```
+
+```ts
+import { createGoogleHandler } from "probot-self-hosted/adapters/google";
+
+const send = createGoogleHandler({
+  apiKey: process.env.GOOGLE_API_KEY!,
+  model: "gemini-2.5-flash",
+});
+```
+
+### OpenAI-compatible endpoints (Grok, Ollama, Azure, …)
+
+Point the OpenAI adapter at the provider's `baseUrl`:
+
+```ts
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+// Grok
+const sendGrok = createOpenAIHandler({
+  baseUrl: "https://api.x.ai/v1",
+  apiKey: process.env.XAI_API_KEY!,
+  model: "grok-4",
+});
+
+// Ollama (no key)
+const sendOllama = createOpenAIHandler({
+  baseUrl: "http://localhost:11434/v1",
+  apiKey: "ollama",
+  model: "llama3.2",
+});
+
+// Azure OpenAI (baseUrl points at your deployment)
+const sendAzure = createOpenAIHandler({
+  baseUrl:
+    "https://<resource>.openai.azure.com/openai/deployments/<deployment>",
+  apiKey: process.env.AZURE_OPENAI_KEY!,
+  model: "<deployment-name>",
+});
+```
+
+## Switch providers at runtime
+
+The widget doesn't care which provider you use — every adapter returns the
+same `SendMessage` function. Pick at request time with a small factory:
+
+```ts
+// app/api/probot-chat/route.ts
+import type { SendMessage } from "probot-self-hosted";
+import { createAnthropicHandler } from "probot-self-hosted/adapters/anthropic";
+import { createGoogleHandler } from "probot-self-hosted/adapters/google";
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+function resolveHandler(): SendMessage {
+  switch (process.env.PROBOT_PROVIDER) {
+    case "anthropic":
+      return createAnthropicHandler({
+        apiKey: process.env.ANTHROPIC_API_KEY!,
+        model: process.env.PROBOT_MODEL ?? "claude-haiku-4-5",
+      });
+    case "google":
+      return createGoogleHandler({
+        apiKey: process.env.GOOGLE_API_KEY!,
+        model: process.env.PROBOT_MODEL ?? "gemini-2.5-flash",
+      });
+    default:
+      return createOpenAIHandler({
+        apiKey: process.env.OPENAI_API_KEY!,
+        model: process.env.PROBOT_MODEL ?? "gpt-4o-mini",
+      });
+  }
+}
+
+const send = resolveHandler();
+export async function POST(req: Request) {
+  const { system, messages } = await req.json();
+  return Response.json({ reply: await send({ system, messages }) });
+}
+```
+
+Set `PROBOT_PROVIDER=anthropic PROBOT_MODEL=claude-sonnet-4-5` in your
+environment, redeploy, and the widget starts calling Claude Sonnet on the
+next visitor turn. No client-side change.
+
+For truly per-request switching (A/B tests, cost-tiering by user), replace
+the module-level `send` with `resolveHandler()` inside the POST handler
+and read the provider from a request header, cookie, or feature-flag
+client.
+
+## Where does the key live?
+
+<Warning>
+  Never put your LLM API key in the browser. All three `create*Handler`
+  functions are **server-only** — they hold the key in your Node process
+  and never expose it to the widget. The `<ProbotBot />` component's
+  `sendMessage` prop calls a same-origin `/api/…` route you own; that
+  route calls the adapter.
+</Warning>
+
+Compared to a managed pro-bot.dev bot (where the platform holds an
+envelope-encrypted copy of your key), the self-hosted path keeps the key
+entirely inside your infra. Nothing on pro-bot.dev — not even the
+platform operators — can read it.
+
+## Compared to a managed bot
+
+Managed bots on pro-bot.dev pick a model via **Settings → AI Model & Key**
+in the dashboard. Switching = change the setting, save. The widget
+re-reads the current model on every chat request.
+
+Self-hosted bots skip the dashboard for model config and give you the
+same flexibility inside your own backend — swap providers by changing an
+env var, and the widget doesn't need to know.
+
+<CardGroup cols={2}>
+  <Card
+    title="Managed bot: dashboard setup"
+    icon="gauge-high"
+    href="/docs/guides/models-and-keys"
+  >
+    How to configure a managed bot's provider + model + key in the
+    ProBot dashboard.
+  </Card>
+  <Card
+    title="Self-hosted quickstart"
+    icon="rocket"
+    href="/docs/self-hosted-bot"
+  >
+    The full setup guide for the `probot-self-hosted` npm package.
+  </Card>
+</CardGroup>
