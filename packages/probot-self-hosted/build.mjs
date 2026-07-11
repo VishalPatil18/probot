@@ -10,6 +10,7 @@ const shared = {
   target: ["es2020"],
   platform: "neutral",
   external: ["react", "react-dom"],
+  loader: { ".css": "text" },
   logLevel: "info",
 };
 
@@ -36,6 +37,7 @@ await build({
   format: "iife",
   globalName: "ProbotSelfHosted",
   outfile: "dist/probot-self-hosted.iife.js",
+  loader: { ".css": "text" },
   logLevel: "info",
 });
 

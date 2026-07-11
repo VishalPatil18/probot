@@ -344,7 +344,15 @@ export function BotFactoryForm({
       return;
     }
     if (step === 5) {
-      router.push(`/u/${username}/chat`);
+      // Unpublished drafts have no live public URL — send the owner to the
+      // token-signed preview so "Open chat" always lands on a page that
+      // actually renders their bot. Once they publish, the public URL is
+      // live and preview is unnecessary.
+      const target =
+        !published && previewToken
+          ? `/u/${username}/chat?preview=${encodeURIComponent(previewToken)}`
+          : `/u/${username}/chat`;
+      router.push(target);
       return;
     }
     if (stepIsValid(step) && step < TOTAL_STEPS) setStep(step + 1);

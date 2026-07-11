@@ -77,25 +77,6 @@
         ]
       },
       {
-        "tab": "API reference",
-        "groups": [
-          {
-            "group": "Overview",
-            "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoints",
-            "pages": [
-              "api-reference/auth-register",
-              "api-reference/bots-upsert",
-              "api-reference/chat"
-            ]
-          }
-        ]
-      },
-      {
         "tab": "Self-hosted bot",
         "groups": [
           {
@@ -123,6 +104,25 @@
             "group": "Help",
             "pages": [
               "self-hosted-bot/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api-reference/auth-register",
+              "api-reference/bots-upsert",
+              "api-reference/chat"
             ]
           }
         ]

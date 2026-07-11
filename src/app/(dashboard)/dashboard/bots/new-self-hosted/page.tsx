@@ -21,20 +21,20 @@ export default async function NewSelfHostedBotPage() {
     redirect("/login?next=/dashboard/bots/new-self-hosted");
   }
 
+  // Layout scaffolding mirrors BotFactoryForm's wrapper so the two creation
+  // surfaces feel like the same product. Self-hosted is a single-step form
+  // (persona/knowledge/model live in the consumer's webapp), so there's no
+  // stepper and no live preview column — just the same padded max-width
+  // container BotFactory renders each step inside.
   return (
-    <div className="max-w-xl px-6 py-14 lg:px-8">
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand mb-3">
-        Register a self-hosted bot
-      </p>
-      <h1 className="font-display text-3xl font-extrabold tracking-tight mb-3">
-        Give your bot a name.
-      </h1>
-      <p className="text-muted leading-relaxed mb-8">
-        We&apos;ll create the dashboard entry and mint your first token. Persona,
-        knowledge, provider, and theme all live in your webapp&apos;s{" "}
-        <code>probot-self-hosted</code> config.
-      </p>
-      <RegisterSelfHostedForm />
+    <div className="flex flex-col lg:h-full lg:overflow-hidden">
+      <div className="w-full max-w-[1280px] mx-auto lg:flex-1 lg:min-h-0">
+        <div className="px-6 lg:px-12 py-10 lg:overflow-y-auto">
+          <div className="max-w-lg">
+            <RegisterSelfHostedForm />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

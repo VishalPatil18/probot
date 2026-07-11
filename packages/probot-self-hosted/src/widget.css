@@ -1,19 +1,21 @@
 /*
- * ProBot widget styles. All selectors are scoped to the Shadow DOM root the
- * widget creates - there is no `:host { all: initial }` reset because
- * `mode: "closed"` already isolates from host-page styles.
+ * ProBot widget styles — kept in sync with `src/widget/widget.css` in the
+ * probot monorepo. Any visual change to the managed embed widget belongs
+ * in that source-of-truth file first; this copy is checked in so the npm
+ * package builds standalone (esbuild inlines it as a text import in
+ * `ProbotBot.tsx`).
+ *
+ * Class names are all `probot-*` prefixed so host-page collisions are
+ * unlikely. Unlike the managed widget (which runs inside a closed Shadow
+ * DOM), the React component renders directly into the consumer's app —
+ * host CSS *could* reach in, but the visual language stays intact for the
+ * common case.
  *
  * Theme color is applied per-instance via the `--probot-theme` CSS custom
- * property (set inline on the shadow root). The overall visual language
- * mirrors `src/components/chat/*` on the deployed /u/[username]/chat page:
- * ringed avatar with online dot, asymmetric-corner bubbles with a mini
- * bot avatar on assistant replies, pill chips, and a rounded pill input
- * that highlights the theme colour on focus.
- *
- * SOURCE OF TRUTH. `packages/probot-self-hosted/src/widget.css` is a
- * checked-in copy of this file so the npm package can be built and
- * published standalone. When you change styles here, re-copy the file
- * (or diff-apply the same change) into the package.
+ * property (set inline on `.probot-root`). Layout mirrors the deployed
+ * /u/[username]/chat page: ringed avatar with online dot, asymmetric-
+ * corner bubbles with a mini bot avatar on assistant replies, pill chips,
+ * and a rounded pill input that highlights the theme colour on focus.
  */
 
 * {

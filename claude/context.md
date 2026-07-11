@@ -3702,3 +3702,29 @@ _Tests + types:_
 - The Bot Factory "single managed row per user" implicit lookup will need to become an explicit `botId` selector when managed multi-bot ships. The `AND deployment_mode='managed'` scoping stops it silently coalescing onto self-hosted rows today; it doesn't solve the multi-managed case.
 - Any deployment still running the old cloned `probot-bot` runtime will 404 on `/api/v1/bot/{config,knowledge}` after this batch. Migration path in `docs/self-hosted-bot/troubleshooting.mdx#migrating-from-the-old-cloned-runtime`.
 - Typecheck was green after the batch (`npx tsc --noEmit -p tsconfig.json` exits 0). `.next/types/app/api/bots/[botId]/deployment/` had to be cleared once because Next's route-type generator caches the previous route shape.
+
+---
+
+### 2026-07-11 — Self-hosted register UI re-skinned to match Bot Factory
+
+**Prompt.** The self-hosted bot register page (`/dashboard/bots/new-self-hosted`) looked visually distinct from the managed Bot Factory flow (`/dashboard/bots/new`). Bring it into the same design language so the two creation surfaces feel like one product.
+
+**What I did.** Presentational-only restyle. No API, schema, shared component, or behavioral change.
+
+**Files changed.**
+- `src/app/(dashboard)/dashboard/bots/new-self-hosted/page.tsx` — UPDATE. Replaced the ad-hoc `max-w-xl px-6 py-14 lg:px-8` container with the exact wrapper `BotFactoryForm` uses: outer `flex flex-col lg:h-full lg:overflow-hidden` → `max-w-[1280px] mx-auto lg:flex-1 lg:min-h-0` → inner `px-6 lg:px-12 py-10 lg:overflow-y-auto` → `max-w-lg` form column. Moved the eyebrow/title/subtitle out of the page (into the form component) so the "form" and "success" states can share the same `StepHeading`-shaped block.
+- `src/app/(dashboard)/dashboard/bots/new-self-hosted/RegisterSelfHostedForm.tsx` — UPDATE. Both states now wrap in `<section>` matching Bot Factory step convention. Adopted `StepHeading` typography inline (`text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2` eyebrow / `font-display text-3xl font-extrabold tracking-tight mb-2` title / `text-muted text-sm mb-8` subtitle) — inlined rather than imported because `StepHeading` hardcodes "Step X of Y" which isn't truthful for a single-step form. Rebuilt every label/input pair from `<label><span>…</span><input/></label>` to Bot Factory's `<div><label htmlFor>…</label><input id/></div>`. Label class dropped `text-sm` → `text-xs font-semibold mb-1.5`; input class picked up the missing `transition-colors`. Error alert upgraded from a bare `<p>` to the same `mt-6 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3` panel Bot Factory uses. Bottom action row replaced the full-width single button with `flex items-center justify-between mt-10 pt-6 border-t border-border-base` — **Cancel** (secondary, routes to `/dashboard`) left + **Register bot** (primary, `!px-6`) right. Success ("minted") state rebuilt to mirror `StepDeploy`: green status banner (`bg-success/10 border-success/20`), uppercase micro-label (`text-[11px] font-bold text-muted uppercase tracking-wider`) "Bot token", token in the same dark block used for the embed snippet (`rounded-xl bg-neutral-900 p-4 ring-1 ring-white/10`) with an inline Copy button styled to match `<CopyUrlButton>` on that block (added transient "Copied" state for 1.5s). Bottom action row on success: **Copy token** (secondary) + **Open dashboard** (primary).
+
+**Decisions.**
+- **No fake stepper.** Self-hosted really is one step — persona / knowledge / provider / theme all live in the customer's `probot-self-hosted` npm-package config, not in the dashboard. Faking "Step 1 of 5" chrome would misrepresent the flow. "Consistency" means shared design language, not identical layout.
+- **Inlined `StepHeading` classes instead of extending the component.** `StepHeading` hardcodes `Step {step} of {TOTAL_STEPS}` text. Adding a variant prop would touch a shared file for one caller; inlining the same tailwind classes keeps the change surgical (per CLAUDE.md §3).
+- **Wrote a 12-line inline Copy button rather than widening `CopyUrlButton`.** `CopyUrlButton` is scoped to URL copying (used in `StepDeploy`); the token isn't a URL. Reused the exact class set from `StepDeploy.tsx:147` (`shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-neutral-200 hover:bg-white/10`) so the visual is identical.
+- **No new abstraction / no `PageShell` extraction.** Only two callers of this wrapper shape exist (Bot Factory and this page); per CLAUDE.md §2 that's not enough to justify a shared component. Revisit if a third caller appears.
+
+**Verification.**
+- `npx tsc --noEmit -p tsconfig.json` → 0 errors.
+- All className strings trace to Bot Factory source lines (`StepIdentity.tsx:76`, `StepDeploy.tsx:53–147`, `BotFactoryForm.tsx:455,461,473`). No behavior touched; no test updates needed.
+
+**Open questions / follow-ups.**
+- The new success screen shares almost every className with `StepDeploy`'s embed-code block. If a third "show a copyable secret" surface appears (rotate-token modal in Settings → Deployment could be one), consider extracting a shared `<SecretBlock>` component then. Not yet.
+- The Bot Factory bottom-nav pattern (`flex items-center justify-between mt-10 pt-6 border-t border-border-base` + Cancel/Primary) is now used in three places (BotFactoryForm, this form, this form's success view). Same "wait for a third distinct caller" rule.

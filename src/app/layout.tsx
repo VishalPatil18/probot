@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Inter_Tight } from "next/font/google";
 
+import { CookieConsent } from "@/components/CookieConsent";
 import { SessionProvider } from "@/lib/auth/session-provider";
 import {
   SITE_DESCRIPTION,
@@ -57,6 +58,7 @@ export default function RootLayout({
     <html lang="en" className={`${display.variable} ${sans.variable}`}>
       <body className="font-sans bg-bg-app text-ink min-h-screen">
         <SessionProvider>{children}</SessionProvider>
+        <CookieConsent />
       </body>
     </html>
   );
