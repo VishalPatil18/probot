@@ -8,10 +8,6 @@ export const metadata = {
   title: "Notifications · ProBot",
 };
 
-// Standalone notifications inbox. Same component that renders inside the
-// Settings "Notifications" tab; this route just gives it a dedicated URL
-// so the sidebar and the bell-dropdown "See all" link have a stable
-// destination.
 export default async function NotificationsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {

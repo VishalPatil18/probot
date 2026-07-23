@@ -4,18 +4,11 @@ import { requireBotToken } from "@/lib/bot-tokens/service";
 import { captureLead } from "@/lib/leads/capture";
 import { leadCaptureInput } from "@/lib/leads/schemas";
 
-// POST /api/v1/bot/leads
-//
-// The self-hosted runtime forwards a captured recruiter email. Reuses the
-// shared `captureLead` core (lead + conversation recruiter-email + dashboard
-// notification, idempotent on (botId, conversationId, email)), so leads from a
-// self-hosted bot show up in the owner's dashboard exactly like managed ones.
 export async function POST(request: Request): Promise<Response> {
   const auth = await requireBotToken(request.headers);
   if (!auth.ok) return auth.response;
   const { bot } = auth;
   if (!bot.userId) {
-    // An orphaned bot (owner deleted) can't route a notification; reject.
     return NextResponse.json({ error: "bot_unavailable" }, { status: 409 });
   }
 

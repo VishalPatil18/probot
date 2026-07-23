@@ -3,11 +3,6 @@ import { NextResponse } from "next/server";
 
 import { db, userAvatars } from "@/lib/db";
 
-// GET /api/avatar/[userId] - public serve route for database-stored profile
-// photos. `users.image` points here for users who uploaded a custom photo;
-// the public chat page and dashboard render it directly. Default avatars are
-// plain Cloudinary URLs and never reach this route.
-
 export const dynamic = "force-dynamic";
 
 export async function GET(

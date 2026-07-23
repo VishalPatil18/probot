@@ -29,9 +29,6 @@ export default async function NewBotPage() {
   });
   if (!userRow) redirect("/login");
 
-  // Bot Factory is managed-only. Self-hosted bots live under
-  // /dashboard/bots/new-self-hosted and never enter this upsert path, so we
-  // scope the "existing bot" lookup to the managed one.
   const existing = await db.query.bots.findFirst({
     where: and(
       eq(bots.userId, session.user.id),

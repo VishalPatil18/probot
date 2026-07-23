@@ -16,8 +16,6 @@ describe("extractPdfText", () => {
   });
 
   it("rejects oversized buffer as file_too_large", async () => {
-    // Build a buffer that starts with PDF magic but exceeds the cap.
-    // 10MB + 1 byte; magic at the head doesn't matter because size check comes first.
     const oversize = Buffer.alloc(MAX_PDF_BYTES + 1, 0);
     await expect(extractPdfText(oversize)).rejects.toMatchObject({
       category: "file_too_large",
@@ -32,8 +30,6 @@ describe("extractPdfText", () => {
   });
 
   it("rejects PDF-magic-but-corrupt as pdf_unreadable", async () => {
-    // Starts with %PDF- so it passes the magic check, but the rest is garbage
-    // so pdf-parse will throw.
     const corrupt = Buffer.concat([
       Buffer.from("%PDF-1.4\n"),
       Buffer.from("this is not a valid PDF body, just noise"),
@@ -43,9 +39,6 @@ describe("extractPdfText", () => {
       expect.fail("expected throw");
     } catch (e) {
       expect(e).toBeInstanceOf(IngestionError);
-      // pdf-parse may either throw (pdf_unreadable) or return empty text
-      // (empty_extract) depending on how far it gets. Both are acceptable
-      // failure modes for malformed PDF-shaped input.
       const cat = (e as IngestionError).category;
       expect(["pdf_unreadable", "empty_extract"]).toContain(cat);
     }

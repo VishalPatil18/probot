@@ -4,7 +4,7 @@ import { db, passwordResetTokens } from "@/lib/db";
 
 import { generateRawToken, hashToken } from "./tokens";
 
-const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const TOKEN_TTL_MS = 60 * 60 * 1000;
 
 interface CreateResult {
   rawToken: string;
@@ -47,9 +47,6 @@ export async function validateAndConsumeToken(
     return { valid: false, reason: "expired" };
   }
 
-  // Mark used in the same transaction-equivalent guard. We rely on the
-  // unique index on token_hash + the WHERE used_at IS NULL clause so two
-  // concurrent consumes both can't succeed.
   const updated = await db
     .update(passwordResetTokens)
     .set({ usedAt: new Date() })

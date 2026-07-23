@@ -138,11 +138,6 @@ describe("checkRateLimit - per-bot overrides (Stage 7 §FR-010.9)", () => {
   });
 });
 
-// ---- Redis-backed path ----------------------------------------------------
-
-// Faithful in-JS fake of the sorted-set operations the rate limiter's Lua
-// scripts perform, so the Redis code path is exercised without a live server.
-// Identified by keyword: the HIT script ZADDs, the rollback script ZREMs.
 function makeFakeRedis(): RedisLike {
   const sets = new Map<string, Map<string, number>>();
   return {
@@ -168,7 +163,6 @@ function makeFakeRedis(): RedisLike {
         sets.set(key, zset);
         return [1, 0] as never;
       }
-      // rollback (ZREM)
       const [member] = args as unknown as [string];
       zset.delete(member);
       sets.set(key, zset);
@@ -211,7 +205,6 @@ describe("checkRateLimit - Redis-backed", () => {
   });
 
   it("rolls back the minute slot when the day cap rejects", async () => {
-    // perMinute high so the day axis fails first; perDay tiny so it trips.
     for (let i = 0; i < 2; i++) {
       await checkRateLimit("bot-c", { perMinute: 50, perDay: 2 }, T0 + i * 10);
     }
@@ -222,8 +215,6 @@ describe("checkRateLimit - Redis-backed", () => {
     );
     expect(blocked.ok).toBe(false);
     if (!blocked.ok) expect(blocked.scope).toBe("per_day");
-    // The rejected request must not have consumed a minute slot: only the 2
-    // allowed requests count, so a fresh request under a higher day cap is ok.
     const after = await checkRateLimit(
       "bot-c",
       { perMinute: 50, perDay: 50 },

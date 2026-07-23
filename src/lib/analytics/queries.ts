@@ -2,16 +2,6 @@ import { eq, sql } from "drizzle-orm";
 
 import { bots, conversations, db, leads, messages } from "@/lib/db";
 
-// Shared analytics queries. The `/api/bots/[botId]/analytics`
-// route and the `/dashboard` + `/dashboard/bots/[botId]` pages all
-// call into this module so the SQL lives in one place.
-//
-// Both functions use parallel small COUNTs scoped by `bot_id` / `user_id`
-// rather than the plan's 4-way LEFT JOIN. The JOIN multiplies rows
-// (cartesian product of conversations × messages × leads) before the SUMs
-// aggregate them. Three small COUNTs each hit a small per-bot index slice
-// and return one row.
-
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type BotAnalytics = {
@@ -62,9 +52,6 @@ export type UserAnalytics = {
   totalMessages: number;
   totalLeads: number;
   leadsThisMonth: number;
-  // Period-over-period counts powering the live "% change" stats on the
-  // dashboard. Conversations compare the last 7 days vs the prior 7;
-  // leads compare the last 30 days vs the prior 30.
   conversationsThisWeek: number;
   conversationsPrevWeek: number;
   messagesThisWeek: number;
@@ -74,8 +61,6 @@ export type UserAnalytics = {
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Aggregates across every bot owned by `userId`. Used by the dashboard
-// home stat row.
 export async function getAnalyticsForUser(
   userId: string,
 ): Promise<UserAnalytics> {
@@ -134,9 +119,6 @@ export async function getAnalyticsForUser(
   };
 }
 
-// Format a period-over-period change as a signed percentage string for the
-// dashboard stat cards. Returns null when there's no prior-period baseline (so
-// the card can hide the chip instead of showing a misleading "+100%").
 export function formatGrowth(
   current: number,
   previous: number,
@@ -146,11 +128,6 @@ export function formatGrowth(
   return `${pct >= 0 ? "+" : ""}${pct}%`;
 }
 
-// Daily conversation counts for the last N days, scoped to a user.
-// Powers the curvy line chart on the dashboard home. Postgres
-// `date_trunc` rolls timestamps down to day boundaries; we emit one row
-// per day even for zero-count days by left-joining a generated series
-// so the chart doesn't have gaps in its X axis.
 export type DailyCount = { date: string; count: number };
 
 const MAX_DAILY_RANGE = 365;
@@ -160,13 +137,7 @@ export async function getDailyConversationCounts(args: {
   days: number;
 }): Promise<DailyCount[]> {
   const { userId } = args;
-  // Clamp `days` defensively - a million-day request would generate a
-  // million-row series in Postgres. The dashboard caller passes 7
-  // today; the cap is generous (a year) while still bounded.
   const days = Math.min(MAX_DAILY_RANGE, Math.max(1, Math.floor(args.days)));
-  // generate_series produces one row per day from N-days-ago to today,
-  // and the left join attaches the conversation count for that day.
-  // `COALESCE(count, 0)` ensures gap-free output.
   const rows = await db.execute<{ date: string; count: string }>(sql`
     SELECT
       to_char(d::date, 'YYYY-MM-DD') AS date,

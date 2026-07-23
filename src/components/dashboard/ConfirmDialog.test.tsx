@@ -95,10 +95,8 @@ describe("ConfirmDialog", () => {
         onCancel={onCancel}
       />,
     );
-    // Inner panel: clicking the title text shouldn't cancel
     fireEvent.click(screen.getByText("Delete?"));
     expect(onCancel).not.toHaveBeenCalled();
-    // Backdrop click: fires onCancel
     fireEvent.click(screen.getByRole("dialog"));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });

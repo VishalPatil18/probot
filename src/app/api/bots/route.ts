@@ -7,12 +7,6 @@ import { mintPreviewToken } from "@/lib/bots/preview-token";
 import { botInput } from "@/lib/bots/schemas";
 import { bots, db, users } from "@/lib/db";
 
-// New bots default to draft (is_active=false). The
-// creator gets a `previewUrl` that includes a signed preview token so they
-// can chat against the bot at `/u/<username>/chat?preview=<token>` before
-// flipping the live switch. Existing bots (one-bot-per-user model) keep
-// whatever isActive value they already have - this route only changes the
-// behaviour for net-new INSERTs.
 export async function POST(request: Request): Promise<Response> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -45,17 +39,11 @@ export async function POST(request: Request): Promise<Response> {
       })
       .where(eq(users.id, userId));
 
-    // Bot Factory is managed-only. Never coalesce onto a self-hosted row.
     const existing = await tx.query.bots.findFirst({
       where: and(eq(bots.userId, userId), eq(bots.deploymentMode, "managed")),
     });
 
     if (existing) {
-      // Re-saving a still-draft bot needs to hydrate Step 5 with a
-      // preview token so the Publish button renders. If the row lost
-      // its previewToken (nulled at publish time) or never had one,
-      // mint a fresh one here — only for draft bots; published rows
-      // deliberately keep `previewToken=null`.
       const nextPreviewToken =
         existing.isActive
           ? existing.previewToken
@@ -99,13 +87,7 @@ export async function POST(request: Request): Promise<Response> {
         personality: input.personality,
         contextText: input.contextText,
         suggestedQuestions: input.suggestedQuestions,
-        // Explicit isActive=false so a future column default flip
-        // can't accidentally publish drafts. previewToken is minted from the
-        // brand-new bot id, then UPDATEd onto the same row in the next
-        // statement (we need the id before we can mint the token).
         isActive: false,
-        // Bot Factory only creates managed bots. Self-hosted bots go through
-        // /api/bots/self-hosted, which sets deployment_mode explicitly.
         ...(input.contextTokenCap !== undefined
           ? { contextTokenCap: input.contextTokenCap }
           : {}),

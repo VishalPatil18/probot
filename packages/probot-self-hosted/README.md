@@ -72,13 +72,13 @@ hosted` ships three server-only adapters that all return the same
 | OpenAI | `createOpenAIHandler` | `probot-self-hosted/adapters/openai` | none |
 | Anthropic (Claude) | `createAnthropicHandler` | `probot-self-hosted/adapters/anthropic` | `@anthropic-ai/sdk` |
 | Google (Gemini) | `createGoogleHandler` | `probot-self-hosted/adapters/google` | `@google/generative-ai` |
-| Grok, Ollama, Azure OpenAI, LM Studio, together.ai, DeepSeek, Mistral… | `createOpenAIHandler` with `baseUrl` | `probot-self-hosted/adapters/openai` | none |
+| Grok, Azure OpenAI, LM Studio, together.ai, DeepSeek, Mistral… | `createOpenAIHandler` with `baseUrl` | `probot-self-hosted/adapters/openai` | none |
 
 The Anthropic and Google SDKs are **optional peer dependencies**: install
 them only if you use those adapters. If you only ship OpenAI (or an
 OpenAI-compatible endpoint), there's zero extra bundle cost.
 
-### OpenAI-compatible providers (Grok, Ollama, Azure, …)
+### OpenAI-compatible providers (Grok, Azure, …)
 
 Every provider whose API mimics OpenAI's `POST /v1/chat/completions` works
 through the same `createOpenAIHandler` — just point `baseUrl` at their host
@@ -90,13 +90,6 @@ createOpenAIHandler({
   baseUrl: "https://api.x.ai/v1",
   apiKey: process.env.XAI_API_KEY!,
   model: "grok-4",
-});
-
-// Ollama (local, no key needed)
-createOpenAIHandler({
-  baseUrl: "http://localhost:11434/v1",
-  apiKey: "ollama",
-  model: "llama3.2",
 });
 
 // Azure OpenAI (baseUrl points at your deployment)

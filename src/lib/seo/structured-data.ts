@@ -1,9 +1,5 @@
 import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from "./site";
 
-// JSON-LD structured data for the landing page. Two graphs help search engines
-// understand the brand (Organization) and the product (SoftwareApplication, a
-// free web app) - which can unlock richer SERP treatment.
-
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
 

@@ -3,11 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-// Site-wide cookie consent banner. Mounts in the root layout so every
-// public surface (marketing, auth, dashboard, public chat) shows it to
-// first-time visitors. Dismissal is persisted in localStorage; accepted
-// users never see it again on this device. Starts hidden on the server
-// so hydration matches for already-consented visitors.
 const STORAGE_KEY = "probot.cookie-consent";
 
 export function CookieConsent() {
@@ -19,8 +14,6 @@ export function CookieConsent() {
         setVisible(true);
       }
     } catch {
-      // Private mode / blocked storage — still show the banner so the
-      // visitor gets the notice at least once per pageview.
       setVisible(true);
     }
   }, []);
@@ -31,7 +24,6 @@ export function CookieConsent() {
     try {
       window.localStorage.setItem(STORAGE_KEY, "accepted");
     } catch {
-      // Non-fatal — banner will reappear next load, which is fine.
     }
     setVisible(false);
   }

@@ -1,14 +1,5 @@
 import type { SendMessage } from "../types";
 
-// Server-side helper. Consumers call this in their own API route (Next.js,
-// Express, etc.) to build a `SendMessage` backed by any OpenAI-compatible
-// endpoint - OpenAI, Grok, local Ollama, LM Studio, together.ai, etc.
-//
-// This helper must NOT run in the browser: it holds the API key. The typical
-// wiring is a same-origin POST /api/chat handler that invokes this and
-// streams the reply back to the ProbotBot component through a client-side
-// `sendMessage` shim that calls `/api/chat`.
-
 export interface OpenAIHandlerOptions {
   baseUrl?: string;
   apiKey: string;

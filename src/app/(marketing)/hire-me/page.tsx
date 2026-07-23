@@ -8,7 +8,7 @@ export const metadata = buildMetadata({
   path: "/hire-me",
 });
 
-const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
+const PORTFOLIO_URL = "https://v-ai.org/";
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
 const EMAIL = "hire.vishalpatil@gmail.com";

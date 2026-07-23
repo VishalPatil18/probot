@@ -1,15 +1,6 @@
 import { DataActions } from "./DataActions";
 import { SecurityActions } from "./SecurityActions";
 
-// Security & privacy tab. Rate-limit values come straight
-// from the live rate limiter so the display reflects whatever env
-// overrides the deployment uses. Export supports per-type slicing (bots /
-// knowledge / conversations / leads / all) via the `?scope=` query param
-// on /api/users/me/export. Delete-all-data (irreversible wipe of every
-// bot + notifications, keeps the account) sits beside export as a
-// user-controlled reset. Full account deletion is a separate flow with a
-// 7-day grace window.
-
 interface Props {
   username: string;
   pendingDeletion: { scheduledPurgeAt: string } | null;

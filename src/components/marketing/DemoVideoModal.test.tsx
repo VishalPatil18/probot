@@ -4,8 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import { DemoVideoModal } from "./DemoVideoModal";
 
-// The modal renders a native <video> (jsdom doesn't implement play(), which the
-// component guards against) plus a mute/unmute toggle and a close button.
 describe("DemoVideoModal", () => {
   it("is closed until the trigger is clicked", () => {
     render(<DemoVideoModal />);

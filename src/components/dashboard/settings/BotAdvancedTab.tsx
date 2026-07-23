@@ -19,29 +19,11 @@ import { DeleteBotModal } from "../DeleteBotModal";
 import { RateLimitField } from "./fields/RateLimitField";
 import { SaveButton } from "./fields/SaveButton";
 
-// Bot Configuration → "Advanced" tab. Hosts the three sections that live
-// alongside the primary bot fields but aren't part of the day-to-day
-// persona/theme/knowledge editor:
-//   - Rate limits (per-minute, per-day, max chars per message)
-//   - Save-as-preset (snapshots the currently-persisted config into a
-//     reusable preset row)
-//   - Danger zone (delete this bot)
-//
-// The preset snapshot pulls from the `initial*` props (i.e. the last
-// values persisted to `bots`), so any unsaved edits in the Bot
-// Configuration tab do NOT leak into the preset. That's a deliberate
-// contract: a preset should always describe a shape that already exists
-// on the server.
-
 type SectionKey = "limits";
 
 type Props = {
   botId: string;
   botName: string;
-  // Snapshot fields for the preset save. These are the last-committed
-  // values from the DB; they seed the preset payload without the tab
-  // needing to know how the Bot Config tab's in-flight edits are
-  // structured.
   initialName: string;
   initialHeadline: string;
   initialPersonality: Personality;

@@ -10,24 +10,6 @@ import {
   notifications,
 } from "@/lib/db";
 
-// Hard-wipes every piece of user-generated data (bots + everything that
-// cascades off them, plus notifications) while keeping the user's account
-// row intact. Distinct from account deletion which schedules a full purge
-// including the `users` row after a 7-day grace window.
-//
-// Order of operations:
-//   1. Count child rows first, so the API response can report what was
-//      removed - Postgres CASCADE otherwise leaves no trace we can surface.
-//   2. `DELETE FROM notifications WHERE user_id = ?` - includes both
-//      bot-scoped and bot-independent notifications.
-//   3. `DELETE FROM bots WHERE user_id = ?` - cascades kill
-//      knowledge_base, conversations, messages, leads, bot_tokens,
-//      encrypted_llm_keys, and bot_avatars for those bots.
-//
-// Wrapped in a transaction so a mid-flight failure leaves nothing
-// half-deleted; the count queries run inside so a concurrent write
-// between count-and-delete can't skew the returned totals.
-
 export interface PurgeSummary {
   bots: number;
   knowledge: number;
@@ -84,8 +66,6 @@ export async function purgeUserData(userId: string): Promise<PurgeSummary> {
       .where(eq(notifications.userId, userId))
       .returning({ id: notifications.id });
 
-    // Cascading FKs (`ON DELETE CASCADE`) take care of every child of
-    // `bots` in one Postgres statement.
     const deletedBots = await tx
       .delete(bots)
       .where(eq(bots.userId, userId))
@@ -102,10 +82,6 @@ export async function purgeUserData(userId: string): Promise<PurgeSummary> {
   });
 }
 
-// Purge scoped to a single bot for the same owner. Kept alongside the
-// full-purge so both flows share the same "count first, then delete"
-// safety pattern. Not currently wired to a UI; exported for future use
-// and to document the intended shape.
 export async function purgeBotData(
   userId: string,
   botId: string,

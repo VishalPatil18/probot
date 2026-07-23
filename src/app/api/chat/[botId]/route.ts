@@ -15,15 +15,10 @@ import {
   persistConversation,
   recordDecryptAudit,
   resolveAzureExtras,
-  resolveOllamaExtras,
   resolveProviderAndKey,
   retrieveChunks,
 } from "./pipeline";
 
-// CORS preflight for the embeddable widget. The widget POSTs from
-// arbitrary origins (janedoe.com, etc.) so the browser fires OPTIONS first.
-// next.config.js sets CORS headers on the POST response; this handler
-// answers the preflight before the POST fires.
 export function OPTIONS(): Response {
   return corsPreflight();
 }
@@ -38,20 +33,16 @@ export async function POST(
   request: Request,
   { params }: RouteContext,
 ): Promise<Response> {
-  // 1-5. Content-type, optional BYO key header, body size cap, parse, validate.
   const parsed = await parseChatRequest(request);
   if (!parsed.ok) return parsed.response;
 
-  // 6-7. Bot lookup (+ draft preview-token auth) and owner lookup.
   const loaded = await loadBotAndOwner(request, params.botId);
   if (!loaded.ok) return loaded.response;
   const { botRow, ownerRow } = loaded;
 
-  // 8-8b. Per-bot rate limit + maxChars ceiling.
   const limited = await enforceLimits(botRow, parsed.message);
   if (!limited.ok) return limited.response;
 
-  // 9. Input sanitize
   const sanitized = sanitizeInput(parsed.message);
   if (!sanitized.ok) {
     return NextResponse.json(
@@ -60,21 +51,20 @@ export async function POST(
     );
   }
 
-  // 9b. Optional RAG retrieval (falls back to full-context on any failure).
   const relevantChunks = await retrieveChunks(
     request,
     botRow.id,
     sanitized.message,
   );
 
-  // 10-10b. Resolve provider + LLM API key (header > managed > fail).
   const resolved = await resolveProviderAndKey(
     botRow,
     ownerRow,
     parsed.headerApiKey,
   );
   if (!resolved.ok) return resolved.response;
-  const { providerName, provider, apiKey, managedKeyUsed } = resolved;
+  const { providerName, provider, apiKey, managedKeyUsed, managedAzure } =
+    resolved;
 
   const personality: Personality = isPersonality(botRow.personality)
     ? botRow.personality
@@ -90,14 +80,9 @@ export async function POST(
     ...(relevantChunks ? { relevantChunks } : {}),
   });
 
-  // Provider-specific runtime config carried in custom headers: Azure's
-  // endpoint/apiVersion, or Ollama's base URL. Only one applies per request.
-  const azure = resolveAzureExtras(request, providerName);
+  const azure = resolveAzureExtras(request, providerName, managedAzure);
   if (!azure.ok) return azure.response;
-  const ollama = resolveOllamaExtras(request, providerName);
-  if (!ollama.ok) return ollama.response;
 
-  // Provider call (per-provider circuit breaker + graceful fallback).
   const called = await callProvider({
     providerName,
     provider,
@@ -105,19 +90,16 @@ export async function POST(
     userMessage: sanitized.message,
     apiKey,
     model: ownerRow.llmModel,
-    extras: azure.extras ?? ollama.extras,
+    extras: azure.extras,
   });
   if (!called.ok) return called.response;
 
-  // 11. Output sanitize
   const reply = sanitizeOutput(called.reply);
 
-  // 11b. Decrypt audit-log row when the managed key served the request.
   if (managedKeyUsed) {
     await recordDecryptAudit(request, botRow.id);
   }
 
-  // 12. Persist conversation + messages (analytics; never blocks the reply).
   const conversationId = await persistConversation({
     botId: params.botId,
     sessionId: parsed.sessionId,
@@ -127,6 +109,5 @@ export async function POST(
     botName: botRow.name,
   });
 
-  // 13. Done
   return NextResponse.json({ reply, conversationId });
 }

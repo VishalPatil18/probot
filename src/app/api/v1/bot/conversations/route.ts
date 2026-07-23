@@ -6,14 +6,6 @@ import { requireBotToken } from "@/lib/bot-tokens/service";
 import { conversations, db, messages } from "@/lib/db";
 import { emitNotification } from "@/lib/notifications/emit";
 
-// POST /api/v1/bot/conversations
-//
-// The self-hosted runtime posts a chat turn's transcript back so the owner's
-// dashboard analytics (conversations + messages) work the same as for managed
-// bots. UPSERT on (bot_id, session_id) coalesces concurrent tabs into one
-// conversation - identical to the managed chat route's persistence block.
-// Returns the conversationId so the runtime can attach a later lead to it.
-
 const bodySchema = z.object({
   sessionId: z.string().uuid(),
   messages: z
@@ -61,9 +53,6 @@ export async function POST(request: Request): Promise<Response> {
         })
         .returning({
           id: conversations.id,
-          // xmax=0 means "row was inserted by this statement" (vs. the
-          // ON CONFLICT UPDATE branch). Used to fire the
-          // conversation_started notification only for the first turn.
           isInsert: sql<boolean>`xmax = 0`,
         });
       if (!convo) throw new Error("conversation_upsert_failed");

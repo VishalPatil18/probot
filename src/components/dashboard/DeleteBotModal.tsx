@@ -2,14 +2,6 @@
 
 import { useEffect, useId, useState } from "react";
 
-// Sister modal to DeleteAccountModal, scoped to a single bot. Same
-// GitHub-style two-input confirmation - the user types the bot's NAME
-// (not the user's username, which is different) and the literal phrase.
-// Bot deletion is immediate (no 7-day grace) because (a) the operational
-// implications are smaller than account deletion and (b) the user can
-// recreate the bot from scratch via /dashboard/bots/new. The "what gets
-// deleted" copy is explicit about the per-bot scope.
-
 const CONFIRM_PHRASE = "delete this bot";
 
 interface Props {

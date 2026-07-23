@@ -56,7 +56,6 @@ export function HeroSection() {
           </div>
         </div>
 
-        {/* Live bot card */}
         <div className="relative rise" style={{ animationDelay: ".1s" }}>
           <div className="absolute -inset-4 bg-brand/5 rounded-[2rem] blur-2xl" />
           <div className="relative bg-white rounded-2xl border border-border-base shadow-floating overflow-hidden">

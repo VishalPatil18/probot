@@ -15,9 +15,6 @@ vi.mock("@/lib/db", () => ({
   verificationTokens: {} as Record<string, unknown>,
 }));
 
-// DrizzleAdapter runs dialect detection on the real `db` at module-load. Our
-// mock db is a plain object - bypass with a no-op adapter so this unit test
-// stays focused on CredentialsProvider.authorize().
 vi.mock("@auth/drizzle-adapter", () => ({
   DrizzleAdapter: () => ({}),
 }));
@@ -30,9 +27,6 @@ type AuthorizeFn = (
 ) => Promise<{ id: string; username: string; email: string } | null>;
 
 function getAuthorize(): AuthorizeFn {
-  // NextAuth v4 CredentialsProvider stashes the user-supplied authorize on
-  // `.options.authorize`; the top-level `.authorize` is a default `() => null`
-  // stub. Reach for the user's function explicitly.
   const provider = authOptions.providers[0] as
     | { options?: { authorize?: AuthorizeFn } }
     | undefined;

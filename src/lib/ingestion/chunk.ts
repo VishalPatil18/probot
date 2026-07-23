@@ -24,14 +24,10 @@ function getEncoder(): Tiktoken {
   return cachedEncoder;
 }
 
-// Test-only reset. Re-acquires the encoder on the next call.
 export function __resetEncoder(): void {
   cachedEncoder = null;
 }
 
-// Splits `text` into overlapping token-bounded chunks using the cl100k_base
-// encoding. Default 750 tokens per chunk with 100-token overlap. Throws
-// `IngestionError("empty_input")` if `text` is whitespace-only.
 export function chunkText(text: string, opts: ChunkOptions = {}): Chunk[] {
   const targetTokens = opts.targetTokens ?? DEFAULT_TARGET_TOKENS;
   const overlapTokens = opts.overlapTokens ?? DEFAULT_OVERLAP_TOKENS;
@@ -81,4 +77,3 @@ export function chunkText(text: string, opts: ChunkOptions = {}): Chunk[] {
 
   return chunks;
 }
-

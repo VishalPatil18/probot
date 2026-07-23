@@ -13,7 +13,6 @@ vi.mock("@/lib/auth/email", () => ({
   sendLeadCapturedEmail: (...args: unknown[]) => sendLeadEmailMock(...args),
 }));
 
-// Captures for transaction-internal assertions
 const txCalls: {
   leadInsertValues?: Record<string, unknown>;
   conversationUpdateSet?: Record<string, unknown>;
@@ -93,7 +92,6 @@ function resetTransactionMock() {
         insert: () => {
           insertCallCount += 1;
           if (insertCallCount === 1) {
-            // leads insert with .returning()
             return {
               values: (v: Record<string, unknown>) => {
                 txCalls.leadInsertValues = v;
@@ -112,7 +110,6 @@ function resetTransactionMock() {
               },
             };
           }
-          // notifications insert
           return {
             values: (v: Record<string, unknown>) => {
               txCalls.notificationInsertValues = v;
@@ -193,7 +190,6 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
     findBotMock.mockReset();
     findLeadMock.mockReset();
     selectMock.mockReset();
-    // Owner not opted into lead emails by default (no email sent).
     findUserMock
       .mockReset()
       .mockResolvedValue({ email: "owner@x.com", notifyLeadsEmail: false });
@@ -267,7 +263,6 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
     expect(body.deduped).toBe(false);
     expect(body.lead.id).toBe("lead-new");
 
-    // Atomic transaction: all three writes captured
     expect(txCalls.leadInsertValues).toMatchObject({
       botId: BOT_ID,
       conversationId: CONV_ID,
@@ -354,7 +349,6 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
     };
     expect(body.deduped).toBe(true);
     expect(body.lead.id).toBe("lead-existing");
-    // No transaction was opened - idempotent path skips the write entirely
     expect(transactionMock).not.toHaveBeenCalled();
   });
 
@@ -420,7 +414,6 @@ describe("POST /api/bots/[botId]/leads (CORS-public)", () => {
       userId: "u-1",
       name: "Jane Doe",
     });
-    // No conversationId → route falls through to the .select() fallback.
     selectMock.mockReturnValueOnce(
       chainResolving([
         {

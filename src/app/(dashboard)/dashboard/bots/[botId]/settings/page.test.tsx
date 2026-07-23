@@ -131,11 +131,9 @@ describe("BotSettingsPage (5-tab)", () => {
     findBotMock.mockResolvedValueOnce(botFixture());
     const tree = await renderPage();
     render(tree);
-    // Account tab renders the Profile heading
     expect(
       screen.getByRole("heading", { name: /^profile$/i }),
     ).toBeInTheDocument();
-    // Bot configuration's Save button is NOT visible on Account tab
     expect(screen.queryByText(/save bot settings/i)).toBeNull();
   });
 
@@ -176,7 +174,6 @@ describe("BotSettingsPage (5-tab)", () => {
     expect(
       screen.getByRole("heading", { name: /provider & model/i }),
     ).toBeInTheDocument();
-    // The live editor has the Managed key + Decrypt audit log sections.
     expect(
       screen.getByRole("heading", { name: /managed key storage/i }),
     ).toBeInTheDocument();
@@ -191,7 +188,6 @@ describe("BotSettingsPage (5-tab)", () => {
     findBotMock.mockResolvedValueOnce(botFixture());
     const tree = await renderPage();
     render(tree);
-    // Account is the default tab
     expect(
       screen.getByRole("heading", { name: /^profile$/i }),
     ).toBeInTheDocument();
@@ -209,7 +205,6 @@ describe("BotSettingsPage (5-tab)", () => {
     );
     const tree = await renderPage();
     render(tree);
-    // BotConfig tab rendered without crashing on the unknown enum value
     expect(
       screen.getByRole("heading", { name: /bot status/i }),
     ).toBeInTheDocument();

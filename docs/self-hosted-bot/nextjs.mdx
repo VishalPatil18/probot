@@ -11,7 +11,7 @@ ship.
 
 - Next.js `14.x` or later, App Router (`app/` directory).
 - Node 20+ (for `Response.json`, `fetch`).
-- An LLM API key (OpenAI, Grok, Ollama, LM Studio, or any other
+- An LLM API key (OpenAI, Grok, LM Studio, or any other
   OpenAI-compatible endpoint).
 - Optional: a `pbt_…` bot token if you want dashboard analytics.
 
@@ -60,7 +60,6 @@ const send = createOpenAIHandler({
   model: "gpt-4o-mini",
   // Optional overrides:
   // baseUrl: "https://api.x.ai/v1",         // e.g. Grok
-  // baseUrl: "http://localhost:11434/v1",   // e.g. local Ollama
   // temperature: 0.5,
   // maxTokens: 800,
 });

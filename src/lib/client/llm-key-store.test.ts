@@ -13,19 +13,7 @@ import {
 } from "./llm-key-store";
 import { __resetSecureKeyStoreForTests } from "./secure-key-store";
 
-// fake-indexeddb hangs `indexedDB` on the global; jsdom's `window` is the
-// global object too. We re-export so the SUT's `window.indexedDB` check
-// passes.
-//
-// crypto.subtle: vitest's jsdom env exposes Node's WebCrypto via
-// `globalThis.crypto.subtle`. We assert it before running so a future
-// runtime swap doesn't silently make these tests pass-by-skip.
-
 beforeEach(async () => {
-  // Close + drop the cached DB connection from the previous test before
-  // we delete the database; otherwise `deleteDatabase` blocks forever
-  // waiting for the open connection to close (fake-indexeddb fires
-  // `onblocked` and never settles).
   await __resetSecureKeyStoreForTests();
   await new Promise<void>((resolve) => {
     const req = indexedDB.deleteDatabase("probot-secure-store");
@@ -89,7 +77,6 @@ describe("llm-key-store", () => {
     const value = await getApiKey();
     expect(value).toBe("sk-legacy-migrated-1234567890");
     expect(window.localStorage.getItem("probot.llm.key.v1")).toBeNull();
-    // Subsequent read should hit IDB and produce the same value.
     expect(await getApiKey()).toBe("sk-legacy-migrated-1234567890");
   });
 });

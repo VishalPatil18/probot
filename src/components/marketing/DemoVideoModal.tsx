@@ -4,11 +4,6 @@ import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/ui/Icon";
 
-// Landing-page "See a live demo" button + borderless video modal. The video
-// autoplays with sound when the modal opens and exposes the browser's native
-// player controls (play/pause, scrub, volume, speed, fullscreen). Replace the
-// placeholder URL below with the real Cloudinary asset link (or set
-// NEXT_PUBLIC_DEMO_VIDEO_URL at build time).
 const VIDEO_URL =
   "https://res.cloudinary.com/dbjdu0hvl/video/upload/v1782434715/probot/demo_mn8yv1.mp4";
 
@@ -25,10 +20,6 @@ export function DemoVideoModal() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
-  // Autoplay with sound when the modal opens. Opening is a user gesture, so
-  // most browsers allow audible autoplay; if one still blocks it, fall back to
-  // muted playback so the video at least plays - the native controls then let
-  // the viewer unmute.
   useEffect(() => {
     if (!open) return;
     const video = videoRef.current;
@@ -43,7 +34,6 @@ export function DemoVideoModal() {
         });
       }
     } catch {
-      // jsdom / autoplay blocked - safe to ignore.
     }
   }, [open]);
 

@@ -6,9 +6,6 @@ import {
   deleteSource,
 } from "@/lib/ingestion/assemble";
 
-// DELETE /api/bots/[botId]/knowledge/sources/[sourceName]
-// Deletes every chunk for one source (per-source replace semantic).
-// Reassembles `bots.context_text` afterwards.
 export async function DELETE(
   _request: Request,
   { params }: { params: { botId: string; sourceName: string } },

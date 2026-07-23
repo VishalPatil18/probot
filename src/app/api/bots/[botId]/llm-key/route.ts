@@ -7,23 +7,15 @@ import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { KekUnavailableError, encryptKey } from "@/lib/crypto/envelope";
 import { db, encryptedLlmKeys } from "@/lib/db";
 
-// POST /api/bots/[botId]/llm-key
-//
-// Managed-key storage endpoint.
-//
-// Stores the user-supplied LLM API key on pro-bot.dev encrypted with
-// envelope encryption. This is the "managed-key" opt-in: lets the bot
-// respond to recruiters even when the creator's browser is offline,
-// at the cost of trusting pro-bot.dev's infra (not its DB - DB leak alone
-// can't decrypt). The DELETE path below revokes.
-//
-// The key never appears in the response, never in a log line, never in
-// an error message. If KEK is unavailable (operator hasn't set up the
-// managed flow), we surface a 503 with a clear message rather than 500
-// so the dashboard can guide the user.
-
 const storeInput = z.object({
   apiKey: z.string().min(8).max(512),
+  azureEndpoint: z
+    .string()
+    .max(512)
+    .url()
+    .startsWith("https://")
+    .optional(),
+  azureApiVersion: z.string().min(1).max(64).optional(),
 });
 
 export async function POST(
@@ -46,10 +38,6 @@ export async function POST(
     return NextResponse.json({ error: "validation_failed" }, { status: 400 });
   }
 
-  // Read the bot owner's current provider so we can stamp it on the row.
-  // Storing it denormalised lets the chat route confirm "is the stored key
-  // for the provider this bot currently uses?" without an extra users-table
-  // read.
   const ownerRow = await db.query.users.findFirst({
     where: (users, { eq: eqOp }) => eqOp(users.id, bot.userId),
     columns: { llmProvider: true },
@@ -58,6 +46,21 @@ export async function POST(
     return NextResponse.json({ error: "provider_unset" }, { status: 400 });
   }
   const provider: ProviderName = ownerRow.llmProvider;
+
+  if (provider === "azure" && !parsed.data.azureEndpoint) {
+    return NextResponse.json(
+      {
+        error: "azure_endpoint_required",
+        message:
+          "Azure OpenAI needs its endpoint URL stored with the key. Add the endpoint and save again.",
+      },
+      { status: 400 },
+    );
+  }
+  const azureEndpoint =
+    provider === "azure" ? (parsed.data.azureEndpoint ?? null) : null;
+  const azureApiVersion =
+    provider === "azure" ? (parsed.data.azureApiVersion ?? null) : null;
 
   let payload: ReturnType<typeof encryptKey>;
   try {
@@ -76,7 +79,6 @@ export async function POST(
     throw err;
   }
 
-  // UPSERT on bot_id - one managed key per bot. Re-submitting replaces.
   await db
     .insert(encryptedLlmKeys)
     .values({
@@ -88,6 +90,8 @@ export async function POST(
       dekIv: payload.dekIv,
       dekAuthTag: payload.dekAuthTag,
       provider,
+      azureEndpoint,
+      azureApiVersion,
     })
     .onConflictDoUpdate({
       target: encryptedLlmKeys.botId,
@@ -99,6 +103,8 @@ export async function POST(
         dekIv: payload.dekIv,
         dekAuthTag: payload.dekAuthTag,
         provider,
+        azureEndpoint,
+        azureApiVersion,
         updatedAt: new Date(),
       },
     });
@@ -106,11 +112,6 @@ export async function POST(
   return NextResponse.json({ status: "stored", provider });
 }
 
-// DELETE /api/bots/[botId]/llm-key
-//
-// Revokes the managed key. After this call, recruiters can no longer chat
-// with the bot unless the creator re-stores a key or the bot is hit with a
-// header-supplied key (self-host / dashboard test chat path).
 export async function DELETE(
   _request: Request,
   { params }: { params: { botId: string } },

@@ -41,10 +41,6 @@ type Props = {
   onItemRead: (id: string) => void;
 };
 
-// Kind-aware headline + body. Kept in sync with the same function on the
-// full inbox page (`NotificationsInbox.tsx`); the dropdown intentionally
-// re-implements it locally so the two surfaces can evolve independently
-// (compact wording here, wordier there).
 function describe(n: NotificationItem): { title: string; body: string } {
   const bot = n.payload.botName ?? "your bot";
   if (n.kind === "lead_captured") {
@@ -89,11 +85,6 @@ function relTime(iso: string): string {
   return `${day}d ago`;
 }
 
-// Dropdown panel that mounts inside <NotificationBell>. Fetches
-// the most recent 10 notifications on open, supports per-item mark-read +
-// navigate, and a "Mark all read" footer. Items are rendered with a
-// pre-denormalized payload (botName, email, contextSummary, etc.) so no
-// follow-up join queries are needed.
 export function NotificationDropdown({
   onClose,
   onAllRead,
@@ -103,8 +94,6 @@ export function NotificationDropdown({
   const [items, setItems] = useState<NotificationItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // null until loaded so the toggle stays hidden rather than flashing a
-  // possibly-wrong default.
   const [emailLeads, setEmailLeads] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -114,8 +103,6 @@ export function NotificationDropdown({
       .then((body: ListResponse) => {
         if (!alive) return;
         setItems(body.items);
-        // The lead-email pref rides the same response; keep it null (toggle
-        // hidden) when absent rather than flashing a wrong default.
         if (typeof body.notifyLeadsEmail === "boolean") {
           setEmailLeads(body.notifyLeadsEmail);
         }
@@ -129,7 +116,7 @@ export function NotificationDropdown({
   }, []);
 
   async function toggleEmailLeads(next: boolean) {
-    setEmailLeads(next); // optimistic
+    setEmailLeads(next);
     try {
       const res = await fetch("/api/users/me/notification-prefs", {
         method: "PATCH",
@@ -143,9 +130,6 @@ export function NotificationDropdown({
   }
 
   async function handleItemClick(item: NotificationItem) {
-    // Mark read first; the navigation can fire in parallel since the
-    // mark-read endpoint is idempotent (404 on already-read returns
-    // safely). We don't await before navigating.
     if (!item.readAt) {
       void fetch(`/api/notifications/${item.id}/read`, { method: "POST" });
       onItemRead(item.id);
@@ -167,8 +151,6 @@ export function NotificationDropdown({
         method: "POST",
       });
       if (!res.ok) {
-        // Don't flip the local unread state on server failure - the next
-        // poll will reconcile. A flicker is worse than no-op here.
         setError("Couldn't clear notifications.");
         return;
       }

@@ -5,11 +5,6 @@ import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { botAvatars, bots, db } from "@/lib/db";
 import { parseImageUpload, toPublicImageUrl } from "@/lib/uploads/image-upload";
 
-// POST /api/bots/[botId]/avatar - owner-gated upload of a bot's profile picture.
-// Bytes go into `bot_avatars` (one row per bot, upserted) and `bots.image` is
-// pointed at the public serve route GET /api/bot-avatar/<botId>. Same shape as
-// the user-avatar route; shares validation/sniffing via image-upload helper.
-
 export async function POST(
   request: Request,
   { params }: { params: { botId: string } },
@@ -31,10 +26,6 @@ export async function POST(
   const { buffer, contentType } = parsed;
   const botId = owner.bot.id;
 
-  // Root-relative on purpose: decouples the stored value from the writer's
-  // deployment origin so a bot uploaded on `next dev` still renders in
-  // production. `?v=` busts any cached copy of the stable avatar URL after a
-  // re-upload.
   const storedImage = `/api/bot-avatar/${botId}?v=${Date.now()}`;
 
   await db.transaction(async (tx) => {
@@ -48,7 +39,5 @@ export async function POST(
     await tx.update(bots).set({ image: storedImage }).where(eq(bots.id, botId));
   });
 
-  // Return the display-ready (absolutized) URL so the client updates its UI
-  // without a re-fetch through the config API.
   return NextResponse.json({ image: toPublicImageUrl(storedImage) });
 }

@@ -103,9 +103,6 @@ describe("PATCH /api/bots/[botId]", () => {
       PARAMS,
     );
     expect(res.status).toBe(200);
-    // Only themeColor was passed to the UPDATE SET. `isActive` is now a
-    // legitimately whitelisted field (status toggle) so it's
-    // omitted from this regression - see the dedicated isActive spec.
     const setArg = updateSetMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(setArg).toEqual({ themeColor: "#ff00aa" });
     expect(setArg).not.toHaveProperty("userId");
@@ -113,7 +110,6 @@ describe("PATCH /api/bots/[botId]", () => {
     expect(setArg).not.toHaveProperty("createdAt");
   });
 
-  // Settings page PATCHes identity fields.
   it("accepts a name+headline PATCH and forwards both to UPDATE SET", async () => {
     const res = await PATCH(
       makeRequest({ name: "Jane Doe", headline: "ML Engineer" }),

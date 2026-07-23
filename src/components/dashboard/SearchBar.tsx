@@ -11,14 +11,6 @@ type Props = {
 
 const DEBOUNCE_MS = 300;
 
-// Debounced search input for the conversations list. Pushes
-// the value to the URL via `router.replace` (so the back button doesn't
-// fill with every keystroke) and wraps the update in `useTransition` so
-// the input stays responsive while the server-rendered list re-fetches.
-//
-// Resets `?page=` to 1 implicitly by not including it in the new URL -
-// otherwise a search after navigating to page 5 would land on page 5 of
-// the filtered results, which is almost always empty.
 export function SearchBar({
   basePath,
   placeholder = "Search…",
@@ -31,9 +23,6 @@ export function SearchBar({
   const [, startTransition] = useTransition();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync state from URL when the param changes externally (server-driven
-  // navigation, browser back/forward). Without this the input could display
-  // a stale value while the rendered list reflects the new param.
   useEffect(() => {
     const next = searchParams.get(paramName) ?? "";
     setValue((prev) => (prev === next ? prev : next));
@@ -52,7 +41,6 @@ export function SearchBar({
     } else {
       params.set(paramName, next);
     }
-    // Reset to first page on every search change
     params.delete("page");
     const qs = params.toString();
     startTransition(() => {

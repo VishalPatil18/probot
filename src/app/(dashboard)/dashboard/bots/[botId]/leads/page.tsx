@@ -10,10 +10,6 @@ import { bots, db } from "@/lib/db";
 import { listLeads } from "@/lib/leads/queries";
 import { DEFAULT_LIMIT } from "@/lib/pagination";
 
-// Dashboard leads list page. Includes a "Export CSV" anchor
-// that points at the CSV export endpoint - same-origin, session
-// cookie carries auth, no JS needed.
-
 type Props = {
   params: { botId: string };
   searchParams: { page?: string };
@@ -29,9 +25,6 @@ function fmtFull(d: Date): string {
   });
 }
 
-// Defense-in-depth - same as the conversation detail page. Emails are
-// already Zod-validated at lead capture, but a malformed value must not
-// flow into an href if the schema ever drifts.
 const SAFE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function safeMailtoHref(email: string): string | null {
   return SAFE_EMAIL.test(email) ? `mailto:${email}` : null;
@@ -77,9 +70,6 @@ export default async function LeadsListPage({ params, searchParams }: Props) {
         ) : null}
       </header>
 
-      {/* No CTA on the empty state - sidebar + dashboard home both
-          surface the public URL; a duplicate "Get your URL" button
-          here would point at the now-redirected bot detail route. */}
       {items.length === 0 ? (
         <EmptyState
           title="No leads captured yet."

@@ -3788,3 +3788,59 @@ Consolidated entry covering a stack of small changes on top of the self-hosted-r
 - The two copies of `widget.css` (source-of-truth in `src/widget/`, checked-in mirror in `packages/probot-self-hosted/src/`) rely on the sync comment at the top of each. If either copy drifts, both `probot-chatbot` and `probot-self-hosted` diverge visually. Consider a CI check that `diff`s the two files and fails on mismatch. Not urgent.
 - Publishing `probot-self-hosted@0.2` (new adapters + shadow DOM + package.json exports changes) is a manual `npm publish` from the package folder. Bump version first.
 - The `manual-testing/` folder is still in root `.gitignore` (line 41). If we want the test harnesses versioned, remove that line — otherwise every collaborator recreates them locally.
+
+### 2026-07-23 — Azure joins the managed-key path (root-cause fix for "embed never answers")
+
+**Prompt.** All three `manual-testing/` harnesses "don't answer even when an API key is fed." Diagnose, grill the user on intent, fix so any third-party user can create + use bots. User confirmed target design: current managed-key architecture, made reliable.
+
+**Root cause (script-tag widget).** The tested bot's owner provider is `azure`. An `encrypted_llm_keys` row EXISTED (stored 2026-07-07), but `resolveProviderAndKey` hard-refused Azure on the managed path (`missing_llm_key` before ever reading the row) because endpoint/apiVersion weren't stored server-side. Meanwhile `POST /llm-key` accepted Azure keys, the publish guard passed (row present), and the dashboard banner stayed quiet (row present). Four surfaces disagreed about one invariant; the owner did everything right and the embed still 400'd every question. The other two harnesses were NOT bugs: `self-hosted-react` needs `OPENAI_API_KEY` in the shell env (key lives in the consumer's backend by design), `self-hosted-vanilla` is a hardcoded echo.
+
+**Fix.**
+- `src/lib/db/schema.ts` — `encrypted_llm_keys` gains nullable `azure_endpoint` (text) + `azure_api_version` (varchar 64). Endpoint/apiVersion are deployment config, not secrets — stored plaintext; only the key stays envelope-encrypted.
+- `src/app/api/bots/[botId]/llm-key/route.ts` — accepts optional `azureEndpoint` (zod: url, https-only, ≤512) + `azureApiVersion` (≤64); REFUSES an azure store without endpoint (`azure_endpoint_required`, 400) so the gap surfaces at save time, not at a recruiter's chat. Non-azure providers null both columns even if supplied.
+- `src/app/api/chat/[botId]/pipeline.ts` — azure hard-refusal deleted; azure follows the same managed lookup (row → provider match → decrypt). A legacy azure row with NULL endpoint returns `missing_llm_key` (same UX class). `resolveProviderAndKey` now returns `managedAzure {endpoint, apiVersion} | null`; `resolveAzureExtras(request, providerName, managedAzure)` prefers header creds, falls back to stored.
+- `src/app/api/chat/[botId]/route.ts` — threads `managedAzure` into `resolveAzureExtras`.
+- `src/components/bot-factory/BotFactoryForm.tsx` — wizard auto-store POST now includes `azureEndpoint`/`azureApiVersion` when provider is azure.
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` — the Azure credentials panel now ALSO posts to `/llm-key` (mirror into managed storage; blank key falls back to the browser-stored one). Stale "Azure isn't supported by managed storage" copy replaced. Review-pass fix: when the provider/model selection is dirty, PATCH `/api/users/me/llm-prefs` FIRST — the managed store stamps `users.llmProvider` server-side, so saving azure creds before the provider switch would stamp the row with the old provider and silently null the endpoint. Unused `Link` import removed.
+- `src/app/api/bots/[botId]/publish/route.ts` — guard extended: azure row without endpoint → `needs_managed_key` with re-save message.
+- `src/app/(dashboard)/dashboard/page.tsx` — "Share your bot" banner also fires for azure rows missing the endpoint.
+- Tests: `src/app/api/chat/[botId]/route.test.ts` — old "rejects Azure managed fallback" spec REPLACED by four: no-row 400, managed azure serve (decrypted key + stored extras + audit row), header-over-stored precedence, legacy-row-without-endpoint 400. NEW `src/app/api/bots/[botId]/llm-key/route.test.ts` — 4 specs (endpoint required, azure row stored with config + key never raw, non-https rejected, non-azure nulls columns).
+- `MANUAL_TESTING.md` — troubleshooting entries for `missing_llm_key` and "dashboard keys don't affect self-hosted harnesses".
+
+**Migration incident (important).** `.gitignore` line 65 ignored `/drizzle/meta/` — the Drizzle journal was never versioned, so on this machine `db:generate` saw an empty journal and produced a FULL-SNAPSHOT `0000_funny_iron_fist.sql` instead of an incremental migration; `db:migrate` "applied" it against the Supabase DB (harmless — `IF NOT EXISTS` no-ops — but the azure columns silently did NOT land, and a bogus bookkeeping row was appended). Recovery: deleted the rogue file + its `drizzle.__drizzle_migrations` row, regenerated a clean baseline `0000_crazy_kate_bishop.sql` from the pre-change schema (no-op apply), re-added the azure columns, generated `0001_dashing_dreaming_celestial.sql` (pure `ALTER TABLE ADD COLUMN`), applied, verified columns exist. Removed `/drizzle/meta/` from `.gitignore` so the journal versions from now on. NOTE: legacy `drizzle/0000_new_misty_knight.sql`–`0012_melodic_raza.sql` are now orphaned history (the new journal doesn't reference them); left in place as documentation.
+
+**Verification.** `npx tsc --noEmit` clean. Chat route 39/39, llm-key 4/4. Full suite has 36 pre-existing failures (verified identical on clean HEAD via `git stash` runs — jsdom/Node-26 environment issues in `llm-key-store`/`widget` tests plus stale BotFactoryForm specs from the earlier uncommitted masked-key work); none caused by this change.
+
+**Data follow-ups for the owner (not code):**
+- Bot `d6020046` (Vishal Patil, azure): re-save the Azure key WITH endpoint in Settings → AI Model & Key (legacy row has NULL endpoint).
+- Bots `Github bot` + `Aronbot` (openai, active, no key rows — published before the guard existed): store keys via Settings or the embeds stay dead.
+- `.env.local` DATABASE_URL points at the Supabase POOLER (prod) — local testing mutates the hosted DB. Consider a local Postgres for testing.
+
+**Open questions / follow-ups.**
+- 36 pre-existing test failures (env + stale specs) need their own session.
+- `manual-testing/self-hosted-react` still OpenAI-only; Gemini/Anthropic modes would need the optional SDKs installed in the harness.
+- Legacy orphaned migration files could be moved to an `archive/` folder for clarity — cosmetic.
+
+### 2026-07-23 — Ollama removed as a provider (everywhere)
+
+**Prompt.** "Remove ollama from the provider list from everywhere." Approved full plan including docs + package READMEs; consequence accepted: publish guard now requires a stored managed key for ALL managed bots (no more ollama exemption).
+
+**Files changed (app).**
+- DELETED `src/lib/ai/providers/ollama.ts` + `ollama.test.ts`.
+- `src/lib/ai/providers/{types,index}.ts` — `"ollama"` dropped from `ProviderName` union, registry, `PROVIDER_NAMES`.
+- `src/lib/ai/{model-options,provider-labels}.ts` — entries removed.
+- `src/lib/ai/key-transport.ts` — `readOllamaBaseUrl` + loopback-http allowance + header const deleted.
+- `src/lib/client/llm-key-store.ts` — `get/set/clearOllamaBaseUrl` + secret/legacy key names deleted.
+- `src/app/api/chat/[botId]/pipeline.ts` — placeholder-key branch + `resolveOllamaExtras` deleted.
+- `src/app/api/chat/[botId]/route.ts` — extras = azure only.
+- `src/app/api/bots/[botId]/publish/route.ts` + `src/app/(dashboard)/dashboard/page.tsx` — ollama exemptions removed from publish guard and embed banner.
+- `src/components/chat/ChatWindow.tsx` — ollama key-less path + base-url header attach removed; `x-llm-api-key` always the real key.
+- Bot Factory: `types.ts` (`ollamaBaseUrl` field), `constants.ts` (ENABLED_PROVIDERS), `BotFactoryForm.tsx` (state/hydrate/submit/auto-store branches), `StepAIModel.tsx` (base-URL + model UI branch; key input now unconditional).
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` — model placeholder ternary.
+- Tests updated: `providers/index.test.ts`, `key-transport.test.ts`, `bots/schemas.test.ts`.
+
+**Docs/packages.** `MANUAL_TESTING.md`, `docs/guides/models-and-keys.mdx` (table row, $0 note now points at Gemini free tier, "Ollama specifics" section deleted), `docs/self-hosted-bot/{models-and-keys,index,nextjs,react}.mdx`, `docs/blogs/azure-student-credits.mdx`, `packages/probot-chatbot/README.md`, `packages/probot-self-hosted/{README.md,package.json keyword,src/adapters/openai.ts comment}`, `manual-testing/self-hosted-react/README.md`. Self-hosted package dist rebuilt. `createOpenAIHandler` generic `baseUrl` mechanism intentionally KEPT (serves Grok/Azure/LM Studio/any OpenAI-compatible endpoint) — only Ollama name-drops removed.
+
+**Safety checks.** DB scanned: zero users on `llm_provider='ollama'` (openai/azure/google only), so `isProviderName` tightening strands nobody. `probot.md` (user's personal interview KB) + append-only `claude/` logs intentionally untouched.
+
+**Verification.** `npx tsc --noEmit` clean at root and in the package. Affected suites 268/268 green. Full suite: same 36 pre-existing failures, same file set as before the change, zero new.

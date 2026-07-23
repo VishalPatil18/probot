@@ -4,16 +4,6 @@ import { NextResponse } from "next/server";
 import { buildExportBundle, type ExportBundle } from "@/lib/account/export";
 import { authOptions } from "@/lib/auth/auth";
 
-// GET /api/users/me/export?scope=all|bots|knowledge|conversations|leads
-//
-// Portable JSON dump of the signed-in user's data. `scope` narrows the
-// bundle to a single category so the Security & Privacy tab can offer a
-// per-type export button. `all` (default) mirrors the previous behavior.
-// Streamed with a `Content-Disposition: attachment` header so browsers
-// offer a save dialog rather than rendering JSON in a new tab; the
-// filename encodes the scope + timestamp so repeated exports don't
-// overwrite each other.
-
 type Scope = "all" | "bots" | "knowledge" | "conversations" | "leads";
 
 const VALID_SCOPES: readonly Scope[] = [
@@ -31,12 +21,6 @@ function parseScope(raw: string | null): Scope {
   return "all";
 }
 
-// Slice a full bundle down to the fields relevant to the requested scope.
-// Keeps `user` metadata in every response so the export is self-describing
-// (which account did this dump come from, when?), but drops the
-// per-bot arrays we don't need. For `bots`, the bot rows are kept but the
-// child arrays are cleared - the intent is "give me the bot config, not
-// its history."
 function sliceBundle(bundle: ExportBundle, scope: Scope): unknown {
   if (scope === "all") return bundle;
 
@@ -73,7 +57,6 @@ function sliceBundle(bundle: ExportBundle, scope: Scope): unknown {
       })),
     };
   }
-  // scope === "leads"
   return {
     ...base,
     bots: bundle.bots.map((b) => ({

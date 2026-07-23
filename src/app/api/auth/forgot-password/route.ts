@@ -7,8 +7,6 @@ import { forgotPasswordInput } from "@/lib/auth/schemas";
 import { buildTokenUrl } from "@/lib/auth/tokens";
 import { db, users } from "@/lib/db";
 
-// Always returns 200 with the same body regardless of whether the email is
-// registered. Prevents account-enumeration via response timing or shape.
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -32,10 +30,6 @@ export async function POST(request: Request) {
     columns: { id: true, hashedPassword: true },
   });
 
-  // Only credentials-registered accounts can reset a password. OAuth-only or
-  // magic-link-only accounts have no password to reset; we silently no-op
-  // (still 200) so an attacker cannot tell which accounts use which
-  // authentication method.
   if (user && user.hashedPassword) {
     const { rawToken } = await createResetToken(user.id);
     const url = buildTokenUrl({
@@ -45,8 +39,6 @@ export async function POST(request: Request) {
     try {
       await sendPasswordResetEmail({ to: email, url });
     } catch {
-      // Swallow send failures intentionally - we don't want to leak whether
-      // the address is registered. The user can re-request.
     }
   }
 

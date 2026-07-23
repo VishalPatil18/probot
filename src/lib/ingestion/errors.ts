@@ -1,6 +1,3 @@
-// Typed taxonomy for ingestion failures.
-// The API layer maps `category` → HTTP status; the message is for server logs
-// (never echoed verbatim to the chat path).
 export type IngestionErrorCategory =
   | "invalid_file_type"
   | "file_too_large"

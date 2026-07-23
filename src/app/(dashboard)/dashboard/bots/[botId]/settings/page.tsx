@@ -14,18 +14,6 @@ import { getPendingDeletion } from "@/lib/account/delete";
 import { authOptions } from "@/lib/auth/auth";
 import { bots, db } from "@/lib/db";
 
-// Bot-scoped settings.
-//
-// Since the introduction of the dedicated Bot Configuration page, this page
-// only surfaces user-level concerns:
-//   Account            - profile + password + photo
-//   Notifications      - full inbox (list + mark read + delete)
-//   Security & privacy - rate-limit display, export, delete-account
-//
-// Legacy deep links that referenced the now-migrated tabs (?tab=bot / kb /
-// model) are 302-redirected to /dashboard/bots/[botId]/configuration so
-// bookmarks + shared URLs from before this refactor keep working.
-
 const CONFIGURATION_TABS = new Set(["bot", "kb", "model"]);
 
 function computeInitials(name: string): string {

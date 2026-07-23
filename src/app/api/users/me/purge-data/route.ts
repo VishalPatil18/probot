@@ -4,17 +4,6 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth/require-session";
 import { purgeUserData } from "@/lib/account/purge-data";
 
-// POST /api/users/me/purge-data
-//
-// Deletes every bot (and everything that cascades off it: knowledge base,
-// conversations, messages, leads, tokens, encrypted keys) plus notifications
-// for the signed-in user. Leaves the user account itself untouched so the
-// user can start fresh without re-registering.
-//
-// Requires the caller to type their username in the confirm modal so a
-// mistaken click can't wipe an active setup. The check happens against the
-// current session (never trusts a `userId` from the body).
-
 const schema = z.object({
   username: z.string().min(1).max(64),
 });

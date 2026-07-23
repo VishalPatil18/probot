@@ -10,9 +10,6 @@ function randomId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-// Headless hook consumers can build their own UI on top of. The React
-// component (`<ProbotBot />`) is a thin wrapper around this - lift the hook
-// directly when you want full styling control.
 export function useProbotChat(config: ProbotBotConfig): UseProbotChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");

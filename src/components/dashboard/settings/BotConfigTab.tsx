@@ -31,7 +31,6 @@ type Props = {
   previewToken: string | null;
 };
 
-// Each editable card saves on its own; this keys the per-section save state.
 type SectionKey = "identity" | "personality" | "questions";
 
 const PERSONALITY_CARDS: Record<
@@ -59,7 +58,6 @@ const PERSONALITY_CARDS: Record<
   },
 };
 
-// Default bot mark shown when no custom picture is set (the two-dot ProBot eye).
 function ProBotMark() {
   return (
     <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true">
@@ -69,11 +67,6 @@ function ProBotMark() {
   );
 }
 
-// Bot Configuration tab. Single PATCH per save, diffed against
-// initial values so only changed fields are sent. A future change enables the
-// previously-disabled custom-instructions textarea, adds a per-bot rate-
-// limit panel, and (for draft bots) surfaces a Publish button alongside
-// the preview link.
 export function BotConfigTab({
   botId,
   ownerUsername,
@@ -88,12 +81,7 @@ export function BotConfigTab({
   previewToken,
 }: Props) {
   const router = useRouter();
-  // State seeded from props once; subsequent prop changes do NOT clobber
-  // in-progress user edits.
   const [isActive, setIsActive] = useState(initialIsActive);
-  // The status toggle auto-saves on click (independent of "Save bot settings"),
-  // so we track its own committed baseline. The main dirty/patch diff uses this
-  // baseline, so a status flip never leaves the Save button stuck "dirty".
   const [activeBaseline, setActiveBaseline] = useState(initialIsActive);
   const [statusSaving, setStatusSaving] = useState(false);
   const [name, setName] = useState(initialName);
@@ -123,9 +111,6 @@ export function BotConfigTab({
     return () => clearTimeout(t);
   }, [savedSection]);
 
-  // Each card tracks its own unsaved-changes state so its Save button only
-  // enables for edits in that section. The status toggle auto-saves and is
-  // excluded here.
   const identityDirty =
     name !== initialName || headline !== initialHeadline;
   const personalityDirty =
@@ -137,9 +122,6 @@ export function BotConfigTab({
     initialSuggestedQuestions,
   );
 
-  // Shared PATCH for one section. Sends only the fields that changed; the
-  // endpoint is the same per-bot PATCH used by every section. An empty patch
-  // (e.g. only whitespace changed) is treated as an immediate no-op success.
   async function commit(
     key: SectionKey,
     patch: Record<string, unknown>,
@@ -209,11 +191,10 @@ export function BotConfigTab({
     void commit("questions", { suggestedQuestions });
   }
 
-  // Auto-save the live/off status immediately on toggle - no "Save" needed.
   async function handleToggleStatus(next: boolean) {
     if (statusSaving) return;
     const prev = isActive;
-    setIsActive(next); // optimistic
+    setIsActive(next);
     setStatusSaving(true);
     setStatusError(null);
     try {
@@ -223,7 +204,7 @@ export function BotConfigTab({
         body: JSON.stringify({ isActive: next }),
       });
       if (!res.ok) {
-        setIsActive(prev); // revert
+        setIsActive(prev);
         setStatusError("Couldn't update status. Please try again.");
         return;
       }
@@ -313,10 +294,6 @@ export function BotConfigTab({
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="font-bold">Bot status</h3>
-          {/* Plain <div>, not <label> - the Toggle button is its own
-              labelled control via aria-label. Wrapping it in a <label>
-              creates a redundant-click hazard on some AT configurations
-              (the label fires a synthetic click on the inner button). */}
           <div className="flex items-center gap-2 text-sm">
             <span className={isActive ? "text-success" : "text-muted"}>
               {isActive ? "Live" : "Off"}

@@ -56,7 +56,6 @@ describe("envelope encryption", () => {
 
     it("rejects payloads that have been tampered with (GCM auth tag check)", () => {
       const payload = encryptKey("sk-test");
-      // Flip a bit in the ciphertext.
       const tamperedBuf = Buffer.from(payload.ciphertext, "base64");
       tamperedBuf[0] = (tamperedBuf[0] ?? 0) ^ 0x01;
       const tampered = {
@@ -68,7 +67,6 @@ describe("envelope encryption", () => {
 
     it("rejects payloads decrypted with a different KEK", () => {
       const payload = encryptKey("sk-test");
-      // Rotate the KEK in the env, then attempt to decrypt with the new KEK.
       process.env[KEK_ENV_VAR] = fakeKekBase64();
       expect(() => decryptKey(payload)).toThrow();
     });
@@ -79,8 +77,6 @@ describe("envelope encryption", () => {
     });
 
     it("throws when KEK env var decodes to the wrong length", () => {
-      // 16 bytes, not 32 - AES-128 key incorrectly stuffed where AES-256
-      // is required.
       process.env[KEK_ENV_VAR] = randomBytes(16).toString("base64");
       expect(() => encryptKey("sk-test")).toThrow(/32 bytes/);
     });
@@ -112,11 +108,9 @@ describe("envelope encryption", () => {
       ];
       const rotated = rotateKEK(originals, oldKek, newKek);
 
-      // Old KEK can NO LONGER decrypt the rotated payloads.
       process.env[KEK_ENV_VAR] = oldKek;
       expect(() => decryptKey(rotated[0]!)).toThrow();
 
-      // New KEK CAN decrypt them, and the plaintext is unchanged.
       process.env[KEK_ENV_VAR] = newKek;
       expect(decryptKey(rotated[0]!)).toBe("sk-a");
       expect(decryptKey(rotated[1]!)).toBe("sk-b");
@@ -133,7 +127,6 @@ describe("envelope encryption", () => {
       expect(rotated!.ciphertext).toBe(original.ciphertext);
       expect(rotated!.iv).toBe(original.iv);
       expect(rotated!.authTag).toBe(original.authTag);
-      // The DEK wrapping changes since it's now encrypted under the new KEK.
       expect(rotated!.wrappedDek).not.toBe(original.wrappedDek);
     });
 

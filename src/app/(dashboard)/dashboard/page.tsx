@@ -22,15 +22,6 @@ import { getOrigin } from "@/lib/server/origin";
 
 const EMBED_GUIDE_URL = "https://pro-bot.dev/docs/embed-share";
 
-// Dashboard home - ported from design/dashboard.html.
-//
-// Layout chrome (sidebar + topbar) is provided by `(dashboard)/layout.tsx`.
-// This page renders the inner content: weekly greeting, 4 metric tiles
-// (with Coming Soon pills where the data isn't wired yet), curvy 7-day
-// chart + top topics placeholder, recent leads table, recent conversations
-// list + share-your-bot card.
-//
-// First-time users (no bots) see a focused empty-state CTA instead.
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || !session.user.username) return null;
@@ -38,8 +29,6 @@ export default async function DashboardPage() {
   const userId = session.user.id;
   const username = session.user.username;
 
-  // The layout already fetches a similar set, but a route boundary won't
-  // pass data from layout to page. Re-fetch the few pieces we need here.
   const [ownedBots, analytics, dailyCounts, recentLeads, recentConvos] =
     await Promise.all([
       db
@@ -52,8 +41,6 @@ export default async function DashboardPage() {
       listRecentConversationsForUser({ userId, limit: 5 }),
     ]);
 
-  // Greeting empty state - user has zero bots; collapse the dashboard
-  // grid to a focused "create your first bot" CTA.
   if (ownedBots.length === 0) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-12 lg:px-8">
@@ -86,10 +73,6 @@ export default async function DashboardPage() {
 
   const origin = getOrigin();
 
-  // Embed widget calls /api/chat with no BYO-key header, so it depends
-  // on either a stored managed key or a provider that doesn't need one
-  // (Ollama). Warn the owner when neither is true — otherwise every
-  // visitor question 400s with `missing_llm_key`.
   let embedNeedsKeySetup = false;
   if (selectedBot) {
     const [ownerRow, storedKey] = await Promise.all([
@@ -99,17 +82,13 @@ export default async function DashboardPage() {
       }),
       db.query.encryptedLlmKeys.findFirst({
         where: eq(encryptedLlmKeys.botId, selectedBot.id),
-        columns: { botId: true },
+        columns: { botId: true, azureEndpoint: true },
       }),
     ]);
     embedNeedsKeySetup =
-      ownerRow?.llmProvider !== "ollama" && !storedKey;
+      !storedKey ||
+      (ownerRow?.llmProvider === "azure" && !storedKey.azureEndpoint);
   }
-
-  // `ownedBots` is already pre-filtered by `eq(bots.userId, userId)` and
-  // includes the themeColor column we need for the embed snippet - so
-  // `selectedBot` is ownership-verified by construction. No need to
-  // re-query for confirmation.
 
   const firstName = (session.user.name ?? username).split(/\s+/)[0] ?? username;
   const thisWeekConvos = dailyCounts.reduce((sum, d) => sum + d.count, 0);
@@ -117,7 +96,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="max-w-[1100px] px-6 py-8 lg:px-8">
-      {/* greeting */}
       <div className="mb-8">
         <h2 className="font-display text-2xl font-extrabold tracking-tight">
           Welcome back, {firstName} 👋
@@ -144,7 +122,6 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* metric tiles */}
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricTile
           label="Total conversations"
@@ -180,7 +157,6 @@ export default async function DashboardPage() {
         <MetricTile label="Response time" value="1.4s" icon="bolt" comingSoon />
       </div>
 
-      {/* chart + topics */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-border-base bg-white p-6 shadow-soft lg:col-span-2">
           <div className="mb-6 flex items-center justify-between">
@@ -194,10 +170,8 @@ export default async function DashboardPage() {
         <TopTopicsPlaceholder />
       </div>
 
-      {/* leads table */}
       <RecentLeadsTable leads={recentLeads} />
 
-      {/* conversations + share */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <RecentConversationsList
           conversations={recentConvos}

@@ -37,7 +37,6 @@ const SECTIONS = [
 export default function TermsPage() {
   return (
     <>
-      {/* HERO */}
       <section className="dot-pattern border-b border-border-base">
         <div className="mx-auto max-w-[1180px] px-6 py-16 lg:py-20">
           <div className="max-w-3xl">
@@ -52,10 +51,8 @@ export default function TermsPage() {
         </div>
       </section>
 
-      {/* BODY */}
       <section className="bg-white">
         <div className="mx-auto max-w-[1180px] px-6 py-14 grid lg:grid-cols-[240px_1fr] gap-12">
-          {/* TOC */}
           <aside className="lg:sticky lg:top-24 self-start">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted mb-3">
               On this page
@@ -73,7 +70,6 @@ export default function TermsPage() {
             </nav>
           </aside>
 
-          {/* CONTENT */}
           <div className="max-w-3xl space-y-12 text-ink leading-relaxed">
             <section id="acceptance">
               <h2 className="font-display text-2xl font-bold mb-4">

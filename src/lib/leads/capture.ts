@@ -2,19 +2,6 @@ import { and, eq } from "drizzle-orm";
 
 import { conversations, db, leads, notifications } from "@/lib/db";
 
-// Shared lead-capture core: insert the lead, stamp the conversation's
-// recruiter email, and raise the dashboard notification - all in one
-// transaction so a partial commit can't leave a lead with no notification (or
-// a badge with no lead). Mirrors the managed POST /api/bots/[botId]/leads
-// transaction; the /api/v1/bot/leads endpoint reuses it so the
-// self-hosted runtime captures leads identically.
-//
-// Dedupe is idempotent on (botId, conversationId, lowercased email): a
-// double-submit for the same conversation returns the existing row without a
-// second notification. (The managed route additionally has a conversation-less
-// 24h window for the anonymous widget; the self-hosted runtime always supplies
-// a conversationId, so that fallback isn't needed here.)
-
 export interface CaptureLeadArgs {
   botId: string;
   ownerUserId: string;

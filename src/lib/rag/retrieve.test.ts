@@ -77,11 +77,8 @@ describe("retrieveRelevant", () => {
     });
     expect(executeMock).toHaveBeenCalledTimes(1);
     const [sqlArg] = executeMock.mock.calls[0] ?? [];
-    // drizzle `sql` template stores the static fragments under `.queryChunks`
-    // and the bound params under `.params`; the bot id should be present.
     const flat = JSON.stringify(sqlArg);
     expect(flat).toContain("bot-xyz");
-    // and the vector literal we generated:
     expect(flat).toContain("[0.1,0.2,0.3]");
   });
 
@@ -170,7 +167,6 @@ describe("retrieveRelevant", () => {
     });
     expect(out.map((c) => c.contentText)).toEqual(["a"]);
     const flat = JSON.stringify(executeMock.mock.calls[0]?.[0]);
-    // LIMIT param is bound; the value 10 should appear in params
     expect(flat).toContain("10");
   });
 

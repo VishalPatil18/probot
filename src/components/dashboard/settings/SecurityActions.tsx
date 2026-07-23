@@ -10,15 +10,6 @@ interface Props {
   pendingDeletion: { scheduledPurgeAt: string } | null;
 }
 
-// Client island that holds the destructive actions on the
-// Security tab. Renders one of three states:
-//   1. No pending deletion → "Delete account" button → opens the modal.
-//   2. Pending deletion → banner with countdown + "Undo deletion" link to
-//      the email-driven undo page. (The dashboard doesn't expose its own
-//      undo button because the typed-username re-check belongs on the
-//      undo-page form, which we want to be the one canonical surface.)
-//   3. Modal open → DeleteAccountModal renders.
-
 export function SecurityActions({ username, pendingDeletion }: Props) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,9 +37,6 @@ export function SecurityActions({ username, pendingDeletion }: Props) {
         );
         return;
       }
-      // Sign the user out so the next request doesn't render a stale
-      // session pointing at an account the user just scheduled for
-      // deletion. They can still log in during the grace period to undo.
       await signOut({ callbackUrl: "/login?deletion=scheduled" });
     } catch {
       setError("Network error. Please try again.");

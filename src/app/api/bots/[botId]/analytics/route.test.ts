@@ -21,10 +21,6 @@ const BOT_ID = "11111111-1111-1111-1111-111111111111";
 const PARAMS = { params: { botId: BOT_ID } };
 
 function chainResolving(value: unknown) {
-  // Mimics drizzle's terminal-thenable select chain: every intermediate
-  // method returns the same chain object until awaited; awaiting yields
-  // the rows array. The route does `.from().innerJoin?().where()` and
-  // `await`s the result.
   const chain: Record<string, unknown> = {};
   const ret = () => chain;
   chain.from = ret;
@@ -55,7 +51,6 @@ describe("GET /api/bots/[botId]/analytics", () => {
       bot: { id: BOT_ID },
       userId: "u-1",
     });
-    // Three parallel selects: convo totals, msg totals, lead totals
     selectMock
       .mockReturnValueOnce(chainResolving([{ total: 42, thisMonth: 9 }]))
       .mockReturnValueOnce(chainResolving([{ total: 137 }]))
@@ -79,7 +74,6 @@ describe("GET /api/bots/[botId]/analytics", () => {
       bot: { id: BOT_ID },
       userId: "u-1",
     });
-    // Empty arrays → optional-chain `?? 0` defaults kick in
     selectMock
       .mockReturnValueOnce(chainResolving([]))
       .mockReturnValueOnce(chainResolving([]))

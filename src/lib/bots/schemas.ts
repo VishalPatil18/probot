@@ -16,21 +16,12 @@ const nonEmptyTrimmed = z
   .transform((v) => v.trim())
   .refine((v) => v.length > 0, "Must not be empty");
 
-// contextText is optional/empty: the bot's knowledge can now come
-// from `knowledge_base` chunks (PDFs + text), reassembled into context_text
-// server-side. The text-only path still works (textarea content goes here).
 export const CONTEXT_TOKEN_CAP_MIN = 1_000;
 export const CONTEXT_TOKEN_CAP_MAX = 100_000;
 export const CONTEXT_TOKEN_CAP_DEFAULT = 12_000;
 
-// Custom instructions cap. Aligned with the architecture
-// blueprint; tighter caps can land later without a migration since the column
-// is `text` (no DB-level length constraint).
 export const CUSTOM_INSTRUCTIONS_MAX = 2000;
 
-// Per-bot rate-limit ceilings. Hard caps prevent a creator
-// from setting absurd values that would effectively disable abuse protection.
-// The rate-limit module enforces these too (defence in depth).
 export const RATE_LIMIT_PER_MINUTE_MAX = 100;
 export const RATE_LIMIT_PER_DAY_MAX = 5_000;
 export const RATE_LIMIT_MAX_CHARS_MAX = 32_000;
@@ -57,10 +48,7 @@ export const botInput = z.object({
     .string()
     .max(60, "Model identifier must be ≤ 60 chars")
     .optional(),
-  // Per-bot widget/badge color. Optional on create so existing
-  // forms don't break; the DB default '#7c5cff' takes over when absent.
   themeColor: themeColorSchema.optional(),
-  // Optional free-form additions to the system prompt.
   customInstructions: z
     .string()
     .max(
@@ -68,26 +56,11 @@ export const botInput = z.object({
       `Custom instructions must be ≤ ${CUSTOM_INSTRUCTIONS_MAX} chars`,
     )
     .optional(),
-  // Chat-runtime location. Persisted to `bots.deployment_mode`. Bot Factory
-  // never sets this - it always creates `managed` bots. The dedicated
-  // "Register self-hosted bot" endpoint is the only path that writes
-  // "self_hosted". Kept optional here so an older client omitting the
-  // field still validates.
   deploymentMode: z.enum(["managed", "self_hosted"]).optional(),
 });
 
 export type BotInput = z.infer<typeof botInput>;
 
-// Partial-update schema for the PATCH endpoint behind the bot
-// detail page. Limited to fields the detail page + settings page actually
-// edit so we don't accidentally widen the surface (and let an attacker
-// mass-assign e.g. `userId`, `isActive`, or `contextText`).
-//
-// The current flow widened from `themeColor` only to also include the
-// bot identity fields the settings page edits. Each field is independently
-// optional so callers can PATCH any subset; the `.refine()` rejects the
-// fully-empty body so an SQL `UPDATE … SET WHERE …` with no SET clause
-// can never reach the database.
 export const botPatchInput = z
   .object({
     name: z
@@ -99,10 +72,6 @@ export const botPatchInput = z
     headline: z
       .string()
       .max(120, "Headline must be ≤ 120 chars")
-      // Trim at parse time so a hostile / sloppy client can't store
-      // whitespace-only padding that renders as a blank-looking headline
-      // in the chat UI. After trim, the empty string is still valid -
-      // it's the way the UI signals "clear the headline".
       .transform((v) => v.trim())
       .optional(),
     personality: z.enum(PERSONALITY_PRESETS).optional(),
@@ -110,16 +79,8 @@ export const botPatchInput = z
       .array(z.string().max(200, "Each question must be ≤ 200 chars"))
       .max(6, "At most 6 suggested questions")
       .optional(),
-    // Live/off status toggle. Inactive bots reject chat requests (the chat
-    // route gates on `bots.is_active`) and don't accept lead capture (the
-    // export endpoint gates on it too). Exposed here so the settings page
-    // can flip the bit.
     isActive: z.boolean().optional(),
     themeColor: themeColorSchema.optional(),
-    // Dashboard editor for the prompt addendum. The
-    // empty string is a legitimate "clear it" signal; we transform to
-    // `null` at the route layer so the DB column flips back to NULL
-    // rather than storing an empty string.
     customInstructions: z
       .string()
       .max(
@@ -127,8 +88,6 @@ export const botPatchInput = z
         `Custom instructions must be ≤ ${CUSTOM_INSTRUCTIONS_MAX} chars`,
       )
       .optional(),
-    // Per-bot rate-limit overrides. `null` clears the
-    // column (revert to env default); a positive integer takes precedence.
     rateLimitPerMinute: z
       .number()
       .int()

@@ -23,7 +23,6 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-// Fill the three required fields (name, email, company).
 async function fillRequired(
   user: ReturnType<typeof userEvent.setup>,
   email = "rec@example.com",

@@ -8,9 +8,6 @@ type Props = {
   leads: UserLeadRow[];
 };
 
-// Company signal pill - derives a human-readable company name from the
-// recruiter's email domain. Strips common public providers so a personal
-// gmail doesn't render as "Gmail" (it stays unlabeled).
 const PUBLIC_DOMAINS = new Set([
   "gmail.com",
   "googlemail.com",
@@ -27,11 +24,6 @@ function companyFromEmail(email: string): string | null {
   if (at === -1) return null;
   const domain = email.slice(at + 1).toLowerCase();
   if (PUBLIC_DOMAINS.has(domain)) return null;
-  // Use the second-to-last segment as the registrable name when the
-  // domain has 3+ parts (so `mail.stripe.com` → "Stripe", not "Mail").
-  // For two-part domains (`stripe.com`) the first segment IS the name.
-  // This heuristic misses public-suffix-list edge cases like `.co.uk`
-  // but is good enough for a decorative pill.
   const parts = domain.split(".");
   if (parts.length === 0) return null;
   const base =

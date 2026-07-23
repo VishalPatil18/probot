@@ -37,7 +37,6 @@ describe("operational alerts", () => {
 
     expect(warn).toHaveBeenCalledTimes(1);
     const [, payload] = warn.mock.calls[0]!;
-    // The key-shaped field must be redacted, the benign one preserved.
     expect(payload).toMatchObject({ apiKey: "[REDACTED]", provider: "openai" });
   });
 });

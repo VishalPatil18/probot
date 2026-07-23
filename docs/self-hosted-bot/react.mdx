@@ -46,7 +46,6 @@ import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
 const send = createOpenAIHandler({
   apiKey: process.env.OPENAI_API_KEY!,
   model: "gpt-4o-mini",
-  // baseUrl: "http://localhost:11434/v1", // e.g. local Ollama
 });
 
 const app = express();

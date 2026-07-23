@@ -36,9 +36,9 @@ describe("LoadingAnimation", () => {
   it("wraps around to the first message after the last", () => {
     render(<LoadingAnimation messages={messages} />);
     act(() => {
-      vi.advanceTimersByTime(3000); // → "Searching memory…"
-      vi.advanceTimersByTime(3000); // → "Drafting a response…"
-      vi.advanceTimersByTime(3000); // → wraps to "Thinking…"
+      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(3000);
     });
     expect(screen.getByText("Thinking…")).toBeInTheDocument();
   });

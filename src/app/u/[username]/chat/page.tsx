@@ -33,13 +33,6 @@ type ResolvedBot = {
   previewToken: string | null;
 };
 
-// Wrapped in React `cache()` so `generateMetadata` and the page component
-// share a single set of DB queries per request - avoids the 2x lookup
-// (users + bots) running 4 times total per page load.
-//
-// Lookup no longer hard-filters on isActive. We pull
-// the user's bot regardless; the caller decides whether the request is
-// authorised to see a draft (i.e. presented a valid preview token).
 const resolve = cache(async function resolve(
   username: string,
 ): Promise<{ owner: ResolvedOwner; bot: ResolvedBot } | null> {
@@ -92,8 +85,6 @@ export async function generateMetadata({
     return { title: "Not found · ProBot" };
   }
   const { owner, bot } = resolved;
-  // Drafts must NOT leak metadata to crawlers, even if the URL is shared.
-  // Public OG data only renders for published bots.
   const previewAuthorised = isPreviewAuthorised(bot, searchParams.preview);
   if (!bot.isActive && !previewAuthorised) {
     return { title: "Not found · ProBot", robots: { index: false } };
@@ -127,8 +118,6 @@ export default async function PublicChatPage({
   params,
   searchParams,
 }: PageProps) {
-  // PUBLIC - no auth required for published bots.
-  // Draft bots require a valid signed preview token in `?preview=`.
   const resolved = await resolve(params.username);
   if (!resolved) notFound();
   const { owner, bot } = resolved;
@@ -141,9 +130,6 @@ export default async function PublicChatPage({
     : "anthropic";
 
   return (
-    // Own the full (dynamic) viewport as a flex column: an optional compact
-    // preview strip on top, then the chat fills the rest. Nothing scrolls at
-    // the page level - only ChatWindow's inner message region scrolls.
     <div className="flex h-dvh flex-col bg-bg-app">
       {!bot.isActive ? (
         <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-900">

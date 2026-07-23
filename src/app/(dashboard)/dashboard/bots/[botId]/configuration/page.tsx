@@ -16,15 +16,6 @@ import type { Personality } from "@/lib/bots/schemas";
 import { PERSONALITY_PRESETS } from "@/lib/bots/schemas";
 import { bots, db, users } from "@/lib/db";
 
-// Bot Configuration - the per-bot editor for name/persona/theme, knowledge
-// base, and AI model & API key. Split out from Settings so the sidebar's
-// "Build" section has a direct entry point and the Settings page can stay
-// user-scoped.
-//
-// Self-hosted bots have no editable platform-side config (persona +
-// knowledge + provider all live in the consumer's webapp), so we redirect
-// them back to the dashboard rather than render a confusing screen.
-
 export const metadata = {
   title: "Bot Configuration · ProBot",
 };
@@ -72,8 +63,6 @@ export default async function BotConfigurationPage({
 
   const mode = (bot.deploymentMode as "managed" | "self_hosted") ?? "managed";
   if (mode === "self_hosted") {
-    // Self-hosted bots configure themselves via probot-self-hosted; there is
-    // nothing meaningful to edit here.
     redirect("/dashboard");
   }
 

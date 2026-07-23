@@ -1,6 +1,5 @@
 "use client";
 
-// Blue (primary brand color), Red, Green, Black.
 const THEME_PRESETS = ["#0070dd", "#ef4444", "#16a34a", "#000000"];
 
 interface ThemeColorFieldProps {
@@ -8,11 +7,6 @@ interface ThemeColorFieldProps {
   onChange: (hex: string) => void;
 }
 
-// Theme color control, shown inline (no popover). The preset swatches are always
-// visible with the active color ringed; the trailing custom button is a swatch
-// filled with the current color and overlaid with a color-picker icon - it wraps
-// a native <input type="color">, so clicking it opens the OS picker. When the
-// current color isn't a preset, the custom button carries the active ring.
 export function ThemeColorField({ value, onChange }: ThemeColorFieldProps) {
   const isPreset = THEME_PRESETS.some(
     (hex) => hex.toLowerCase() === value.toLowerCase(),

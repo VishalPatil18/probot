@@ -48,7 +48,7 @@ plus the embed widget - and skip this whole guide.
 flowchart LR
     Visitor["Visitor browser"] --> Widget["ProbotBot component<br/>(inside your web app)"]
     Widget -->|"POST /api/probot-chat"| YourApi["Your API route<br/>(your server, holds LLM key)"]
-    YourApi -->|"your LLM key"| LLM["LLM provider<br/>(OpenAI, Anthropic, Ollama, etc.)"]
+    YourApi -->|"your LLM key"| LLM["LLM provider<br/>(OpenAI, Anthropic, etc.)"]
     Widget -.->|"Bearer pbt_… (optional)"| Platform["ProBot platform<br/>/api/v1/bot/{conversations,leads}"]
     Platform --> DB[("Analytics rows")]
     DB --> Dashboard["Your ProBot dashboard<br/>(read-only analytics)"]
@@ -96,7 +96,7 @@ Three roles:
     the browser.
 
     For any OpenAI-compatible endpoint (OpenAI, Grok, LM Studio, together.ai,
-    local Ollama), use the built-in `createOpenAIHandler`:
+    LM Studio), use the built-in `createOpenAIHandler`:
 
     ```ts
     // app/api/probot-chat/route.ts  (Next.js App Router)
@@ -109,7 +109,6 @@ Three roles:
       // Point at any OpenAI-compatible base URL:
       //   Grok:      "https://api.x.ai/v1"
       //   Together:  "https://api.together.xyz/v1"
-      //   Ollama:    "http://localhost:11434/v1"
       //   LM Studio: "http://localhost:1234/v1"
       // baseUrl: "…",
       // temperature: 0.7,  // default 0.7

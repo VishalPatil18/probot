@@ -7,11 +7,6 @@ interface Props {
   token: string;
 }
 
-// Public undo page (no session required). The undo token in the URL is
-// the authentication; the typed-username field is the same defence-in-
-// depth pattern the delete-init modal uses, ensuring the user reading
-// the email is the same one who scheduled the deletion.
-
 export function UndoDeletionForm({ token }: Props) {
   const [typedUsername, setTypedUsername] = useState("");
   const [status, setStatus] = useState<

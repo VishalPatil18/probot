@@ -2,22 +2,11 @@ import Anthropic from "@anthropic-ai/sdk";
 
 import type { SendMessage } from "../types";
 
-// Server-side helper. Consumers call this in their own API route (Next.js,
-// Express, etc.) to build a `SendMessage` backed by the Anthropic Claude
-// API. Same shape as `createOpenAIHandler` / `createGoogleHandler` so
-// swapping providers is a one-line change.
-//
-// This helper must NOT run in the browser: it holds the API key. The
-// typical wiring is a same-origin POST /api/chat handler that invokes
-// this and returns the reply to the ProbotBot component's
-// `sendMessage` shim.
-
 export interface AnthropicHandlerOptions {
   apiKey: string;
   model: string;
   temperature?: number;
   maxTokens?: number;
-  // Optional override for proxying, testing, or Vertex/Bedrock relays.
   baseUrl?: string;
   fetchImpl?: typeof fetch;
 }

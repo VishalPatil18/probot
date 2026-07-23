@@ -6,10 +6,6 @@ export const metadata: Metadata = {
   description: "Something went wrong signing you in.",
 };
 
-// NextAuth surfaces the error code via ?error= query param. Common values:
-// AccessDenied, Verification (magic link expired or already used),
-// OAuthSignin, OAuthCallback, OAuthCreateAccount, EmailCreateAccount,
-// Callback, OAuthAccountNotLinked, EmailSignin, CredentialsSignin.
 const ERROR_MESSAGES: Record<string, string> = {
   Verification:
     "That sign-in link has expired or was already used. Request a new one.",

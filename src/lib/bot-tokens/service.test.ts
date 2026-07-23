@@ -6,8 +6,6 @@ const insertReturning = vi.fn();
 const updateReturning = vi.fn();
 
 vi.mock("@/lib/db", () => ({
-  // Column stubs are enough for the drizzle operators used here (eq) - they
-  // store the reference and only build SQL at query time, which the mock skips.
   botTokens: {
     id: "bot_tokens.id",
     botId: "bot_tokens.bot_id",
@@ -40,7 +38,6 @@ import {
   revokeBotToken,
 } from "./service";
 
-// A syntactically valid raw token: pbt_ + 64 hex chars.
 const VALID_RAW = `pbt_${"a".repeat(64)}`;
 
 function authHeaders(value: string): Headers {

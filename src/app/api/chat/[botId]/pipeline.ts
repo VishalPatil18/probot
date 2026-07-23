@@ -9,7 +9,6 @@ import {
   readApiKey,
   readAzureCreds,
   readEmbeddingApiKey,
-  readOllamaBaseUrl,
 } from "@/lib/ai/key-transport";
 import {
   type LLMProvider,
@@ -38,14 +37,8 @@ import { retrieveRelevant } from "@/lib/rag/retrieve";
 
 export const MAX_BODY_BYTES = 16_384;
 
-// Outer Zod cap kept at the absolute ceiling; the per-bot `maxChars`
-// override clamps further down at request time (see enforceLimits).
 const chatInput = z.object({
   message: z.string().min(1).max(RATE_LIMIT_MAX_CHARS_MAX),
-  // Client-generated per-tab UUID from sessionStorage. Required
-  // so the chat orchestrator can UPSERT a `conversations` row and persist
-  // the user/assistant turn into `messages` for the dashboard analytics
-  // surface.
   sessionId: z.string().uuid(),
 });
 
@@ -57,15 +50,12 @@ export type OwnerRow = Pick<
   "id" | "username" | "llmProvider" | "llmModel"
 >;
 
-// Steps 1-5: content-type, optional BYO key header, body size cap, JSON parse,
-// Zod validation. Returns the validated payload + the header key (if any).
 export async function parseChatRequest(
   request: Request,
 ): Promise<
   | { ok: true; message: string; sessionId: string; headerApiKey: string | null }
   | { ok: false; response: Response }
 > {
-  // 1. Content-Type
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
     return {
@@ -77,13 +67,6 @@ export async function parseChatRequest(
     };
   }
 
-  // 2. BYO key header is OPTIONAL now. The chat route
-  // tries the header first, then falls back to the managed-key decrypt
-  // path against `encrypted_llm_keys`. Whichever source resolves wins.
-  // Header-supplied key always wins so a creator testing locally can
-  // override a stored managed key without revoking it. A missing header
-  // is fine; a *malformed* header (empty / too short / too long) still
-  // 400s loudly because that's almost always a client bug.
   let headerApiKey: string | null = null;
   try {
     headerApiKey = readApiKey(request.headers);
@@ -101,8 +84,6 @@ export async function parseChatRequest(
     headerApiKey = null;
   }
 
-  // 3. Body read with enforced size cap. Content-Length is a client-supplied
-  // hint and can be spoofed/omitted, so we measure the actual bytes here.
   const bodyText = await request.text();
   if (bodyText.length > MAX_BODY_BYTES) {
     return {
@@ -114,7 +95,6 @@ export async function parseChatRequest(
     };
   }
 
-  // 4. JSON parse
   let raw: unknown;
   try {
     raw = JSON.parse(bodyText);
@@ -125,7 +105,6 @@ export async function parseChatRequest(
     };
   }
 
-  // 5. Zod validate
   const parsed = chatInput.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -145,7 +124,6 @@ export async function parseChatRequest(
   };
 }
 
-// Steps 6, 6b, 7: bot lookup, draft preview-token authorization, owner lookup.
 export async function loadBotAndOwner(
   request: Request,
   botId: string,
@@ -153,8 +131,6 @@ export async function loadBotAndOwner(
   | { ok: true; botRow: BotRow; ownerRow: OwnerRow }
   | { ok: false; response: Response }
 > {
-  // 6. Bot lookup. We pull the bot regardless of `is_active` so we can
-  // separately authorize draft bots via a preview token.
   const botRow = await db.query.bots.findFirst({
     where: eq(bots.id, botId),
   });
@@ -165,12 +141,6 @@ export async function loadBotAndOwner(
     };
   }
 
-  // 6b. Draft-mode access. An inactive bot can still be chatted with by the
-  // owner via a signed preview token (sent as `x-preview-token` header or as
-  // a `?preview=` query param, whichever the client uses). The header path
-  // is preferred for the wizard's preview chat; the query-param path is
-  // accepted so a creator can manually paste the preview URL into a tab and
-  // it still works.
   if (!botRow.isActive) {
     const headerToken = request.headers.get("x-preview-token") ?? "";
     const urlToken = new URL(request.url).searchParams.get("preview") ?? "";
@@ -191,7 +161,6 @@ export async function loadBotAndOwner(
     }
   }
 
-  // 7. Owner lookup (for llm provider + model preferences)
   const ownerRow = await db.query.users.findFirst({
     where: eq(users.id, botRow.userId),
     columns: { id: true, username: true, llmProvider: true, llmModel: true },
@@ -206,14 +175,10 @@ export async function loadBotAndOwner(
   return { ok: true, botRow, ownerRow };
 }
 
-// Steps 8, 8b: per-bot rate limit + per-bot maxChars ceiling.
 export async function enforceLimits(
   botRow: BotRow,
   message: string,
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
-  // 8. Rate limit (per-bot, with per-bot overrides from the bot row).
-  // The limiter clamps unreasonable values internally; the Zod schema on the
-  // PATCH endpoint also bounds what can be stored.
   const rl = await checkRateLimit(botRow.id, {
     perMinute: botRow.rateLimitPerMinute,
     perDay: botRow.rateLimitPerDay,
@@ -228,9 +193,6 @@ export async function enforceLimits(
     };
   }
 
-  // 8b. Per-bot maxChars override. The outer Zod schema accepts up to
-  // RATE_LIMIT_MAX_CHARS_MAX; here we enforce the per-bot ceiling (or the
-  // env default of 8000) before sending to the LLM.
   const effectiveMaxChars = resolveMaxChars(botRow.rateLimitMaxChars);
   if (message.length > effectiveMaxChars) {
     return {
@@ -245,10 +207,6 @@ export async function enforceLimits(
   return { ok: true };
 }
 
-// Step 9b: optional RAG retrieval. Embedding key is optional - when absent OR
-// when no chunks pass the similarity floor, we fall through to the legacy
-// full-context path. Retrieval failures (bad key, OpenAI down, etc.) also
-// fall back silently rather than 5xx the chat request.
 export async function retrieveChunks(
   request: Request,
   botId: string,
@@ -260,7 +218,6 @@ export async function retrieveChunks(
     embeddingApiKey = readEmbeddingApiKey(request.headers);
   } catch (err) {
     if (!(err instanceof KeyTransportError)) throw err;
-    // Malformed embedding header: treat as missing, do not fail chat.
     embeddingApiKey = null;
   }
   if (embeddingApiKey) {
@@ -274,13 +231,6 @@ export async function retrieveChunks(
         relevantChunks = retrieved.map((r) => r.contentText);
       }
     } catch (err: unknown) {
-      // Retrieval failure → fall back to full-context. Chat must keep
-      // working even if pgvector or the embedding API is unavailable.
-      // We DO want an observable signal so a broken HNSW index or stored
-      // dimension mismatch doesn't silently degrade every user.
-      // `EmbeddingError.toJSON()` is bounded (no raw message, no key); plain
-      // errors collapse to a generic category so we never echo SDK-layer
-      // strings that may carry the BYO key.
       const signal =
         err instanceof EmbeddingError
           ? err.toJSON()
@@ -296,11 +246,6 @@ export async function retrieveChunks(
   return relevantChunks;
 }
 
-// Steps 10, 10b: validate the owner's provider, then resolve the LLM API key.
-// Priority: header (self-host / creator local test) > managed encrypted key
-// (DB) > fail. Azure is the one exception: its multi-secret credential (key +
-// endpoint + apiVersion) isn't stored managed-side, so Azure bots must use the
-// header path.
 export async function resolveProviderAndKey(
   botRow: BotRow,
   ownerRow: OwnerRow,
@@ -312,10 +257,10 @@ export async function resolveProviderAndKey(
       provider: LLMProvider;
       apiKey: string;
       managedKeyUsed: boolean;
+      managedAzure: { endpoint: string; apiVersion: string | null } | null;
     }
   | { ok: false; response: Response }
 > {
-  // 10. Provider dispatch
   if (!isProviderName(ownerRow.llmProvider)) {
     return {
       ok: false,
@@ -328,19 +273,12 @@ export async function resolveProviderAndKey(
   const providerName = ownerRow.llmProvider;
   const provider = getProvider(providerName);
 
-  // 10b. Resolve the LLM API key.
   let apiKey: string;
   let managedKeyUsed = false;
+  let managedAzure: { endpoint: string; apiVersion: string | null } | null =
+    null;
   if (headerApiKey) {
     apiKey = headerApiKey;
-  } else if (providerName === "ollama") {
-    // Ollama runs locally and needs no key; the adapter uses a placeholder.
-    apiKey = "ollama";
-  } else if (providerName === "azure") {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "missing_llm_key" }, { status: 400 }),
-    };
   } else {
     const stored = await db.query.encryptedLlmKeys.findFirst({
       where: eq(encryptedLlmKeys.botId, botRow.id),
@@ -355,14 +293,27 @@ export async function resolveProviderAndKey(
       };
     }
     if (stored.provider !== providerName) {
-      // Provider switched after the key was stored - safer to refuse than
-      // to send an Anthropic key to an OpenAI endpoint (or vice versa).
       return {
         ok: false,
         response: NextResponse.json(
           { error: "managed_key_provider_mismatch" },
           { status: 400 },
         ),
+      };
+    }
+    if (providerName === "azure") {
+      if (!stored.azureEndpoint) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            { error: "missing_llm_key" },
+            { status: 400 },
+          ),
+        };
+      }
+      managedAzure = {
+        endpoint: stored.azureEndpoint,
+        apiVersion: stored.azureApiVersion ?? null,
       };
     }
     try {
@@ -389,17 +340,13 @@ export async function resolveProviderAndKey(
     managedKeyUsed = true;
   }
 
-  return { ok: true, providerName, provider, apiKey, managedKeyUsed };
+  return { ok: true, providerName, provider, apiKey, managedKeyUsed, managedAzure };
 }
 
-// Azure needs three extra runtime values (endpoint, apiVersion, deployment).
-// Endpoint + apiVersion ride in custom headers (read here); deployment is
-// persisted in `users.llmModel`. Missing endpoint when provider is azure is
-// the same UX class as a missing api key - both mean "your provider settings
-// are incomplete." Non-Azure providers resolve to no extras.
 export function resolveAzureExtras(
   request: Request,
   providerName: ProviderName,
+  managedAzure: { endpoint: string; apiVersion: string | null } | null = null,
 ):
   | { ok: true; extras: Record<string, string> | undefined }
   | { ok: false; response: Response } {
@@ -421,6 +368,13 @@ export function resolveAzureExtras(
     }
     throw err;
   }
+  if (!azureCreds && managedAzure) {
+    const extras: Record<string, string> = { endpoint: managedAzure.endpoint };
+    if (managedAzure.apiVersion !== null) {
+      extras.apiVersion = managedAzure.apiVersion;
+    }
+    return { ok: true, extras };
+  }
   if (!azureCreds) {
     return {
       ok: false,
@@ -434,47 +388,6 @@ export function resolveAzureExtras(
   return { ok: true, extras };
 }
 
-// Ollama needs a base URL (where the local model server lives), supplied in a
-// custom header. Missing/invalid base URL when provider is ollama is the same
-// UX class as a missing api key. Non-Ollama providers resolve to no extras.
-export function resolveOllamaExtras(
-  request: Request,
-  providerName: ProviderName,
-):
-  | { ok: true; extras: Record<string, string> | undefined }
-  | { ok: false; response: Response } {
-  if (providerName !== "ollama") {
-    return { ok: true, extras: undefined };
-  }
-  let baseUrl: string | null;
-  try {
-    baseUrl = readOllamaBaseUrl(request.headers);
-  } catch (err) {
-    if (err instanceof KeyTransportError) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          { error: "missing_llm_key" },
-          { status: 400 },
-        ),
-      };
-    }
-    throw err;
-  }
-  if (!baseUrl) {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "missing_llm_key" }, { status: 400 }),
-    };
-  }
-  return { ok: true, extras: { baseUrl } };
-}
-
-// Provider call wrapped in a per-provider circuit breaker. The
-// breaker key is the provider NAME, not the bot id, so a single broken
-// upstream (e.g. Anthropic outage) trips one breaker that protects every bot
-// on that provider. Returns either the raw reply or a ready-to-send Response
-// (including the friendly 200 fallback when the breaker is open).
 export async function callProvider(args: {
   providerName: ProviderName;
   provider: LLMProvider;
@@ -520,13 +433,6 @@ export async function callProvider(args: {
           ),
         };
       }
-      // Graceful fallback: when the breaker is open OR the
-      // provider returns "unknown" (network blip, malformed response), we
-      // surface a friendly canned reply rather than a hard 502. The
-      // client renders this as an assistant message asking the recruiter
-      // to try again, with a `fallback: true` flag for analytics. The
-      // chat persistence block below still runs so the dashboard sees
-      // these requests in its conversation count.
       if (err.message === "circuit_open") {
         return {
           ok: false,
@@ -558,9 +464,6 @@ export async function callProvider(args: {
   }
 }
 
-// Step 11b: record a decrypt-audit-log row when the managed key was actually
-// used. Wrapped in try/catch so a logging failure cannot block the
-// user-facing chat reply.
 export async function recordDecryptAudit(
   request: Request,
   botId: string,
@@ -576,12 +479,6 @@ export async function recordDecryptAudit(
   }
 }
 
-// Step 12: persist conversation + messages (analytics). UPSERT on
-// (bot_id, session_id) - concurrent tabs on the same bot for the same
-// recruiter coalesce into one conversation. Wrapped in try/catch so analytics
-// persistence MUST NOT break the user-facing chat reply. Returns the
-// conversation id on success (used by the in-chat lead-capture card), or
-// undefined when persistence failed.
 export async function persistConversation(args: {
   botId: string;
   sessionId: string;
@@ -607,10 +504,6 @@ export async function persistConversation(args: {
         })
         .returning({
           id: conversations.id,
-          // Postgres exposes xmax=0 on a freshly INSERTed row and non-zero
-          // when the ON CONFLICT branch ran an UPDATE. This lets us fire
-          // a "new conversation" notification only for the first turn,
-          // rather than on every subsequent message.
           isInsert: sql<boolean>`xmax = 0`,
         });
       if (!convo) return;
@@ -626,7 +519,6 @@ export async function persistConversation(args: {
       ]);
     });
     if (wasNewConversation && ownerUserId) {
-      // Fire-and-forget - never block the chat reply on notification insert.
       void emitNotification({
         userId: ownerUserId,
         botId,
@@ -635,13 +527,6 @@ export async function persistConversation(args: {
       });
     }
   } catch (err) {
-    // Swallow - analytics persistence never blocks chat. Log so operators
-    // can still spot pool exhaustion / missing migrations / etc. before
-    // a future change wires a structured logger. Matches the [rag] warn
-    // pattern used for the analogous retrieval-failure case. `conversationId`
-    // stays undefined in this branch; the lead-capture client then falls back
-    // to the 24h (botId, email) dedupe window without the convo-scoped
-    // enrichment.
     console.warn("[chat] conversation persistence failed", err);
   }
   return conversationId;

@@ -28,10 +28,6 @@ const PASSWORD_ERRORS: Record<string, string> = {
   validation_failed: "New password must be at least 8 characters.",
 };
 
-// Settings → Account. Editable profile (photo upload, full name, username with a
-// debounced availability check) and a password-change form. Each section saves
-// independently to its own endpoint; the page is refreshed after a successful
-// save so the server-rendered session values re-read.
 export function AccountTab({ name, email, username, image, initials }: Props) {
   const router = useRouter();
 
@@ -47,8 +43,6 @@ export function AccountTab({ name, email, username, image, initials }: Props) {
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSaved, setPwSaved] = useState(false);
 
-  // Debounced username availability. The user's own current username is always
-  // "available" to them, so only changed values are checked.
   const debouncedUsername = useDebouncedValue(usernameValue, 400);
   const [usernameStatus, setUsernameStatus] =
     useState<FieldAvailability | null>(null);

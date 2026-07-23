@@ -7,10 +7,6 @@ import { authOptions } from "@/lib/auth/auth";
 import { db, users } from "@/lib/db";
 import { isPlaceholderUsername } from "@/lib/users/placeholder";
 
-// OAuth/magic-link users land here on first sign-in to
-// (a) pick a real username (replacing the `user-<8hex>` placeholder) and
-// (b) optionally pick a different animal-icon avatar. Already-onboarded
-// users (real username) bounce straight to /dashboard.
 export default async function OnboardingPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || !session.user.username) {

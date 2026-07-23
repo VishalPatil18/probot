@@ -58,10 +58,6 @@ export function RegisterForm() {
     null,
   );
 
-  // Debounced username/email availability check. We only query once the value
-  // is plausibly checkable (username ≥ 3 chars, email contains "@") so we don't
-  // flag a half-typed field. The register endpoint stays the source of truth -
-  // this is a pre-submit hint, not a replacement for the server-side check.
   const debouncedUsername = useDebouncedValue(username, 400);
   const debouncedEmail = useDebouncedValue(email, 400);
   const [availability, setAvailability] = useState<AvailabilityResult>({});

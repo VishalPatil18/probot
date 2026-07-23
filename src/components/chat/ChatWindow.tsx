@@ -9,11 +9,7 @@ import {
   readLeadCaptureState,
   writeLeadCaptureState,
 } from "@/lib/client/lead-capture-state";
-import {
-  getApiKey,
-  getAzureCreds,
-  getOllamaBaseUrl,
-} from "@/lib/client/llm-key-store";
+import { getApiKey, getAzureCreds } from "@/lib/client/llm-key-store";
 import { getOrCreateSessionId } from "@/lib/client/session-id-store";
 
 import { LeadCaptureCard } from "./LeadCaptureCard";
@@ -25,9 +21,6 @@ import type { ChatMessage } from "./types";
 const LEAD_CAPTURE_THRESHOLD = 3;
 const CONTEXT_SUMMARY_MAX = 300;
 
-// Lead-capture card eligibility. Returns true when the user
-// has seen at least N assistant replies and the sessionStorage status is
-// still "pending" (i.e. the card hasn't been shown/dismissed/captured).
 function shouldShowLeadCard(
   messages: ChatMessage[],
   botId: string,
@@ -42,9 +35,6 @@ function shouldShowLeadCard(
   return readLeadCaptureState(botId, sessionId) === "pending";
 }
 
-// Build the contextSummary sent to /api/bots/[botId]/leads. Concatenates
-// the first up-to-3 user messages with " · " separator, truncated to
-// 300 chars. The server caps at 1024 so 300 leaves comfortable headroom.
 function buildContextSummary(messages: ChatMessage[]): string {
   const firstUserMessages = messages
     .filter(
@@ -72,16 +62,10 @@ type Props = {
   botName: string;
   botHeadline: string | null;
   botImage?: string | null;
-  // Per-bot accent color (#RRGGBB). Applied via the `--bot-accent` CSS variable
-  // so the header avatar, send button, and user bubbles match the bot's theme.
   themeColor?: string;
   suggestedQuestions: string[];
   loadingMessages: string[];
   llmProvider: ProviderName;
-  // When present, the chat is talking to a draft bot;
-  // we forward the token to the API so it can bypass the is_active gate
-  // server-side. Public visitors never see this prop - only the wizard's
-  // Step 5 / dashboard "open private preview" path supplies it.
   previewToken?: string | null;
 };
 
@@ -100,18 +84,8 @@ export function ChatWindow({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [missingKey, setMissingKey] = useState(false);
-  // Toggles the suggested-questions list popover (only available once the
-  // conversation has started; before that the questions show as chips).
   const [showSuggestionList, setShowSuggestionList] = useState(false);
-  // ConversationId comes back in the chat response after the
-  // first successful turn. The lead-capture card sends it on POST /leads
-  // for idempotent (botId, conversationId, email) dedupe.
   const [conversationId, setConversationId] = useState<string | null>(null);
-  // sessionId memoized once at mount so sessionStorage state lookups are
-  // stable across renders (the lead-capture state machine is keyed by it).
-  // Lazy `useState` initializer over a render-body ref write - Strict
-  // Mode's double-render would run the ref-write side effect twice with
-  // no cleanup; `useState`'s initializer is contract-guaranteed once.
   const [sessionId] = useState<string | null>(() =>
     typeof window !== "undefined" ? getOrCreateSessionId() : null,
   );
@@ -124,8 +98,6 @@ export function ChatWindow({
     }
   }, [messages, loading]);
 
-  // Auto-grow the input up to 4 rows (the CSS max-height caps it there and
-  // turns on internal scroll); resets to a single row after send clears it.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -133,10 +105,6 @@ export function ChatWindow({
     el.style.height = `${el.scrollHeight}px`;
   }, [input]);
 
-  // Return focus to the input the moment the loading state flips off, so
-  // the visitor can start typing the follow-up immediately without clicking
-  // back into the textarea. Guarded on `!loading` so we don't steal focus
-  // while the reply is still streaming in.
   useEffect(() => {
     if (loading) return;
     textareaRef.current?.focus({ preventScroll: true });
@@ -147,16 +115,12 @@ export function ChatWindow({
     if (trimmed.length === 0 || loading) return;
     setShowSuggestionList(false);
 
-    // Ollama runs locally and needs no key - only a base URL. Every other
-    // provider requires the BYO key.
-    const isOllama = llmProvider === "ollama";
     const apiKey = await getApiKey();
-    if (!apiKey && !isOllama) {
+    if (!apiKey) {
       setMissingKey(true);
       return;
     }
 
-    // Azure also needs endpoint + apiVersion alongside the key.
     let azureCreds: Awaited<ReturnType<typeof getAzureCreds>> = null;
     if (llmProvider === "azure") {
       azureCreds = await getAzureCreds();
@@ -166,15 +130,6 @@ export function ChatWindow({
       }
     }
 
-    // Ollama needs the base URL where its local server is reachable.
-    let ollamaBaseUrl: string | null = null;
-    if (isOllama) {
-      ollamaBaseUrl = await getOllamaBaseUrl();
-      if (!ollamaBaseUrl) {
-        setMissingKey(true);
-        return;
-      }
-    }
     setMissingKey(false);
 
     setMessages((prev) => [
@@ -184,40 +139,22 @@ export function ChatWindow({
     setInput("");
     setLoading(true);
 
-    // BYO credentials ride ONLY in headers - never in the JSON body.
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      // Ollama ignores the key but the header contract still requires a value.
-      "x-llm-api-key": apiKey ?? "ollama-local",
+      "x-llm-api-key": apiKey,
     };
     if (azureCreds) {
       headers["x-llm-azure-endpoint"] = azureCreds.endpoint;
       headers["x-llm-azure-api-version"] = azureCreds.apiVersion;
     }
-    if (ollamaBaseUrl) {
-      headers["x-llm-ollama-base-url"] = ollamaBaseUrl;
-    }
-    // RAG: include the optional OpenAI embedding key. Absent →
-    // server skips retrieval and falls back to full-context. Same security
-    // model as the chat key (localStorage only, never persisted server-side).
     const embeddingKey = await getEmbeddingApiKey();
     if (embeddingKey) {
       headers["x-embedding-api-key"] = embeddingKey;
     }
-    // Forward the draft preview token when present so
-    // the chat API allows the inactive bot. The route also accepts a
-    // `?preview=` query param as a fallback for hand-pasted URLs.
     if (previewToken) {
       headers["x-preview-token"] = previewToken;
     }
 
-    // Per-tab session ID lets the server UPSERT a
-    // `conversations` row and coalesce multiple turns from the same tab
-    // into a single conversation for dashboard analytics. The mount-
-    // stable state value (lazy-init in useState) keeps the send path
-    // and the lead-capture state lookup agreeing on the same value.
-    // Fallback to a per-call call only if SSR somehow rendered with
-    // null and the user managed to send a message before hydration.
     const effectiveSessionId = sessionId ?? getOrCreateSessionId();
 
     try {
@@ -257,11 +194,6 @@ export function ChatWindow({
       if (body.conversationId) {
         setConversationId(body.conversationId);
       }
-      // Append the assistant reply AND - if this turn crosses the
-      // lead-capture threshold for the first time - a sentinel system
-      // message that the renderer maps to <LeadCaptureCard>. Doing both
-      // updates in one setMessages call avoids a flash of "card not yet
-      // there" between renders.
       setMessages((prev) => {
         const next: ChatMessage[] = [
           ...prev,
@@ -333,11 +265,6 @@ export function ChatWindow({
           )}
 
           {messages.map((m) => {
-            // Discriminate on `role` first, then on `kind` for the system
-            // variants. The trailing `never` check makes a new system
-            // variant (e.g. `{ role: "system"; kind: "cookie_banner" }`)
-            // a compile-time error here instead of silently routing to
-            // the lead-capture card.
             if (m.role === "system") {
               if (m.kind === "lead_capture") {
                 return (
@@ -361,7 +288,6 @@ export function ChatWindow({
                   />
                 );
               }
-              // Exhaustiveness: any new system `kind` lands here.
               const _exhaustive: never = m.kind;
               void _exhaustive;
               return null;

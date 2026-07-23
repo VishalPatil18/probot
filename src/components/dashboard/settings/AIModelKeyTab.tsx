@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -20,30 +19,10 @@ import { type AuditResponse, formatTimestamp } from "./audit";
 import { ManagedKeyStatusPill } from "./ManagedKeyStatusPill";
 
 type Props = {
-  // Null on the account-only /dashboard/settings route (no bot yet). The
-  // provider/model switcher (user-level) still works; the per-bot managed-key
-  // + audit sections are hidden until a bot exists.
   botId: string | null;
   provider: string | null;
   model: string | null;
 };
-
-// The AI model & key tab is live.
-//
-// Three controls:
-//   1. Provider + model switcher (writes to users.llm_provider /
-//      users.llm_model via PATCH /api/users/me/llm-prefs).
-//   2. Managed-key storage panel (POST/DELETE /api/bots/[botId]/llm-key).
-//      The plaintext key goes from this form straight to envelope encryption
-//      server-side; nothing is logged. On revoke, the encrypted row is
-//      deleted - recruiters can no longer reach the bot via the managed
-//      path until the creator stores a fresh key.
-//   3. Decrypt audit log (last 30 days) showing when the managed key was
-//      used and a short hash suffix of the requester IP.
-//
-// Provider/model preferences live on the USER (one provider per account, as
-// the existing onboarding flow assumes); managed key + audit log are per-BOT
-// since a future multi-bot user may want to scope keys per bot.
 
 export function AIModelKeyTab({
   botId,
@@ -73,10 +52,6 @@ export function AIModelKeyTab({
   const [audit, setAudit] = useState<AuditResponse | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
 
-  // Azure credentials live in the browser's encrypted IndexedDB store - Azure's
-  // multi-secret credential (key + endpoint + apiVersion) isn't wired into the
-  // server-side managed-key path. This mirrors Bot Factory Step 4 so owners can
-  // update the same three values from Settings without re-running the wizard.
   const [azureEndpoint, setAzureEndpoint] = useState("");
   const [azureApiVersion, setAzureApiVersion] = useState(
     DEFAULT_AZURE_API_VERSION,
@@ -110,10 +85,6 @@ export function AIModelKeyTab({
     void fetchAudit();
   }, [fetchAudit]);
 
-  // Pre-fill the Azure form from the encrypted browser store when the tab
-  // opens on Azure (or when the user flips the provider to Azure). Only the
-  // endpoint + apiVersion round-trip visibly; the key is masked with a
-  // placeholder if one is already stored (same UX as the managed-key input).
   useEffect(() => {
     if (provider !== "azure") return;
     let cancelled = false;
@@ -130,7 +101,6 @@ export function AIModelKeyTab({
         }
         setAzureKeyStored(Boolean(existingKey && existingKey.length > 0));
       } catch {
-        // Non-fatal - the user can still type new credentials in.
       }
     })();
     return () => {
@@ -148,8 +118,6 @@ export function AIModelKeyTab({
       setAzureError("Endpoint must start with https://");
       return;
     }
-    // Key required only when nothing has been stored yet - blank means
-    // "keep the existing one" on a settings update.
     if (!azureKeyStored && keyInput.length < 8) {
       setAzureStatus("error");
       setAzureError("API key must be at least 8 characters.");
@@ -158,9 +126,50 @@ export function AIModelKeyTab({
     setSavingAzure(true);
     setAzureError(null);
     try {
+      if (provider !== initialProvider || (model || null) !== initialModel) {
+        const prefsRes = await fetch("/api/users/me/llm-prefs", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            llmProvider: provider,
+            llmModel: model.trim().length > 0 ? model.trim() : null,
+          }),
+        }).catch(() => null);
+        if (!prefsRes || !prefsRes.ok) {
+          setAzureStatus("error");
+          setAzureError(
+            "Couldn't save the provider switch to Azure. Try again.",
+          );
+          return;
+        }
+        router.refresh();
+      }
       await setAzureCreds({ endpoint, apiVersion });
       if (keyInput.length >= 8) {
         await setApiKey(keyInput);
+      }
+      if (botId) {
+        const uploadKey =
+          keyInput.length >= 8 ? keyInput : ((await getApiKey()) ?? "").trim();
+        if (uploadKey.length >= 8) {
+          const res = await fetch(`/api/bots/${botId}/llm-key`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              apiKey: uploadKey,
+              azureEndpoint: endpoint,
+              azureApiVersion: apiVersion,
+            }),
+          }).catch(() => null);
+          if (!res || !res.ok) {
+            setAzureStatus("error");
+            setAzureError(
+              "Saved in this browser, but storing the encrypted copy on the server failed - recruiters can't chat until it succeeds. Try again.",
+            );
+            return;
+          }
+          await fetchAudit();
+        }
       }
       setAzureKey("");
       setAzureKeyStored(true);
@@ -175,8 +184,6 @@ export function AIModelKeyTab({
 
   function selectProvider(next: ProviderName) {
     setProvider(next);
-    // Reset to first available model when provider changes (Azure has no
-    // dropdown - deployment name is free-text, handled by onboarding).
     const list = MODEL_OPTIONS[next];
     setModel(next === "azure" ? "" : (list[0] ?? ""));
     setPrefsStatus("idle");
@@ -238,9 +245,6 @@ export function AIModelKeyTab({
         );
         return;
       }
-      // Mirror the key into the encrypted IndexedDB store too so
-      // the creator's own dashboard test chat keeps working without
-      // re-entry.
       await setApiKey(trimmed);
       setManagedKey("");
       setKeyStatus("stored");
@@ -315,7 +319,7 @@ export function AIModelKeyTab({
         </p>
 
         <label className="mb-2 block text-xs font-semibold">Provider</label>
-        <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-5">
           {PROVIDER_NAMES.map((p) => {
             const active = provider === p;
             const meta = PROVIDER_LABELS[p];
@@ -352,9 +356,7 @@ export function AIModelKeyTab({
             placeholder={
               provider === "azure"
                 ? "your Azure deployment name"
-                : provider === "ollama"
-                  ? "llama3.2"
-                  : "model id (e.g. grok-4.3)"
+                : "model id (e.g. grok-4.3)"
             }
             className="w-full rounded-xl border border-border-base bg-white px-3 py-2.5 text-sm font-mono outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
           />
@@ -408,17 +410,9 @@ export function AIModelKeyTab({
             </span>
           </div>
           <p className="mb-5 text-xs text-muted">
-            Kept encrypted in your browser. Azure&apos;s multi-secret credential
-            isn&apos;t supported by server-side managed storage in this release,
-            so recruiters can only reach an Azure bot when you&apos;re online -
-            or via the{" "}
-            <Link
-              href="/self-hosted-bot"
-              className="text-brand font-semibold hover:underline"
-            >
-              self-hosted runtime
-            </Link>
-            .
+            Saved in your browser and envelope-encrypted on pro-bot.dev (the
+            endpoint + API version are stored alongside the encrypted key), so
+            recruiters and the embed widget can reach your Azure bot any time.
           </p>
 
           <div className="space-y-4">

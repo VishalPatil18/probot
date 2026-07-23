@@ -61,7 +61,7 @@ browser.
 
 Any OpenAI-compatible endpoint works — set the `baseUrl` in the
 `createOpenAIHandler` call inside `vite.config.ts` (Grok, together.ai,
-Ollama, LM Studio, …).
+LM Studio, …).
 
 ### Dashboard-linked mode
 

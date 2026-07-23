@@ -23,7 +23,6 @@ import { assertSafeBuffer } from "@/lib/uploads/malware-scan";
 
 const MANUAL_TEXT_SOURCE = "manual_text";
 
-// Maps IngestionError categories to HTTP status codes.
 function statusForCategory(category: IngestionError["category"]): number {
   switch (category) {
     case "file_too_large":
@@ -46,13 +45,6 @@ interface SourceSummary {
   tokenCount: number;
 }
 
-// POST /api/bots/[botId]/knowledge
-// Accepts multipart/form-data:
-//   text (optional string) - manual text; stored as `manual_text` source
-//   files[] (optional PDFs) - up to MAX_PDF_FILES, each ≤ MAX_PDF_BYTES
-// At least one of {text, files[]} must be provided.
-// Per-source replace: existing rows with the same source_name are deleted.
-// After insert, reassembles `bots.context_text` from all chunks.
 export async function POST(
   request: Request,
   { params }: { params: { botId: string } },
@@ -69,9 +61,6 @@ export async function POST(
     );
   }
 
-  // RAG: optional OpenAI key for embedding generation. Absent header
-  // means "skip embeddings" - the bot falls back to full-context at chat
-  // time. Malformed header (wrong length) is rejected early.
   let embeddingApiKey: string | null;
   try {
     embeddingApiKey = readEmbeddingApiKey(request.headers);
@@ -117,10 +106,6 @@ export async function POST(
     );
   }
 
-  // One-time migration: if an older bot has prose in `context_text` but no
-  // knowledge_base rows yet, seed a `manual_text` source from the existing
-  // text so re-assembly preserves it. This runs before per-source replace so
-  // the seed sticks when the request itself provides no text.
   const existingRowCount = await db.$count(
     knowledgeBase,
     eq(knowledgeBase.botId, bot.id),
@@ -134,8 +119,6 @@ export async function POST(
     );
   }
 
-  // Track sources we touched in this request so we only re-embed those (not
-  // the whole bot every upload).
   const processedSources: string[] = [];
   const fileResults: Array<{
     name: string;
@@ -144,11 +127,6 @@ export async function POST(
     category?: IngestionError["category"];
   }> = [];
 
-  // Process each PDF independently. A single bad file (oversize, non-PDF,
-  // unsafe, or unreadable) records a per-file error while the rest still ingest;
-  // the wizard surfaces these inline and lets the user retry just the failed
-  // file, instead of one page-level "ingestion failed" that discards the good
-  // files. Per-source replace by filename keeps this deterministic on retry.
   for (const file of fileEntries) {
     const name = file.name || "file";
     try {
@@ -171,9 +149,6 @@ export async function POST(
         );
       }
       const buffer = Buffer.from(await file.arrayBuffer());
-      // Heuristic safety scan BEFORE handing the buffer to pdf-parse. Rejects
-      // renamed executables, Office macro containers, EICAR, and magic-byte /
-      // MIME / extension mismatches. See src/lib/uploads/malware-scan.ts.
       assertSafeBuffer(buffer, file.name, file.type || PDF_MIME_TYPE);
       const text = await extractPdfText(buffer);
       await deleteSource(bot.id, file.name);
@@ -189,7 +164,6 @@ export async function POST(
           category: e.category,
         });
       } else {
-        // Unexpected failure: record it per-file rather than 500-ing the batch.
         fileResults.push({
           name,
           ok: false,
@@ -200,8 +174,6 @@ export async function POST(
     }
   }
 
-  // Manual text is not a retriable "file"; a failure here still fails the
-  // request loudly (it's the form's text field, not a per-file row).
   try {
     if (manualText.length > 0) {
       await deleteSource(bot.id, MANUAL_TEXT_SOURCE);
@@ -218,10 +190,6 @@ export async function POST(
     throw e;
   }
 
-  // RAG: embed each newly persisted source. Embedding failures are
-  // logged but do NOT fail the request - the chunks remain queryable via the
-  // legacy full-context path (assembled below). The user gets a degraded but
-  // working bot rather than a 5xx on an OpenAI hiccup.
   let embeddingError: string | null = null;
   if (embeddingApiKey && processedSources.length > 0) {
     try {
@@ -233,10 +201,6 @@ export async function POST(
         });
       }
     } catch (err) {
-      // Bound the error surface to a category - never serialize raw `err.message`
-      // because a network-layer error could carry the BYO key in headers or
-      // URL parts. `EmbeddingError.category` is a small string union; all
-      // other errors collapse to a generic label.
       embeddingError =
         err instanceof EmbeddingError ? err.category : "embedding_failed";
     }
@@ -245,9 +209,6 @@ export async function POST(
   const result = await assembleAndSaveBotContext(bot.id);
   const sources = await summarizeSources(bot.id);
 
-  // One notification per upload batch (not per file) so a 5-PDF upload
-  // doesn't produce 5 identical inbox rows. Skipped when the batch
-  // touched nothing that persisted (all files failed pre-parse).
   const successfulFiles = fileResults.filter((f) => f.ok).length;
   if (processedSources.length > 0) {
     void emitNotification({
@@ -276,7 +237,6 @@ export async function POST(
   });
 }
 
-// GET /api/bots/[botId]/knowledge - returns sources grouped by name.
 export async function GET(
   _request: Request,
   { params }: { params: { botId: string } },

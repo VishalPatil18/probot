@@ -53,7 +53,6 @@ export function StepKnowledge({
         rejected.push(`${file.name}: max ${MAX_PDF_FILES} files`);
         continue;
       }
-      // Dedupe by filename: replacing earlier add keeps the latest content.
       const without = merged.filter((f) => f.name !== file.name);
       merged.length = 0;
       merged.push(...without, file);

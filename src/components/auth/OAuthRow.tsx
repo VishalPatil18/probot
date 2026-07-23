@@ -9,20 +9,12 @@ interface OAuthRowProps {
   email: string;
 }
 
-// Three sign-in options:
-//  - Google (full-width row)
-//  - GitHub + Magic Link (side-by-side row)
-// The Magic Link button opens a modal (seeded with any email already typed in
-// the parent form) that collects the address and sends the sign-in link.
 export function OAuthRow({ email }: OAuthRowProps) {
   const [magicOpen, setMagicOpen] = useState(false);
 
   const baseClass =
     "flex items-center justify-center gap-2 h-11 rounded-xl border border-border-base bg-white text-sm font-semibold hover:bg-gray-50 transition-colors";
 
-  // Every provider button shares `baseClass` (equal height + layout) and wraps
-  // its icon in a fixed 18px square so the Google / GitHub / Magic Link marks
-  // sit on the same baseline regardless of each glyph's intrinsic dimensions.
   return (
     <>
       <div className="space-y-2.5 mb-6" aria-label="Sign-in providers">
@@ -114,7 +106,6 @@ function GitHubLogo() {
   );
 }
 
-// Official Gmail "M" envelope mark (white envelope, red/blue/green/yellow swoosh).
 function GmailLogo() {
   return (
     <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">

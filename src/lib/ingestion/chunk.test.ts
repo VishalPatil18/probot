@@ -44,7 +44,7 @@ describe("chunkText", () => {
 
   it("splits long text into multiple chunks with monotonic chunkIndex", () => {
     const sentence = "The quick brown fox jumps over the lazy dog. ";
-    const longText = sentence.repeat(200); // far over any small target
+    const longText = sentence.repeat(200);
     const chunks = chunkText(longText, { targetTokens: 100, overlapTokens: 20 });
     expect(chunks.length).toBeGreaterThan(1);
     chunks.forEach((c, i) => {
@@ -64,8 +64,6 @@ describe("chunkText", () => {
       overlapTokens: overlap,
     });
     expect(chunks.length).toBeGreaterThan(2);
-    // Tail of chunk[i] should share tokens with head of chunk[i+1].
-    // Verify by checking that some words appear in both consecutive chunks.
     for (let i = 0; i < chunks.length - 1; i += 1) {
       const a = chunks[i]!.contentText.split(/\s+/);
       const b = chunks[i + 1]!.contentText.split(/\s+/);
@@ -79,7 +77,6 @@ describe("chunkText", () => {
     const words = Array.from({ length: 300 }, (_, i) => `tok${i}`).join(" ");
     const chunks = chunkText(words, { targetTokens: 60, overlapTokens: 10 });
     const joined = chunks.map((c) => c.contentText).join(" ");
-    // Every distinct source word should appear somewhere in the chunks
     for (let i = 0; i < 300; i += 1) {
       expect(joined).toContain(`tok${i}`);
     }
@@ -97,4 +94,3 @@ describe("chunkText", () => {
     ).toThrow(/overlapTokens/);
   });
 });
-

@@ -10,8 +10,7 @@
     "react",
     "component",
     "openai",
-    "anthropic",
-    "ollama"
+    "anthropic"
   ],
   "homepage": "https://pro-bot.dev",
   "repository": {

@@ -4,21 +4,11 @@ import { NextResponse } from "next/server";
 import { generateRawToken, hashToken } from "@/lib/auth/tokens";
 import { type Bot, botTokens, bots, db } from "@/lib/db";
 
-// Bot-token service. A self-hosted webapp (using the `probot-self-hosted`
-// npm package) authenticates to /api/v1/bot/{conversations,leads} with one
-// of these tokens so its transcripts and captured leads flow back to the
-// owner's ProBot dashboard for analytics. The raw token is shown to the
-// owner exactly once at mint time; only its SHA-256 hash is stored (same
-// model as the password-reset / email-verification tokens), so a DB dump
-// can't be replayed. Revocation is a soft-delete (`revoked_at`) so the
-// audit row survives while the auth path rejects instantly.
-
 const TOKEN_PREFIX = "pbt_";
 const BEARER_RE = /^Bearer\s+(pbt_[0-9a-f]{64})$/i;
 
 export interface MintedToken {
   id: string;
-  // The full `pbt_<hex>` secret - returned ONCE, never retrievable again.
   rawToken: string;
 }
 
@@ -36,7 +26,6 @@ export async function mintBotToken(
   return { id: row.id, rawToken };
 }
 
-// Owner-facing view of a token row. Never includes the hash.
 export interface BotTokenView {
   id: string;
   name: string;
@@ -59,8 +48,6 @@ export async function listBotTokens(botId: string): Promise<BotTokenView[]> {
   });
 }
 
-// Revoke scoped to the owning bot (defence in depth - the route already
-// verified ownership). Returns false if no matching, still-active token.
 export async function revokeBotToken(
   botId: string,
   tokenId: string,
@@ -83,10 +70,6 @@ export type BotAuthResult =
   | { ok: true; bot: Bot; tokenId: string }
   | { ok: false; status: number; error: string };
 
-// Resolve a request's `Authorization: Bearer pbt_…` header to its bot. The
-// header format is validated before any DB hit; a valid-but-revoked or unknown
-// token returns the same opaque `invalid_bot_token` so callers can't probe
-// which tokens exist.
 export async function authenticateBotToken(
   headers: Headers,
 ): Promise<BotAuthResult> {
@@ -108,14 +91,12 @@ export async function authenticateBotToken(
     return { ok: false, status: 401, error: "invalid_bot_token" };
   }
 
-  // Best-effort liveness bump - never block the request if it fails.
   try {
     await db
       .update(botTokens)
       .set({ lastSeenAt: new Date() })
       .where(eq(botTokens.id, tokenRow.id));
   } catch {
-    // ignore
   }
 
   return { ok: true, bot, tokenId: tokenRow.id };
@@ -125,8 +106,6 @@ export type RequireBotTokenResult =
   | { ok: true; bot: Bot; tokenId: string }
   | { ok: false; response: NextResponse };
 
-// Route guard mirroring `requireBotOwner`: returns the authenticated bot or a
-// ready-to-return 401 NextResponse, so /api/v1/bot/* handlers stay terse.
 export async function requireBotToken(
   headers: Headers,
 ): Promise<RequireBotTokenResult> {

@@ -10,11 +10,6 @@ const auditInsertMock = vi.fn((..._args: unknown[]) => ({
 const completeMock = vi.fn();
 const checkRateLimitMock = vi.fn();
 
-// Persistence mocks. The route inserts a conversation row (UPSERT
-// on bot_id/session_id) then 2 message rows in a single transaction. We
-// stub `db.transaction(cb)` to invoke `cb(tx)` and route `tx.insert(table)`
-// by call order - first call returns the conversation chain, subsequent
-// calls return the messages chain. Tests reset call count in `beforeEach`.
 let insertCallCount = 0;
 const convoValuesMock = vi.fn();
 const convoOnConflictMock = vi.fn();
@@ -119,10 +114,6 @@ const VALID_KEY = "sk-ant-test-XYZ-1234567890";
 const BOT_ID = "11111111-1111-1111-1111-111111111111";
 const SESSION_ID = "22222222-2222-2222-2222-222222222222";
 
-// Default sessionId injection. The current flow made `sessionId` a required Zod
-// field; existing specs that pass a bare `{ message }` get the default UUID
-// merged in. Specs that want to test missing/invalid sessionId pass a
-// string body or override explicitly.
 function makeRequest(
   body: unknown,
   headers: Record<string, string> = {},
@@ -188,8 +179,6 @@ describe("POST /api/chat/[botId]", () => {
       conversationId?: string;
     };
     expect(body.reply).toBe("Sure - Jane is great.");
-    // ConversationId comes from the persistence transaction's
-    // returning() call. The shared mock resolves it to "conv-1".
     expect(body.conversationId).toBe("conv-1");
   });
 
@@ -218,7 +207,6 @@ describe("POST /api/chat/[botId]", () => {
   });
 
   it("returns 400 missing_llm_key when neither header nor managed key exists", async () => {
-    // No header, and findEncryptedKeyMock returns undefined by default.
     const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -232,8 +220,6 @@ describe("POST /api/chat/[botId]", () => {
   });
 
   it("returns 400 missing_llm_key when the x-llm-api-key header is malformed", async () => {
-    // Empty header value goes through the "empty" KeyTransportError branch
-    // (not "missing"), which we still surface as 400 missing_llm_key.
     const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
       method: "POST",
       headers: {
@@ -437,8 +423,6 @@ describe("POST /api/chat/[botId]", () => {
     const ORIGINAL_KEK = process.env[KEK_ENV_VAR];
 
     beforeEach(() => {
-      // Real KEK for the envelope module so encryptKey/decryptKey work end to
-      // end in this test (we feed the result through the chat route).
       process.env[KEK_ENV_VAR] = Buffer.from(
         "0".repeat(32),
         "utf8",
@@ -471,9 +455,7 @@ describe("POST /api/chat/[botId]", () => {
       const [args] = completeMock.mock.calls[0] as [
         { apiKey: string; system: string },
       ];
-      // The provider sees the decrypted plaintext key.
       expect(args.apiKey).toBe(plaintextKey);
-      // Audit-log insert ran exactly once with a bot-id-carrying payload.
       expect(auditInsertValuesMock).toHaveBeenCalledTimes(1);
       const auditRow = auditInsertValuesMock.mock.calls[0]?.[0] as {
         botId: string;
@@ -489,7 +471,6 @@ describe("POST /api/chat/[botId]", () => {
     });
 
     it("returns 400 managed_key_provider_mismatch when stored key's provider has drifted", async () => {
-      // Owner is on Anthropic; stored key was minted for OpenAI.
       const payload = encryptKey("sk-test-mismatch");
       findEncryptedKeyMock.mockResolvedValueOnce({
         ...payload,
@@ -507,12 +488,11 @@ describe("POST /api/chat/[botId]", () => {
       expect(completeMock).not.toHaveBeenCalled();
     });
 
-    it("rejects Azure managed-key fallback (only header path is supported in Phase 3)", async () => {
+    it("returns 400 missing_llm_key for Azure with no header and no stored row", async () => {
       findUserMock.mockResolvedValueOnce({
         ...owner,
         llmProvider: "azure",
       });
-      // No header, no Azure stored payload.
       const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -522,7 +502,87 @@ describe("POST /api/chat/[botId]", () => {
       expect(res.status).toBe(400);
       const body = (await res.json()) as { error: string };
       expect(body.error).toBe("missing_llm_key");
-      expect(findEncryptedKeyMock).not.toHaveBeenCalled();
+      expect(findEncryptedKeyMock).toHaveBeenCalled();
+    });
+
+    it("serves Azure from managed storage: decrypted key + stored endpoint/apiVersion as extras", async () => {
+      findUserMock.mockResolvedValueOnce({
+        ...owner,
+        llmProvider: "azure",
+        llmModel: "gpt-4o",
+      });
+      const plaintextKey = "azure-managed-key-1234567890";
+      const payload = encryptKey(plaintextKey);
+      findEncryptedKeyMock.mockResolvedValueOnce({
+        ...payload,
+        provider: "azure",
+        azureEndpoint: "https://stored.cognitiveservices.azure.com",
+        azureApiVersion: "2025-01-01-preview",
+      });
+      const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "hi", sessionId: SESSION_ID }),
+      });
+      const res = await POST(req, PARAMS);
+      expect(res.status).toBe(200);
+      const [args] = completeMock.mock.calls[0] as [
+        { apiKey: string; extras: Record<string, string> },
+      ];
+      expect(args.apiKey).toBe(plaintextKey);
+      expect(args.extras).toEqual({
+        endpoint: "https://stored.cognitiveservices.azure.com",
+        apiVersion: "2025-01-01-preview",
+      });
+      expect(auditInsertValuesMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("prefers header Azure creds over the stored managed config", async () => {
+      findUserMock.mockResolvedValueOnce({
+        ...owner,
+        llmProvider: "azure",
+        llmModel: "gpt-4o",
+      });
+      const res = await POST(
+        makeRequest(
+          { message: "hi" },
+          {
+            "x-llm-azure-endpoint": "https://header.cognitiveservices.azure.com",
+          },
+        ),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      const [args] = completeMock.mock.calls[0] as [
+        { extras: Record<string, string> },
+      ];
+      expect(args.extras.endpoint).toBe(
+        "https://header.cognitiveservices.azure.com",
+      );
+    });
+
+    it("returns 400 missing_llm_key when the Azure managed row lacks an endpoint (legacy row)", async () => {
+      findUserMock.mockResolvedValueOnce({
+        ...owner,
+        llmProvider: "azure",
+      });
+      const payload = encryptKey("azure-managed-key-1234567890");
+      findEncryptedKeyMock.mockResolvedValueOnce({
+        ...payload,
+        provider: "azure",
+        azureEndpoint: null,
+        azureApiVersion: null,
+      });
+      const req = new Request(`http://localhost/api/chat/${BOT_ID}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "hi", sessionId: SESSION_ID }),
+      });
+      const res = await POST(req, PARAMS);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("missing_llm_key");
+      expect(completeMock).not.toHaveBeenCalled();
     });
   });
 
@@ -537,7 +597,6 @@ describe("POST /api/chat/[botId]", () => {
       expect(res.status).toBe(200);
       expect(retrieveRelevantMock).not.toHaveBeenCalled();
       const [args] = completeMock.mock.calls[0] as [{ system: string }];
-      // Falls back to bot.contextText
       expect(args.system).toContain(bot.contextText);
     });
 
@@ -636,7 +695,6 @@ describe("POST /api/chat/[botId]", () => {
     });
   });
 
-  // Chat persistence into conversations + messages.
   describe("conversation persistence (Stage 6)", () => {
     it("UPSERTs a conversation + inserts user + assistant messages on the happy path", async () => {
       const res = await POST(
@@ -646,7 +704,6 @@ describe("POST /api/chat/[botId]", () => {
       expect(res.status).toBe(200);
       expect(transactionMock).toHaveBeenCalledTimes(1);
 
-      // Conversation UPSERT: bot_id + session_id from the request
       expect(convoValuesMock).toHaveBeenCalledTimes(1);
       const convoValues = convoValuesMock.mock.calls[0]?.[0] as {
         botId: string;
@@ -656,7 +713,6 @@ describe("POST /api/chat/[botId]", () => {
       expect(convoValues.sessionId).toBe(SESSION_ID);
       expect(convoOnConflictMock).toHaveBeenCalledTimes(1);
 
-      // Both message turns persisted in the same transaction
       expect(messagesValuesMock).toHaveBeenCalledTimes(1);
       const msgRows = messagesValuesMock.mock.calls[0]?.[0] as Array<{
         conversationId: string;
@@ -742,7 +798,6 @@ describe("OPTIONS /api/chat/[botId] (CORS preflight)", () => {
     expect(res.status).toBe(204);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(res.headers.get("Access-Control-Allow-Methods")).toContain("POST");
-    // Widget passes the BYO key headers - must be on the allowlist
     expect(res.headers.get("Access-Control-Allow-Headers")).toContain(
       "x-llm-api-key",
     );

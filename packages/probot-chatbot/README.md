@@ -58,7 +58,7 @@ The widget is a tiny (~8 KB), dependency-free, iframe-isolated chat surface. It 
 
 ## Choose a model
 
-Model choice for a hosted bot lives in the ProBot dashboard — **Settings → AI Model & Key**. Pick from Anthropic (Claude), OpenAI (GPT), Google (Gemini), Grok (xAI), Azure OpenAI, or Ollama, paste the API key, save. The widget picks up the new model on the next visitor turn — no code change, no redeploy, and the same `<script>` embed stays valid.
+Model choice for a hosted bot lives in the ProBot dashboard — **Settings → AI Model & Key**. Pick from Anthropic (Claude), OpenAI (GPT), Google (Gemini), Grok (xAI), or Azure OpenAI, paste the API key, save. The widget picks up the new model on the next visitor turn — no code change, no redeploy, and the same `<script>` embed stays valid.
 
 The API key you paste is stored server-side (envelope-encrypted) and never leaves the platform. Recruiters chatting with your bot never see it.
 

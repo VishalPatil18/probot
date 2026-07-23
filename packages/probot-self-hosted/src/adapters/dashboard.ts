@@ -1,9 +1,5 @@
 import type { ChatMessage, DashboardLink } from "../types";
 
-// Thin client for pro-bot.dev's /api/v1/bot/{conversations,leads} endpoints.
-// Only used when the consumer supplies a `dashboard` link. Failures are
-// swallowed so a platform outage never breaks the local chat.
-
 const DEFAULT_API_URL = "https://pro-bot.dev";
 
 function authHeaders(link: DashboardLink): HeadersInit {

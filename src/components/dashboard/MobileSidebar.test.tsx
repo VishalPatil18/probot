@@ -35,7 +35,6 @@ describe("MobileSidebar - provider + toggle + panel", () => {
     expect(
       screen.getByRole("button", { name: /open navigation menu/i }),
     ).toBeInTheDocument();
-    // Panel is closed → its content is not rendered
     expect(screen.queryByText("Panel content")).toBeNull();
   });
 
@@ -75,7 +74,6 @@ describe("MobileSidebar - provider + toggle + panel", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /open navigation menu/i }),
     );
-    // The backdrop is the first absolutely-positioned div inside the dialog
     const backdrop = container.querySelector("div[aria-hidden]");
     if (!backdrop) throw new Error("backdrop not found");
     fireEvent.click(backdrop);

@@ -1,7 +1,5 @@
 "use client";
 
-// Per-section save control: enabled only when that section has unsaved edits.
-// Shows a brief "Saved" confirmation and an inline error for its own section.
 export function SaveButton({
   dirty,
   saving,

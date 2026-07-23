@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { verifyAndConsumeToken } from "@/lib/auth/email-verification";
 import { verifyEmailInput } from "@/lib/auth/schemas";
 
-// GET handler so the email link works without client JS. The browser is
-// redirected to /login with a status flag the LoginForm picks up.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const token = searchParams.get("token");

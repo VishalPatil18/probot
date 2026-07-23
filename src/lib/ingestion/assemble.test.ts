@@ -45,7 +45,6 @@ describe("assembleFromChunks", () => {
       chunk("a", 2, "gamma", 5),
     ];
     const r = assembleFromChunks(chunks, 7);
-    // 5 fits (total 5). next +5=10 > 7 → stop, truncated.
     expect(r.text).toBe("alpha");
     expect(r.totalTokens).toBe(5);
     expect(r.truncated).toBe(true);

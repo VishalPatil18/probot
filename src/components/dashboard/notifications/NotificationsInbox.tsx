@@ -2,23 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-// Full notification inbox. Renders on both the dedicated
-// /dashboard/notifications route and inside the Settings "Notifications"
-// tab. Supports per-item mark-read + delete plus bulk mark-all-read +
-// delete-all. Talks to the same /api/notifications endpoints as the
-// bell dropdown; the DELETE endpoints are new (delete-all + [id]).
-
 type NotificationPayload = {
   leadId?: string;
   email?: string;
   botId?: string;
   botName?: string;
   contextSummary?: string | null;
-  // conversation_started
   sessionId?: string;
   conversationId?: string;
   origin?: "self_hosted" | "managed";
-  // knowledge_updated
   sourcesTouched?: number;
   filesAdded?: number;
   includesManualText?: boolean;
@@ -128,8 +120,6 @@ export function NotificationsInbox() {
   }, [load]);
 
   async function markRead(id: string) {
-    // Optimistic: flip readAt locally so the UI feels instant. Revert on
-    // failure by re-fetching the current page.
     const snapshot = items;
     setItems((prev) =>
       prev.map((n) =>

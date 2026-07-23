@@ -7,15 +7,6 @@ interface Props {
   username: string;
 }
 
-// Client island for the "Delete all my data" flow on the Security &
-// Privacy tab. Distinct from account deletion:
-//   - No grace period.
-//   - Keeps the user account intact.
-//   - Wipes bots + everything cascading off them (knowledge, conversations,
-//     messages, leads, tokens, encrypted keys) + notifications.
-// Requires the user to type their username to confirm - same guardrail as
-// account deletion, so accidental clicks can't wipe an active setup.
-
 export function DataActions({ username }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -57,8 +48,6 @@ export function DataActions({ username }: Props) {
         return;
       }
       setSummary(body.deleted ?? null);
-      // Refresh server components so the dashboard shell picks up the
-      // now-empty state (sidebar bot switcher, bot counts, etc.).
       router.refresh();
     } catch {
       setError("Network error. Please try again.");

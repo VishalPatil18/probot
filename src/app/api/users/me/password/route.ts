@@ -7,10 +7,6 @@ import { hashPassword, verifyPassword } from "@/lib/auth/passwords";
 import { db, users } from "@/lib/db";
 import { passwordChangeInput } from "@/lib/users/profile-schemas";
 
-// POST /api/users/me/password - change the signed-in user's password. Requires
-// the current password. OAuth/magic-link accounts have no password set and
-// cannot use this path (they would need a "set password" flow instead).
-
 export async function POST(request: Request): Promise<Response> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {

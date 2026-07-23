@@ -12,15 +12,6 @@ type Props = {
   liveBotUrl: string | null;
 };
 
-// Sticky topbar - shared across all (dashboard) pages. Hosts the mobile
-// hamburger button (left), page title (derived from pathname), public
-// URL pill with copy button (when a bot is selected), and the
-// notification bell + "View live bot" CTA on the right.
-//
-// NotificationBell relocated from the old single-row header.
-// Topbar is a client component so it can derive the page title from
-// `usePathname()` without the server layout having to know which page
-// is rendering.
 export function Topbar({ publicUrl, liveBotUrl }: Props) {
   const pathname = usePathname() ?? "/dashboard";
   const title = deriveTitle(pathname);

@@ -142,7 +142,6 @@ describe("callWithBreaker (in-memory)", () => {
         }),
       OPTS,
     );
-    // Let the probe register its half-open in-flight slot before the 2nd call.
     await Promise.resolve();
 
     await expect(callWithBreaker("p1", passingFn(), OPTS)).rejects.toMatchObject(
@@ -167,7 +166,6 @@ describe("callWithBreaker (in-memory)", () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
     expect(onOpen).toHaveBeenCalledWith("p1");
 
-    // Further rejected calls while already open must NOT re-fire onOpen.
     await expect(callWithBreaker("p1", failingFn(), opts)).rejects.toThrow();
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
@@ -191,9 +189,6 @@ describe("ProviderError shape for circuit_open", () => {
   });
 });
 
-// ---- Redis-backed path ----------------------------------------------------
-
-// Fake of the GET/SET the breaker store performs via eval, plus del.
 function makeFakeRedis(): RedisLike {
   const kv = new Map<string, string>();
   return {

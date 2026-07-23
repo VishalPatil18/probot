@@ -1,17 +1,3 @@
-// Defence-in-depth helper that removes any header or property that could
-// carry a user-supplied LLM API key before the value reaches a logger,
-// Sentry breadcrumb, or error response. The chat route already only logs
-// shapes that don't include `apiKey`, but operators reaching for
-// `console.log(request.headers)` during incident debugging shouldn't be
-// able to accidentally leak a key.
-//
-// Usage:
-//   import { redactSensitive } from "@/lib/server/redact";
-//   console.warn("[chat] something happened", redactSensitive({ headers, err }));
-//
-// The CI guard greps for raw `x-llm-api-key` substrings in
-// logger calls; this helper is the codified opposite of that grep.
-
 const REDACTED_HEADER_NAMES: ReadonlySet<string> = new Set([
   "x-llm-api-key",
   "x-llm-azure-endpoint",

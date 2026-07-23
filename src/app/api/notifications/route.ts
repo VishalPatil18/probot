@@ -5,18 +5,6 @@ import { requireSession } from "@/lib/auth/require-session";
 import { db, notifications, users } from "@/lib/db";
 import { parsePagination } from "@/lib/pagination";
 
-// GET /api/notifications?unread=true&page=1&limit=20
-//
-// Paginated notification feed for the dashboard bell. The
-// optional `?unread=true` filter narrows to unread rows so the bell-list
-// dropdown can cheaply show "what's new since I last looked." A partial
-// index (`notifications_user_unread_idx`) covers that query.
-//
-// Always returns the unread count too - the bell badge polls
-// /unread-count for cheap updates, but the list response includes the
-// count so the dropdown can render the badge in sync without a second
-// round-trip.
-
 export async function GET(request: Request): Promise<Response> {
   const session = await requireSession();
   if (!session.ok) return session.response;

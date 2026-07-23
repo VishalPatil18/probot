@@ -2,16 +2,6 @@ import { desc, eq, sql } from "drizzle-orm";
 
 import { bots, db, leads } from "@/lib/db";
 
-// Shared lead queries. Called by both the API routes
-// (paginated list + CSV export) and the dashboard list pages.
-//
-// **Caller contract - tenancy is the caller's responsibility.** These
-// functions take a `botId` and trust the caller has already verified the
-// session user owns it (via `requireBotOwner` in API routes, or
-// `findFirst({ where: and(eq(bots.id), eq(bots.userId, ...)) })` in
-// RSC pages). Do NOT introduce a new call site without that upstream
-// guard or this becomes a cross-tenant leak.
-
 export type LeadListItem = {
   id: string;
   email: string;
@@ -63,10 +53,6 @@ export async function listLeads(args: ListLeadsArgs): Promise<LeadListResult> {
   return { items: rows, total: totalRows[0]?.total ?? 0 };
 }
 
-// Hard ceiling on the CSV export - 50K rows is well above any realistic
-// per-bot lead count and bounds the response size at ~10 MB worst case.
-// A future streaming endpoint can lift this; for now we trade
-// completeness against DoS risk.
 export const MAX_EXPORT_ROWS = 50_000;
 
 export type LeadExportRow = {
@@ -98,9 +84,6 @@ export async function listAllLeadsForExport(args: {
     .limit(MAX_EXPORT_ROWS);
 }
 
-// Cross-bot lead feed for the dashboard home.
-// Joins through `bots` so the user_id filter is the trust boundary -
-// every lead returned is owned by the requesting user.
 export type UserLeadRow = {
   id: string;
   email: string;

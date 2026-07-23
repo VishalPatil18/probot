@@ -1,8 +1,5 @@
 import Link from "next/link";
 
-// Shared left-side chrome for /login + /register. Server component - no client
-// state. Uses inline SVGs rather than pulling in an icon-library dependency
-// for these few icons.
 export function BrandPanel() {
   return (
     <div className="hidden lg:flex brand-deep-gradient dot-pattern-light flex-col justify-between p-12 text-white relative overflow-hidden">

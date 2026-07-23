@@ -32,9 +32,6 @@ const AVAILABILITY_OK = {
   email: { available: true },
 };
 
-// The form fires a debounced availability check AND the register POST through
-// the same global fetch. Route by URL: availability returns "all clear" unless
-// a test overrides it; the register call uses the supplied responder.
 function routeFetch(registerResponder: () => Promise<Response>) {
   fetchMock.mockImplementation((url: string) => {
     if (String(url).includes("check-availability")) {
@@ -166,7 +163,7 @@ describe("RegisterForm", () => {
     await fillAndSubmit(user, {
       username: "jane-doe",
       email: "jane@example.com",
-      password: "short1", // intentionally invalid to drive the 400 mock
+      password: "short1",
     });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

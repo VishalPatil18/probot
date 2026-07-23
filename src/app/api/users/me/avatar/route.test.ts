@@ -27,7 +27,6 @@ import { POST } from "./route";
 
 const USER_ID = "11111111-1111-1111-1111-111111111111";
 
-// Minimal valid magic-byte headers so the sniff passes for each format.
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
 

@@ -1,7 +1,3 @@
-// Email body builders. Kept separate from `email.ts` (the Resend transport)
-// so that template tweaks don't pull the Resend client into test bundles and
-// so that a future email vendor swap only touches `email.ts`.
-
 interface TemplateLink {
   url: string;
 }

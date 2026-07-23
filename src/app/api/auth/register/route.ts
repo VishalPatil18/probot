@@ -9,9 +9,6 @@ import { buildTokenUrl } from "@/lib/auth/tokens";
 import { pickDefaultAvatar } from "@/lib/avatars";
 import { db, users } from "@/lib/db";
 
-// Postgres unique_violation code - emitted by the UNIQUE constraints on
-// users.username / users.email if a row sneaks in between the pre-check and
-// the INSERT. We translate it back to a 409 rather than leaking a 500.
 function isUniqueViolation(err: unknown): boolean {
   return (
     typeof err === "object" &&
@@ -78,10 +75,6 @@ export async function POST(request: Request) {
     throw err;
   }
 
-  // Send the verification email immediately. The user
-  // cannot log in via credentials until they click the link (gated in
-  // auth.ts authorize()). We don't roll back the user row if Resend fails -
-  // the user can resend from the verify-request page.
   const { rawToken } = await createVerificationToken(createdUserId);
   const url = buildTokenUrl({ path: "/auth/verify-email", token: rawToken });
   try {

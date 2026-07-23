@@ -1,15 +1,5 @@
 import type { ReactNode } from "react";
 
-// Inline-SVG icon set, replacing the Material Symbols icon font. The font cost
-// ~3.86 MB (a full variable icon font) loaded via a render-blocking Google
-// Fonts stylesheet, for the ~14 glyphs the marketing pages actually use.
-// Inlining the handful we need removes the font download, the render-blocking
-// external stylesheet, the extra font origins, and the font-swap layout shift.
-//
-// Icons are stroke-based and sized in `em` with `currentColor`, so they behave
-// like the old font glyphs: the existing font-size utility classes (e.g.
-// `!text-lg`) still control their size and the surrounding text color flows in.
-
 export type IconName =
   | "arrow_forward"
   | "arrow_upward"
@@ -73,8 +63,6 @@ const ICONS: Record<IconName, ReactNode> = {
       <path d="m22 7-10 5L2 7" />
     </>
   ),
-  // Brand marks render filled (own fill/stroke override the stroke-based
-  // wrapper) so they look like the official logos.
   github: (
     <path
       fill="currentColor"

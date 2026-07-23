@@ -9,9 +9,6 @@ const PERSONALITY_PROMPTS: Record<Personality, string> = {
     "Reply with genuine enthusiasm and energy. Stay on topic and be helpful.",
 };
 
-// Shared prompt builder for both the React component and the headless hook.
-// Mirrors the platform's prompt shape so a self-hosted bot behaves like a
-// managed one when the same knowledge is supplied.
 export function buildSystemPrompt(config: ProbotBotConfig): string {
   const persona = config.personality ?? "professional";
   const chunks = config.contextChunks ?? (config.context ? [config.context] : []);

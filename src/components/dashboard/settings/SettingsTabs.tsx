@@ -41,20 +41,9 @@ function tabId(tab: SettingsTabKey): string {
 
 type Props = {
   children: ReactNode;
-  // Optional subset (and order) of tabs to show. Defaults to the full set.
-  // The account-only /dashboard/settings route passes the bot-independent tabs.
   tabs?: SettingsTabKey[];
 };
 
-// Settings page tab strip. Tab state lives in the URL via
-// `?tab=` so deep links + browser back work without extra JS plumbing.
-// Click flips the param via `router.replace` (not `push`) so back
-// doesn't fill with tab-changes the user didn't really commit to.
-//
-// `children` is an array of <SettingsTabPanel> elements; only the panel
-// matching the active key renders. Tab buttons + panels are wired with
-// ARIA `aria-controls` / `aria-labelledby` per the WAI-ARIA tabs
-// pattern so screen readers announce the relationship.
 export function SettingsTabs({ children, tabs }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();

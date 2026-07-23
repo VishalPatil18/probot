@@ -37,8 +37,6 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-// Each editable card now has its own subtle "Save" button. Scope queries to a
-// section by its heading so the right per-section button is targeted.
 function sectionByHeading(re: RegExp): HTMLElement {
   const heading = screen.getByRole("heading", { name: re });
   const section = heading.closest("section");
@@ -96,7 +94,6 @@ describe("BotConfigTab", () => {
   });
 
   it("auto-saves isActive=false immediately when the status toggle is clicked off", async () => {
-    // The status toggle saves on its own - no Save button needed.
     fetchMock.mockResolvedValueOnce(jsonResponse(200, {}));
     render(<BotConfigTab {...baseProps} />);
     fireEvent.click(screen.getByRole("switch", { name: /bot status/i }));

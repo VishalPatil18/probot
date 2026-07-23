@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-// Live preview of the chosen bot picture (or the default ProBot mark). Manages
-// the object URL lifecycle so the blob is revoked when the file changes/clears.
 export function BotAvatarPreview({
   file,
   sizeClass = "size-16",

@@ -1,9 +1,3 @@
-// Embedding provider abstraction. Kept separate from `LLMProvider` because
-// embedding and completion are independent capabilities - not every chat
-// provider exposes a native embeddings endpoint (e.g. Anthropic redirects to
-// Voyage AI, a paid third-party service). The current flow ships OpenAI-only; the
-// interface leaves room for `google` (text-embedding-004 @ 768d) later.
-
 export type EmbeddingProviderName = "openai";
 
 export interface EmbedParams {
@@ -40,9 +34,6 @@ export class EmbeddingError extends Error {
     this.category = category;
   }
 
-  // Bounds the serialized shape so a structured logger cannot pull in an
-  // attached SDK error whose headers may carry the raw API key. Mirrors
-  // ProviderError.toJSON() (see src/lib/ai/providers/types.ts).
   toJSON(): {
     name: string;
     provider: EmbeddingProviderName;

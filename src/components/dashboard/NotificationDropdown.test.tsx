@@ -68,7 +68,7 @@ describe("NotificationDropdown", () => {
   });
 
   it("shows 'Loading…' while the initial fetch is in flight", () => {
-    fetchMock.mockReturnValueOnce(new Promise(() => {})); // never resolves
+    fetchMock.mockReturnValueOnce(new Promise(() => {}));
     render(<NotificationDropdown {...baseProps} />);
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
@@ -121,7 +121,6 @@ describe("NotificationDropdown", () => {
         "/dashboard/bots/bot-1/leads",
       );
     });
-    // Mark-read call was fired in parallel with navigation
     const calls = fetchMock.mock.calls.map((c) => c[0]);
     expect(calls).toContain("/api/notifications/n-1/read");
     expect(baseProps.onItemRead).toHaveBeenCalledWith("n-1");

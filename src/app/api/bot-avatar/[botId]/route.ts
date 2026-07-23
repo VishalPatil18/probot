@@ -3,11 +3,6 @@ import { NextResponse } from "next/server";
 
 import { botAvatars, db } from "@/lib/db";
 
-// GET /api/bot-avatar/[botId] - public serve route for database-stored bot
-// pictures. `bots.image` points here for bots with an uploaded photo; the
-// public chat header and embeddable widget render it directly. Bots on the
-// default ProBot icon have no row here and never hit this route.
-
 export const dynamic = "force-dynamic";
 
 export async function GET(

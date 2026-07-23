@@ -98,15 +98,11 @@ describe("embedChunks", () => {
       apiKey: "sk-test",
     });
     expect(updateMock).toHaveBeenCalledTimes(2);
-    // Each UPDATE .set() received a vector literal + the model name
     const setCalls = updateSetMock.mock.calls;
     expect(setCalls).toHaveLength(2);
     expect(setCalls[0]?.[0]).toMatchObject({
       embeddingModel: "text-embedding-3-large",
     });
-    // The first call's vector literal string contains both numbers from the
-    // first vector. Drizzle wraps the sql template in an opaque object, so we
-    // serialize and search.
     const firstSet = JSON.stringify(setCalls[0]?.[0]);
     expect(firstSet).toContain("0.1");
     expect(firstSet).toContain("0.2");

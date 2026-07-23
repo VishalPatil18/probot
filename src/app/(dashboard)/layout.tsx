@@ -22,17 +22,6 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-// Every dashboard surface is gated behind a "real
-// username" check. OAuth and magic-link sign-ups land with a
-// `user-<8hex>` placeholder; we shunt them through /onboarding before any
-// dashboard page renders so public chat URLs (/u/<username>/chat) never
-// expose the throwaway slug.
-//
-// The redesigned layout now wraps every dashboard page in the
-// sidebar + topbar shell that mirrors design/dashboard.html. The
-// selected bot id rides a per-browser cookie so the URL pill, embed
-// snippet, and "View live bot" surfaces stay consistent as the user
-// navigates between pages.
 export default async function DashboardLayout({
   children,
 }: DashboardLayoutProps) {
@@ -69,8 +58,6 @@ export default async function DashboardLayout({
     }),
   ]);
 
-  // ToS-change banner: show when the legal effective date is newer than the
-  // user's acknowledgement (or they've never acknowledged).
   const showLegalBanner =
     !userRow?.lastLegalAckDate ||
     userRow.lastLegalAckDate < LEGAL_EFFECTIVE_AT;
@@ -116,12 +103,6 @@ export default async function DashboardLayout({
           <Sidebar {...sidebarProps} />
         </aside>
 
-        {/* On desktop the right column is a vertical flex stack of fixed
-            height (full viewport). The topbar takes `h-16` and `main`
-            absorbs the remaining `calc(100vh - 4rem)` via `flex-1`.
-            `main` is the scroll container - long pages scroll inside it,
-            the topbar + sidebar stay pinned, and the document itself
-            never scrolls. Mobile: no flex/h-screen, document scroll. */}
         <div className="flex-1 lg:ml-64 lg:flex lg:h-screen lg:flex-col">
           <Topbar
             publicUrl={

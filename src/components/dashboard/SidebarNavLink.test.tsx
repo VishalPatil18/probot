@@ -7,9 +7,6 @@ vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
 }));
 
-// The real Sidebar module also runs server-only side effects we don't
-// need for testing the nav-link; stub its SidebarIcon export to a
-// trivial span so we can render in isolation.
 vi.mock("./Sidebar", () => ({
   SidebarIcon: ({ name }: { name: string }) => (
     <span data-testid={`icon-${name}`} />

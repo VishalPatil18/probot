@@ -34,7 +34,6 @@ describe("lead-capture-state", () => {
   });
 
   it("returns 'pending' on a garbage stored value", () => {
-    // Directly poke a value that's not in the allowed set
     window.sessionStorage.setItem(
       `probot.lead.v1:${BOT}:${SES_A}`,
       "nonsense",

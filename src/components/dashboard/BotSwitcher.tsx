@@ -31,16 +31,6 @@ function initials(name: string): string {
   );
 }
 
-// Sidebar's per-user bot selector. Above the workspace nav. Click opens
-// a dropdown of the user's owned bots; picking one submits a hidden form
-// that fires the `selectBotAction` server action - the action writes
-// the cookie and triggers a server revalidation so the rest of the
-// shell (URL pill, embed snippet, "View live bot") re-renders against
-// the new selection.
-//
-// Single-bot users see a static card with no dropdown (the disclosure
-// caret is hidden) - no value in clicking when there's nothing to
-// switch to. The "+ New bot" footer is always visible.
 export function BotSwitcher({
   bots,
   selectedBotId,

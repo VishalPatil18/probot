@@ -31,12 +31,12 @@ suite is enough — skip manual testing.
 
 ## Prerequisites
 
-| Tool | Version | Why |
-|---|---|---|
-| Node.js | 20+ | Vite + Next dev servers |
-| npm | 10+ | Package installs (yarn/pnpm work; lockfile is `package-lock.json`) |
-| Chrome or Firefox | any recent | Widget rendering, DevTools inspection |
-| An LLM API key | optional | Only if you want to test real chat replies. Free tier: Google Gemini (see [Environment variables](#environment-variables--secrets)) |
+| Tool              | Version    | Why                                                                                                                                 |
+| ----------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js           | 20+        | Vite + Next dev servers                                                                                                             |
+| npm               | 10+        | Package installs (yarn/pnpm work; lockfile is `package-lock.json`)                                                                  |
+| Chrome or Firefox | any recent | Widget rendering, DevTools inspection                                                                                               |
+| An LLM API key    | optional   | Only if you want to test real chat replies. Free tier: Google Gemini (see [Environment variables](#environment-variables--secrets)) |
 
 The **Next dev server** (`npm run dev` at the repo root) is only needed
 for two of the three tests — the vanilla IIFE test runs standalone.
@@ -49,11 +49,11 @@ Three self-contained mini-projects live under
 [`manual-testing/`](./manual-testing/). Each has its own README with a
 per-scenario verification checklist:
 
-| Folder | Package under test | Runs on |
-|---|---|---|
-| [`chatbot-script-tag/`](./manual-testing/chatbot-script-tag/) | `probot-chatbot` | localhost:5500 |
-| [`self-hosted-vanilla/`](./manual-testing/self-hosted-vanilla/) | `probot-self-hosted` (vanilla IIFE) | localhost:5501 |
-| [`self-hosted-react/`](./manual-testing/self-hosted-react/) | `probot-self-hosted` (React ESM + adapters) | localhost:5173 |
+| Folder                                                          | Package under test                          | Runs on        |
+| --------------------------------------------------------------- | ------------------------------------------- | -------------- |
+| [`chatbot-script-tag/`](./manual-testing/chatbot-script-tag/)   | `probot-chatbot`                            | localhost:5500 |
+| [`self-hosted-vanilla/`](./manual-testing/self-hosted-vanilla/) | `probot-self-hosted` (vanilla IIFE)         | localhost:5501 |
+| [`self-hosted-react/`](./manual-testing/self-hosted-react/)     | `probot-self-hosted` (React ESM + adapters) | localhost:5173 |
 
 The [`manual-testing/README.md`](./manual-testing/README.md) is the
 operational reference for each folder — this file is the entry point
@@ -68,10 +68,10 @@ From the repo root, build both packages once:
 
 ```bash
 # Widget bundle used by `chatbot-script-tag/`
-( cd packages/probot-chatbot && npm install && npm run build )
+cd packages/probot-chatbot && npm install && npm run build
 
 # ESM/CJS + IIFE bundles used by both self-hosted tests
-( cd packages/probot-self-hosted && npm install && npm run build )
+cd packages/probot-self-hosted && npm install && npm run build
 ```
 
 If you plan to run [`chatbot-script-tag/`](./manual-testing/chatbot-script-tag/)
@@ -168,8 +168,8 @@ allowed through — use them if you want to publish a "here's what to
 set" reminder to fellow contributors.
 
 **Zero-cost keys** if you don't want to pay for testing:
+
 - Google Gemini has a free tier — [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey). Use with the [Google adapter](./docs/self-hosted-bot/models-and-keys.mdx).
-- Ollama runs locally, no key needed — see [docs/self-hosted-bot/models-and-keys.mdx](./docs/self-hosted-bot/models-and-keys.mdx#openai-compatible-endpoints-grok-ollama-azure-).
 
 ---
 
@@ -219,7 +219,7 @@ tarball. If any don't, consumers will hit "cannot resolve" errors.
   script copies the freshly-built bundle.
 - **`Cannot find package 'probot-self-hosted'` in the React harness.**
   Either build the package (`cd packages/probot-self-hosted && npm run
-  build`) or `rm -rf node_modules package-lock.json && npm install`.
+build`) or `rm -rf node_modules package-lock.json && npm install`.
 - **"Invalid hook call" in the React harness.** React de-duped
   incorrectly (usually happens after switching between `file:` and
   tarball installs). Wipe `node_modules` + `package-lock.json` in the
@@ -229,14 +229,25 @@ tarball. If any don't, consumers will hit "cannot resolve" errors.
 - **OpenAI mode returns 500.** Check the terminal running `npm run dev`
   for the underlying error. Most common causes: missing/wrong
   `OPENAI_API_KEY`, no billing credit for the chosen model.
+- **Widget replies "its owner needs to save an AI key"** (`missing_llm_key`
+  from `POST /api/chat/[botId]`). The bot has no usable row in
+  `encrypted_llm_keys` — the embed never sends a key header, so the
+  managed (server-stored) key is the only path. Store the key via Bot
+  Factory Step 4 or Settings → AI Model & Key. Azure bots additionally
+  need the endpoint saved with the key; rows stored before the
+  `azure_endpoint` column existed must be re-saved once.
+- **Keys entered in the dashboard don't affect the self-hosted harnesses.**
+  By design: `probot-self-hosted` keeps the LLM key in *your* backend
+  (`OPENAI_API_KEY` env for the React harness). The vanilla harness's
+  `sendMessage` is a hardcoded echo and never calls an LLM.
 - **`tsc: command not found` when building `probot-self-hosted`.** The
   build script shells out to `tsc` without npx. Either run it via `npm
-  run build` (npm scripts auto-add `.bin` to PATH), or prepend it
+run build` (npm scripts auto-add `.bin` to PATH), or prepend it
   manually: `PATH="$(pwd)/node_modules/.bin:$PATH" node build.mjs`.
 - **Anthropic/Google adapters fail to resolve.** Their SDKs are optional
   peer deps in `probot-self-hosted`. Install the one you need in your
   consumer app: `npm install @anthropic-ai/sdk` or `npm install
-  @google/generative-ai`.
+@google/generative-ai`.
 - **Widget bubble missing on a plain HTML page.** Static file servers
   (`serve`, `http-server`, `python -m http.server`) block parent-
   directory traversal, so `<script src="../../packages/…">` silently

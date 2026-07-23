@@ -2,9 +2,6 @@ import { z } from "zod";
 
 import { usernameSchema } from "@/lib/auth/schemas";
 
-// Validation for the Settings → Account write endpoints. Username rules are
-// shared with registration/onboarding via `usernameSchema`. Name is optional -
-// an empty value clears it back to NULL.
 export const profileUpdateInput = z.object({
   name: z.string().trim().max(100, "Name must be at most 100 characters"),
   username: usernameSchema,

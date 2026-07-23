@@ -2,7 +2,6 @@ const HEADER_NAME = "x-llm-api-key";
 const EMBEDDING_HEADER_NAME = "x-embedding-api-key";
 const AZURE_ENDPOINT_HEADER = "x-llm-azure-endpoint";
 const AZURE_API_VERSION_HEADER = "x-llm-azure-api-version";
-const OLLAMA_BASE_URL_HEADER = "x-llm-ollama-base-url";
 const MIN_LEN = 8;
 const MAX_LEN = 256;
 const MAX_ENDPOINT_LEN = 512;
@@ -49,11 +48,6 @@ export function readApiKey(headers: Headers): string {
   return trimmed;
 }
 
-// RAG: the OpenAI key used for embedding generation and chat-time
-// query embedding. Independent of `x-llm-api-key` because the user's chat
-// provider may not be OpenAI. Returns null when the header is absent - the
-// caller treats this as "skip embeddings, fall back to full-context". Only
-// throws when the header is present but malformed (length out of range).
 export function readEmbeddingApiKey(headers: Headers): string | null {
   const raw = headers.get(EMBEDDING_HEADER_NAME);
   if (raw === null) return null;
@@ -84,11 +78,6 @@ export type AzureCreds = {
   apiVersion: string | null;
 };
 
-// Pull the two Azure-specific headers (endpoint + optional apiVersion).
-// Returns null when no endpoint header is present - the chat route only
-// requires these for `users.llmProvider === "azure"`, so absence is not
-// fatal at this layer. Throws `KeyTransportError("invalid_endpoint")`
-// if endpoint is present but malformed (empty, oversized, or not HTTPS).
 export function readAzureCreds(headers: Headers): AzureCreds | null {
   const rawEndpoint = headers.get(AZURE_ENDPOINT_HEADER);
   if (rawEndpoint === null) return null;
@@ -107,7 +96,6 @@ export function readAzureCreds(headers: Headers): AzureCreds | null {
     );
   }
   if (!endpoint.startsWith("https://")) {
-    // Defense-in-depth: never forward credentials to a non-TLS endpoint.
     throw new KeyTransportError(
       "invalid_endpoint",
       `${AZURE_ENDPOINT_HEADER} header must use https://`,
@@ -122,8 +110,6 @@ export function readAzureCreds(headers: Headers): AzureCreds | null {
       trimmedVersion.length === 0 ||
       trimmedVersion.length > MAX_API_VERSION_LEN
     ) {
-      // Treat malformed apiVersion as absent - the adapter will fall back to
-      // its own default, which is safer than rejecting the whole request.
       apiVersion = null;
     } else {
       apiVersion = trimmedVersion;
@@ -131,51 +117,4 @@ export function readAzureCreds(headers: Headers): AzureCreds | null {
   }
 
   return { endpoint, apiVersion };
-}
-
-// Hosts allowed over plain http:// for Ollama. A local Ollama is reached over
-// http on the loopback interface; anything else must use https:// so we never
-// forward a request to an untrusted, non-TLS remote host.
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
-
-function isAllowedOllamaUrl(url: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol === "https:") return true;
-  if (parsed.protocol === "http:") return LOOPBACK_HOSTS.has(parsed.hostname);
-  return false;
-}
-
-// Pull the Ollama base-URL header. Returns null when absent - the chat route
-// only requires it for `llmProvider === "ollama"`, so absence is not fatal at
-// this layer. Throws `KeyTransportError("invalid_endpoint")` when present but
-// malformed (empty, oversized, or a non-loopback http:// URL).
-export function readOllamaBaseUrl(headers: Headers): string | null {
-  const raw = headers.get(OLLAMA_BASE_URL_HEADER);
-  if (raw === null) return null;
-
-  const baseUrl = raw.trim();
-  if (baseUrl.length === 0) {
-    throw new KeyTransportError(
-      "invalid_endpoint",
-      `${OLLAMA_BASE_URL_HEADER} header is empty`,
-    );
-  }
-  if (baseUrl.length > MAX_ENDPOINT_LEN) {
-    throw new KeyTransportError(
-      "invalid_endpoint",
-      `${OLLAMA_BASE_URL_HEADER} header exceeds ${MAX_ENDPOINT_LEN} characters`,
-    );
-  }
-  if (!isAllowedOllamaUrl(baseUrl)) {
-    throw new KeyTransportError(
-      "invalid_endpoint",
-      `${OLLAMA_BASE_URL_HEADER} must use https:// (or http:// for localhost)`,
-    );
-  }
-  return baseUrl;
 }

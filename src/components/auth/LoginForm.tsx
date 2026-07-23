@@ -9,9 +9,6 @@ import { ForgotPasswordModal } from "./ForgotPasswordModal";
 import { OAuthRow } from "./OAuthRow";
 import { PasswordInput } from "./PasswordInput";
 
-// Banner copy keyed by ?verify= and ?reset= query params set by the
-// verify-email API redirect and the reset-password success redirect. Kept
-// next to the form so a future copy change touches one place.
 const VERIFY_MESSAGES: Record<string, { tone: "ok" | "warn"; text: string }> = {
   ok: {
     tone: "ok",

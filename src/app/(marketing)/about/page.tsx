@@ -10,7 +10,7 @@ import { buildMetadata } from "@/lib/seo/site";
 
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
-const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
+const PORTFOLIO_URL = "https://v-ai.org/";
 
 export const metadata = buildMetadata({
   title: "About",
@@ -45,7 +45,6 @@ const PRINCIPLES: Array<{ icon: IconName; title: string; body: string }> = [
 export default function AboutPage() {
   return (
     <>
-      {/* HERO */}
       <section className="dot-pattern border-b border-border-base">
         <div className="mx-auto max-w-[1180px] px-6 py-20 lg:py-24">
           <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
@@ -97,7 +96,6 @@ export default function AboutPage() {
               </p>
             </div>
 
-            {/* CNBC feature - click to read the article */}
             <a
               href="https://www.cnbc.com/2026/04/30/these-2-job-seekers-built-ai-chatbots-to-talk-to-recruiters-for-them.html"
               target="_blank"
@@ -117,7 +115,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* WHY */}
       <section className="border-b border-border-base bg-white">
         <div className="mx-auto max-w-[1180px] px-6 py-20">
           <div className="grid lg:grid-cols-2 gap-14">
@@ -178,7 +175,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* PRINCIPLES */}
       <section className="dot-pattern border-b border-border-base">
         <div className="mx-auto max-w-[1180px] px-6 py-20">
           <div className="max-w-2xl mb-12">
@@ -208,7 +204,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* HYBRID KEY STORAGE */}
       <section id="hybrid" className="border-b border-border-base scroll-mt-20">
         <div className="mx-auto max-w-[1180px] px-6 py-20">
           <div className="max-w-2xl mb-10">
@@ -325,7 +320,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* WHO */}
       <section className="border-b border-border-base bg-white">
         <div className="mx-auto max-w-[1180px] px-6 py-20">
           <div className="grid lg:grid-cols-3 gap-12">
@@ -400,7 +394,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* CTA */}
       <section className="px-6 py-16">
         <div className="mx-auto max-w-[1180px] brand-blue-gradient dot-pattern-light rounded-3xl overflow-hidden">
           <div className="grid lg:grid-cols-2">

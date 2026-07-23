@@ -9,20 +9,6 @@ import widgetCss from "./widget.css";
 
 const DEFAULT_THEME = "#2563eb";
 
-// Drop-in React chat widget. Mirrors the DOM + class shape of the ProBot
-// managed embed widget (see `src/widget/widget.ts` in the probot repo) so
-// the visual language is identical across managed and self-hosted bots.
-// The full stylesheet ships inline via a bundled `<style>` tag; the whole
-// widget renders inside a Shadow DOM so host-page CSS can't reach in and
-// the widget's own reset (`* { margin: 0; padding: 0 }`) can't leak out.
-// This matches the isolation model of the managed embed widget on
-// pro-bot.dev.
-
-// Renders children into an open Shadow DOM attached to a host `<div>`.
-// Uses `useLayoutEffect` so the shadow is attached before the browser
-// paints, avoiding a visible flash of the empty host element. Portals the
-// React tree through `createPortal` so React state/effects continue to
-// work the same way from the caller's perspective.
 function ShadowContainer({ children }: { children: ReactNode }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [shadow, setShadow] = useState<ShadowRoot | null>(null);
@@ -30,8 +16,6 @@ function ShadowContainer({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    // React StrictMode double-invokes effects in dev; guard against a
-    // second attachShadow that would throw "Shadow root already exists".
     const existing = host.shadowRoot;
     setShadow(existing ?? host.attachShadow({ mode: "open" }));
   }, []);
@@ -307,9 +291,6 @@ function TypingRow({ avatarUrl }: { avatarUrl: string | undefined }) {
   );
 }
 
-// Bot avatar: real image when supplied, otherwise the two-dot ProBot mark
-// on a theme-tinted circle. Matches `renderBotAvatar` in the managed
-// widget so the two products render the same fallback.
 function BotAvatar({
   variant,
   src,
@@ -438,8 +419,6 @@ function ArrowUpIcon() {
   );
 }
 
-// Escape user-controlled strings before interpolating into HTML. Mirrors
-// `escapeHtml` in the managed widget.
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -449,10 +428,6 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-// Minimal markdown → HTML for bot replies. Byte-for-byte port of
-// `renderMarkdown` in the managed widget so both surfaces format the same
-// LLM output identically. See `src/widget/widget.ts` for the design
-// rationale (bundle-size trade-off vs. react-markdown + remark-gfm).
 function renderMarkdown(md: string): string {
   const lines = md.replace(/\r\n?/g, "\n").split("\n");
   const blocks: string[] = [];
@@ -565,7 +540,4 @@ function renderInline(text: string): string {
   return s;
 }
 
-// Re-exported so consumers importing from the ProbotBot entry can access
-// the ChatMessage type without a second import path. Public surface stays
-// unchanged (also re-exported from `index.ts`).
 export type { ChatMessage };

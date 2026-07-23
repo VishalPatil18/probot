@@ -14,10 +14,6 @@ type Props = {
   external?: boolean;
 };
 
-// Active state is computed client-side via `usePathname()` so the
-// server layout doesn't have to thread the current path through every
-// nav row. Exact-match for `/dashboard` (so deep links into bot pages
-// don't double-highlight the home row); prefix-match for everything else.
 function isActive(pathname: string, href: string): boolean {
   if (href === "/dashboard") return pathname === "/dashboard";
   return pathname.startsWith(href);

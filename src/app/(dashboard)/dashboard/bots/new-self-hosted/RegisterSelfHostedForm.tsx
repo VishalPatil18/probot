@@ -3,10 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-// Client half of the self-hosted register page. POSTs to /api/bots/self-hosted,
-// shows the minted token exactly once (raw secret can never be retrieved
-// again), then routes back to the dashboard. Additional tokens require
-// re-registering the bot.
 export function RegisterSelfHostedForm() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -98,7 +94,6 @@ export function RegisterSelfHostedForm() {
                       setCopied(true);
                       window.setTimeout(() => setCopied(false), 1500);
                     } catch {
-                      // clipboard may be unavailable; the value is selectable above
                     }
                   }}
                   className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-semibold text-neutral-200 hover:bg-white/10"
@@ -122,7 +117,6 @@ export function RegisterSelfHostedForm() {
                   setCopied(true);
                   window.setTimeout(() => setCopied(false), 1500);
                 } catch {
-                  // clipboard may be unavailable; the value is selectable above
                 }
               }}
               className="btn btn-secondary"

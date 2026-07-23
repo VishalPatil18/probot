@@ -1,4 +1,3 @@
-// Per-file result shape returned by POST /api/bots/[botId]/knowledge.
 export type IngestFileResult = {
   name: string;
   ok: boolean;

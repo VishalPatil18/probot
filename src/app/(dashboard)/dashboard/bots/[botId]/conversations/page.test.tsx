@@ -106,7 +106,6 @@ describe("ConversationsListPage", () => {
     expect(screen.getByText("tell me about her ML work")).toBeInTheDocument();
     expect(screen.getByText(/4 msgs/)).toBeInTheDocument();
 
-    // Search query is forwarded to the shared query
     expect(listConversationsMock).toHaveBeenCalledWith(
       expect.objectContaining({ botId: BOT_ID, q: "ml" }),
     );

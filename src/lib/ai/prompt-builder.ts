@@ -36,19 +36,12 @@ type Bot = {
   name: string;
   personality: Personality;
   contextText: string;
-  // Optional free-form additions to the system prompt.
-  // Length is capped at the Zod layer (max 2000). When null/empty/whitespace,
-  // the block is omitted entirely so a non-customising bot's prompt is byte-
-  // identical to its earlier shape.
   customInstructions?: string | null;
 };
 
 export function buildSystemPrompt(args: {
   bot: Bot;
   ownerUsername: string;
-  // RAG: when present + non-empty, replaces `bot.contextText` as the
-  // ## CONTEXT body. Chunks are joined with a `---` separator so the LLM
-  // sees clear boundaries between independently retrieved passages.
   relevantChunks?: string[];
 }): string {
   const { bot, relevantChunks } = args;
@@ -61,14 +54,6 @@ export function buildSystemPrompt(args: {
       : bot.contextText;
   const context = `## CONTEXT\n${contextBody}`;
 
-  // Custom-instructions block lives BETWEEN personality and the
-  // response-style block. Personality establishes voice, custom instructions
-  // refine bot-specific intent, then RESPONSE_STYLE locks the structural
-  // rules - this order keeps the immutable structural rules as the last
-  // word so a malformed custom block can't override "no filler phrases" or
-  // "max 6 sentences." The IMMUTABLE RULES block above all of this still
-  // governs identity / context-only / prompt protection regardless of what
-  // the custom block says.
   const trimmedCustom = bot.customInstructions?.trim() ?? "";
   const customBlock =
     trimmedCustom.length > 0

@@ -1,10 +1,4 @@
-export type ProviderName =
-  | "anthropic"
-  | "openai"
-  | "google"
-  | "azure"
-  | "grok"
-  | "ollama";
+export type ProviderName = "anthropic" | "openai" | "google" | "azure" | "grok";
 
 export type CompleteParams = {
   system: string;
@@ -13,9 +7,6 @@ export type CompleteParams = {
   model?: string;
   maxTokens?: number;
   temperature?: number;
-  // Per-provider auxiliary fields. Azure uses `endpoint` and `apiVersion`;
-  // other providers ignore. Kept as a generic Record so a new provider with
-  // extra config (e.g. base URL, region) doesn't require widening the type.
   extras?: Record<string, string>;
 };
 
@@ -45,8 +36,6 @@ export class ProviderError extends Error {
     this.category = category;
   }
 
-  // Bounds the serialized shape so a structured logger (Sentry, pino) cannot
-  // pull in an attached SDK error whose headers may carry the raw API key.
   toJSON(): {
     name: string;
     provider: ProviderName;

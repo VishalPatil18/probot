@@ -1,20 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
-// Lightweight HMAC-signed token for private bot previews.
-//
-// Format: `base64url(JSON payload).base64url(HMAC-SHA256(payload))`
-//
-// We don't use a full JWT here on purpose - the only payload fields we need
-// are `botId`, `userId`, and a unix `iat` timestamp; a JOSE header would
-// be pure overhead. The signing key reuses `NEXTAUTH_SECRET` so operators
-// don't need to manage another secret.
-//
-// 7-day TTL because the deploy step lives inside the same dashboard session
-// as the bot-creation flow and creators may go several days between drafting
-// and publishing. The token doesn't grant anything beyond chatting with the
-// inactive bot - revoking on publish (and on bot deletion via CASCADE) is
-// the actual access boundary.
-
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface Payload {
@@ -67,7 +52,6 @@ export function verifyPreviewToken(
   const secret = getSecret();
   const expectedSig = sign(encoded, secret);
 
-  // Constant-time comparison so signature-matching cannot be timed.
   const provided = base64UrlDecode(providedSig);
   const expected = base64UrlDecode(expectedSig);
   if (provided.length !== expected.length) return null;

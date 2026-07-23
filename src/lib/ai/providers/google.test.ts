@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Mock the SDK at module level so the adapter can be exercised without
-// hitting a real Gemini endpoint. Each test reaches into this mock to
-// stage the response shape it cares about.
 const generateContentMock = vi.fn();
 const getGenerativeModelMock = vi.fn(() => ({
   generateContent: generateContentMock,

@@ -38,6 +38,6 @@ describe("getRedisClient", () => {
     const a = getRedisClient();
     const b = getRedisClient();
     expect(a).not.toBeNull();
-    expect(a).toBe(b); // memoized: same instance per process
+    expect(a).toBe(b);
   });
 });

@@ -1,8 +1,3 @@
-// Bot avatar shown in the chat header and on each assistant reply. Renders the
-// uploaded bot picture when set, otherwise the default ProBot mark (two dots)
-// on a circle tinted with the bot's theme accent (`--bot-accent`). Size is
-// controlled by the caller via `sizeClass` (e.g. "size-12" or "size-8").
-
 interface BotAvatarIconProps {
   image?: string | null;
   name: string;

@@ -35,7 +35,6 @@ describe("TranscriptMessage", () => {
         createdAt={SOME_DATE}
       />,
     );
-    // ReactMarkdown emits a <strong> for **bold**
     const strong = screen.getByText("bold");
     expect(strong.tagName.toLowerCase()).toBe("strong");
   });

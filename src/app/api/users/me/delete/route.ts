@@ -7,19 +7,6 @@ import { authOptions } from "@/lib/auth/auth";
 import { sendDeletionInitiatedEmail } from "@/lib/auth/email";
 import { buildTokenUrl } from "@/lib/auth/tokens";
 
-// POST /api/users/me/delete
-//
-// Initiates the 7-day deletion grace
-// period. The client (DeleteAccountModal) collected a username retype as
-// a GitHub-style confirmation; we re-validate it server-side before
-// scheduling. On success, sends the user an email containing an undo link
-// they can click within 7 days to cancel.
-//
-// Idempotent: re-submitting while a deletion is already pending returns
-// `already_requested` rather than scheduling a second purge or resending
-// the email. (Resending the email is a future polish - "I lost
-// the link, send me a new one.")
-
 const deleteInput = z.object({
   username: z.string().min(1).max(30),
 });
@@ -65,10 +52,6 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "user_not_found" }, { status: 404 });
   }
 
-  // Best-effort email send. The grace period and undo flow still work if
-  // the email never makes it out; the dashboard banner (a future addition) will
-  // also expose the deletion request, and the user can use the in-app
-  // "Cancel deletion" button instead of the email link.
   try {
     const undoUrl = buildTokenUrl({
       path: "/undo-deletion",
@@ -80,8 +63,6 @@ export async function POST(request: Request): Promise<Response> {
       scheduledPurgeAt: result.scheduledPurgeAt,
     });
   } catch {
-    // Swallow - the deletion request is recorded; the user can still
-    // undo via the dashboard banner.
   }
 
   return NextResponse.json({

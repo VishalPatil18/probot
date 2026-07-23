@@ -6,10 +6,6 @@ import { NotificationDropdown } from "./NotificationDropdown";
 
 const POLL_INTERVAL_MS = 30_000;
 
-// Dashboard notification bell. Polls the unread-count
-// endpoint every 30s while the tab is visible (pauses on Page Visibility
-// API hidden, resumes + immediate refresh on visible). Click opens the
-// dropdown panel. The badge caps at "9+" so it stays readable.
 export function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -22,12 +18,9 @@ export function NotificationBell() {
       const body = (await res.json()) as { count: number };
       setUnread(body.count);
     } catch {
-      // Swallow: a single failed poll shouldn't reset the badge to a stale
-      // zero. The next successful poll will reconcile.
     }
   }, []);
 
-  // Initial fetch + 30s polling loop, paused when the tab is hidden.
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -64,7 +57,6 @@ export function NotificationBell() {
     };
   }, [refresh]);
 
-  // Close the dropdown on outside click or ESC.
   useEffect(() => {
     if (!open) return;
 

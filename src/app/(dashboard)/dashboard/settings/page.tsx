@@ -11,11 +11,6 @@ import { NotificationsInbox } from "@/components/dashboard/notifications/Notific
 import { getPendingDeletion } from "@/lib/account/delete";
 import { authOptions } from "@/lib/auth/auth";
 
-// Bot-independent settings, reachable without a bot. Sidebar Settings link
-// + profile-row link point here when no bot is selected. Bot-scoped
-// versions live at /dashboard/bots/[botId]/settings and expose the same
-// three tabs (Account, Notifications, Security & privacy).
-
 function computeInitials(name: string): string {
   return (
     name

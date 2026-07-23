@@ -62,7 +62,6 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Jane led the team that shipped Acme's RAG search.");
     expect(prompt).toContain("She mentored 4 junior engineers in 2025.");
     expect(prompt).toContain("\n\n---\n\n");
-    // Fallback contextText must NOT appear when chunks are used
     expect(prompt).not.toContain(baseBot.contextText);
   });
 

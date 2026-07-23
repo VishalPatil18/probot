@@ -21,7 +21,7 @@ adapter to import, and how to switch providers at runtime.
     `createGoogleHandler` — Gemini models via Google's Generative AI API.
   </Card>
   <Card title="OpenAI-compatible" icon="plug">
-    `createOpenAIHandler` with `baseUrl` — Grok, Ollama, Azure OpenAI, LM
+    `createOpenAIHandler` with `baseUrl` — Grok, Azure OpenAI, LM
     Studio, together.ai, DeepSeek, Mistral, and any other API that speaks
     the OpenAI Chat Completions protocol.
   </Card>
@@ -40,12 +40,11 @@ provider. If you only ship OpenAI, there is zero extra bundle cost.
 | Google Gemini | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) | `gemini-2.5-flash` (free tier!), `gemini-2.5-pro` | **Free tier available.** Requires `@google/generative-ai`. |
 | Grok (xAI) | [console.x.ai](https://console.x.ai) | `grok-4` | OpenAI-compatible — use `createOpenAIHandler`. |
 | Azure OpenAI | Azure portal → your OpenAI resource → Keys | Your deployment name | OpenAI-compatible — use `createOpenAIHandler` with `baseUrl`. |
-| Ollama | No key — runs locally | Whatever you pulled (e.g. `llama3.2`) | Free, local, no key. |
 | LM Studio / together.ai / DeepSeek / Mistral | Provider dashboard | Provider's model id | All OpenAI-compatible — one adapter, different `baseUrl`. |
 
 <Tip>
-  Gemini's free tier and local Ollama are the two genuinely $0 paths.
-  Great for prototyping or side projects.
+  Gemini's free tier is the genuinely $0 path. Great for prototyping or
+  side projects.
 </Tip>
 
 ## Wiring examples
@@ -97,7 +96,7 @@ const send = createGoogleHandler({
 });
 ```
 
-### OpenAI-compatible endpoints (Grok, Ollama, Azure, …)
+### OpenAI-compatible endpoints (Grok, Azure, …)
 
 Point the OpenAI adapter at the provider's `baseUrl`:
 
@@ -109,13 +108,6 @@ const sendGrok = createOpenAIHandler({
   baseUrl: "https://api.x.ai/v1",
   apiKey: process.env.XAI_API_KEY!,
   model: "grok-4",
-});
-
-// Ollama (no key)
-const sendOllama = createOpenAIHandler({
-  baseUrl: "http://localhost:11434/v1",
-  apiKey: "ollama",
-  model: "llama3.2",
 });
 
 // Azure OpenAI (baseUrl points at your deployment)

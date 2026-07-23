@@ -14,10 +14,6 @@ interface SidebarAccountFooterProps {
   modelHref: string;
 }
 
-// Sidebar footer: the AI-model status card plus the profile row + sign-out
-// trigger. Clicking sign-out swaps the model card for an inline confirmation
-// panel in the same slot (no centered modal) - Cancel restores the card,
-// Confirm fires `signOut()` and navigates to /login.
 export function SidebarAccountFooter({
   llmProvider,
   llmModel,
@@ -31,7 +27,6 @@ export function SidebarAccountFooter({
   async function handleConfirm() {
     if (pending) return;
     setPending(true);
-    // signOut triggers a full navigation to callbackUrl, unmounting this tree.
     await signOut({ callbackUrl: "/login" });
   }
 

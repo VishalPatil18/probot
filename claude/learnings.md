@@ -2095,3 +2095,53 @@ The fix is one line: `AND deployment_mode = 'managed'`. Same shape at `/dashboar
 
 This is a variant of the "polymorphic table" antipattern: if you find yourself doing this in more than two or three places, split the tables. Two flows sharing a table is fine; five flows sharing a table is the pattern telling you it wants to be normalized.
 
+### Two LLM key stores: browser-local vs. server-managed
+
+> Why does a managed bot answer fine on `/u/<username>/chat` but the embed widget says "the owner needs to save an AI key"?
+
+The same bot has two independent places its API key can live, and the two chat surfaces read from different ones — so one working never implies the other does.
+
+**Browser-local store.** The owner's key is kept in *their* browser only, in an encrypted IndexedDB store (`src/lib/client/llm-key-store.ts`, AES-256-GCM via Web Crypto, migrated off plaintext localStorage). `ChatWindow` reads it with `getApiKey()` and attaches it as the `x-llm-api-key` **header** on every `POST /api/chat/[botId]`. The key never travels in a JSON body and is never round-tripped through a ProBot endpoint. This is why the internal chat page works for the owner: it's *their* browser supplying the credential. Anyone else's browser — or the owner on a different machine — has an empty store and would fail the same way the widget does.
+
+**Server-managed store.** For the embeddable widget there is no owner browser in the loop: `widget.js` runs on a stranger's site (janedoe.com) and sends **no** key header. So the chat route falls to the managed path — `resolveProviderAndKey` looks up `encrypted_llm_keys` by `botId`, envelope-decrypts it (per-row DEK wrapped by a KEK), and uses that. Resolution priority is: **header key > managed key > fail** (`missing_llm_key`, 400). The widget renders that 400 as the friendly "owner needs to save an AI key" line.
+
+The managed row is populated by a **separate, explicit action** — the Managed-key panel in Settings → AI Model & Key, which POSTs the plaintext straight into server-side envelope encryption (`POST /api/bots/[botId]/llm-key`). Saving the key locally (onboarding / Bot Factory step 4) does **not** create the managed row; the two are decoupled on purpose so a creator can test locally without ever exposing a managed key, and can revoke the managed key (deleting the row) without losing their local one.
+
+**The design's own guard rail.** `POST /api/bots/[botId]/publish` refuses to activate a managed-mode bot with no `encrypted_llm_keys` row (`needs_managed_key`, 400), precisely because the embed would 400 on every visitor. Exemptions: `ollama` owners (the adapter uses a placeholder key) and `self_hosted` bots (their chat runs entirely in the consumer's own webapp and never hits this endpoint). So an *active* managed bot with no managed key is an anomaly — it means it reached `is_active = true` by a path that skipped the guard (provider was ollama at publish time, draft preview-token access, or predating the guard), not that the embed is broken.
+
+**General rule.** When one credential can be provisioned through two decoupled channels (a per-device local store and a shared server store), "it works for me" is never evidence the shared path is provisioned. Trace which store each caller actually reads before concluding a bug exists; the fix is usually a missing provisioning step, not a code change.
+
+
+### Multi-secret providers break single-secret assumptions (the Azure managed-path bug)
+
+> Why did the embed widget fail for an Azure bot even though the encrypted key WAS stored server-side?
+
+Most LLM providers authenticate with exactly one secret: the API key. The managed-key design (envelope-encrypt one string per bot) was built around that shape. Azure OpenAI is a *multi-value* credential: key + resource endpoint + API version (+ deployment name, which lives in `users.llmModel`). The original code "solved" this by refusing Azure on the managed path entirely — but the store endpoint (`POST /llm-key`) still *accepted* Azure keys, the publish guard only checked row-presence, and the dashboard banner did the same. Result: every surface an owner could see said "configured", and the only surface a *visitor* hit said `missing_llm_key`. A consistency bug across four call sites, not a single broken function.
+
+**The fix pattern: split config from secret.** Only the API key is secret; the endpoint and API version are deployment *configuration* — they appear in every request URL and are useless without the key. So they land as plaintext columns (`azure_endpoint`, `azure_api_version`) on the same `encrypted_llm_keys` row, while the key alone stays envelope-encrypted. This keeps the crypto surface minimal (no re-encryption schema, no JSON-blob payload versioning) and lets the chat pipeline read config without a decrypt.
+
+**General rule.** When a feature gate exists because "provider X needs more fields," the honest options are: (a) store the extra fields and lift the gate, or (b) enforce the gate at *every* surface — store-time, publish-time, warning banners, and serve-time — so the owner learns at save, not when a visitor's request fails. A gate enforced only at serve-time, with store-time acceptance, is a lie the UI tells the owner.
+
+### Version your migration journal (Drizzle meta) or db:generate will snapshot-reset
+
+> Why did `npm run db:generate` produce a full-schema `0000_` migration instead of a two-line ALTER?
+
+Drizzle-kit decides "what changed" by diffing `schema.ts` against the last snapshot in `drizzle/meta/`. The journal (`_journal.json`) and snapshots were in `.gitignore`, so on any machine that didn't run the original generates, `drizzle/meta/` simply doesn't exist — and drizzle-kit treats the project as brand new: it emits a full-schema `CREATE TABLE IF NOT EXISTS` snapshot as migration `0000`. Applying it against an existing database is *silently useless*: `IF NOT EXISTS` no-ops on every existing table, so new COLUMNS inside those CREATE statements never land, while the migrations bookkeeping table happily records the file as applied.
+
+**Recovery recipe** (works when the live DB already matches the pre-change schema): delete the rogue snapshot file + its row in `drizzle.__drizzle_migrations`; revert the schema change; `db:generate` a clean baseline and `db:migrate` it (no-op apply, marks the baseline); re-apply the schema change; `db:generate` again — now you get the real incremental `ALTER TABLE`; migrate. Old migration files become orphaned history (the fresh journal doesn't know them) — harmless, but they no longer participate in bootstrap.
+
+**General rule.** `drizzle/meta/` is not build output — it is the *source of truth for diffing* and must be committed, same as the `.sql` files. Gitignoring it converts every fresh clone into a snapshot-reset landmine.
+
+### Vitest: clearAllMocks leaks unconsumed mockResolvedValueOnce queues
+
+> Why did a spec see `provider: "azure"` when its own mock said `anthropic`?
+
+`vi.clearAllMocks()` clears call history but NOT the one-shot implementation queue. If spec A queues `findUserMock.mockResolvedValueOnce({llmProvider: "azure"})` and the code under test short-circuits *before* consuming it (e.g. zod validation fails first), that queued value survives into spec B — whose own `mockResolvedValueOnce` lands *behind* it in the queue. Use `vi.resetAllMocks()` in `beforeEach` and re-establish default implementations after it (in Vitest 2.x, `mockReset` also wipes the implementation passed to `vi.fn(impl)`, so factories like `insertMock` need explicit `mockImplementation` in the `beforeEach`).
+
+### Removing a union member: let the compiler enumerate the blast radius
+
+> What's the safest order of operations for ripping a provider out of a TypeScript codebase?
+
+Delete the member from the *narrowest* type first — here, `"ollama"` from the `ProviderName` union — then run `tsc --noEmit` and treat the error list as the authoritative to-do list. Every `providerName === "ollama"` comparison becomes TS2367 ("no overlap"), every `Record<ProviderName, …>` with a leftover key becomes TS2322, every import of the deleted module becomes TS2307. This beats grep-driven removal because the compiler finds *semantic* dependents (exhaustive Records, switch arms, type-level usage) that a string search can miss, and it can't produce false positives in comments or docs. Grep still matters afterwards — but only for the things the compiler can't see: prose docs, JSON configs, test fixtures typed as `string`, and HTTP header names.
+
+One trap: `Record<ProviderName, T>` initializers with the removed key *fail*, but a `ReadonlySet<ProviderName>` built from a literal array fails too (the array's inferred union no longer assigns) — while a plain `string[]` list of provider names sails through silently. Any provider list typed looser than `ProviderName` is invisible to this technique; keep such lists typed against the union precisely so removals surface at compile time.

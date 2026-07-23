@@ -35,12 +35,6 @@ type Props = {
 
 const EMBED_GUIDE_URL = "https://pro-bot.dev/docs/embed-share";
 
-// Sidebar - server component used by every (dashboard) page. Active
-// nav highlight is computed inside SidebarNavLink via usePathname(),
-// so the server layout doesn't need to thread the current path here.
-//
-// Visible only on lg+ via the wrapper. Mobile uses <MobileSidebar> which
-// reuses these components inside a slide-in panel.
 export function Sidebar({
   bots,
   selectedBotId,
@@ -51,33 +45,19 @@ export function Sidebar({
   llmProvider,
   llmModel,
 }: Props) {
-  // Zero-bot users get a clean sidebar: the Workspace links (Dashboard /
-  // Conversations / Leads) and Embed & share are dead-ends until a bot exists,
-  // so we hide them and show only the Create-bot CTA + Account.
   const hasBots = bots.length > 0;
   const selectedBot = bots.find((b) => b.id === selectedBotId) ?? null;
-  // Bot Configuration is only meaningful for managed bots; self-hosted bots
-  // configure themselves in their own web app via the npm package.
   const showBotConfigLink =
     selectedBotId !== null && selectedBot?.deploymentMode !== "self_hosted";
-  // Settings is reachable with or without a bot: the bot-scoped settings page
-  // when a bot exists, else the account-only /dashboard/settings route.
   const settingsHref = selectedBotId
     ? `/dashboard/bots/${selectedBotId}/settings`
     : "/dashboard/settings";
-  // "Manage model & key" now opens the AI Model & Key tab under Bot
-  // Configuration (moved out of Settings). For self-hosted bots there is no
-  // configuration page - fall back to the account-only settings tab so the
-  // sidebar profile-row link doesn't 404.
   const modelHref =
     selectedBotId && selectedBot?.deploymentMode !== "self_hosted"
       ? `/dashboard/bots/${selectedBotId}/configuration?tab=model`
       : "/dashboard/settings";
   return (
     <aside className="flex h-full flex-col">
-      {/* Fixed `h-16` matches the topbar height so the sidebar's brand
-          row and the topbar's title row align horizontally across the
-          two columns. */}
       <div className="flex h-16 shrink-0 items-center border-b border-border-base px-4">
         <Link href="/dashboard" className="flex items-center gap-2.5 px-2 py-1">
           <svg
@@ -193,8 +173,6 @@ function SidebarNavDisabled({ icon, label }: { icon: string; label: string }) {
 }
 
 function SidebarIcon({ name }: { name: string }) {
-  // SVG glyphs replace the Material Symbols font used in the design
-  // mockup so the production bundle doesn't depend on an external font.
   const paths: Record<string, JSX.Element> = {
     dashboard: (
       <>

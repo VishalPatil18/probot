@@ -3,16 +3,6 @@ import { NextResponse } from "next/server";
 import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { getConversationWithMessages } from "@/lib/conversations/queries";
 
-// GET /api/bots/[botId]/conversations/[convId]
-//
-// Full transcript viewer. Returns the conversation row with
-// its messages embedded in chronological order. Delegates to
-// `getConversationWithMessages` (shared with the dashboard conversation page).
-//
-// Ownership: requireBotOwner gives us the bot row, then the shared query
-// filters by `AND bot_id = bot.id` so a forged convId targeting another
-// owner's conversation cannot leak across the tenancy boundary.
-
 export async function GET(
   _request: Request,
   { params }: { params: { botId: string; convId: string } },
