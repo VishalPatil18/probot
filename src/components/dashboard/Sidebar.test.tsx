@@ -21,12 +21,12 @@ const baseProps = {
 };
 
 describe("Sidebar", () => {
-  it("hides Workspace + Embed and shows Create bot when the user has no bots", () => {
+  it("hides the Workspace section and shows Create bot when the user has no bots", () => {
     const { container } = render(
       <Sidebar {...baseProps} bots={[]} selectedBotId={null} />,
     );
     expect(screen.queryByText("Workspace")).not.toBeInTheDocument();
-    expect(screen.queryByText("Embed & share")).not.toBeInTheDocument();
+    expect(screen.queryByText("Conversations")).not.toBeInTheDocument();
     expect(screen.getByText("Create bot")).toBeInTheDocument();
     expect(
       container.querySelector('a[href="/dashboard/settings"]'),
@@ -43,6 +43,6 @@ describe("Sidebar", () => {
     );
     expect(screen.getByText("Workspace")).toBeInTheDocument();
     expect(screen.getByText("Bot Factory")).toBeInTheDocument();
-    expect(screen.getByText("Embed & share")).toBeInTheDocument();
+    expect(screen.getByText("Conversations")).toBeInTheDocument();
   });
 });

@@ -7,13 +7,18 @@ const setApiKeyMock = vi.fn();
 const setAzureCredsMock = vi.fn();
 const fetchMock = vi.fn();
 
+const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, refresh: refreshMock }),
 }));
 
 vi.mock("@/lib/client/llm-key-store", () => ({
   setApiKey: (...args: unknown[]) => setApiKeyMock(...args),
   setAzureCreds: (...args: unknown[]) => setAzureCredsMock(...args),
+}));
+
+vi.mock("@/app/(dashboard)/actions", () => ({
+  selectBotAction: async () => undefined,
 }));
 
 import { BotFactoryForm } from "./BotFactoryForm";

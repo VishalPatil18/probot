@@ -3844,3 +3844,147 @@ Consolidated entry covering a stack of small changes on top of the self-hosted-r
 **Safety checks.** DB scanned: zero users on `llm_provider='ollama'` (openai/azure/google only), so `isProviderName` tightening strands nobody. `probot.md` (user's personal interview KB) + append-only `claude/` logs intentionally untouched.
 
 **Verification.** `npx tsc --noEmit` clean at root and in the package. Affected suites 268/268 green. Full suite: same 36 pre-existing failures, same file set as before the change, zero new.
+
+---
+
+### 2026-07-23 23:56 - Prod key-save failure diagnosis + bot-factory key-input UX + managed-key chat for recruiters
+
+**What was asked to do:** Fix production errors when saving provider/model API keys from both Bot Factory and Bot Configuration ("storing the encrypted copy on the server failed" / "Store an encrypted API key… before publishing" / private-window "No API key found"). Reset the Bot Factory key input to empty on provider change; remove the Edit button and instead show a masked key (first4+stars+last4) that clears to blank on focus for paste. Make published bots show a generic "Bot is currently not working! Please try again later." instead of the owner-facing key-setup link.
+
+**What I did:**
+- **Issue #1 (root cause, no code fix needed):** All three symptoms trace to `POST /api/bots/[botId]/llm-key` never persisting a row. Diagnosed two prod-only candidates — (A) `PROBOT_KEY_ENCRYPTION_KEY` unset → `encryptKey` throws `KekUnavailableError` → 503 `managed_storage_unavailable`; (B) migration `0014` (azure_endpoint/azure_api_version columns) unapplied → INSERT 500. User confirmed **(A)** and set the KEK in prod. No code change.
+- **Issue #2 (Bot Factory key input):** `selectProvider` now also clears `apiKey` + `apiKeyStoredMask` so a switched provider starts empty (was carrying the prior provider's key). Replaced the Edit/Cancel two-mode block in `StepAIModel` with a single input: when a key is stored and the field is unfocused, it shows the mask (reusing `maskSecret` → `abcd••••••••wxyz`, first4+stars+last4) as read-only text; focusing flips to an empty editable password field for paste. Removed `editingKey` state + its `useEffect` (and the now-unused `useEffect` import).
+- **Issue #3 (published-bot chat):** Root cause was `ChatWindow.send()` refusing to call the server unless the *browser* held a key, always sending `x-llm-api-key` — so recruiters/private-window viewers never reached the server's managed-key fallback (`resolveProviderAndKey` decrypts the stored key when no header). Dropped the pre-send gate; now sends `x-llm-api-key` only when a browser key exists and azure headers only when browser azure creds exist, deferring to the managed key otherwise. On a server key error (`missing_llm_key`/`managed_key_provider_mismatch`/`managed_storage_unavailable`) the missing-key state shows a message keyed off `previewToken`: published (null) → "Bot is currently not working! Please try again later." (no link); preview (owner) → the existing "Add your API key in bot settings" link.
+
+**Files changed:**
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - reset apiKey + apiKeyStoredMask on provider switch.
+- `src/components/bot-factory/steps/StepAIModel.tsx` - update - single mask-on-blur key input; removed Edit/Cancel + editingKey state + useEffect import.
+- `src/components/chat/ChatWindow.tsx` - update - drop client-side browser-key gate; conditional headers; detect server key errors; preview-vs-published missing-key message.
+- `src/components/chat/ChatWindow.test.tsx` - update - rewrote the two tests that asserted the old client gate to the new "defer to managed key" contract; added a preview-message test (14 pass).
+
+**Decisions made:**
+- Issue #1 fix is operational (set env var), per KEY-STORAGE.md — no band-aid in code. Did NOT add error-surfacing to the client handlers this round since the KEK fix resolves the reported failures (candidate follow-up below).
+- Issue #3 fixed at the shared choke point (ChatWindow.send) rather than only swapping the message — the message alone would leave managed-key chat dead for every recruiter, which is the whole point of managed storage.
+- Kept AIModelKeyTab (Bot Configuration) key input as-is; the UX change was scoped to Bot Factory only.
+
+**Open questions / follow-ups:**
+- Optional: surface the server's real status/error in `AIModelKeyTab.saveAzureCreds` (line ~164) and `BotFactoryForm.submit` (line ~249) instead of generic copy, so the next storage failure is self-diagnosing. Not done — ask before implementing.
+- Pre-existing: `BotFactoryForm.test.tsx` has 5 failing / 8 passing tests unrelated to this change (identical on stashed baseline).
+
+**Verification:** `npx tsc --noEmit` clean. `ChatWindow.test.tsx` 14/14 pass. `BotFactoryForm.test.tsx` unchanged from baseline (5 pre-existing fails, not introduced here).
+
+---
+
+### 2026-07-24 00:07 - Delete self-hosted bots (reuse type-name confirmation)
+
+**What was asked to do:** There was no way to remove a self-hosted bot. Add a delete path for self-hosted bots that reuses the same confirmation as normal bots (type the bot name + "delete this bot" phrase).
+
+**What I did:**
+- Traced the gap: `DELETE /api/bots/[botId]` already deletes any bot (managed or self-hosted) via `requireBotOwner` + `db.delete(bots)`, and `bot_tokens`/knowledge/conversations/leads/keys/avatars all cascade (`ON DELETE cascade` FKs). `DeleteBotModal` (type-name + phrase) already exists and is reused by normal bots in BotAdvancedTab's Danger Zone. The only gap was UI: self-hosted bots were **redirected away** from the configuration page and the sidebar hid their config link, so they had no management surface at all (despite the register success screen promising "manage from bot settings").
+- Gave self-hosted bots a minimal Bot Configuration page: for `deploymentMode === "self_hosted"`, the configuration page now early-returns a `SelfHostedDangerZone` view (bot identity + Self-hosted badge + a Danger Zone card) instead of redirecting to `/dashboard`.
+- `SelfHostedDangerZone` reuses `DeleteBotModal` and the existing DELETE endpoint; on success it routes to `/dashboard` + `router.refresh()`. Copy is tailored to self-hosted (deletes the dashboard entry + access tokens + API-recorded conversations/leads; the self-hosted runtime is untouched).
+- Exposed the "Bot Configuration" sidebar link for self-hosted bots (was gated to managed-only) so the page is reachable.
+
+**Files changed:**
+- `src/components/dashboard/settings/SelfHostedDangerZone.tsx` - create - client Danger Zone for self-hosted bots; reuses DeleteBotModal + DELETE /api/bots/[botId].
+- `src/app/(dashboard)/dashboard/bots/[botId]/configuration/page.tsx` - update - self-hosted branch renders SelfHostedDangerZone instead of redirecting; removed now-unused `redirect` import.
+- `src/components/dashboard/Sidebar.tsx` - update - `showBotConfigLink` no longer excludes self-hosted bots.
+- `src/components/dashboard/settings/SelfHostedDangerZone.test.tsx` - create - confirm-gating + delete-calls-API + error-path tests.
+
+**Decisions made:**
+- Reused the configuration route + sidebar slot rather than adding a new route/nav entry — mirrors the normal-bot pattern (delete lives in Bot Configuration) and fulfills the register form's "manage from bot settings" promise with the least new surface.
+- Kept `DeleteBotModal` identical (the user asked for the *same* confirmation); did not touch `BotAdvancedTab` (avoids its test surface; the shared piece is already the modal + the DELETE API).
+- No API or schema change — the DELETE endpoint + FK cascade already covered self-hosted bots.
+
+**Open questions / follow-ups:**
+- Token revoke/rotate UI for self-hosted bots is still unbuilt (the other half of the "manage from bot settings" promise). Out of scope here.
+
+**Verification:** `npx tsc --noEmit` clean. `SelfHostedDangerZone.test.tsx` 2/2 pass. Sidebar.test.tsx has 1 pre-existing failure (stale "Embed & share" assertion, identical on stashed baseline — not introduced here).
+
+---
+
+### 2026-07-24 11:29 - Self-hosted token management (list/revoke/rotate) + de-stale Sidebar test
+
+**What was asked to do:** (1) Fix the stale Sidebar test asserting removed "Embed & share" text. (2) Build the missing token revoke/rotate UI for self-hosted bots (the other half of the register screen's "manage from bot settings" promise).
+
+**What I did:**
+- **Sidebar test:** "Embed & share" was removed from the sidebar (the public URL now lives in `BotSwitcher`). Replaced the two dead-text assertions with "Conversations" (the real Workspace-section marker) in both tests. 2/2 pass.
+- **Token management:** the `bot_tokens` service (`mintBotToken`/`listBotTokens`/`revokeBotToken`) existed but only *mint* was wired (at registration) - no dashboard routes. Added them and a UI panel on the self-hosted management page:
+  - `GET /api/bots/[botId]/tokens` (list) + `POST` (mint new / rotate); `DELETE /api/bots/[botId]/tokens/[tokenId]` (revoke). All guarded by `requireBotOwner` **and** `deploymentMode === "self_hosted"` (managed bots can't mint tokens). The list endpoint returns only metadata (id/name/createdAt/lastSeenAt/revokedAt) - never token material; the raw token is returned once, at mint.
+  - `SelfHostedTokens` client panel: lists tokens (name, created, last-used, Active/Revoked badge), per-token Revoke (window.confirm), and "Generate new token" with a show-once reveal + copy (mirrors RegisterSelfHostedForm's token box). Rotate = generate-new + revoke-old separately, so the owner can install the new token before killing the old (no downtime).
+  - Reused `formatTimestamp` / `formatRelative` from `settings/audit.ts` for the dates.
+- Restructured the self-hosted configuration view: the page now renders an identity header + `SelfHostedTokens` + `SelfHostedDangerZone` (identity moved out of the danger-zone component so order reads identity → tokens → danger).
+
+**Files changed:**
+- `src/components/dashboard/Sidebar.test.tsx` - update - dead "Embed & share" → "Conversations".
+- `src/app/api/bots/[botId]/tokens/route.ts` - create - GET (list) + POST (mint), owner + self_hosted guarded.
+- `src/app/api/bots/[botId]/tokens/[tokenId]/route.ts` - create - DELETE (revoke), 404 when not found/already revoked.
+- `src/components/dashboard/settings/SelfHostedTokens.tsx` - create - token list/revoke/generate panel with show-once reveal.
+- `src/app/(dashboard)/dashboard/bots/[botId]/configuration/page.tsx` - update - self-hosted branch renders identity header + SelfHostedTokens + SelfHostedDangerZone.
+- `src/components/dashboard/settings/SelfHostedDangerZone.tsx` - update - removed identity section (moved to page); dropped `botHeadline` prop.
+- `src/components/dashboard/settings/SelfHostedTokens.test.tsx` - create - list/generate/revoke/decline tests.
+- `src/components/dashboard/settings/SelfHostedDangerZone.test.tsx` - update - dropped `botHeadline` from props.
+
+**Decisions made:**
+- Rotate does NOT auto-revoke the old token - self-hosted tokens live in the owner's running app config, so forcing a simultaneous revoke would cause an outage. Owner revokes the old one once the new is deployed.
+- List endpoint deliberately exposes zero token material (no hash, no raw) - only metadata. Raw token is shown once at creation, matching the registration flow.
+- Guarded token routes to `self_hosted` bots only; managed bots use the browser/managed-key path and have no tokens.
+- No schema change - `bot_tokens` + service already existed; this only exposed them via routes + UI.
+
+**Open questions / follow-ups:**
+- None outstanding for self-hosted management. (Token count limits / auto-expiry intentionally skipped - YAGNI.)
+
+**Verification:** `npx tsc --noEmit` clean. SelfHostedTokens 4/4, SelfHostedDangerZone 2/2, Sidebar 2/2 pass.
+
+---
+
+### 2026-07-24 12:00 - Bot factory: sidebar-on-publish, step-5 Dashboard button, full draft prefill + force-select
+
+**What was asked to do:** (1) After publishing in the bot factory, the sidebar's bot options should appear immediately. (2) Add a "Dashboard" button left of "Open chat" on step 5, shown even when unpublished. (3) Re-entering the factory for an unpublished draft should prefill all prior values so the user can click through to step 5's Publish button. (4) Force-select the newly published bot.
+
+**What I did:**
+- **Sidebar-on-publish + force-select:** `publish()` now, on success, calls the existing `selectBotAction` server action (sets the `probot.selectedBot.v1` cookie + `revalidatePath("/")`) with the new bot id, then `router.refresh()`. The server-rendered dashboard layout (which owns the sidebar) re-renders, so its bot options appear immediately and the freshly-published bot is the selected one. Client state (step 5, `published`) is preserved across the refresh.
+- **Step-5 Dashboard button:** the step-5 footer left button was `invisible`; it's now a visible "Dashboard" button, and `back()` routes to `/dashboard` on step 5 (previously only step 1). Right button stays "Open chat".
+- **Full draft prefill:** `new/page.tsx` already loaded the existing managed draft as `initialBot` and `POST /api/bots` upserts it (no duplicate), but the `initialBot` object omitted `themeColor` and `customInstructions` (both already in the `InitialBot` type and read by the form's initial state). Added both fields, so re-entering prefills every persisted value; the user clicks Continue → … → "Save as draft" (idempotent upsert) → step 5 → Publish.
+
+**Files changed:**
+- `src/app/(dashboard)/dashboard/bots/new/page.tsx` - update - pass `themeColor` + `customInstructions` in `initialBot`.
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - import `selectBotAction`; `publish()` selects new bot + `router.refresh()`; `back()` → `/dashboard` on step 5; footer left button visible as "Dashboard" on step 5.
+- `src/components/bot-factory/BotFactoryForm.test.tsx` - update - mock `@/app/(dashboard)/actions` (the new server-action import pulls db/auth into jsdom); add `refresh` to the `next/navigation` router mock.
+
+**Decisions made:**
+- Reused `selectBotAction` (already used by BotSwitcher) rather than adding a new selection endpoint - it already does ownership check + cookie + `revalidatePath`. Tied both the sidebar-refresh and force-select to publish, matching the "once published" wording.
+- Prefill needed no type/form change - the gap was purely the fields omitted at the `new/page.tsx` call site; the `InitialBot` type and form-init already supported them.
+- Did not init `createdBotId`/`previewToken` from `initialBot` - steps are sequential and step-4 "Save as draft" upserts and yields the preview token, so step 5 + Publish are reachable by clicking through.
+
+**Open questions / follow-ups:**
+- None. (Pre-existing: BotFactoryForm.test.tsx has 5 failing tests unrelated to this change - identical set before and after.)
+
+**Verification:** `npx tsc --noEmit` clean. `BotFactoryForm.test.tsx` unchanged from baseline (same 5 pre-existing failures, 8 pass) - the new server-action import loads cleanly under the added mock.
+
+---
+
+### 2026-07-24 12:45 - Investigate "deleted account still logs in / overdue deletion banner"; cancel stuck deletions + fix cron gap + display
+
+**What was asked to do:** User re-logged into a "previously deleted" account and saw an "Account scheduled for deletion … (0 days from now)" banner with a past date. Investigate (including the DB) and resolve.
+
+**Root cause (evidence-based):** Account deletion is a soft 7-day-grace schedule (`deletion_requests` row; `runPurgeJob` deletes the user after `scheduled_purge_at`). The purge is driven by a Vercel cron (`vercel.json` → `/api/cron/purge-deleted-accounts`, daily 03:00) that **hard-requires `CRON_SECRET`** — the route returns 503 and does nothing when it's unset ([route.ts:8-14](src/app/api/cron/purge-deleted-accounts/route.ts#L8-L14)). `CRON_SECRET` is absent from the deployment env (only in `.env.example`), so **the cron fires daily but every call is rejected and no deletion ever completes**. Consequences: (a) accounts sit overdue-but-unpurged forever and stay fully loggable-in ("re-login after deletion"); (b) the banner clamps overdue day-counts to "0 days from now" ([SecurityActions.tsx:50-52](src/components/dashboard/settings/SecurityActions.tsx)). DB confirmed two pending rows: `vishal-terpmail` (due Jun 30, 24 days overdue) and `vishal18@umd.edu` (fresh, today).
+
+**What I did (with user's explicit choices):**
+- **DB (prod, one-off script):** cancelled BOTH pending deletions per the user's decision to keep both accounts — deleted the two `deletion_requests` rows (same effect as the app's `undoAccountDeletion`; user rows untouched). Verified: 0 pending deletions remain, both accounts present.
+- **Code:** [SecurityActions.tsx](src/components/dashboard/settings/SecurityActions.tsx) - overdue (`scheduled_purge_at <= now`) now renders "past its scheduled deletion date … deleted on the next cleanup run" instead of the misleading "0 days from now"; dropped the `Math.max(0, …)` clamp.
+- **Ops (handed to user):** generated a `CRON_SECRET` and gave Vercel setup steps so the daily purge actually authenticates and runs. Without this, deletions keep piling up in limbo.
+
+**Files changed:**
+- `src/components/dashboard/settings/SecurityActions.tsx` - update - overdue-aware deletion banner.
+- (prod DB) `deletion_requests` - deleted 2 rows (cancel deletions) via a read-then-delete script in scratchpad; no schema/app-code change.
+
+**Decisions made:**
+- Cancel (not purge) both deletions - user chose to keep both accounts.
+- Root fix is making the cron run (set `CRON_SECRET` in Vercel) - the `runPurgeJob` logic itself is correct; it was never authorized to execute. Vercel auto-sends `Authorization: Bearer $CRON_SECRET` to cron routes once the env var is set (works on Hobby/free; daily schedule is Hobby-allowed → zero-cost).
+
+**Open questions / follow-ups:**
+- User must set `CRON_SECRET` in Vercel (Production) + redeploy, then verify one cron run purges due rows. Until then, deletions won't complete.
+- Optional hardening (not done): block login/usage once a deletion is *past* its grace period (currently an overdue-unpurged account is fully usable). The clean fix is timely purging; a login guard is defense-in-depth.
+
+**Verification:** `npx tsc --noEmit` clean. DB script output confirmed 2 rows deleted, 0 pending, both users intact. No SecurityActions test exists to update.

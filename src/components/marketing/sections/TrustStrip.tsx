@@ -12,13 +12,11 @@ export function TrustStrip() {
         </div>
         <div className="px-4 text-center">
           <p className="font-display text-3xl font-extrabold">$0</p>
-          <p className="text-xs text-muted mt-1">
-            Free &amp; self-hostable
-          </p>
+          <p className="text-xs text-muted mt-1">Free &amp; self-hostable</p>
         </div>
         <div className="px-4 text-center">
           <p className="font-display text-3xl font-extrabold">100%</p>
-          <p className="text-xs text-muted mt-1">Local key storage</p>
+          <p className="text-xs text-muted mt-1">Encrypted key storage</p>
         </div>
       </div>
     </section>

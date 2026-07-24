@@ -57,6 +57,8 @@ export default async function NewBotPage() {
               contextText: existing.contextText,
               contextTokenCap: existing.contextTokenCap,
               suggestedQuestions: existing.suggestedQuestions ?? [],
+              themeColor: existing.themeColor,
+              customInstructions: existing.customInstructions,
             }
           : undefined
       }

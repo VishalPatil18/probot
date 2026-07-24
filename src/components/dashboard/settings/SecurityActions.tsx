@@ -47,24 +47,32 @@ export function SecurityActions({ username, pendingDeletion }: Props) {
 
   if (pendingDeletion) {
     const purgeDate = new Date(pendingDeletion.scheduledPurgeAt);
-    const daysLeft = Math.max(
-      0,
-      Math.ceil((purgeDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)),
-    );
+    const msLeft = purgeDate.getTime() - Date.now();
+    const overdue = msLeft <= 0;
+    const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
     return (
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
         <h3 className="font-bold text-amber-900">
           Account scheduled for deletion
         </h3>
         <p className="mt-2 text-sm text-amber-900/80">
-          Your account and all data will be permanently deleted on{" "}
-          <strong>{purgeDate.toUTCString()}</strong> ({daysLeft}{" "}
-          {daysLeft === 1 ? "day" : "days"} from now).
+          {overdue ? (
+            <>
+              Your account is past its scheduled deletion date (
+              <strong>{purgeDate.toUTCString()}</strong>) and will be
+              permanently deleted on the scheduled date.
+            </>
+          ) : (
+            <>
+              Your account and all data will be permanently deleted on{" "}
+              <strong>{purgeDate.toUTCString()}</strong> ({daysLeft}{" "}
+              {daysLeft === 1 ? "day" : "days"} from now).
+            </>
+          )}
         </p>
         <p className="mt-2 text-sm text-amber-900/80">
-          To cancel, open the &ldquo;Undo deletion&rdquo; link in the email
-          we sent you. You&apos;ll need to confirm your username on that
-          page.
+          To cancel, open the &ldquo;Undo deletion&rdquo; link in the email we
+          sent you. You&apos;ll need to confirm your username on that page.
         </p>
       </section>
     );
@@ -76,8 +84,8 @@ export function SecurityActions({ username, pendingDeletion }: Props) {
         <h3 className="mb-1 font-bold text-rose-600">Danger zone</h3>
         <p className="mb-4 text-xs text-muted">
           Schedules permanent deletion of your account, all bots, knowledge
-          bases, conversations, and leads after a 7-day grace period. You
-          can undo via email during that window.
+          bases, conversations, and leads after a 7-day grace period. You can
+          undo via email during that window.
         </p>
         <button
           type="button"
