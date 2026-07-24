@@ -1,0 +1,706 @@
+# Instincts generated from https://github.com/VishalPatil18/probot
+# Generated: 2026-07-24T01:34:13.092Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: probot-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: feat, fix
+
+## Evidence
+
+- 9 commits analyzed
+- Detected conventional commit pattern
+- Examples: fix: [STAGE v1.22] self hosted bot npm package, feat: [STAGE v1.24] Dashboard Nav & Security tab fix
+
+---
+id: probot-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Commit Length
+
+## Action
+
+Keep commit messages concise (~43 characters)
+
+## Evidence
+
+- Average commit message length: 43 chars
+- Based on 9 commits
+
+---
+id: probot-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: probot-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: probot-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: probot-arch-type-based
+trigger: "when adding new code"
+confidence: 0.8
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Arch Type Based
+
+## Action
+
+Place code in the appropriate type folder (components/, services/, utils/, etc.)
+
+## Evidence
+
+- Type-based module organization detected
+- Folders: app, components, lib, widget
+
+---
+id: probot-test-colocate
+trigger: "when writing tests"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Colocate
+
+## Action
+
+Place test file next to the source file (e.g., Button.test.tsx next to Button.tsx)
+
+## Evidence
+
+- Colocated test pattern detected
+- Tests live alongside source files
+
+---
+id: probot-test-framework
+trigger: "when writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Framework
+
+## Action
+
+Use vitest as the test framework
+
+## Evidence
+
+- Test framework detected: vitest
+- File pattern: *.test.ts
+
+---
+id: probot-test-naming
+trigger: "when creating a test file"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Naming
+
+## Action
+
+Name test files using the pattern: *.test.ts
+
+## Evidence
+
+- File pattern: *.test.ts
+- Consistent across test files
+
+---
+id: probot-test-mocking
+trigger: "when mocking dependencies in tests"
+confidence: 0.75
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Mocking
+
+## Action
+
+Use vi.mock for mocking
+
+## Evidence
+
+- Mocking pattern detected: vi.mock
+- Consistent across test files
+
+---
+id: probot-test-types
+trigger: "when planning tests for a feature"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Test Types
+
+## Action
+
+Write unit, integration tests to match project standards
+
+## Evidence
+
+- Test types detected: unit, integration
+- Coverage config: no
+
+---
+id: probot-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~20x per month
+- Files: src/app/(dashboard)/dashboard/bots/[botid]/configuration/*, src/app/(dashboard)/dashboard/bots/[botid]/settings/*, src/app/(dashboard)/dashboard/notifications/*
+
+---
+id: probot-workflow-add-or-update-self-hosted-bot-package
+trigger: "when doing add or update self hosted bot package"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Add Or Update Self Hosted Bot Package
+
+## Action
+
+Follow the add-or-update-self-hosted-bot-package workflow:
+1. Edit or add files in packages/probot-self-hosted/src/ (e.g., ProbotBot.tsx, adapters, hooks, types, prompt, vanilla)
+2. Update packages/probot-self-hosted/package.json and/or build.mjs
+3. Update or create packages/probot-self-hosted/README.md and LICENSE
+4. Update related docs in docs/self-hosted-bot/
+5. Update tsconfig.json if needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: packages/probot-self-hosted/src/*.ts, packages/probot-self-hosted/package.json, packages/probot-self-hosted/build.mjs
+
+---
+id: probot-workflow-dashboard-ui-and-feature-development
+trigger: "when doing dashboard ui and feature development"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Dashboard Ui And Feature Development
+
+## Action
+
+Follow the dashboard-ui-and-feature-development workflow:
+1. Edit or add files in src/app/(dashboard)/dashboard/ (pages, settings, notifications, etc.)
+2. Update or add src/components/dashboard/ and related components
+3. Update or add related API routes in src/app/api/
+4. Update or add tests for new/changed components or routes
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: src/app/(dashboard)/dashboard/**/*.tsx, src/components/dashboard/**/*.tsx, src/app/api/**/*.ts
+
+---
+id: probot-workflow-documentation-update-for-self-hosted-or-features
+trigger: "when doing documentation update for self hosted or features"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Documentation Update For Self Hosted Or Features
+
+## Action
+
+Follow the documentation-update-for-self-hosted-or-features workflow:
+1. Edit or add files in docs/self-hosted-bot/ (api-reference, guides, troubleshooting, etc.)
+2. Update docs/docs.json if needed
+3. Update or add related files in docs/guides/, docs/concepts/, docs/blogs/, etc.
+4. Update README.md or BYO-KEY.md as appropriate
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: docs/self-hosted-bot/*.mdx, docs/docs.json, docs/guides/*.mdx
+
+---
+id: probot-workflow-manual-testing-scenarios-addition-or-update
+trigger: "when doing manual testing scenarios addition or update"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Manual Testing Scenarios Addition Or Update
+
+## Action
+
+Follow the manual-testing-scenarios-addition-or-update workflow:
+1. Edit or add files in manual-testing/self-hosted-react/, manual-testing/self-hosted-vanilla/, manual-testing/chatbot-script-tag/
+2. Update MANUAL_TESTING.md and manual-testing/README.md
+3. Update or add related index.html, package.json, and config files
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: manual-testing/self-hosted-react/**/*, manual-testing/self-hosted-vanilla/**/*, manual-testing/chatbot-script-tag/**/*
+
+---
+id: probot-workflow-api-route-addition-or-update-with-tests
+trigger: "when doing api route addition or update with tests"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/VishalPatil18/probot
+---
+
+# Probot Workflow Api Route Addition Or Update With Tests
+
+## Action
+
+Follow the api-route-addition-or-update-with-tests workflow:
+1. Edit or add files in src/app/api/ (route.ts, route.test.ts)
+2. Update or add related schema files in src/lib/db/schema.ts or src/lib/bots/schemas.ts
+3. Update or add tests for new/changed endpoints
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/app/api/**/*.ts, src/app/api/**/*.test.ts, src/lib/db/schema.ts
+
+---
+id: probot-instinct-file-naming-camelCase
+trigger: "When creating or renaming a file in the codebase"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct File Naming CamelCase
+
+## Action
+
+Use camelCase for file names
+
+## Evidence
+
+- Pattern in namingConventions.files
+- Observed in src/app/(dashboard)/dashboard/bots/[botId]/configuration/page.tsx
+
+---
+id: probot-instinct-function-naming-camelCase
+trigger: "When defining a function"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Function Naming CamelCase
+
+## Action
+
+Name the function using camelCase
+
+## Evidence
+
+- Pattern in namingConventions.functions
+
+---
+id: probot-instinct-class-naming-PascalCase
+trigger: "When defining a class"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Class Naming PascalCase
+
+## Action
+
+Name the class using PascalCase
+
+## Evidence
+
+- Pattern in namingConventions.classes
+
+---
+id: probot-instinct-constant-naming-SCREAMING_SNAKE_CASE
+trigger: "When declaring a constant"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Constant Naming SCREAMING_SNAKE_CASE
+
+## Action
+
+Use SCREAMING_SNAKE_CASE for constant names
+
+## Evidence
+
+- Pattern in namingConventions.constants
+
+---
+id: probot-instinct-import-style-relative
+trigger: "When importing modules within the codebase"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Import Style Relative
+
+## Action
+
+Use relative import paths
+
+## Evidence
+
+- Pattern in importStyle
+
+---
+id: probot-instinct-export-style-named
+trigger: "When exporting functions, classes, or variables"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Export Style Named
+
+## Action
+
+Use named exports
+
+## Evidence
+
+- Pattern in exportStyle
+
+---
+id: probot-instinct-test-file-pattern
+trigger: "When creating a test file"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Test File Pattern
+
+## Action
+
+Name the file with the pattern *.test.ts
+
+## Evidence
+
+- Pattern in testing.filePattern
+- Seen in src/app/api/**/*.test.ts
+
+---
+id: probot-instinct-testing-framework-vitest
+trigger: "When writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Testing Framework Vitest
+
+## Action
+
+Use the vitest testing framework
+
+## Evidence
+
+- Pattern in testing.framework
+
+---
+id: probot-instinct-mocking-style-vi.mock
+trigger: "When mocking modules in tests"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Mocking Style Vi.mock
+
+## Action
+
+Use vi.mock for mocking
+
+## Evidence
+
+- Pattern in testing.mockingStyle
+
+---
+id: probot-instinct-test-types-unit-integration
+trigger: "When writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Test Types Unit Integration
+
+## Action
+
+Write both unit and integration tests as appropriate
+
+## Evidence
+
+- Pattern in testing.testTypes
+
+---
+id: probot-instinct-commit-conventional-format
+trigger: "When making a commit"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Commit Conventional Format
+
+## Action
+
+Use conventional commit format with 'feat:' or 'fix:' prefix
+
+## Evidence
+
+- Pattern in commits.prefixes
+- Seen in commit 'feat: [STAGE v1.24] Dashboard Nav & Security tab fix'
+
+---
+id: probot-instinct-commit-message-length
+trigger: "When writing a commit message"
+confidence: 0.7
+domain: git
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Commit Message Length
+
+## Action
+
+Keep the commit message around 43 characters on average
+
+## Evidence
+
+- Pattern in commits.averageLength
+
+---
+id: probot-instinct-add-or-update-self-hosted-bot-package
+trigger: "When someone wants to add new features or fix issues in the self-hosted bot package"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Add Or Update Self Hosted Bot Package
+
+## Action
+
+Edit/add files in packages/probot-self-hosted/src/, update package.json/build.mjs, update README.md/LICENSE, update docs/self-hosted-bot/, update tsconfig.json if needed
+
+## Evidence
+
+- Workflow 'add-or-update-self-hosted-bot-package'
+- Pattern in files: packages/probot-self-hosted/src/*.ts, packages/probot-self-hosted/package.json, docs/self-hosted-bot/*.mdx
+
+---
+id: probot-instinct-dashboard-ui-and-feature-development
+trigger: "When someone wants to add or improve dashboard features or fix UI bugs"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Dashboard Ui And Feature Development
+
+## Action
+
+Edit/add files in src/app/(dashboard)/dashboard/, update/add src/components/dashboard/, update/add related API routes in src/app/api/, update/add tests for new/changed components or routes
+
+## Evidence
+
+- Workflow 'dashboard-ui-and-feature-development'
+- Pattern in files: src/app/(dashboard)/dashboard/**/*.tsx, src/components/dashboard/**/*.tsx
+
+---
+id: probot-instinct-documentation-update-for-self-hosted-or-features
+trigger: "When someone adds new features or changes to the self-hosted bot or dashboard that require documentation"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Documentation Update For Self Hosted Or Features
+
+## Action
+
+Edit/add files in docs/self-hosted-bot/, update docs/docs.json, update/add related files in docs/guides/, docs/concepts/, docs/blogs/, update README.md or BYO-KEY.md as appropriate
+
+## Evidence
+
+- Workflow 'documentation-update-for-self-hosted-or-features'
+- Pattern in files: docs/self-hosted-bot/*.mdx, README.md
+
+---
+id: probot-instinct-manual-testing-scenarios-addition-or-update
+trigger: "When someone wants to add or update manual testing setups for the self-hosted bot"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Manual Testing Scenarios Addition Or Update
+
+## Action
+
+Edit/add files in manual-testing/self-hosted-react/, manual-testing/self-hosted-vanilla/, manual-testing/chatbot-script-tag/, update MANUAL_TESTING.md and manual-testing/README.md, update/add related index.html, package.json, and config files
+
+## Evidence
+
+- Workflow 'manual-testing-scenarios-addition-or-update'
+- Pattern in files: manual-testing/self-hosted-react/**/*, MANUAL_TESTING.md
+
+---
+id: probot-instinct-api-route-addition-or-update-with-tests
+trigger: "When someone wants to add new API endpoints or modify existing ones, ensuring test coverage"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: VishalPatil18/probot
+---
+
+# Probot Instinct Api Route Addition Or Update With Tests
+
+## Action
+
+Edit/add files in src/app/api/, update/add related schema files in src/lib/db/schema.ts or src/lib/bots/schemas.ts, update/add tests for new/changed endpoints
+
+## Evidence
+
+- Workflow 'api-route-addition-or-update-with-tests'
+- Pattern in files: src/app/api/**/*.ts, src/app/api/**/*.test.ts
+
