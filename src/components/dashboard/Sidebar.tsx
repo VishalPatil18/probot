@@ -47,8 +47,7 @@ export function Sidebar({
 }: Props) {
   const hasBots = bots.length > 0;
   const selectedBot = bots.find((b) => b.id === selectedBotId) ?? null;
-  const showBotConfigLink =
-    selectedBotId !== null && selectedBot?.deploymentMode !== "self_hosted";
+  const showBotConfigLink = selectedBotId !== null;
   const settingsHref = selectedBotId
     ? `/dashboard/bots/${selectedBotId}/settings`
     : "/dashboard/settings";

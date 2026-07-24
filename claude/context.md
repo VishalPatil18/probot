@@ -3872,3 +3872,31 @@ Consolidated entry covering a stack of small changes on top of the self-hosted-r
 - Pre-existing: `BotFactoryForm.test.tsx` has 5 failing / 8 passing tests unrelated to this change (identical on stashed baseline).
 
 **Verification:** `npx tsc --noEmit` clean. `ChatWindow.test.tsx` 14/14 pass. `BotFactoryForm.test.tsx` unchanged from baseline (5 pre-existing fails, not introduced here).
+
+---
+
+### 2026-07-24 00:07 - Delete self-hosted bots (reuse type-name confirmation)
+
+**What was asked to do:** There was no way to remove a self-hosted bot. Add a delete path for self-hosted bots that reuses the same confirmation as normal bots (type the bot name + "delete this bot" phrase).
+
+**What I did:**
+- Traced the gap: `DELETE /api/bots/[botId]` already deletes any bot (managed or self-hosted) via `requireBotOwner` + `db.delete(bots)`, and `bot_tokens`/knowledge/conversations/leads/keys/avatars all cascade (`ON DELETE cascade` FKs). `DeleteBotModal` (type-name + phrase) already exists and is reused by normal bots in BotAdvancedTab's Danger Zone. The only gap was UI: self-hosted bots were **redirected away** from the configuration page and the sidebar hid their config link, so they had no management surface at all (despite the register success screen promising "manage from bot settings").
+- Gave self-hosted bots a minimal Bot Configuration page: for `deploymentMode === "self_hosted"`, the configuration page now early-returns a `SelfHostedDangerZone` view (bot identity + Self-hosted badge + a Danger Zone card) instead of redirecting to `/dashboard`.
+- `SelfHostedDangerZone` reuses `DeleteBotModal` and the existing DELETE endpoint; on success it routes to `/dashboard` + `router.refresh()`. Copy is tailored to self-hosted (deletes the dashboard entry + access tokens + API-recorded conversations/leads; the self-hosted runtime is untouched).
+- Exposed the "Bot Configuration" sidebar link for self-hosted bots (was gated to managed-only) so the page is reachable.
+
+**Files changed:**
+- `src/components/dashboard/settings/SelfHostedDangerZone.tsx` - create - client Danger Zone for self-hosted bots; reuses DeleteBotModal + DELETE /api/bots/[botId].
+- `src/app/(dashboard)/dashboard/bots/[botId]/configuration/page.tsx` - update - self-hosted branch renders SelfHostedDangerZone instead of redirecting; removed now-unused `redirect` import.
+- `src/components/dashboard/Sidebar.tsx` - update - `showBotConfigLink` no longer excludes self-hosted bots.
+- `src/components/dashboard/settings/SelfHostedDangerZone.test.tsx` - create - confirm-gating + delete-calls-API + error-path tests.
+
+**Decisions made:**
+- Reused the configuration route + sidebar slot rather than adding a new route/nav entry — mirrors the normal-bot pattern (delete lives in Bot Configuration) and fulfills the register form's "manage from bot settings" promise with the least new surface.
+- Kept `DeleteBotModal` identical (the user asked for the *same* confirmation); did not touch `BotAdvancedTab` (avoids its test surface; the shared piece is already the modal + the DELETE API).
+- No API or schema change — the DELETE endpoint + FK cascade already covered self-hosted bots.
+
+**Open questions / follow-ups:**
+- Token revoke/rotate UI for self-hosted bots is still unbuilt (the other half of the "manage from bot settings" promise). Out of scope here.
+
+**Verification:** `npx tsc --noEmit` clean. `SelfHostedDangerZone.test.tsx` 2/2 pass. Sidebar.test.tsx has 1 pre-existing failure (stale "Embed & share" assertion, identical on stashed baseline — not introduced here).

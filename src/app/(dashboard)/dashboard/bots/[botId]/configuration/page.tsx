@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { AIModelKeyTab } from "@/components/dashboard/settings/AIModelKeyTab";
 import { BotAdvancedTab } from "@/components/dashboard/settings/BotAdvancedTab";
 import { BotConfigTab } from "@/components/dashboard/settings/BotConfigTab";
 import { KnowledgeTab } from "@/components/dashboard/settings/KnowledgeTab";
+import { SelfHostedDangerZone } from "@/components/dashboard/settings/SelfHostedDangerZone";
 import {
   SettingsTabPanel,
   SettingsTabs,
@@ -63,7 +64,15 @@ export default async function BotConfigurationPage({
 
   const mode = (bot.deploymentMode as "managed" | "self_hosted") ?? "managed";
   if (mode === "self_hosted") {
-    redirect("/dashboard");
+    return (
+      <div className="max-w-[900px] px-6 py-8 lg:px-8">
+        <SelfHostedDangerZone
+          botId={bot.id}
+          botName={bot.name}
+          botHeadline={bot.headline ?? ""}
+        />
+      </div>
+    );
   }
 
   const personality = isPersonality(bot.personality)
