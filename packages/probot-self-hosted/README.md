@@ -41,6 +41,10 @@ export function ChatWidget() {
 }
 ```
 
+> `captureLead` surfaces a "Leave your email" prompt above the input after the
+> visitor's third reply; submissions fire `onLead` (and POST to the dashboard
+> when linked).
+
 Then in a Next.js Route Handler (server-only):
 
 ```ts

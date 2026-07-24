@@ -8,10 +8,6 @@ import type {
   SendMessage,
 } from "probot-self-hosted";
 
-// Test-harness page for the <ProbotBot /> component. Three runtime modes,
-// no restart needed. Each mode swaps the `sendMessage` and `dashboard`
-// fields on the config; everything else (persona, theme, suggested Qs)
-// stays constant so you're isolating the transport under test.
 type Mode = "echo" | "openai" | "dashboard";
 
 const SUGGESTED_QUESTIONS = [
@@ -41,9 +37,6 @@ export function App() {
     return { token: dashboardToken, apiUrl: dashboardApiUrl };
   }, [mode, dashboardToken, dashboardApiUrl]);
 
-  // Key the widget on the mode so React fully unmounts + remounts it when
-  // you flip modes — otherwise stale conversation state from the previous
-  // transport bleeds into the next test.
   const widgetKey = `${mode}-${dashboardToken.length > 0 ? "linked" : "solo"}`;
 
   const config: ProbotBotConfig = {
@@ -97,7 +90,8 @@ export function App() {
             checked={captureLead}
             onChange={(e) => setCaptureLead(e.target.checked)}
           />
-          Enable lead capture ("Leave your email" chip in the widget)
+          Enable lead capture ("Leave your email" appears above the input after
+          3 replies)
         </label>
         {leadFired ? (
           <p className="fired">
@@ -141,8 +135,6 @@ export function App() {
   );
 }
 
-// Local echo — proves the wiring without any external dependency. Returns
-// after 400 ms so the typing dots animate.
 const echoSendMessage: SendMessage = async ({ messages }) => {
   const last = messages[messages.length - 1]?.content ?? "";
   await new Promise((r) => setTimeout(r, 400));
@@ -153,8 +145,6 @@ const echoSendMessage: SendMessage = async ({ messages }) => {
   ].join("\n");
 };
 
-// Calls the Vite dev-server middleware (see vite.config.ts) which pipes
-// through the package's `createOpenAIHandler`.
 const openaiSendMessage: SendMessage = async ({ system, messages }) => {
   const res = await fetch("/api/chat", {
     method: "POST",
@@ -171,8 +161,6 @@ const openaiSendMessage: SendMessage = async ({ system, messages }) => {
   return data.reply ?? "";
 };
 
-// TypeScript unused-import guard — pin the type reference so tsc doesn't
-// mark it dead code. The value is intentionally not used at runtime.
 const _typeGuard: ChatMessage | null = null;
 void _typeGuard;
 

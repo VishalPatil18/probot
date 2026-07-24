@@ -1,6 +1,6 @@
 {
   "name": "probot-self-hosted",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Self-hosted ProBot chatbot as an npm package. Drop the <ProbotBot /> React component (or vanilla script) into any web app; configure persona, knowledge, provider, and (optionally) your ProBot dashboard token for analytics.",
   "keywords": [
     "probot",
@@ -72,10 +72,18 @@
     "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
-    "@anthropic-ai/sdk": { "optional": true },
-    "@google/generative-ai": { "optional": true },
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@google/generative-ai": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18.3.11",

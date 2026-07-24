@@ -1,6 +1,6 @@
 {
   "name": "probot-chatbot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Embed a ProBot AI chatbot on any website with a single script tag. BYO-key chatbot widget for job seekers.",
   "keywords": [
     "probot",

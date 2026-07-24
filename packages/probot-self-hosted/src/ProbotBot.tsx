@@ -8,6 +8,7 @@ import type { ChatMessage, ProbotBotConfig } from "./types";
 import widgetCss from "./widget.css";
 
 const DEFAULT_THEME = "#2563eb";
+const LEAD_THRESHOLD = 3;
 
 function ShadowContainer({ children }: { children: ReactNode }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -42,6 +43,12 @@ export function ProbotBot(config: ProbotBotConfig) {
   const hasSuggestions = suggestions.length > 0;
   const showInlineChips = hasSuggestions && chat.messages.length === 0;
   const showSuggestToggle = hasSuggestions && chat.messages.length > 0;
+
+  const assistantReplies = chat.messages.filter(
+    (m) => m.role === "assistant",
+  ).length;
+  const showLead =
+    Boolean(config.captureLead) && assistantReplies >= LEAD_THRESHOLD;
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -164,6 +171,17 @@ export function ProbotBot(config: ProbotBotConfig) {
           </div>
         ) : null}
 
+        {showLead ? (
+          <LeadCaptureStrip
+            open={leadOpen}
+            sent={leadSent}
+            email={leadEmail}
+            setEmail={setLeadEmail}
+            onOpen={() => setLeadOpen(true)}
+            onSubmit={submitLead}
+          />
+        ) : null}
+
         <form
           className="probot-inputbar"
           onSubmit={(e) => {
@@ -211,17 +229,6 @@ export function ProbotBot(config: ProbotBotConfig) {
           <div className="probot-notice" role="alert">
             {chat.error}
           </div>
-        ) : null}
-
-        {config.captureLead ? (
-          <LeadCaptureStrip
-            open={leadOpen}
-            sent={leadSent}
-            email={leadEmail}
-            setEmail={setLeadEmail}
-            onOpen={() => setLeadOpen(true)}
-            onSubmit={submitLead}
-          />
         ) : null}
 
         <footer className="probot-footer">
