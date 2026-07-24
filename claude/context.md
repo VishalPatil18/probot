@@ -3961,3 +3961,30 @@ Consolidated entry covering a stack of small changes on top of the self-hosted-r
 - None. (Pre-existing: BotFactoryForm.test.tsx has 5 failing tests unrelated to this change - identical set before and after.)
 
 **Verification:** `npx tsc --noEmit` clean. `BotFactoryForm.test.tsx` unchanged from baseline (same 5 pre-existing failures, 8 pass) - the new server-action import loads cleanly under the added mock.
+
+---
+
+### 2026-07-24 12:45 - Investigate "deleted account still logs in / overdue deletion banner"; cancel stuck deletions + fix cron gap + display
+
+**What was asked to do:** User re-logged into a "previously deleted" account and saw an "Account scheduled for deletion … (0 days from now)" banner with a past date. Investigate (including the DB) and resolve.
+
+**Root cause (evidence-based):** Account deletion is a soft 7-day-grace schedule (`deletion_requests` row; `runPurgeJob` deletes the user after `scheduled_purge_at`). The purge is driven by a Vercel cron (`vercel.json` → `/api/cron/purge-deleted-accounts`, daily 03:00) that **hard-requires `CRON_SECRET`** — the route returns 503 and does nothing when it's unset ([route.ts:8-14](src/app/api/cron/purge-deleted-accounts/route.ts#L8-L14)). `CRON_SECRET` is absent from the deployment env (only in `.env.example`), so **the cron fires daily but every call is rejected and no deletion ever completes**. Consequences: (a) accounts sit overdue-but-unpurged forever and stay fully loggable-in ("re-login after deletion"); (b) the banner clamps overdue day-counts to "0 days from now" ([SecurityActions.tsx:50-52](src/components/dashboard/settings/SecurityActions.tsx)). DB confirmed two pending rows: `vishal-terpmail` (due Jun 30, 24 days overdue) and `vishal18@umd.edu` (fresh, today).
+
+**What I did (with user's explicit choices):**
+- **DB (prod, one-off script):** cancelled BOTH pending deletions per the user's decision to keep both accounts — deleted the two `deletion_requests` rows (same effect as the app's `undoAccountDeletion`; user rows untouched). Verified: 0 pending deletions remain, both accounts present.
+- **Code:** [SecurityActions.tsx](src/components/dashboard/settings/SecurityActions.tsx) - overdue (`scheduled_purge_at <= now`) now renders "past its scheduled deletion date … deleted on the next cleanup run" instead of the misleading "0 days from now"; dropped the `Math.max(0, …)` clamp.
+- **Ops (handed to user):** generated a `CRON_SECRET` and gave Vercel setup steps so the daily purge actually authenticates and runs. Without this, deletions keep piling up in limbo.
+
+**Files changed:**
+- `src/components/dashboard/settings/SecurityActions.tsx` - update - overdue-aware deletion banner.
+- (prod DB) `deletion_requests` - deleted 2 rows (cancel deletions) via a read-then-delete script in scratchpad; no schema/app-code change.
+
+**Decisions made:**
+- Cancel (not purge) both deletions - user chose to keep both accounts.
+- Root fix is making the cron run (set `CRON_SECRET` in Vercel) - the `runPurgeJob` logic itself is correct; it was never authorized to execute. Vercel auto-sends `Authorization: Bearer $CRON_SECRET` to cron routes once the env var is set (works on Hobby/free; daily schedule is Hobby-allowed → zero-cost).
+
+**Open questions / follow-ups:**
+- User must set `CRON_SECRET` in Vercel (Production) + redeploy, then verify one cron run purges due rows. Until then, deletions won't complete.
+- Optional hardening (not done): block login/usage once a deletion is *past* its grace period (currently an overdue-unpurged account is fully usable). The clean fix is timely purging; a login guard is defense-in-depth.
+
+**Verification:** `npx tsc --noEmit` clean. DB script output confirmed 2 rows deleted, 0 pending, both users intact. No SecurityActions test exists to update.
