@@ -5,16 +5,9 @@ type Props = {
   page: number;
   limit: number;
   total: number;
-  // Other query params that need to be preserved across pagination clicks
-  // (e.g. `q` for the conversations list search). Keys with empty/undefined
-  // values are dropped.
   extraParams?: Record<string, string | null | undefined>;
 };
 
-// Shared pagination control for the dashboard list pages.
-// URL-driven (no JS) so that prev/next is bookmarkable and browser back
-// works out of the box. Renders nothing when the result fits in a single
-// page - caller doesn't need to gate.
 export function Pagination({
   basePath,
   page,

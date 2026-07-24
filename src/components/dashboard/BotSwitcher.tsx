@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { selectBotAction } from "@/app/(dashboard)/actions";
@@ -9,6 +10,7 @@ import { ComingSoonPill } from "./ComingSoonPill";
 type Bot = {
   id: string;
   name: string;
+  deploymentMode?: "managed" | "self_hosted";
 };
 
 type Props = {
@@ -29,16 +31,6 @@ function initials(name: string): string {
   );
 }
 
-// Sidebar's per-user bot selector. Above the workspace nav. Click opens
-// a dropdown of the user's owned bots; picking one submits a hidden form
-// that fires the `selectBotAction` server action - the action writes
-// the cookie and triggers a server revalidation so the rest of the
-// shell (URL pill, embed snippet, "View live bot") re-renders against
-// the new selection.
-//
-// Single-bot users see a static card with no dropdown (the disclosure
-// caret is hidden) - no value in clicking when there's nothing to
-// switch to. The "+ New bot" footer is always visible.
 export function BotSwitcher({
   bots,
   selectedBotId,
@@ -122,6 +114,11 @@ export function BotSwitcher({
                       {initials(b.name)}
                     </div>
                     <span className="min-w-0 flex-1 truncate">{b.name}</span>
+                    {b.deploymentMode === "self_hosted" ? (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+                        Self-hosted
+                      </span>
+                    ) : null}
                     {b.id === selectedBotId ? (
                       <svg
                         aria-hidden
@@ -142,7 +139,7 @@ export function BotSwitcher({
               </li>
             ))}
           </ul>
-          <div className="border-t border-border-base p-1.5">
+          <div className="border-t border-border-base p-1.5 space-y-0.5">
             <div
               aria-disabled
               className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-muted"
@@ -166,6 +163,28 @@ export function BotSwitcher({
               <span className="flex-1">Create New Bot</span>
               <ComingSoonPill />
             </div>
+            <Link
+              href="/dashboard/bots/new-self-hosted"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-ink transition-colors hover:bg-neutral-50"
+            >
+              <svg
+                aria-hidden
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0"
+              >
+                <path d="M5 12h14" />
+                <path d="M12 5v14" />
+              </svg>
+              <span className="flex-1">Register self-hosted bot</span>
+            </Link>
           </div>
         </div>
       ) : null}

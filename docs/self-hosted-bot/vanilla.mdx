@@ -1,0 +1,303 @@
+---
+title: Vanilla HTML / script tag
+description: "Drop probot-self-hosted onto any HTML page with a single script tag. No React, no bundler, no build step - just a static site plus a tiny backend."
+---
+
+Even without React or a bundler, you can add the widget to any HTML page
+with one script tag. The IIFE build bundles React internally and exposes
+one global: `window.ProbotSelfHosted`.
+
+## What you'll build
+
+- A static HTML page that mounts the widget via
+  `ProbotSelfHosted.mount(el, config)`.
+- Any backend (Node, Python, Go, Rust, PHP, Cloud Function - whatever) that
+  handles `POST /api/probot-chat`. The widget doesn't care what language
+  answers the request; it only needs `{ reply: "…" }` JSON back.
+
+## 1. HTML markup
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>My site</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Welcome to my portfolio.</h1>
+
+    <!-- Any container element the widget will mount into. -->
+    <div id="probot"></div>
+
+    <!-- Pinned major version so a future breaking release doesn't
+         silently reshape the widget on your live site. -->
+    <script src="https://unpkg.com/probot-self-hosted@0/dist/probot-self-hosted.iife.js"></script>
+
+    <script>
+      ProbotSelfHosted.mount("#probot", {
+        name: "Ada",
+        headline: "Ask me about my work",
+        personality: "professional",
+        themeColor: "#2563eb",
+        suggestedQuestions: ["What are you working on?"],
+        context: "I'm Ada Lovelace…",
+        captureLead: true,
+        sendMessage: async ({ system, messages }) => {
+          const res = await fetch("/api/probot-chat", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ system, messages }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "chat_failed");
+          return data.reply;
+        },
+        // Optional analytics link. Safe to inline; scoped per bot; revocable.
+        dashboard: { token: "pbt_…" },
+      });
+    </script>
+  </body>
+</html>
+```
+
+`mount()` takes either a CSS selector string or a real DOM element as its
+first argument. It returns the React root so you can call `.unmount()`
+later if you need to.
+
+## 2. Backend - any language
+
+The widget calls `POST /api/probot-chat` with:
+
+```json
+{
+  "system": "You are Ada's AI assistant. …\n## CONTEXT\n<your context>",
+  "messages": [
+    { "role": "user", "content": "hi" }
+  ]
+}
+```
+
+And expects:
+
+```json
+{ "reply": "the assistant's response" }
+```
+
+Any HTTP server that can produce that response works. A few reference
+implementations:
+
+### Node (Express)
+
+```ts
+// server.ts
+import express from "express";
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+const send = createOpenAIHandler({
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: "gpt-4o-mini",
+});
+
+const app = express();
+app.use(express.json());
+app.post("/api/probot-chat", async (req, res) => {
+  try {
+    const reply = await send({
+      system: req.body.system,
+      messages: req.body.messages,
+    });
+    res.json({ reply });
+  } catch (err) {
+    res.status(500).json({ error: "chat_failed" });
+  }
+});
+app.listen(3000);
+```
+
+### Python (FastAPI)
+
+```py
+# server.py
+import os
+from fastapi import FastAPI
+from openai import OpenAI
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+app = FastAPI()
+
+@app.post("/api/probot-chat")
+async def chat(payload: dict):
+    system = payload["system"]
+    messages = payload["messages"]
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "system", "content": system}, *messages],
+    )
+    return {"reply": resp.choices[0].message.content}
+```
+
+### Cloudflare Worker
+
+```ts
+// worker.ts
+export default {
+  async fetch(req: Request, env: { OPENAI_API_KEY: string }) {
+    const url = new URL(req.url);
+    if (url.pathname !== "/api/probot-chat" || req.method !== "POST") {
+      return new Response("not_found", { status: 404 });
+    }
+    const { system, messages } = await req.json<{
+      system: string;
+      messages: { role: string; content: string }[];
+    }>();
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "system", content: system }, ...messages],
+      }),
+    });
+    const j = await r.json<{ choices: { message: { content: string } }[] }>();
+    return Response.json({ reply: j.choices[0].message.content });
+  },
+};
+```
+
+### PHP
+
+```php
+<?php
+// probot-chat.php
+$body = json_decode(file_get_contents("php://input"), true);
+$system = $body["system"];
+$messages = array_merge(
+    [["role" => "system", "content" => $system]],
+    $body["messages"]
+);
+
+$curl = curl_init("https://api.openai.com/v1/chat/completions");
+curl_setopt_array($curl, [
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer " . getenv("OPENAI_API_KEY"),
+        "Content-Type: application/json",
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        "model" => "gpt-4o-mini",
+        "messages" => $messages,
+    ]),
+    CURLOPT_RETURNTRANSFER => true,
+]);
+$response = json_decode(curl_exec($curl), true);
+header("Content-Type: application/json");
+echo json_encode(["reply" => $response["choices"][0]["message"]["content"]]);
+```
+
+## Pinning versions
+
+Public CDNs can move fast. Pin the version in the script URL so a future
+release can't silently change your widget:
+
+```html
+<!-- pinned to the 0.x major line -->
+<script src="https://unpkg.com/probot-self-hosted@0/dist/probot-self-hosted.iife.js"></script>
+
+<!-- pinned to an exact version (recommended for production) -->
+<script src="https://unpkg.com/probot-self-hosted@0.1.0/dist/probot-self-hosted.iife.js"></script>
+```
+
+Also consider adding SRI (subresource integrity) once you pin an exact
+version:
+
+```html
+<script
+  src="https://unpkg.com/probot-self-hosted@0.1.0/dist/probot-self-hosted.iife.js"
+  integrity="sha384-…"
+  crossorigin="anonymous"
+></script>
+```
+
+You can generate the `integrity` hash with `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
+
+## Local development
+
+Set up any static-file server plus your backend of choice. Two easy
+options:
+
+```bash
+# Terminal 1 - static server for the HTML
+npx serve .
+
+# Terminal 2 - backend proxy
+OPENAI_API_KEY=sk-… npx tsx server.ts
+```
+
+Or the classic Python one-liner for the static side:
+
+```bash
+python3 -m http.server 8080
+```
+
+The widget's `fetch("/api/probot-chat")` will hit whatever origin serves
+the HTML - point your reverse proxy (nginx, Caddy) or the backend framework
+itself to answer that route.
+
+## Same-origin vs CORS
+
+The example above assumes the HTML page and the `/api/probot-chat` route
+are served from the same origin. If they're on different origins (e.g. the
+static page is on `example.com` and the API is on `api.example.com`),
+either:
+
+1. Enable CORS on the backend so it accepts requests from the HTML's
+   origin, or
+2. Front both with a reverse proxy that presents one origin to the
+   browser.
+
+Option 2 is simpler and avoids preflight requests entirely.
+
+## What the widget renders
+
+The IIFE build is entirely self-contained: all styles are injected into
+the page's `<head>` at mount time. That means:
+
+- No CSS file to load.
+- No conflict with your existing styles (all class names are prefixed
+  `probot-*`).
+- The FAB is `position: fixed; bottom: 20px; right: 20px;` by default. To
+  reposition, override `.probot-root` in your page's CSS **after** the
+  script mounts.
+
+## Security notes
+
+- **`dashboard.token` visibility.** The token is inline in your page
+  source, so anyone viewing source can copy it. That's OK - it only
+  grants conversation + lead writes for one bot, and you can revoke it
+  from the dashboard in one click.
+- **`OPENAI_API_KEY` visibility.** The LLM API key must NEVER appear in
+  the HTML. Keep it in the backend's environment variables only. If you
+  see the key in DevTools' Sources tab, stop and move it to the server.
+- **Rate limiting.** A publicly-embedded widget = anyone can drain your
+  LLM credits. Add per-IP rate limiting on the backend
+  (see [Next.js example § rate limiting](/self-hosted-bot/nextjs#adding-per-visitor-rate-limiting)
+  for a template).
+
+## Unmounting
+
+If you're on a SPA-style vanilla setup (e.g. htmx or Alpine) and want to
+tear down the widget on route change:
+
+```html
+<script>
+  const root = ProbotSelfHosted.mount("#probot", { /* ...config... */ });
+
+  // Later, when you're navigating away:
+  root.unmount();
+</script>
+```

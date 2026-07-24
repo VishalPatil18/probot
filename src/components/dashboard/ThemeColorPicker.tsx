@@ -5,12 +5,6 @@ import { useState } from "react";
 
 import { isValidThemeColor } from "@/lib/bots/theme-color";
 
-// Theme color editor for the bot detail page.
-// Uses the native <input type="color"> which gives the user a real picker
-// on every modern browser at zero implementation cost. Submits via
-// PATCH /api/bots/[botId] - that route accepts a single field at a time,
-// so this component does not need to round-trip the rest of the bot.
-
 type Props = {
   botId: string;
   initialColor: string;
@@ -44,8 +38,6 @@ export function ThemeColorPicker({ botId, initialColor }: Props) {
       }
       setSaved(true);
       window.setTimeout(() => setSaved(false), 1500);
-      // Refresh the server-rendered detail page so the snippet samples
-      // re-render with the new color in their inline styles.
       router.refresh();
     } catch {
       setError("Network error. Check your connection and try again.");

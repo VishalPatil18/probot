@@ -13,10 +13,6 @@ interface PasswordInputProps {
   name?: string;
 }
 
-// Password field with a show/hide toggle. Shared by every password input on the
-// site (login, register, reset) so the eye/eye-slash behaviour stays identical.
-// The toggle swaps the input `type` between "password" and "text"; it is
-// keyboard-focusable and announces its current state via aria-label.
 export function PasswordInput({
   id,
   value,

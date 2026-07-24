@@ -9,10 +9,6 @@ export const metadata = buildMetadata({
   path: "/why-pro-bot",
 });
 
-// Honest, defensible comparison. Each row is a property a job-seeker actually
-// cares about; the "generic platform" column reflects the common default of
-// closed SaaS chatbot builders (hosted-only, their key, paid tiers, closed
-// source). Kept factual - no named competitors, no unverifiable claims.
 type Row = {
   feature: string;
   detail: string;

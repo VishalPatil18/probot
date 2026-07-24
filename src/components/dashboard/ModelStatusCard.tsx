@@ -8,11 +8,6 @@ type Props = {
   manageHref: string;
 };
 
-// Sidebar widget showing the user's BYO LLM selection. The active dot
-// only reflects "provider preference is set" - the actual key is
-// envelope-encrypted server-side and the sidebar cannot cheaply verify
-// decrypt-ability without paying the audit cost. Links to the AI model
-// & key tab.
 export function ModelStatusCard({ provider, model, manageHref }: Props) {
   const { name, model: modelLabel } = describeProvider(provider, model);
   return (

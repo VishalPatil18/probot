@@ -2,21 +2,8 @@ import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 
 import { bots, conversations, db, messages } from "@/lib/db";
 
-// Shared conversation queries. Called by both the API
-// routes and the dashboard pages.
-//
-// **Caller contract - tenancy is the caller's responsibility.** These
-// functions take a `botId` and trust the caller has already verified the
-// session user owns it. `getConversationWithMessages` also filters by
-// `bot_id` to prevent cross-bot ID forgery; `listConversations` filters
-// by `bot_id` alone.
-
 const FIRST_USER_MESSAGE_CHAR_LIMIT = 200;
 
-// LATERAL subquery: for each conversation row, fetch the first user-role
-// message truncated to 200 chars. Covered by the composite
-// index `messages_conv_created_idx` so the subquery is a sub-ms
-// index scan per outer row.
 const FIRST_USER_MESSAGE_SQL = sql<string | null>`(
   SELECT LEFT(${messages.content}, ${FIRST_USER_MESSAGE_CHAR_LIMIT})
   FROM ${messages}
@@ -55,11 +42,6 @@ export async function listConversations(
   const trimmed = q?.trim() ?? "";
 
   const botFilter = eq(conversations.botId, botId);
-  // Wrap the subquery in an explicit `sql` template so the ILIKE operator
-  // has an unambiguously parenthesized scalar-subquery operand. Letting
-  // Drizzle's `ilike()` helper handle a raw SQL template as its left
-  // operand depends on dialect-internal wrapping behavior; the explicit
-  // form is portable and grep-friendly.
   const pattern = `%${trimmed}%`;
   const searchFilter: SQL | undefined =
     trimmed.length > 0
@@ -146,10 +128,6 @@ export async function getConversationWithMessages(args: {
   };
 }
 
-// Cross-bot conversation feed for the dashboard home.
-// Includes a first-user-message preview just like `listConversations`,
-// plus the bot id/name so the dashboard can label each row with which
-// bot the conversation belongs to.
 export type UserConversationRow = {
   id: string;
   recruiterEmail: string | null;

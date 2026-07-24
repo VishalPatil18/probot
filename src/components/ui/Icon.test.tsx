@@ -8,8 +8,6 @@ describe("Icon", () => {
     const { container } = render(<Icon name="menu" />);
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
-    // Sized in em + currentColor so it inherits font-size and text color like
-    // the old font glyph did.
     expect(svg?.getAttribute("width")).toBe("1em");
     expect(svg?.getAttribute("stroke")).toBe("currentColor");
     expect(svg?.getAttribute("aria-hidden")).toBe("true");

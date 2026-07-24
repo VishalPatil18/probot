@@ -4,10 +4,6 @@ import { useState } from "react";
 
 import { LEGAL_EFFECTIVE_DATE } from "@/lib/marketing/legal";
 
-// Dismissible top-of-dashboard banner shown (by the layout) when the legal
-// effective date is newer than the user's acknowledgement. Dismissing POSTs the
-// acknowledgement so it doesn't reappear; an optimistic hide keeps it snappy,
-// and a failed POST simply means it shows again on the next load.
 export function LegalBanner() {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
@@ -17,7 +13,6 @@ export function LegalBanner() {
     try {
       await fetch("/api/users/me/legal-ack", { method: "POST" });
     } catch {
-      // Non-fatal: the banner will reappear on the next page load.
     }
   }
 

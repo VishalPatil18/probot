@@ -118,7 +118,6 @@ describe("GET /api/bots/[botId]/config", () => {
     const res = await GET(makeRequest(), PARAMS);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(res.headers.get("Access-Control-Allow-Methods")).toContain("GET");
-    // Cache-Control is preserved alongside CORS
     expect(res.headers.get("Cache-Control")).toContain("s-maxage=60");
   });
 });

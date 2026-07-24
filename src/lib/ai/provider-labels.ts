@@ -1,8 +1,5 @@
 import type { ProviderName } from "@/lib/ai/providers";
 
-// Shared display labels for the four supported providers. Lifted out of
-// BotFactoryForm so dashboard surfaces (ModelStatusCard, future AI-key
-// page) can render the same names without re-importing the wizard.
 export const PROVIDER_LABELS: Record<
   ProviderName,
   { name: string; family: string }
@@ -12,7 +9,6 @@ export const PROVIDER_LABELS: Record<
   azure: { name: "Azure", family: "OpenAI" },
   openai: { name: "OpenAI", family: "GPT" },
   grok: { name: "Grok", family: "xAI" },
-  ollama: { name: "Ollama", family: "Local" },
 };
 
 export function describeProvider(

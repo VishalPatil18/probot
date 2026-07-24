@@ -66,8 +66,6 @@ describe("NotificationBell", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       render(<NotificationBell />);
-      // shouldAdvanceTime lets real waitFor still progress while the fake
-      // setInterval can be advanced manually.
       await vi.waitFor(() => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
       });

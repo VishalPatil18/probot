@@ -10,13 +10,6 @@ type Props = {
 const MAX_QUESTIONS = 6;
 const MAX_CHARS = 200;
 
-// Chip-based suggested questions editor for the settings
-// page. Mirrors the Bot Factory affordance but is its own component (the
-// wizard step has different copy / spacing).
-//
-// Editing in place is intentionally out of scope - users delete + re-add.
-// Cap enforced at 6 to match the `botInput` schema; Add button
-// disables when the cap is hit so the UI matches the server contract.
 export function SuggestedQuestionsEditor({ value, onChange }: Props) {
   const [draft, setDraft] = useState("");
   const [hint, setHint] = useState<string | null>(null);
@@ -27,8 +20,6 @@ export function SuggestedQuestionsEditor({ value, onChange }: Props) {
     if (trimmed.length > MAX_CHARS) return;
     if (value.length >= MAX_QUESTIONS) return;
     if (value.includes(trimmed)) {
-      // Silent dedupe is confusing - surface "already in the list" so the
-      // user knows why their Add appeared to do nothing.
       setHint("Already in the list.");
       setDraft("");
       return;
@@ -57,8 +48,6 @@ export function SuggestedQuestionsEditor({ value, onChange }: Props) {
         <ul className="mb-3 flex flex-wrap gap-2">
           {value.map((q, idx) => (
             <li
-              // Dedupe is enforced on add, so `q` is unique within the list
-              // and is a stable key (no index needed).
               key={q}
               className="inline-flex items-center gap-1.5 rounded-full border border-border-base bg-white px-3 py-1 text-xs"
             >

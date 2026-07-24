@@ -17,12 +17,6 @@ type Props = {
 
 type Status = "idle" | "loading" | "uploading" | "reprocessing" | "error";
 
-// Knowledge base tab. Same wiring as the earlier KnowledgeManager
-// (the underlying /knowledge endpoints don't change) but visual layout
-// matches design/settings.html: source rows with type-icon + filename +
-// "N chunks · indexed" caption + small icon-only delete, "Re-index all"
-// button in the section header, and a full-width dashed "Add source"
-// upload zone at the bottom.
 export function KnowledgeTab({ botId }: Props) {
   const [sources, setSources] = useState<SourceSummary[] | null>(null);
   const [status, setStatus] = useState<Status>("loading");
@@ -130,7 +124,6 @@ export function KnowledgeTab({ botId }: Props) {
 
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files && e.target.files.length > 0) {
-      // Capture the FileList before clearing the input value below.
       void handleUpload(e.target.files);
     }
     e.target.value = "";

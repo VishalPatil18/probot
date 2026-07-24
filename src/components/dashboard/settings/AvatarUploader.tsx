@@ -8,16 +8,10 @@ const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 interface AvatarUploaderProps {
   initialImage: string | null;
   uploadUrl: string;
-  // Fills the circle when there's no image (e.g. initials or the ProBot icon).
   fallback: React.ReactNode;
   ariaLabel?: string;
 }
 
-// Circular avatar that doubles as its own upload control: hovering reveals a
-// camera overlay, clicking opens the file picker, and the chosen image is POSTed
-// to `uploadUrl` (which returns `{ image }`). Shared by the account photo and
-// the bot picture so both behave identically. Accepts jpg/jpeg/png/webp ≤2 MB;
-// the server is the authoritative validator (magic-byte sniff).
 export function AvatarUploader({
   initialImage,
   uploadUrl,

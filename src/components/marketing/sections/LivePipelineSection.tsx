@@ -56,7 +56,6 @@ export function LivePipelineSection() {
             <use href="#il-pC" className="il-wire" />
             <use href="#il-pD" className="il-wire" />
 
-            {/* A: Resume */}
             <g className="il-float">
               <rect
                 x="30"
@@ -131,7 +130,6 @@ export function LivePipelineSection() {
                 2 pages · parsed
               </text>
             </g>
-            {/* B: LinkedIn */}
             <g className="il-float d1">
               <rect
                 x="30"
@@ -179,7 +177,6 @@ export function LivePipelineSection() {
                 profile pdf
               </text>
             </g>
-            {/* C: Portfolio */}
             <g className="il-float d2">
               <rect
                 x="30"
@@ -243,7 +240,6 @@ export function LivePipelineSection() {
               </text>
             </g>
 
-            {/* Travelling particles */}
             {[
               { id: "il-pA", begin: "0s" },
               { id: "il-pA", begin: "1.1s" },
@@ -272,7 +268,6 @@ export function LivePipelineSection() {
               </animateMotion>
             </circle>
 
-            {/* AI Orb */}
             <circle
               className="il-orb-glow"
               cx="600"
@@ -315,7 +310,6 @@ export function LivePipelineSection() {
               your knowledge, embedded
             </text>
 
-            {/* Chat panel */}
             <rect
               x="760"
               y="62"

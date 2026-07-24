@@ -4,9 +4,7 @@ type Props = {
   label: string;
   value: string | number;
   icon: "forum" | "chat" | "contact_mail" | "bolt";
-  /** Right-corner change pill (e.g. "+18%", "-4%", "New"). Coloured by sign. */
   fadedGrowth?: string;
-  /** When true, the entire content is faded and a Coming Soon pill is rendered. */
   comingSoon?: boolean;
 };
 
@@ -26,9 +24,6 @@ const ICON_PATHS: Record<Props["icon"], JSX.Element> = {
   bolt: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
 };
 
-// Dashboard top-row metric tile. The number stays at full opacity even
-// when `comingSoon` is true - the value itself is real or placeholder
-// "1.4s"; the faded pill carries the not-yet-wired-up signal.
 export function MetricTile({
   label,
   value,

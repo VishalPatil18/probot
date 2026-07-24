@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>probot-chatbot · script-tag test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 720px;
+      margin: 3rem auto;
+      padding: 0 1rem;
+      color: #18181b;
+      line-height: 1.55;
+    }
+
+    code {
+      background: #f4f4f5;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 90%;
+    }
+
+    .hint {
+      color: #71717a;
+      font-size: 14px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>probot-chatbot · script-tag test</h1>
+  <p>
+    This page embeds the <code>probot-chatbot</code> widget via a single
+    <code>&lt;script&gt;</code> tag. The bubble should appear in the
+    bottom-right corner and open a chat dialog when clicked.
+  </p>
+  <ol>
+    <li>Boot the Next dev server: <code>npm run dev</code> from the repo root.</li>
+    <li>Replace the <code>data-bot-id</code> below with a real bot id from your dashboard.</li>
+    <li>Serve this folder: <code>npx serve -p 5500</code> and open <a
+        href="http://localhost:5500">http://localhost:5500</a>.</li>
+  </ol>
+  <p class="hint">
+    Verify: bubble renders → dialog opens with the bot's real name, avatar,
+    and suggested questions → send a message → response streams in with
+    markdown formatting → mobile viewport at &lt;480px collapses the dialog
+    full-width.
+  </p>
+
+  <!--
+      Edit these two attributes to point at any bot in your dashboard.
+      `data-api-base` swaps between local dev and production.
+    -->
+  <script src="http://localhost:3000/widget.js" data-bot-id="d6020046-8249-48c1-9813-fac622ced0ec"
+    data-api-base="http://localhost:3000" async></script>
+</body>
+
+</html>

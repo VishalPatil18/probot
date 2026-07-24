@@ -7,7 +7,6 @@ const cookiesMock = vi.fn(() => ({
     return value !== undefined ? { name, value } : undefined;
   },
   set: () => {
-    /* noop */
   },
 }));
 

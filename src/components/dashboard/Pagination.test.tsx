@@ -18,7 +18,6 @@ describe("Pagination", () => {
     expect(screen.getByText("Page 1 of 5")).toBeInTheDocument();
     const next = screen.getByRole("link", { name: /next/i });
     expect(next.getAttribute("href")).toBe(`${BASE}?page=2`);
-    // Prev is rendered as a non-link <span> when disabled
     expect(screen.queryByRole("link", { name: /prev/i })).toBeNull();
   });
 
@@ -53,7 +52,6 @@ describe("Pagination", () => {
     );
     const prev = screen.getByRole("link", { name: /prev/i }).getAttribute("href");
     const next = screen.getByRole("link", { name: /next/i }).getAttribute("href");
-    // Page 1 omits the page param, so prev resets to base?q=python
     expect(prev).toBe(`${BASE}?q=python`);
     expect(next).toBe(`${BASE}?q=python&page=3`);
   });

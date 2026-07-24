@@ -81,9 +81,6 @@ describe("GET /api/bots/[botId]/leads/export", () => {
     expect(disposition).toContain("leads-Jane-Doe-");
     expect(disposition).toContain(".csv");
 
-    // The wire bytes start with the UTF-8 BOM (`EF BB BF`). `res.text()`
-    // strips it by default via TextDecoder, so we inspect the raw bytes
-    // for the BOM and use `res.text()` separately for content assertions.
     const bytes = new Uint8Array(await res.clone().arrayBuffer());
     expect(bytes[0]).toBe(0xef);
     expect(bytes[1]).toBe(0xbb);
@@ -93,11 +90,8 @@ describe("GET /api/bots/[botId]/leads/export", () => {
     expect(body).toContain(
       "captured_at,email,bot_name,context_summary,conversation_id",
     );
-    // Comma-containing cell is quoted
     expect(body).toContain('"asked, about ML"');
-    // Bot name is embedded in every row
     expect(body).toContain("Jane Doe");
-    // Null cells render as empty fields
     expect(body).toContain("rec2@example.com,Jane Doe,,");
   });
 
@@ -127,8 +121,6 @@ describe("GET /api/bots/[botId]/leads/export", () => {
 
     const res = await GET(new Request("http://localhost/"), PARAMS);
     const disposition = res.headers.get("Content-Disposition") ?? "";
-    // ASCII fallback `filename="..."` must not contain `\` or unescaped `"`
-    // - the only `"` chars allowed are the wrapping ones around each value.
     expect(disposition).not.toContain("\\");
     expect(disposition).toMatch(
       /filename="leads-[A-Za-z0-9._-]+-\d{4}-\d{2}-\d{2}\.csv"/,
@@ -146,7 +138,6 @@ describe("GET /api/bots/[botId]/leads/export", () => {
     const res = await GET(new Request("http://localhost/"), PARAMS);
     const disposition = res.headers.get("Content-Disposition") ?? "";
     expect(disposition).toContain("filename*=UTF-8''");
-    // The percent-encoded UTF-8 of "Jané" starts with `Jan%C3%A9`
     expect(disposition).toContain("Jan%C3%A9");
   });
 });

@@ -135,7 +135,6 @@ describe("LoginForm", () => {
     const user = userEvent.setup();
     render(<LoginForm />);
 
-    // The typed login email seeds the modal.
     await user.type(screen.getByLabelText(/email/i), "jane@example.com");
     await user.click(screen.getByRole("button", { name: /magic link/i }));
 

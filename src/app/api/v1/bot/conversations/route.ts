@@ -4,14 +4,7 @@ import { z } from "zod";
 
 import { requireBotToken } from "@/lib/bot-tokens/service";
 import { conversations, db, messages } from "@/lib/db";
-
-// POST /api/v1/bot/conversations
-//
-// The self-hosted runtime posts a chat turn's transcript back so the owner's
-// dashboard analytics (conversations + messages) work the same as for managed
-// bots. UPSERT on (bot_id, session_id) coalesces concurrent tabs into one
-// conversation - identical to the managed chat route's persistence block.
-// Returns the conversationId so the runtime can attach a later lead to it.
+import { emitNotification } from "@/lib/notifications/emit";
 
 const bodySchema = z.object({
   sessionId: z.string().uuid(),
@@ -47,7 +40,7 @@ export async function POST(request: Request): Promise<Response> {
   const { sessionId, messages: turns } = parsed.data;
 
   try {
-    const conversationId = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [convo] = await tx
         .insert(conversations)
         .values({ botId: bot.id, sessionId })
@@ -58,7 +51,10 @@ export async function POST(request: Request): Promise<Response> {
             lastMessageAt: new Date(),
           },
         })
-        .returning({ id: conversations.id });
+        .returning({
+          id: conversations.id,
+          isInsert: sql<boolean>`xmax = 0`,
+        });
       if (!convo) throw new Error("conversation_upsert_failed");
 
       await tx.insert(messages).values(
@@ -68,10 +64,28 @@ export async function POST(request: Request): Promise<Response> {
           content: t.content,
         })),
       );
-      return convo.id;
+      return { conversationId: convo.id, isInsert: convo.isInsert === true };
     });
 
-    return NextResponse.json({ conversationId }, { status: 201 });
+    if (result.isInsert) {
+      void emitNotification({
+        userId: bot.userId,
+        botId: bot.id,
+        kind: "conversation_started",
+        payload: {
+          botId: bot.id,
+          botName: bot.name,
+          sessionId,
+          conversationId: result.conversationId,
+          origin: "self_hosted",
+        },
+      });
+    }
+
+    return NextResponse.json(
+      { conversationId: result.conversationId },
+      { status: 201 },
+    );
   } catch (err) {
     console.warn("[v1/bot/conversations] persistence failed", err);
     return NextResponse.json({ error: "persistence_failed" }, { status: 500 });

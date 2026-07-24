@@ -11,11 +11,6 @@ import { listConversations } from "@/lib/conversations/queries";
 import { bots, db } from "@/lib/db";
 import { DEFAULT_LIMIT } from "@/lib/pagination";
 
-// Dashboard conversations list page. Server-rendered with
-// direct Drizzle queries (matching the existing dashboard pattern) + a
-// client SearchBar that updates the URL's ?q= param. Pagination is also
-// URL-driven (?page=N) so prev/next is bookmarkable.
-
 type Props = {
   params: { botId: string };
   searchParams: { page?: string; q?: string };
@@ -76,9 +71,6 @@ export default async function ConversationsListPage({
         />
       </div>
 
-      {/* No CTA on the empty state - sidebar workspace card + dashboard
-          home Share-your-bot panel both surface the public URL. A
-          "Get your URL" button here would duplicate that chrome. */}
       {items.length === 0 ? (
         <EmptyState
           title={

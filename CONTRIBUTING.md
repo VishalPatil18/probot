@@ -74,6 +74,16 @@ npm run lint                      # next lint
 
 We expect every PR to land with `npm test` green and `npm run typecheck` clean. CI runs these on every push.
 
+### 5. Manual-test the packages (when relevant)
+
+If your PR touches [`src/widget/`](./src/widget/) or either of the npm packages under [`packages/`](./packages/), also exercise the change in a real browser. Three self-contained mini-projects live under [`manual-testing/`](./manual-testing/) — one HTML page for the script-tag widget, one for the vanilla IIFE, and a Vite React harness for the component + adapters. See [MANUAL_TESTING.md](./MANUAL_TESTING.md) for the full guide (prerequisites, per-scenario steps, verifying in the browser, portability check via `npm pack`, and common gotchas).
+
+```bash
+# Fastest smoke — no LLM key required
+( cd packages/probot-self-hosted && npm install && npm run build )
+cd manual-testing/self-hosted-vanilla && npm start   # opens on :5501
+```
+
 ---
 
 ## Branching
@@ -159,6 +169,7 @@ probot/
 ├── CONTRIBUTING.md           # This file
 ├── CODE_OF_CONDUCT.md
 ├── CHANGELOG.md
+├── MANUAL_TESTING.md         # Local end-to-end testing guide for both npm packages
 ├── package.json              # Next.js 14 / React 18 / Drizzle / NextAuth / Anthropic + OpenAI SDKs / Zod / Vitest
 ├── drizzle/                  # Generated Drizzle migrations (committed)
 ├── claude/
@@ -169,6 +180,10 @@ probot/
 │   ├── context.md            # Append-only session history
 │   └── learnings.md          # Topic-keyed learning journal
 ├── design/                   # Static HTML/Tailwind design mockups (ported per surface)
+├── manual-testing/           # Local mini-projects for testing the two npm packages in a real browser
+├── packages/
+│   ├── probot-chatbot/       # Script-tag embed widget (from src/widget/)
+│   └── probot-self-hosted/   # React component + hooks + adapters (Anthropic / OpenAI / Google + dashboard)
 └── src/
     ├── app/                  # Next.js App Router
     │   ├── (auth)/           # Login + Register

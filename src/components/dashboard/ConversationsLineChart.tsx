@@ -4,22 +4,13 @@ type Props = {
   data: Point[];
 };
 
-// Dashboard chart. Renders a smooth (Catmull-Rom → cubic Bézier)
-// line over the daily conversation counts. SVG uses a viewBox so it
-// scales to whatever width the parent allocates. Empty data (no
-// conversations yet) renders a faded baseline so the panel doesn't
-// collapse to zero height.
-
 const VIEW_W = 700;
 const VIEW_H = 200;
 const PAD_X = 24;
 const PAD_TOP = 16;
-const PAD_BOTTOM = 32; // room for day labels
+const PAD_BOTTOM = 32;
 
 function dayLabel(date: string, idx: number, total: number): string {
-  // Highlight today (last point) as "Today"; everything else shows the
-  // short weekday name. `date` is a YYYY-MM-DD string from the server
-  // query - parse it explicitly so timezones don't drift the weekday.
   if (idx === total - 1) return "Today";
   const [y, m, d] = date.split("-").map(Number);
   if (!y || !m || !d) return "";
@@ -43,7 +34,6 @@ function toCoords(data: Point[]): Array<{ x: number; y: number }> {
   }));
 }
 
-// Catmull-Rom → cubic Bézier path with a tension of 1 (standard).
 function smoothPath(points: Array<{ x: number; y: number }>): string {
   if (points.length === 0) return "";
   if (points.length === 1) {

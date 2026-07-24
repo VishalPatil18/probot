@@ -2,22 +2,10 @@
 
 import { useState } from "react";
 
-// Shared copy-to-clipboard button used by:
-//   - Bot Factory Step 5 (post-creation success screen)
-//   - Dashboard home (per-bot list item)
-//   - Topbar URL pill (icon-only variant)
-// Shows transient "Copied!" feedback for 1.5s. Falls back to displaying the
-// URL if clipboard API is unavailable (older browsers, insecure contexts).
-
 type Props = {
   url: string;
   label?: string;
   className?: string;
-  /**
-   * When true, render only the clipboard icon (matches the topbar URL
-   * pill in design/dashboard.html - `content_copy` material icon).
-   * The button's accessible name still carries the human-readable state.
-   */
   iconOnly?: boolean;
 };
 
@@ -87,9 +75,6 @@ export function CopyUrlButton({
     <button
       type="button"
       onClick={copy}
-      // Accessible name reflects BOTH the current state (Copy link / Copied! /
-      // Copy failed) AND the URL for screen-reader users. Dynamic so tests
-      // can findByRole on the visible state.
       aria-label={`${text}: ${url}`}
       title={text}
       className={

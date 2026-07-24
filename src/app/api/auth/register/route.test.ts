@@ -103,7 +103,6 @@ describe("POST /api/auth/register", () => {
     };
     expect(insertedRow.username).toBe("jane-doe");
     expect(insertedRow.email).toBe("jane@example.com");
-    // hashedPassword should be a bcrypt hash, never the plaintext
     expect(insertedRow.hashedPassword).toMatch(/^\$2[aby]\$10\$/);
     expect(insertedRow.hashedPassword).not.toBe("hunter2hunter");
   });
@@ -172,7 +171,7 @@ describe("POST /api/auth/register", () => {
   it("returns 400 on validation errors", async () => {
     const res = await POST(
       makeRequest({
-        username: "ab", // too short
+        username: "ab",
         email: "not-an-email",
         password: "short",
       }),

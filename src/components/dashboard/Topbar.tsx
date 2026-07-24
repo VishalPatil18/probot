@@ -12,15 +12,6 @@ type Props = {
   liveBotUrl: string | null;
 };
 
-// Sticky topbar - shared across all (dashboard) pages. Hosts the mobile
-// hamburger button (left), page title (derived from pathname), public
-// URL pill with copy button (when a bot is selected), and the
-// notification bell + "View live bot" CTA on the right.
-//
-// NotificationBell relocated from the old single-row header.
-// Topbar is a client component so it can derive the page title from
-// `usePathname()` without the server layout having to know which page
-// is rendering.
 export function Topbar({ publicUrl, liveBotUrl }: Props) {
   const pathname = usePathname() ?? "/dashboard";
   const title = deriveTitle(pathname);
@@ -30,17 +21,19 @@ export function Topbar({ publicUrl, liveBotUrl }: Props) {
       <div className="flex h-16 items-center gap-4 px-6 border-b border-border-base lg:px-8">
         <MobileSidebarToggle />
         <h1 className="font-display text-xl font-bold">{title}</h1>
-        {publicUrl ? (
-          <div className="ml-2 hidden items-center gap-1.5 rounded-lg border border-border-base bg-white px-2.5 py-1 font-mono text-xs text-muted md:flex">
-            <span className="truncate">{stripScheme(publicUrl)}</span>
-            <CopyUrlButton
-              url={publicUrl}
-              iconOnly
-              className="text-brand hover:text-brand-deep"
-            />
-          </div>
-        ) : null}
         <div className="ml-auto flex items-center gap-2">
+          {publicUrl ? (
+            <div className="hidden items-center gap-1.5 rounded-lg border border-border-base bg-white px-2.5 py-1 font-mono text-xs text-muted md:flex">
+              <span className="truncate max-w-[220px]">
+                {stripScheme(publicUrl)}
+              </span>
+              <CopyUrlButton
+                url={publicUrl}
+                iconOnly
+                className="text-brand hover:text-brand-deep"
+              />
+            </div>
+          ) : null}
           {liveBotUrl ? (
             <a
               href={liveBotUrl}

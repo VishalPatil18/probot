@@ -15,17 +15,6 @@ export interface AssembleResult {
   truncated: boolean;
 }
 
-// Concatenates chunks into a single `context_text` payload, capped at
-// `tokenCap` tokens. Chunks are ordered deterministically by
-// (sourceName, chunkIndex). Each chunk is separated by a blank line so the
-// LLM sees prose-block boundaries.
-//
-// Note (tradeoff): chunkText produces overlapping chunks (default 100
-// tokens of overlap) so the same content appears in adjacent chunks. The
-// assembler does NOT dedupe - the RAG retrieval path replaces this assembly path
-// entirely, so adding dedupe logic here would be code that gets deleted.
-// The 100-token overlap is ~13% redundancy at the default 750-token target;
-// the per-bot `contextTokenCap` absorbs it.
 export function assembleFromChunks(
   chunks: readonly AssembledChunk[],
   tokenCap: number,
@@ -61,9 +50,6 @@ export function assembleFromChunks(
   };
 }
 
-// Reads all knowledge_base rows for a bot, assembles them under the bot's
-// per-bot `contextTokenCap`, and writes the result back to `bots.context_text`
-// so the chat route can keep reading the same column unchanged.
 export async function assembleAndSaveBotContext(
   botId: string,
 ): Promise<AssembleResult> {
@@ -96,8 +82,6 @@ export async function assembleAndSaveBotContext(
   return result;
 }
 
-// Deletes all chunks for one source on a bot. Used by per-source replace
-// before inserting fresh chunks (Q5=b semantic).
 export async function deleteSource(
   botId: string,
   sourceName: string,

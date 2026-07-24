@@ -107,16 +107,12 @@ describe("BotFactoryForm", () => {
 
     const google = screen.getByRole("button", { name: /Google/i });
     const azure = screen.getByRole("button", { name: /Azure/i });
-    // `/^OpenAI/i` anchors to the start of the accessible name so it matches
-    // only the OpenAI provider button - not Azure, whose family label also
-    // contains "OpenAI" ("Azure / OpenAI").
     const openai = screen.getByRole("button", { name: /^OpenAI/i });
     const anthropic = screen.getByRole("button", { name: /Anthropic/i });
     expect(google).toBeEnabled();
     expect(azure).toBeEnabled();
     expect(openai).toBeEnabled();
     expect(anthropic).toBeEnabled();
-    // The SOON badge that used to live on the Google card is gone.
     expect(within(google).queryByText(/SOON/i)).toBeNull();
   });
 
@@ -153,7 +149,6 @@ describe("BotFactoryForm", () => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.llmProvider).toBe("azure");
     expect(body.llmModel).toBe("gpt-4o-mini");
-    // Defense-in-depth: neither the key nor the endpoint leak into the JSON body.
     expect(init.body).not.toContain("azure-test-key-1234567890");
     expect(init.body).not.toContain("cognitiveservices.azure.com");
   });
@@ -179,7 +174,6 @@ describe("BotFactoryForm", () => {
     expect(body.name).toBe("Jane Doe");
     expect(body.llmProvider).toBe("anthropic");
     expect(body).not.toHaveProperty("apiKey");
-    // Defense-in-depth: the key value must never appear in the request body.
     expect(init.body).not.toContain("sk-ant-test-1234567890");
 
     expect(
@@ -227,7 +221,6 @@ describe("BotFactoryForm", () => {
     const cont = screen.getByRole("button", { name: /continue/i });
     expect(cont).toBeDisabled();
 
-    // Use the hidden file input directly; jsdom can't dispatch real drops.
     const fileInput = document.getElementById(
       "bf-pdf-input",
     ) as HTMLInputElement;
@@ -253,8 +246,6 @@ describe("BotFactoryForm", () => {
       /context token cap/i,
     ) as HTMLInputElement;
     expect(capInput.value).toBe("12000");
-    // Direct change event - bypasses user.type's per-keystroke clamping that
-    // intermediate values would trigger for a controlled number input.
     fireEvent.change(capInput, { target: { value: "20000" } });
 
     await fillStep2(user);
@@ -285,7 +276,6 @@ describe("BotFactoryForm", () => {
       type: "application/pdf",
     });
     await user.upload(fileInput, pdf);
-    // Also paste manual text to verify it's included in the multipart `text` field.
     await user.type(
       screen.getByLabelText(/bio \/ resume text/i),
       "manual bio text",

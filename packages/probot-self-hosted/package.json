@@ -1,0 +1,97 @@
+{
+  "name": "probot-self-hosted",
+  "version": "0.2.0",
+  "description": "Self-hosted ProBot chatbot as an npm package. Drop the <ProbotBot /> React component (or vanilla script) into any web app; configure persona, knowledge, provider, and (optionally) your ProBot dashboard token for analytics.",
+  "keywords": [
+    "probot",
+    "chatbot",
+    "self-hosted",
+    "ai",
+    "react",
+    "component",
+    "openai",
+    "anthropic"
+  ],
+  "homepage": "https://pro-bot.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vishalpatil18/probot.git",
+    "directory": "packages/probot-self-hosted"
+  },
+  "bugs": {
+    "url": "https://github.com/vishalpatil18/probot/issues"
+  },
+  "license": "MIT",
+  "author": "Vishal Patil",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "unpkg": "./dist/probot-self-hosted.iife.js",
+  "jsdelivr": "./dist/probot-self-hosted.iife.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./vanilla": {
+      "types": "./dist/vanilla.d.ts",
+      "import": "./dist/vanilla.mjs",
+      "require": "./dist/vanilla.cjs"
+    },
+    "./adapters/openai": {
+      "types": "./dist/adapters/openai.d.ts",
+      "import": "./dist/adapters/openai.mjs",
+      "require": "./dist/adapters/openai.cjs"
+    },
+    "./adapters/anthropic": {
+      "types": "./dist/adapters/anthropic.d.ts",
+      "import": "./dist/adapters/anthropic.mjs",
+      "require": "./dist/adapters/anthropic.cjs"
+    },
+    "./adapters/google": {
+      "types": "./dist/adapters/google.d.ts",
+      "import": "./dist/adapters/google.mjs",
+      "require": "./dist/adapters/google.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "node build.mjs"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.30",
+    "@google/generative-ai": ">=0.20",
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@google/generative-ai": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.6.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

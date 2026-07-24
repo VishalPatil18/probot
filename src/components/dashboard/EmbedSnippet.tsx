@@ -5,22 +5,6 @@ import { useState } from "react";
 
 import { CopyUrlButton } from "./CopyUrlButton";
 
-// Compact tabbed embed surface: one tab strip at the top, one visible
-// snippet panel below. Replaces the earlier vertically-stacked list of four
-// full cards - that stack was pushing the dashboard page taller than a
-// single viewport for most users; a tabbed shell keeps every option one
-// click away without adding scroll.
-//
-// Every snippet is rendered twice per tab:
-//   - `snippet` (raw text) is what the copy button writes to the clipboard.
-//   - `render` (tokenized JSX) is what the user sees - HTML tags coloured
-//     rose, attribute names sky, string values emerald, punctuation muted,
-//     URL parts split by scheme/host/path so the domain pops.
-// Keeping the two decoupled means the display can be pretty-printed
-// without forcing a multi-line paste on the user (though HTML ignores the
-// extra whitespace, so we opt into the multi-line copy for the embed and
-// signature specifically).
-
 type Props = {
   botId: string;
   username: string;
@@ -160,7 +144,6 @@ function SnippetPanel({
   snippet: string;
   render: ReactNode;
   copyLabel: string;
-  // Optional external link shown under the snippet (e.g. the npm package page).
   link?: { href: string; label: string };
 }) {
   return (
@@ -196,16 +179,6 @@ function SnippetPanel({
     </div>
   );
 }
-
-// --- token renderers ---
-//
-// Each helper splits its snippet into JSX spans and colours the pieces:
-//   - rose-300   → tag punctuation (<script, ></script>, <a, >, </a>)
-//   - sky-300    → attribute names + npm subcommand + URL host
-//   - emerald-300 → string values, package name, URL path
-//   - neutral-500 → equals sign + URL scheme
-// These match the palette used on Bot Factory Step 5 so the two surfaces
-// look like they belong to the same design system.
 
 function UrlTokens({ url }: { url: string }) {
   const m = url.match(/^(https?:\/\/)([^/]+)(\/.*)?$/);
@@ -254,10 +227,6 @@ function NpmTokens() {
   );
 }
 
-// The signature is a single anchor with four attributes; pretty-print with
-// one attr per line so the tokens read cleanly. Inline `style` is a long
-// CSS blob - split into `prop: value; prop: value; …` pairs so it's
-// scannable, still highlighting property names sky and values emerald.
 function SignatureTokens({
   username,
   themeColor,
@@ -320,10 +289,6 @@ function SignatureTokens({
   );
 }
 
-// Email-signature template. Hand-rolled HTML rather than a React render
-// because Gmail / Apple Mail / Outlook each have a different sanitizer
-// - only inline styles + anchor tags survive everywhere. The emoji is
-// a U+1F4AC speech-balloon (renders consistently across mail clients).
 export function signatureBadgeHtml(args: {
   username: string;
   themeColor: string;

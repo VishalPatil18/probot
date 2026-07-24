@@ -5,14 +5,6 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth/auth";
 import { listBotPresets, saveBotPreset } from "@/lib/bot-presets/service";
 
-// /api/bot-presets  (session-gated, per user)
-//
-// GET  - list the signed-in user's saved bot presets.
-// POST - save a new preset (name + an opaque settings snapshot).
-//
-// Presets are user-scoped configuration snapshots reused when creating a future
-// bot; they intentionally carry no secrets (no LLM key, no token).
-
 const saveSchema = z.object({
   name: z.string().trim().min(1).max(80),
   settings: z.record(z.string(), z.unknown()),

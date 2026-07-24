@@ -8,10 +8,6 @@ export const metadata: Metadata = {
   description: "Log in to manage your bot and leads.",
 };
 
-// LoginForm reads ?verify= and ?reset= via useSearchParams(). In Next.js 14
-// any client component reading useSearchParams() at the top of a route must
-// be wrapped in <Suspense> so SSG can prerender the shell while the search
-// params resolve on the client.
 export default function LoginPage() {
   return (
     <Suspense fallback={<LoginFormFallback />}>

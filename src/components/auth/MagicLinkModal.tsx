@@ -9,11 +9,6 @@ interface MagicLinkModalProps {
   initialEmail?: string;
 }
 
-// Magic-link sign-in as an in-place modal, opened from the OAuth row's
-// "Magic Link" button. Calls signIn("email", { redirect: false }) so the
-// NextAuth EmailProvider sends the link without navigating away, then shows an
-// in-modal confirmation. Closes on backdrop click, the × button, or Escape;
-// resets its state each time it opens.
 export function MagicLinkModal({
   open,
   onClose,

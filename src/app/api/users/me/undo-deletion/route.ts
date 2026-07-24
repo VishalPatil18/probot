@@ -3,18 +3,8 @@ import { z } from "zod";
 
 import { undoAccountDeletion } from "@/lib/account/delete";
 
-// POST /api/users/me/undo-deletion
-//
-// Cancel a pending account deletion. The user clicks the
-// link in the initiation email, lands on /undo-deletion, types their
-// username to confirm, and the form POSTs here. No session required - the
-// undo token is the authentication (it's emailed only to the account
-// owner). The typed-username re-check is the same defence-in-depth used
-// at delete-init time.
-
 const undoInput = z.object({
   token: z.string().min(32).max(128),
-  // Either the username or the account email confirms the undo.
   identifier: z.string().trim().min(1).max(255),
 });
 

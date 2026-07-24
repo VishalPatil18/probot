@@ -7,18 +7,7 @@ const DEFAULT_API_VERSION = "2025-01-01-preview";
 const DEFAULT_MAX_TOKENS = 500;
 const DEFAULT_TEMPERATURE = 0.3;
 
-// Azure OpenAI requires three runtime values beyond the API key:
-//   - endpoint: e.g. https://<resource>.cognitiveservices.azure.com
-//   - deployment: the deployment name (also used as `model` at request time)
-//   - apiVersion: e.g. 2025-01-01-preview
-//
-// `params.model` carries the deployment name; the route resolves it from
-// `users.llmModel` (Q1=a). `extras.endpoint` and `extras.apiVersion` come
-// from the chat request's custom headers (via the key-transport helpers).
-
 export const azureProvider: LLMProvider = {
-  // `defaultModel` is a placeholder; for Azure the user MUST supply their
-  // deployment name in the bot factory. We never call this default at runtime.
   defaultModel: "gpt-4o-mini",
   async complete(params: CompleteParams): Promise<CompleteResult> {
     const endpoint = params.extras?.endpoint;
@@ -26,9 +15,6 @@ export const azureProvider: LLMProvider = {
     const deployment = params.model;
 
     if (!endpoint || !deployment) {
-      // Caller didn't supply the Azure-specific config. Treat as a key issue
-      // (same UX bucket as a missing API key - both fail the same way in
-      // the chat UI: "your Azure setup is incomplete; check your settings").
       throw new ProviderError(
         "azure",
         "invalid_key",
@@ -82,8 +68,6 @@ function mapAzureError(err: unknown): ProviderError {
       return new ProviderError("azure", "rate_limit", "Azure rate limit hit");
     }
     if (err.status === 404) {
-      // 404 from Azure usually means a wrong deployment name or endpoint -
-      // surface as invalid_key so the UI prompts the user to recheck settings.
       return new ProviderError(
         "azure",
         "invalid_key",

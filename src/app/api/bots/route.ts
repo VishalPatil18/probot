@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -7,12 +7,6 @@ import { mintPreviewToken } from "@/lib/bots/preview-token";
 import { botInput } from "@/lib/bots/schemas";
 import { bots, db, users } from "@/lib/db";
 
-// New bots default to draft (is_active=false). The
-// creator gets a `previewUrl` that includes a signed preview token so they
-// can chat against the bot at `/u/<username>/chat?preview=<token>` before
-// flipping the live switch. Existing bots (one-bot-per-user model) keep
-// whatever isActive value they already have - this route only changes the
-// behaviour for net-new INSERTs.
 export async function POST(request: Request): Promise<Response> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -46,10 +40,15 @@ export async function POST(request: Request): Promise<Response> {
       .where(eq(users.id, userId));
 
     const existing = await tx.query.bots.findFirst({
-      where: eq(bots.userId, userId),
+      where: and(eq(bots.userId, userId), eq(bots.deploymentMode, "managed")),
     });
 
     if (existing) {
+      const nextPreviewToken =
+        existing.isActive
+          ? existing.previewToken
+          : (existing.previewToken ?? mintPreviewToken(existing.id, userId));
+
       const [updated] = await tx
         .update(bots)
         .set({
@@ -58,6 +57,7 @@ export async function POST(request: Request): Promise<Response> {
           personality: input.personality,
           contextText: input.contextText,
           suggestedQuestions: input.suggestedQuestions,
+          previewToken: nextPreviewToken,
           ...(input.contextTokenCap !== undefined
             ? { contextTokenCap: input.contextTokenCap }
             : {}),
@@ -87,10 +87,6 @@ export async function POST(request: Request): Promise<Response> {
         personality: input.personality,
         contextText: input.contextText,
         suggestedQuestions: input.suggestedQuestions,
-        // Explicit isActive=false so a future column default flip
-        // can't accidentally publish drafts. previewToken is minted from the
-        // brand-new bot id, then UPDATEd onto the same row in the next
-        // statement (we need the id before we can mint the token).
         isActive: false,
         ...(input.contextTokenCap !== undefined
           ? { contextTokenCap: input.contextTokenCap }

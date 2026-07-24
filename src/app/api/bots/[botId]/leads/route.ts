@@ -10,27 +10,8 @@ import { leadCaptureInput } from "@/lib/leads/schemas";
 import { parsePagination } from "@/lib/pagination";
 import { appBaseUrl } from "@/lib/uploads/image-upload";
 
-// /api/bots/[botId]/leads
-//
-// GET  (owner-gated, same-origin) - paginated lead list for the dashboard.
-// POST (public, CORS allow-list)   - chat-UI lead capture call.
-//
-// The POST handler is the only write surface that is anonymous +
-// cross-origin (the embeddable widget on a third-party site). It is
-// idempotent on (conversationId, lowercased email) so a double-submit
-// from the UI produces a single lead row + a single notification row.
-//
-// **No rate limiting yet** - explicit deferral to a later
-// Redis layer (per the original design Q2 lock). The 4 KB body cap, Zod
-// schema, idempotent dedupe, and 24h email-only window combine to make
-// raw brute-force noise expensive without rate-limit middleware. A spam
-// attack that cycles emails to defeat the dedupe still bounds at one DB
-// transaction per unique email per 24h window per bot - acceptable
-// for now; revisit if observed in practice.
-
 const MAX_BODY_BYTES = 4096;
 
-// Widget: CORS preflight. Returns 204 with the public allow-list.
 export function OPTIONS(): Response {
   return corsPreflight();
 }
@@ -60,14 +41,11 @@ export async function POST(
   request: Request,
   { params }: { params: { botId: string } },
 ): Promise<Response> {
-  // 1. Content-Type
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
     return jsonWithCors({ error: "unsupported_media_type" }, 415);
   }
 
-  // 2. Body read with size cap (the chat-route pattern: don't trust
-  // Content-Length, measure the read).
   const bodyText = await request.text();
   if (bodyText.length > MAX_BODY_BYTES) {
     return jsonWithCors({ error: "request_too_large" }, 413);
@@ -79,7 +57,6 @@ export async function POST(
     return jsonWithCors({ error: "invalid_json" }, 400);
   }
 
-  // 3. Zod validate (lowercases + trims email for idempotent dedupe key)
   const parsed = leadCaptureInput.safeParse(raw);
   if (!parsed.success) {
     return jsonWithCors(
@@ -90,8 +67,6 @@ export async function POST(
   const { name, email, company, linkedinUrl, conversationId, contextSummary } =
     parsed.data;
 
-  // 4. Resolve bot (anonymous endpoint - we need bot.user_id for the
-  // notification row + bot.name for the notification payload).
   const bot = await db.query.bots.findFirst({
     where: and(eq(bots.id, params.botId), eq(bots.isActive, true)),
     columns: { id: true, userId: true, name: true },
@@ -100,20 +75,11 @@ export async function POST(
     return jsonWithCors({ error: "bot_not_found" }, 404);
   }
 
-  // 5. Idempotent dedupe on (botId, conversationId, lowercased email).
-  // If the recruiter double-submits, we return the existing row + skip the
-  // second notification. Without a conversationId we still dedupe on
-  // (botId, email) within the last 24h to absorb the widget's double-
-  // click fallback when the conversation hasn't been established.
   const existing = await findExistingLead(bot.id, email, conversationId);
   if (existing) {
     return jsonWithCors({ lead: existing, deduped: true }, 200);
   }
 
-  // 6. Atomic write: lead + conversations.recruiter_email + notification.
-  // All three in one transaction so a partial commit can't (a) leave a
-  // lead with no notification (owner never sees it) or (b) increment the
-  // badge without a backing lead (broken click target).
   try {
     const result = await db.transaction(async (tx) => {
       const [lead] = await tx
@@ -169,8 +135,6 @@ export async function POST(
       return lead;
     });
 
-    // Best-effort owner email if opted in. Never blocks or fails the public
-    // lead-capture response on a Resend hiccup or missing config.
     try {
       const owner = await db.query.users.findFirst({
         where: eq(users.id, bot.userId),
@@ -195,9 +159,6 @@ export async function POST(
   }
 }
 
-// 24h window for the conversation-less dedupe fallback. Prevents a hostile
-// site from filling an owner's notification feed by hitting the endpoint
-// with the same email across many sessions.
 const DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 async function findExistingLead(

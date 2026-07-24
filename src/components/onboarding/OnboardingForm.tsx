@@ -9,11 +9,6 @@ type Props = {
   currentImage: string | null;
 };
 
-// Dual-field onboarding - username + avatar. The avatar grid shows
-// the 13 curated animal icons plus, when the user already has a non-animal
-// `users.image` (e.g. Google/GitHub photo from OAuth), that image as a first
-// "Keep current" card. Selecting an animal replaces the current image on
-// submit; selecting "Keep current" leaves it unchanged.
 export function OnboardingForm({ currentImage }: Props) {
   const router = useRouter();
   const hasExternalImage =
@@ -55,8 +50,6 @@ export function OnboardingForm({ currentImage }: Props) {
         );
         return;
       }
-      // Hard refresh because the session JWT carries the old username; a
-      // full reload re-mints the token on the next /dashboard navigation.
       window.location.href = "/dashboard";
     } catch {
       setError("Network error. Check your connection and try again.");

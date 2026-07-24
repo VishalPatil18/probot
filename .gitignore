@@ -3,6 +3,7 @@ node_modules/
 .pnp
 .pnp.js
 .yarn/install-state.gz
+.claude/
 
 # --- Next.js ---
 .next/
@@ -15,14 +16,25 @@ next-env.d.ts
 *.tsbuildinfo
 
 # --- Environment & secrets ---
-# Never commit API keys, DB URLs, or local LLM-provider keys.
+# Never commit API keys, DB URLs, or LLM-provider keys.
+# Blocks every dotenv variant at ANY depth in the repo, including
+# `manual-testing/*/.env*` where developers keep local OPENAI_API_KEY,
+# ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc. Template files
+# (`.env.example`, `.env.sample`, `.env.template`) stay allowed so a
+# fresh contributor knows which vars to set.
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+# Common non-dotenv secret containers.
 *.pem
 *.key
+*.p12
+*.pfx
+secrets.json
+credentials.json
+service-account*.json
 
 # --- Logs ---
 npm-debug.log*
@@ -37,7 +49,6 @@ logs/
 coverage/
 .nyc_output/
 *.lcov
-manual-testing/
 
 # --- Caches ---
 .cache/

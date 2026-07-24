@@ -1,0 +1,332 @@
+---
+title: Troubleshooting
+description: "Common integration issues with probot-self-hosted and their fixes, from silent widget non-rendering to dashboard analytics that never land. Organised by symptom."
+---
+
+Every issue below is grouped by the visible symptom. When multiple causes
+can trigger the same symptom, they're ordered most-common-first.
+
+## The widget doesn't render at all
+
+**Symptom.** You imported and mounted `<ProbotBot />` but nothing appears
+on the page - not even the floating bubble.
+
+### Cause 1: not inside a client component (Next.js App Router)
+
+`<ProbotBot />` uses React hooks and event handlers, so the containing
+file must start with `"use client";`.
+
+**Fix:**
+
+```tsx
+// components/BotWidget.tsx
+"use client";  // <-- required
+
+import { ProbotBot } from "probot-self-hosted";
+export function BotWidget() { /* ... */ }
+```
+
+If you mounted it directly inside a server component (like `app/page.tsx`
+without `"use client";`), Next.js silently drops the render.
+
+### Cause 2: React 18+ isn't in the dep tree
+
+The package's peer dependencies require `react >= 18` and
+`react-dom >= 18`. Older React ships without concurrent-mode APIs the
+package uses.
+
+**Fix:**
+
+```bash
+npm ls react react-dom
+# both should be >= 18.0.0
+```
+
+Upgrade if not: `npm i react@^18 react-dom@^18`.
+
+### Cause 3: CSS is overriding the widget
+
+The IIFE build injects its styles into `<head>` at mount time. If your
+site has a very aggressive `!important` reset (Tailwind's `preflight`
+plus a custom reset, for instance), it can obliterate the FAB.
+
+**Fix.** Open DevTools → Elements → find the `.probot-fab` element → check
+the computed styles. If your reset stripped position/width/height/z-index,
+add a scoping selector to your reset so `.probot-root *` is excluded, or
+raise the widget's z-index in your global CSS after import.
+
+### Cause 4: You mounted the vanilla IIFE at a selector that doesn't exist
+
+`ProbotSelfHosted.mount("#probot", …)` throws if `#probot` is missing.
+
+**Fix.** Check the browser console for
+`probot-self-hosted: target not found: #probot` and either add the target
+element to your HTML or move the `<script>` block to the bottom of `<body>`
+so it runs after the DOM is ready.
+
+## Every reply says "chat_failed"
+
+**Symptom.** The user types, the "thinking" bubble appears, then the
+assistant response is the literal string `chat_failed` or `llm_500`.
+
+### Cause 1: your `sendMessage` threw
+
+The widget renders whatever `sendMessage` throws as the assistant
+message. Open Network → your `/api/probot-chat` route → look at the
+response.
+
+Common patterns:
+
+- **`500 chat_failed` from your route** → the LLM provider returned an
+  error. Check server logs.
+- **`401` from the provider** → the API key env var is unset or wrong.
+- **`404 not_found` from the SPA host** → your dev proxy isn't
+  forwarding `/api/*` to the backend (Vite: check `vite.config.ts`
+  proxy; Next.js dev: check the route file path).
+
+**Fix.** Debug the proxy in isolation before touching the widget:
+
+```bash
+curl -s http://localhost:3000/api/probot-chat \
+  -H "content-type: application/json" \
+  -d '{"system":"Reply with the word OK.","messages":[{"role":"user","content":"hi"}]}' | jq
+```
+
+Once curl returns `{ "reply": "OK" }`, retry the widget.
+
+### Cause 2: your handler returns the wrong JSON shape
+
+The widget reads `data.reply` from the response. If your handler returns
+`{ "response": … }` or `{ "message": … }` or the LLM provider's raw
+`choices[0].message.content` shape, the widget sees `undefined` and
+throws.
+
+**Fix.** Return exactly `{ "reply": "…" }`:
+
+```ts
+return Response.json({ reply: theString });
+```
+
+### Cause 3: your handler streams instead of returning JSON
+
+If you set up SSE / chunked streaming but the widget is expecting
+non-streaming JSON, it will parse the first chunk as JSON, fail, and
+throw.
+
+**Fix.** Either switch the widget to a custom `sendMessage` that reads
+the stream (see [Next.js § streaming](/self-hosted-bot/nextjs#streaming-responses))
+or make the handler non-streaming.
+
+## Conversations don't appear in the dashboard
+
+**Symptom.** Your local chat works, but the dashboard's Conversations tab
+stays empty. Same for Leads.
+
+### Cause 1: you didn't pass `dashboard.token`
+
+Without a `dashboard` prop, the widget makes zero calls to
+`pro-bot.dev`. That's by design - dashboard analytics are opt-in.
+
+**Fix.**
+
+```tsx
+<ProbotBot
+  /* ... */
+  dashboard={{ token: process.env.NEXT_PUBLIC_PROBOT_TOKEN! }}
+/>
+```
+
+Confirm the env var is defined at build time - `console.log(process.env.NEXT_PUBLIC_PROBOT_TOKEN)`
+inside the client component should print `pbt_…`, not `undefined`.
+
+### Cause 2: the token is wrong or revoked
+
+The widget swallows analytics failures silently (they must never break
+chat). So a 401 from `/api/v1/bot/conversations` gives no visible
+symptom locally.
+
+**Fix.** Test the token directly:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  https://pro-bot.dev/api/v1/bot/conversations \
+  -H "Authorization: Bearer pbt_your_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+- `400` → token is valid; body validation failed as expected. ✓
+- `401` → token is unknown, revoked, or malformed. Regenerate.
+
+### Cause 3: prod build lost the env var
+
+`NEXT_PUBLIC_*` env vars must be defined at build time, not just runtime.
+If you set `NEXT_PUBLIC_PROBOT_TOKEN` on Vercel *after* the last build,
+existing bundles still have `undefined` inlined.
+
+**Fix.** Trigger a fresh build / redeploy after setting the env var.
+
+### Cause 4: CORS / firewall between your app and pro-bot.dev
+
+Vercel and other serverless hosts occasionally drop egress to third-party
+domains under strict outbound rules. Rarer but real.
+
+**Fix.** From your web app's runtime environment (a Vercel Function, an
+Express server, etc.) confirm you can reach `pro-bot.dev`:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://pro-bot.dev
+# Should return 200
+```
+
+If it fails, check your host's outbound network rules.
+
+### Cause 5: dashboard is caching a stale view
+
+The dashboard's analytics tabs poll rather than subscribe. New rows show
+up within a couple of seconds; if you don't see one after 30 seconds,
+it's not a caching issue.
+
+## `chat_failed` on some replies but not others
+
+Symptom: about half of replies work; the others crash with `chat_failed`.
+
+### Cause: the LLM's response exceeded `max_tokens`
+
+`createOpenAIHandler` sets `max_tokens: 1024` by default. Longer replies
+get truncated by the provider and can return odd payloads that break
+JSON parsing.
+
+**Fix.** Raise the ceiling or use `gpt-4o` (higher default max) instead
+of `gpt-4o-mini`:
+
+```ts
+const send = createOpenAIHandler({
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: "gpt-4o-mini",
+  maxTokens: 4096,   // <-- bumped
+});
+```
+
+Also consider tightening the system prompt with a `customInstructions` of
+`"Keep replies under 5 sentences."` so the model doesn't run away.
+
+## The LLM key appears in the browser bundle
+
+**Symptom.** Security scanner flags the key. DevTools → Sources shows
+`OPENAI_API_KEY = "sk-…"`.
+
+### Cause: you used `NEXT_PUBLIC_` (or Vite's `VITE_`) prefix on the key
+
+Anything with those prefixes is inlined into the client bundle by
+design.
+
+**Fix.**
+
+1. Remove the offending env var immediately.
+2. Rotate the key at your LLM provider - assume it's compromised.
+3. Set the un-prefixed version on the server only:
+
+    ```bash
+    # .env.local
+    OPENAI_API_KEY=sk-…        # server-only, no prefix
+    ```
+
+4. Call it from `app/api/probot-chat/route.ts` (Next.js) or your Express
+   handler - not from the React component.
+
+## The chat cuts off mid-reply on Vercel
+
+**Symptom.** Long LLM responses truncate after ~10 seconds. Vercel's
+Function logs show `Task timed out after 10.00 seconds`.
+
+### Cause: Vercel's Edge runtime has a short timeout budget
+
+The Edge runtime tops out at 25 seconds for Pro accounts, less for Hobby.
+The Node runtime is much more generous.
+
+**Fix.** Force Node in your route:
+
+```ts
+// app/api/probot-chat/route.ts
+export const runtime = "nodejs";
+```
+
+## The widget disappears after route change on my SPA
+
+**Symptom.** First render shows the widget; after a client-side
+navigation it vanishes.
+
+### Cause: the widget's parent unmounted and re-mounted, losing state
+
+Mount `<ProbotBot />` **once** at the layout level, not inside per-route
+components. That way a route change doesn't unmount it.
+
+**Fix (Next.js App Router):**
+
+```tsx
+// app/layout.tsx
+<body>
+  {children}
+  <BotWidget />   {/* mounted once at the root */}
+</body>
+```
+
+**Fix (Vite / React Router):** put `<BotWidget />` in your `App` (the
+outer shell), not inside a `Route`'s element.
+
+## Suggested-question chips render but clicking does nothing
+
+### Cause: your `sendMessage` throws synchronously
+
+`useProbotChat` treats `send()` as async and catches thrown errors, but
+if `sendMessage` synchronously throws before returning a promise, the
+click handler swallows it and nothing appears.
+
+**Fix.** Make sure `sendMessage` is `async`:
+
+```tsx
+sendMessage={async ({ system, messages }) => {
+  // …
+}}
+```
+
+## I want to migrate from the old cloned `probot-bot` runtime
+
+Earlier ProBot releases shipped a separate `probot-bot` Next.js runtime
+that you cloned into its own repo and deployed. That model is
+discontinued.
+
+**Migration steps:**
+
+1. `npm i probot-self-hosted` in your existing web app (not the runtime
+   repo).
+2. Move the LLM key env var from the old runtime's `.env` to your web
+   app's server-side env (Vercel dashboard, `.env.local`, whatever).
+3. Add the server-side chat proxy route to your web app.
+4. Add `<ProbotBot />` to your UI.
+5. Verify the widget works locally (curl the proxy, then click through
+   the widget).
+6. Point your domain from the old runtime to the new web app deployment.
+7. Your existing `pbt_…` tokens keep working - the platform still trusts
+   them for the `/api/v1/bot/{conversations,leads}` endpoints, no
+   re-mint needed.
+8. Once the new deployment is verified, decommission the old
+   `probot-bot` runtime + its DNS.
+
+The platform's old `/api/v1/bot/config` and `/api/v1/bot/knowledge`
+endpoints have been removed - if any tooling still POSTs to them,
+retire that tooling. The npm package doesn't call them either.
+
+## Still stuck?
+
+If nothing above matches, open an issue on the ProBot repo with:
+
+- The exact error text (from browser console + Network tab response
+  body).
+- A minimal repro: the `<ProbotBot />` prop set (redact tokens) + your
+  `sendMessage` implementation + your server proxy route.
+- Your framework + version (Next.js / Vite / plain HTML) + Node version.
+
+That set of information is almost always enough to reproduce and fix on
+our side.

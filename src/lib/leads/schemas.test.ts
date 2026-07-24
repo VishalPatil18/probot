@@ -15,7 +15,6 @@ describe("leadCaptureInput", () => {
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      // lowercased + trimmed → idempotent dedupe key
       expect(result.data.email).toBe("jane.doe@example.com");
     }
   });

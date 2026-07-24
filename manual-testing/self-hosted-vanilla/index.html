@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>probot-self-hosted · vanilla IIFE test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 720px;
+      margin: 3rem auto;
+      padding: 0 1rem;
+      color: #18181b;
+      line-height: 1.55;
+    }
+
+    code {
+      background: #f4f4f5;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 90%;
+    }
+
+    .hint {
+      color: #71717a;
+      font-size: 14px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>probot-self-hosted · vanilla IIFE test</h1>
+  <p>
+    Mounts <code>&lt;ProbotBot /&gt;</code> via the vanilla IIFE build. React
+    is bundled inside the script; the host page doesn't need to know about
+    React. The <code>sendMessage</code> is a local echo so no LLM is
+    required.
+  </p>
+  <p class="hint">
+    Verify: bubble bottom-right → dialog opens with the ringed avatar,
+    "Ada · AI Assistant" title, suggested chips → send a message → echo
+    reply appears with typing dots first.
+  </p>
+
+  <div id="root"></div>
+  <script src="./probot-self-hosted.iife.js"></script>
+  <script>
+    ProbotSelfHosted.mount("#root", {
+      name: "Ada",
+      headline: "Ask me about my work",
+      themeColor: "#7c5cff",
+      suggestedQuestions: [
+        "Who are you?",
+        "What projects have you built?",
+        "Are you open to new roles?"
+      ],
+      captureLead: true,
+      onLead: ({ email }) => console.log("onLead fired:", email),
+      sendMessage: async ({ messages }) => {
+        const last = messages[messages.length - 1]?.content ?? "";
+        await new Promise((r) => setTimeout(r, 400));
+        return `**Echo:** ${last}\n\n(This is the vanilla IIFE test — no real LLM is wired up. Wire \`sendMessage\` to your backend for a real chat.)`;
+      }
+    });
+  </script>
+</body>
+
+</html>

@@ -15,16 +15,6 @@ type Props = {
 
 const SAFE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// In-chat lead-capture card. Shown after the 3rd assistant
-// reply. Email validation mirrors the server-side Zod check; on Submit
-// POSTs to /api/bots/[botId]/leads with the conversationId (when
-// available) so the server can mark the conversation's recruiter_email
-// and create a notification atomically. On Skip, the parent persists
-// "dismissed" status so the card never reappears in this conversation.
-//
-// After Submit, the card switches to an inline "Thanks!" confirmation
-// that stays in the message stream rather than disappearing - the
-// recruiter sees the closure of the loop.
 export function LeadCaptureCard({
   botId,
   botName,

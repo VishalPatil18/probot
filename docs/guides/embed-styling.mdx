@@ -1,0 +1,150 @@
+---
+title: Styling the embed widget
+description: "What you can customize on the embeddable chat widget - and what you can't, thanks to Shadow DOM isolation."
+---
+
+The embed widget is deliberately hard to break by accident. It renders inside a **closed Shadow DOM**, which means the host page's CSS - however aggressive - cannot reach inside and change how the widget looks. That's the same feature that stops a poorly-written site stylesheet from shattering your bot's chat UI.
+
+The trade-off: normal "just override the CSS" recipes don't apply. Everything you can customize is exposed via **script-tag attributes** or **your bot's dashboard settings**.
+
+## What you can change today
+
+<CardGroup cols={2}>
+  <Card title="Theme color" icon="palette">
+    Drives the accent across every visible surface: header ring, send button, user bubbles, chips, loading dots.
+  </Card>
+  <Card title="Avatar" icon="user">
+    Bot picture shown on the header and beside each reply. Falls back to the ProBot mark tinted with the theme color.
+  </Card>
+  <Card title="Bot name & headline" icon="text-size">
+    Appear in the header once the widget hydrates.
+  </Card>
+  <Card title="Suggested questions" icon="list">
+    Up to five chips shown before the visitor asks their first question.
+  </Card>
+</CardGroup>
+
+All four live in **Dashboard → Bot settings**. Changes propagate to every embed of that bot within seconds (no rebuild, no re-embed).
+
+## Script-tag attributes
+
+The full embed contract is two attributes. Everything else is server-driven from the bot's dashboard settings.
+
+```html
+<script
+  src="https://pro-bot.dev/widget.js"
+  data-bot-id="00000000-0000-0000-0000-000000000000"
+  data-api-base="https://pro-bot.dev"
+  async
+></script>
+```
+
+| Attribute | Required | Purpose |
+| --- | --- | --- |
+| `data-bot-id` | yes | The bot's UUID - copy it from the dashboard's Embed panel. |
+| `data-api-base` | no | Override the backend URL (for a staging deployment or a self-managed mirror of pro-bot.dev). Must start with `http://` or `https://`. For a fully self-hosted bot inside your own web app, use the [`probot-self-hosted`](/self-hosted-bot/index) npm package instead. |
+
+## Recipes
+
+### Change the theme color
+
+Open **Dashboard → Bot settings → Theme color**. Pick a preset or a custom hex. The widget's `--probot-theme` CSS variable updates on the next render.
+
+<Info>
+  The theme color is the only chrome property you can flip without touching
+  code. Most requests for "custom CSS" boil down to "I want a different accent
+  color" - this covers it.
+</Info>
+
+### Send the widget at a staging backend
+
+For a staging or self-managed mirror of pro-bot.dev, point `data-api-base`
+at your host:
+
+```html
+<script
+  src="https://pro-bot.dev/widget.js"
+  data-bot-id="00000000-0000-0000-0000-000000000000"
+  data-api-base="https://probot-staging.example.com"
+  async
+></script>
+```
+
+The widget's UI is identical - only the chat endpoint changes. For a fully
+self-hosted bot embedded inside your own web app, use the
+[`probot-self-hosted`](/self-hosted-bot/index) npm package instead.
+
+### Position the widget on the page
+
+The widget mounts a `<div data-probot-widget>` at the end of `<body>`. The floating bubble inside it is `position: fixed`, pinned to `bottom: 20px; right: 20px` of the viewport. Because of Shadow DOM isolation, host CSS **cannot** reposition it from the outside.
+
+If you need it in a different corner, run a [custom widget build](#deep-customization) and change the `.probot-root` selector in `src/widget/widget.css`, or use the [`probot-self-hosted`](/self-hosted-bot/index) npm package which lets you render the chat wherever you like.
+
+## What host CSS cannot do
+
+These do **not** work, and understanding why saves you an afternoon of debugging:
+
+```css
+/* All of these are silently ignored */
+[data-probot-widget] .probot-bubble { background: hotpink !important; }
+[data-probot-widget] * { font-family: "Comic Sans MS"; }
+.probot-dialog { border-radius: 0 !important; }
+```
+
+The widget attaches its shadow root in **closed** mode - JavaScript on the host page can't reach into the shadow (`.shadowRoot` returns `null`), and CSS selectors don't cross the shadow boundary. This is by design: the widget looks the same on your carefully-crafted portfolio and on a Bootstrap-heavy blog that hasn't been touched since 2018.
+
+<Warning>
+  If you spot a stylesheet or Chrome extension that "gets in", it's almost
+  certainly modifying the outer `data-probot-widget` host element (which has no
+  visual style anyway) - not the widget interior. The chat itself is genuinely
+  unreachable from the host.
+</Warning>
+
+## Deep customization
+
+Two paths if the theme color + avatar aren't enough:
+
+### 1. Custom widget build
+
+Clone the repo, edit `src/widget/widget.css`, rebuild:
+
+```bash
+git clone https://github.com/vishalpatil18/probot.git
+cd probot
+# edit src/widget/widget.css
+npm run build:widget
+# public/widget.js is your custom bundle
+```
+
+Serve `public/widget.js` from your own domain and point the embed's `src` at it. You keep control of the dashboard-driven bits (theme color, avatar, etc.) - only the CSS diverges.
+
+### 2. Fork `probot-chatbot` on npm
+
+If you'd rather bundle the widget into a Vite/webpack/Next.js app, fork [`probot-chatbot`](https://www.npmjs.com/package/probot-chatbot), swap in your custom CSS at build time, and publish under a new name.
+
+Both paths let you reshape anything - fonts, sizes, corner radii, animation timing, dark mode - because you own the CSS that lands inside the shadow root. Just remember: the moment you fork, upstream widget updates stop reaching you automatically.
+
+## CSS variables (for forkers)
+
+If you self-host, these are the tokens `.probot-root` exposes at the top of `widget.css`. Overwrite them and every internal rule that uses `var(--probot-*)` re-tints together:
+
+```css
+.probot-root {
+  --probot-theme: #7c5cff;   /* accent - overridden per-bot from the dashboard */
+  --probot-text: #18181b;
+  --probot-muted: #71717a;
+  --probot-surface: #ffffff;
+  --probot-border: #e4e4e7;
+  --probot-bg-bot: #ffffff;
+  --probot-bg-page: #fafafa;
+  --probot-online: #10b981;
+}
+```
+
+Only `--probot-theme` is wired to a dashboard control today; the rest are static defaults that would require a widget rebuild to change.
+
+## Related
+
+- [Embed & share](/embed-share) - the two embed options and the npm package.
+- [Themes & avatar](/guides/themes-and-avatar) - the dashboard-driven identity controls.
+- [Self-hosted bot](/self-hosted-bot/index) - embed the chat directly in your own web app via the `probot-self-hosted` npm package.

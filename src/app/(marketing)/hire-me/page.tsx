@@ -8,10 +8,10 @@ export const metadata = buildMetadata({
   path: "/hire-me",
 });
 
-const PORTFOLIO_URL = "https://vishalpatil.vercel.app/";
+const PORTFOLIO_URL = "https://v-ai.org/";
 const GITHUB_URL = "https://github.com/VishalPatil18";
 const LINKEDIN_URL = "https://www.linkedin.com/in/vishalrameshpatil/";
-const EMAIL = "vishalpatil.imp@gmail.com";
+const EMAIL = "hire.vishalpatil@gmail.com";
 const CNBC_ARTICLE_URL =
   "https://www.cnbc.com/2026/04/30/these-2-job-seekers-built-ai-chatbots-to-talk-to-recruiters-for-them.html";
 
@@ -106,32 +106,32 @@ export default function HireMePage() {
           </p>
         </div>
 
-        <div className="mt-8 max-w-3xl flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-3 pt-2">
           <a
             href={PORTFOLIO_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-secondary !px-6 !py-3 !text-base"
+            className="btn btn-secondary"
           >
-            <Icon name="portfolio" className="text-red-600" />
+            <Icon name="portfolio" className="!text-base text-brand" />
             Portfolio
           </a>
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-secondary !px-6 !py-3 !text-base"
+            className="btn btn-secondary"
           >
-            <Icon name="github" className="text-gray-900" />
+            <Icon name="github" className="!text-base text-brand" />
             GitHub
           </a>
           <a
             href={LINKEDIN_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-secondary !px-6 !py-3 !text-base"
+            className="btn btn-secondary"
           >
-            <Icon name="linkedin" className="text-brand" />
+            <Icon name="linkedin" className="!text-base text-brand" />
             LinkedIn
           </a>
           <a

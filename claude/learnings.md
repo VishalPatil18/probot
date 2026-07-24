@@ -2004,3 +2004,144 @@ The heuristic that would have saved a build cycle: **grep the library source for
 
 The fix is either (a) a library with much smaller total surface (like `snarkdown` — 1 KB but allows raw HTML pass-through, an XSS problem) or (b) hand-rolling the subset you need. The ProBot widget went with (b) because the subset was small and the XSS risk had to be controlled anyway.
 
+### Self-hosted chatbot: npm package vs cloned runtime
+
+> Why scrap the "clone a repo and deploy a runtime" model in favor of an npm package? What are the tradeoffs?
+
+The original self-host story was a separate Next.js app (`probot-bot/`) that the developer cloned, configured with env vars (`PROBOT_BOT_TOKEN`, `PROBOT_API_URL`, `OPENAI_API_KEY`), and deployed to their own domain. The runtime authenticated to the platform over `/api/v1/bot/{config,knowledge,conversations,leads}` — the platform kept the persona and knowledge; the runtime kept the LLM key and orchestrated the LLM call.
+
+That model has three friction points that motivate the npm-package rewrite:
+
+1. **Two deploys instead of one.** Every persona tweak needed a redeploy of the cloned runtime, even though the change lived in the platform's dashboard. Devs end up copy-pasting env vars around; junior devs leak keys in front-end bundles.
+2. **Divided ownership of the config surface.** Persona lived on pro-bot.dev, LLM key lived in the runtime env, embed styling lived in yet a third place. Nobody could reason about the whole thing at once.
+3. **Platform stays in the chat critical path.** Every visitor message hit `/api/v1/bot/knowledge` before the runtime could reply. A platform outage broke self-hosted bots too — the exact opposite of "self-hosted" ownership.
+
+The npm package (`probot-self-hosted`) collapses those:
+
+- **One deploy.** `npm i probot-self-hosted`, render `<ProbotBot />`, ship your app. Persona / knowledge / theme are props in your codebase, version-controlled next to everything else.
+- **One trust boundary.** The LLM key lives in the developer's own backend (behind a `sendMessage` proxy or the `createOpenAIHandler` server helper). The platform's role shrinks to accepting analytics writes on two endpoints.
+- **Platform is never in the chat critical path.** If pro-bot.dev is down, the widget still answers; only the async fire-and-forget "report this conversation to the dashboard" calls fail.
+
+**Cost of the trade.** The package can't ship a "no code required" story — you have to wire a `sendMessage` and a server-side route. That is the correct floor: browser-only self-host is inherently unsafe (LLM keys shouldn't live in bundles), so the API surface makes the safe path the default and the unsafe path unrepresentable, not just discouraged in docs.
+
+**Concrete example.** For a Next.js App Router site:
+
+```ts
+// app/api/probot-chat/route.ts — server-only, holds the LLM key
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+const send = createOpenAIHandler({
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: "gpt-4o-mini",
+});
+export async function POST(req: Request) {
+  const { system, messages } = await req.json();
+  return Response.json({ reply: await send({ system, messages }) });
+}
+```
+
+```tsx
+// app/layout.tsx — client, no LLM key anywhere
+"use client";
+import { ProbotBot } from "probot-self-hosted";
+
+<ProbotBot
+  name="Ada"
+  context="…your knowledge…"
+  sendMessage={async ({ system, messages }) => {
+    const res = await fetch("/api/probot-chat", {
+      method: "POST",
+      body: JSON.stringify({ system, messages }),
+    });
+    return (await res.json()).reply;
+  }}
+  dashboard={{ token: process.env.NEXT_PUBLIC_PROBOT_TOKEN! }}
+/>;
+```
+
+The `dashboard.token` is intentionally public-safe: a leaked `pbt_…` can only write conversation/lead analytics for one bot and is revocable in one click from **Settings → Deployment**. The LLM API key never appears in a client bundle.
+
+**IIFE / script-tag path.** For pages without a bundler, esbuild emits a self-contained `dist/probot-self-hosted.iife.js` that bundles React and exposes `window.ProbotSelfHosted.mount(el, config)`. Same `sendMessage` contract — the server-side proxy stays exactly the same regardless of whether the client is React or plain HTML.
+
+### Deployment-mode as a birth attribute (not a runtime toggle)
+
+> Why make `deployment_mode` non-switchable after bot creation?
+
+Managed and self-hosted bots live in different worlds: managed bots have a persona editor, a knowledge base, an envelope-encrypted LLM key, and a public `/u/<username>/chat` URL. Self-hosted bots have none of those — the whole config lives in the developer's code, and the platform only stores tokens + analytics.
+
+If we let owners flip the mode after creation:
+
+- Flipping managed → self-hosted leaves an orphaned envelope-encrypted key row, orphaned knowledge chunks, and a `/u/<username>/chat` URL that suddenly 404s. The dashboard would need to keep showing all those tabs anyway (in case they flip back), so the UI never simplifies.
+- Flipping self-hosted → managed asks the platform to conjure a persona / knowledge / provider config out of thin air, or to force the owner through Bot Factory a second time.
+
+Both directions have a "what do we do with the old state" problem that adds complexity every consumer has to reason about. Making mode a birth attribute means:
+
+- The dashboard tab strip is a pure function of the mode. Self-hosted → `['deploy','account','security']`. Managed → `['bot','kb','model','deploy','account','security']`. No conditional rendering inside a tab, no "is this tab meaningful for this mode" logic scattered across components.
+- The upsert in `/api/bots` and the "load my existing bot" query in `/dashboard/bots/new` scope to `AND deployment_mode='managed'` — one clause each, no runtime coordination between the endpoints.
+- The API surface is smaller: no `PATCH /deployment` route to authorize, no state-machine to test, no "what happens if a token exists on a bot that's currently managed" edge case.
+
+**Cost of the trade.** A user who registered a self-hosted bot but wants managed has to delete + recreate. That's a rare operation (people generally know which path they want before creation), and the simplicity elsewhere pays for it many times over. The `RegisterSelfHostedForm` copy also makes it very clear that the choice is at creation — nobody accidentally locks themselves in.
+
+**Related pattern.** This is the same reasoning as making auth provider (email/password vs OAuth) a birth attribute in NextAuth: switching later requires either data loss or a complex merge, and users almost never actually want to. Cheaper to enforce the invariant at creation than to build the flip.
+
+### Scoping upserts by a discriminator column
+
+> Why does the Bot Factory upsert now say `AND deployment_mode = 'managed'`?
+
+Before this change, `/api/bots` POST did an upsert with `WHERE user_id = ?` — implicit "one bot per user". Once self-hosted bots share the same `bots` table with `deployment_mode` as the discriminator, that lookup becomes ambiguous: a user with both a managed bot and a self-hosted bot could have Bot Factory silently overwrite the wrong row's name / persona / theme.
+
+The fix is one line: `AND deployment_mode = 'managed'`. Same shape at `/dashboard/bots/new/page.tsx` where the server component loads the existing bot to hydrate the wizard.
+
+**General rule.** When a table starts hosting rows for two different flows via a discriminator column, every query that assumes "single row per parent FK" needs to add the discriminator to its `WHERE` — otherwise cross-flow interference is a matter of when, not if. Grep the codebase for `.findFirst({ where: eq(bots.userId, ...) })` (and equivalents) as a starter checklist; any that model a per-user singleton for a specific flow need the extra clause.
+
+This is a variant of the "polymorphic table" antipattern: if you find yourself doing this in more than two or three places, split the tables. Two flows sharing a table is fine; five flows sharing a table is the pattern telling you it wants to be normalized.
+
+### Two LLM key stores: browser-local vs. server-managed
+
+> Why does a managed bot answer fine on `/u/<username>/chat` but the embed widget says "the owner needs to save an AI key"?
+
+The same bot has two independent places its API key can live, and the two chat surfaces read from different ones — so one working never implies the other does.
+
+**Browser-local store.** The owner's key is kept in *their* browser only, in an encrypted IndexedDB store (`src/lib/client/llm-key-store.ts`, AES-256-GCM via Web Crypto, migrated off plaintext localStorage). `ChatWindow` reads it with `getApiKey()` and attaches it as the `x-llm-api-key` **header** on every `POST /api/chat/[botId]`. The key never travels in a JSON body and is never round-tripped through a ProBot endpoint. This is why the internal chat page works for the owner: it's *their* browser supplying the credential. Anyone else's browser — or the owner on a different machine — has an empty store and would fail the same way the widget does.
+
+**Server-managed store.** For the embeddable widget there is no owner browser in the loop: `widget.js` runs on a stranger's site (janedoe.com) and sends **no** key header. So the chat route falls to the managed path — `resolveProviderAndKey` looks up `encrypted_llm_keys` by `botId`, envelope-decrypts it (per-row DEK wrapped by a KEK), and uses that. Resolution priority is: **header key > managed key > fail** (`missing_llm_key`, 400). The widget renders that 400 as the friendly "owner needs to save an AI key" line.
+
+The managed row is populated by a **separate, explicit action** — the Managed-key panel in Settings → AI Model & Key, which POSTs the plaintext straight into server-side envelope encryption (`POST /api/bots/[botId]/llm-key`). Saving the key locally (onboarding / Bot Factory step 4) does **not** create the managed row; the two are decoupled on purpose so a creator can test locally without ever exposing a managed key, and can revoke the managed key (deleting the row) without losing their local one.
+
+**The design's own guard rail.** `POST /api/bots/[botId]/publish` refuses to activate a managed-mode bot with no `encrypted_llm_keys` row (`needs_managed_key`, 400), precisely because the embed would 400 on every visitor. Exemptions: `ollama` owners (the adapter uses a placeholder key) and `self_hosted` bots (their chat runs entirely in the consumer's own webapp and never hits this endpoint). So an *active* managed bot with no managed key is an anomaly — it means it reached `is_active = true` by a path that skipped the guard (provider was ollama at publish time, draft preview-token access, or predating the guard), not that the embed is broken.
+
+**General rule.** When one credential can be provisioned through two decoupled channels (a per-device local store and a shared server store), "it works for me" is never evidence the shared path is provisioned. Trace which store each caller actually reads before concluding a bug exists; the fix is usually a missing provisioning step, not a code change.
+
+
+### Multi-secret providers break single-secret assumptions (the Azure managed-path bug)
+
+> Why did the embed widget fail for an Azure bot even though the encrypted key WAS stored server-side?
+
+Most LLM providers authenticate with exactly one secret: the API key. The managed-key design (envelope-encrypt one string per bot) was built around that shape. Azure OpenAI is a *multi-value* credential: key + resource endpoint + API version (+ deployment name, which lives in `users.llmModel`). The original code "solved" this by refusing Azure on the managed path entirely — but the store endpoint (`POST /llm-key`) still *accepted* Azure keys, the publish guard only checked row-presence, and the dashboard banner did the same. Result: every surface an owner could see said "configured", and the only surface a *visitor* hit said `missing_llm_key`. A consistency bug across four call sites, not a single broken function.
+
+**The fix pattern: split config from secret.** Only the API key is secret; the endpoint and API version are deployment *configuration* — they appear in every request URL and are useless without the key. So they land as plaintext columns (`azure_endpoint`, `azure_api_version`) on the same `encrypted_llm_keys` row, while the key alone stays envelope-encrypted. This keeps the crypto surface minimal (no re-encryption schema, no JSON-blob payload versioning) and lets the chat pipeline read config without a decrypt.
+
+**General rule.** When a feature gate exists because "provider X needs more fields," the honest options are: (a) store the extra fields and lift the gate, or (b) enforce the gate at *every* surface — store-time, publish-time, warning banners, and serve-time — so the owner learns at save, not when a visitor's request fails. A gate enforced only at serve-time, with store-time acceptance, is a lie the UI tells the owner.
+
+### Version your migration journal (Drizzle meta) or db:generate will snapshot-reset
+
+> Why did `npm run db:generate` produce a full-schema `0000_` migration instead of a two-line ALTER?
+
+Drizzle-kit decides "what changed" by diffing `schema.ts` against the last snapshot in `drizzle/meta/`. The journal (`_journal.json`) and snapshots were in `.gitignore`, so on any machine that didn't run the original generates, `drizzle/meta/` simply doesn't exist — and drizzle-kit treats the project as brand new: it emits a full-schema `CREATE TABLE IF NOT EXISTS` snapshot as migration `0000`. Applying it against an existing database is *silently useless*: `IF NOT EXISTS` no-ops on every existing table, so new COLUMNS inside those CREATE statements never land, while the migrations bookkeeping table happily records the file as applied.
+
+**Recovery recipe** (works when the live DB already matches the pre-change schema): delete the rogue snapshot file + its row in `drizzle.__drizzle_migrations`; revert the schema change; `db:generate` a clean baseline and `db:migrate` it (no-op apply, marks the baseline); re-apply the schema change; `db:generate` again — now you get the real incremental `ALTER TABLE`; migrate. Old migration files become orphaned history (the fresh journal doesn't know them) — harmless, but they no longer participate in bootstrap.
+
+**General rule.** `drizzle/meta/` is not build output — it is the *source of truth for diffing* and must be committed, same as the `.sql` files. Gitignoring it converts every fresh clone into a snapshot-reset landmine.
+
+### Vitest: clearAllMocks leaks unconsumed mockResolvedValueOnce queues
+
+> Why did a spec see `provider: "azure"` when its own mock said `anthropic`?
+
+`vi.clearAllMocks()` clears call history but NOT the one-shot implementation queue. If spec A queues `findUserMock.mockResolvedValueOnce({llmProvider: "azure"})` and the code under test short-circuits *before* consuming it (e.g. zod validation fails first), that queued value survives into spec B — whose own `mockResolvedValueOnce` lands *behind* it in the queue. Use `vi.resetAllMocks()` in `beforeEach` and re-establish default implementations after it (in Vitest 2.x, `mockReset` also wipes the implementation passed to `vi.fn(impl)`, so factories like `insertMock` need explicit `mockImplementation` in the `beforeEach`).
+
+### Removing a union member: let the compiler enumerate the blast radius
+
+> What's the safest order of operations for ripping a provider out of a TypeScript codebase?
+
+Delete the member from the *narrowest* type first — here, `"ollama"` from the `ProviderName` union — then run `tsc --noEmit` and treat the error list as the authoritative to-do list. Every `providerName === "ollama"` comparison becomes TS2367 ("no overlap"), every `Record<ProviderName, …>` with a leftover key becomes TS2322, every import of the deleted module becomes TS2307. This beats grep-driven removal because the compiler finds *semantic* dependents (exhaustive Records, switch arms, type-level usage) that a string search can miss, and it can't produce false positives in comments or docs. Grep still matters afterwards — but only for the things the compiler can't see: prose docs, JSON configs, test fixtures typed as `string`, and HTTP header names.
+
+One trap: `Record<ProviderName, T>` initializers with the removed key *fail*, but a `ReadonlySet<ProviderName>` built from a literal array fails too (the array's inferred union no longer assigns) — while a plain `string[]` list of provider names sails through silently. Any provider list typed looser than `ProviderName` is invisible to this technique; keep such lists typed against the union precisely so removals surface at compile time.

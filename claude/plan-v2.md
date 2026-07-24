@@ -212,6 +212,119 @@
 
 **Depends on:** the feedback button modal landing first.
 
+### User testimonial capture + landing-page waterfall
+
+**Today:** No structured way to collect user testimonials. The landing page has no social-proof section beyond the demo video.
+
+**v2.0 scope:**
+
+- **Nudge cadence.** Three trigger points inside the dashboard shell, gated so a dismissed nudge doesn't come back for the same trigger:
+  1. **T0 - first publish:** a post-publish toast appears the moment the bot flips to live (Bot Factory step 5 or `POST /publish` from settings). Copy: "Congrats on going live! Care to share how ProBot helped?"
+  2. **T1 - "used the bot for a while":** fires when the bot has crossed a lightweight activity threshold (e.g. `conversations.total >= 5` OR `leads.total >= 1`, whichever comes first). Evaluated on dashboard-page render, cached in a `user_nudges` row so repeat renders don't re-check.
+  3. **T2 - one-week active user:** fires when `now() - users.created_at >= 7 days` AND the user has at least one live bot.
+- **Modal / drawer form.** Opened from the nudge or from a persistent "Share your story" link in Settings → Account. Fields:
+  - `name` (required, max 80 chars)
+  - `linkedinUrl` (required, `https://linkedin.com/in/...` regex, max 200 chars)
+  - `email` (optional, max 200 chars, only used for follow-up)
+  - `feedback` textarea (required, **max 500 chars** with live counter)
+  - `displayAsTestimonial` boolean (default: unchecked). Copy: "Show my name and feedback on the ProBot landing page as a testimonial."
+- **Storage.** New `user_testimonials` table:
+  - `id` UUID PK
+  - `user_id` FK -> `users.id` (nullable so a user can delete their account without deleting the testimonial they already agreed to publish; row is anonymized on account deletion)
+  - `display_name` VARCHAR(80)
+  - `linkedin_url` VARCHAR(200)
+  - `email` VARCHAR(200) NULL
+  - `feedback_text` VARCHAR(500)
+  - `display_as_testimonial` BOOLEAN NOT NULL DEFAULT false
+  - `moderation_status` VARCHAR(16) NOT NULL DEFAULT 'pending' - `pending | approved | rejected`
+  - `created_at`, `updated_at`
+  - Partial index `(moderation_status = 'approved' AND display_as_testimonial = true)` powers the landing-page query in one seek.
+- **Moderation.** Operator dashboard row lists pending testimonials with Approve / Reject / view LinkedIn. Only `approved` + `display_as_testimonial = true` rows are ever rendered publicly.
+- **Landing-page section.** New `<TestimonialsWaterfall />` client component under the demo video:
+  - Server component fetches the top ~24 approved testimonials.
+  - Client renders them as staggered cards falling in a waterfall using **`framer-motion`** (`motion.div` with `initial={{ y: -200, opacity: 0 }}` -> `animate={{ y: 0, opacity: 1 }}` staggered via `useAnimationControls` + `staggerChildren`). Smooth spring physics, respects `prefers-reduced-motion` (renders static grid when set).
+  - Card content: `display_name`, `feedback_text`, small LinkedIn icon linking to `linkedin_url`. No email displayed ever.
+  - Infinite loop of 3-4 rows at different speeds to keep the section visually alive; new visitor scroll-into-view triggers a re-animation.
+- **Nudge state.** New `user_nudges` table (or JSONB column on `users`) tracking `{ nudgeKey, shownAt, dismissedAt, completed }` so a user who says "not now" at T1 doesn't re-see the same nudge on next login, but still sees T2 when it fires.
+- **API:**
+  - `POST /api/testimonials` - authenticated create (validates + rate-limits per user)
+  - `PATCH /api/testimonials/:id` - author-scoped edit (before approval only)
+  - `POST /api/testimonials/:id/moderate` - operator-only approve/reject
+  - `GET /api/testimonials/public` - anonymous read for the landing page (cache for 5 min)
+  - `POST /api/nudges/:key/dismiss` - dismiss a specific nudge
+
+**Acceptance:**
+
+- A published-bot owner sees the T0 toast within 2 seconds of `POST /publish` succeeding.
+- Submitting a testimonial with `displayAsTestimonial=true` lands in the operator inbox; approving it makes it appear on `pro-bot.dev/` within the 5-minute cache window.
+- Submitting with `displayAsTestimonial=false` never surfaces publicly; the row is kept for internal review only.
+- The waterfall animation runs at 60fps on a mid-range laptop and reduces to a static grid under `prefers-reduced-motion`.
+
+**Risks:**
+
+- **Spam / fake testimonials.** Mitigation: signed-in-only submission + operator moderation gate before any public display + LinkedIn URL required (adds signal even before we validate it).
+- **Nudge fatigue.** Mitigation: 3 nudges MAX per account for this flow; each dismissible; "already submitted" state permanently silences future nudges.
+- **Landing-page performance.** `framer-motion` is ~20 KB gzipped; the testimonials query hits a partial index. Both acceptable; measure LCP after landing.
+- **Account-deletion coupling.** A user who published a testimonial then deletes their account: null the FK, keep the row (they consented to public display), display name kept as-is. Documented in the delete flow so this is explicit, not a surprise.
+
+**Depends on:** the feedback button modal is NOT a hard dependency (separate DB table, separate UI surface). This ships independently.
+
+### First-run walkthrough (spotlight tour)
+
+**Today:** New users land on the dashboard with no guidance. The nudge-based dashboard walkthrough item in the roadmap is a placeholder without shape.
+
+**v2.0 scope:**
+
+- **6-step spotlight tour** covering: (1) sidebar bot switcher + "Create bot", (2) Bot Factory entry point, (3) Bot Configuration → Knowledge base, (4) Bot Configuration → AI Model & Key, (5) public URL + embed snippet on the share card, (6) notifications inbox.
+- **Spotlight interaction pattern.** A full-viewport backdrop (`rgba(0,0,0,0.72)`) covers everything except the currently-highlighted element, cut out via an SVG `mask` (radial gradient with soft edge) or a CSS `clip-path` computed from the target's `getBoundingClientRect()`. The highlighted element remains fully interactive so a user can click through it to see the real behavior.
+- **Copy card.** Anchored to the highlighted element with a keep-in-viewport algorithm (Popper.js-style: try positions `bottom > top > right > left`, pick the first that fits with a 16 px margin). Contents: step index (`3 of 6`), a title, a two-line description, a handwritten arrow pointing at the target, and a **Next** button. Step 6's button reads **Finish**.
+- **Skippable.** A **Skip tour** button pinned to the top-right of the viewport (fixed positioning, above the backdrop). Skipping records `skipped_at` so we never re-prompt the same user on the same tour version.
+- **Handwritten aesthetic.** Cards render in a hand-drawn feel: `font-family: "Kalam"` or `"Caveman Chalk"` (self-hosted, subset - 15 KB gzipped max), slightly-rotated card body (`rotate(-1deg)`), chalky border via `filter: url(#chalk-turbulence)` (SVG `<feTurbulence>` + `<feDisplacementMap>` primitive). Arrows are SVG paths generated live with a "roughness" tuning knob (`rough.js` library, ~9 KB gzipped) so no two runs look mechanically identical.
+- **Responsive.** On viewports narrower than 640 px, the spotlight collapses to a bottom-sheet card that still highlights the target with a pulsing outline (rather than a mask - full-viewport masking is fiddly on small screens with soft keyboards). Sheet is dismissible via swipe-down + explicit Skip button.
+- **Content-driven** (no code change to update copy or step order). Steps live in `src/lib/walkthrough/tours/<persona>.ts` as an array:
+  ```ts
+  export const DEFAULT_TOUR: TourStep[] = [
+    { id: "sidebar-switcher", selector: "[data-tour='bot-switcher']",
+      titleKey: "tour.sidebar.title", bodyKey: "tour.sidebar.body",
+      arrowStyle: "curly-down", side: "auto" },
+    // ...5 more
+  ];
+  ```
+  The `data-tour="…"` attribute is the only piece of DOM the tour code touches; content lives in i18n message catalogs.
+- **i18n-ready.** All copy references `next-intl` message keys (`tour.<step>.title`, `.body`). Fallback locale is `en`; per-locale JSON under `src/messages/<locale>.json`. Arrow/spotlight geometry is language-agnostic; card grows/shrinks with the translated text.
+- **Persona-customizable.** Tour selection at runtime keyed off a `persona` column on `users` (nullable; default `default`). Personas: `default | recruiter | portfolio | ecommerce`. Each ships its own `tours/<persona>.ts` file selecting different sections + wording. Onboarding step 2 asks "What are you here to build?" and stores the answer.
+- **Analytics.** Every step transition emits an event:
+  ```ts
+  track("walkthrough.step_view", { tourId, persona, stepId, stepIndex, elapsedMs });
+  track("walkthrough.step_next", { tourId, persona, stepId, stepIndex });
+  track("walkthrough.skipped", { tourId, persona, stepId, stepIndex });
+  track("walkthrough.completed", { tourId, persona, elapsedMs });
+  ```
+  Behind a thin `analytics.ts` shim so PostHog / Plausible / Segment / a no-op stub can all be plugged in without touching tour code.
+- **State.** New `user_walkthroughs` table:
+  - `user_id` (FK, cascade) + `tour_id` VARCHAR(40) as composite PK
+  - `started_at`, `completed_at`, `skipped_at` (nullable), `last_step_index`, `tour_version` INT
+  - Bumping `tour_version` when the tour content materially changes re-eligible the user for a fresh run (`completed_at` from a stale version doesn't gate a new one).
+- **First-render trigger.** Dashboard layout server-checks `user_walkthroughs` for the current `tour_version`; missing row + no `dismissed_at` on the persona pref = mount `<Walkthrough tour={...} />` client component. Mount is deferred to `requestIdleCallback` so the dashboard's own render isn't blocked.
+
+**Acceptance:**
+
+- A brand-new user lands on `/dashboard`, sees the spotlight over the sidebar bot switcher within 1 s, and can walk through all 6 steps in <90 s.
+- Clicking Skip anywhere records the skip event + hides the tour permanently for that `tour_version`.
+- Editing `src/lib/walkthrough/tours/default.ts` or the i18n JSON updates the live tour without any code change to the walkthrough runtime.
+- Adding `es.json` alongside `en.json` produces a fully-translated Spanish tour with no runtime changes.
+- On a 375 px viewport, the tour renders as a bottom sheet, target still highlighted, all 6 steps completable.
+- `walkthrough.step_view` events fire in Segment/PostHog and can be aggregated into a completion funnel.
+
+**Risks:**
+
+- **Layout drift.** DOM refactors that change the target `data-tour` attribute values silently break the tour (spotlight misses, arrow points at nothing). Mitigation: a Playwright smoke test asserts every `TourStep.selector` in `default.ts` matches a real element in the seeded-dashboard state; runs in CI.
+- **Font weight.** A handwritten webfont adds ~15 KB gzipped even after subsetting; only loaded on the dashboard shell, not the public chat/embed. `font-display: swap` so the tour never blocks first paint.
+- **`rough.js` bundle.** ~9 KB gzipped; consider tree-shakeable dynamic `import()` so the tour code splits and only loads when the walkthrough actually mounts (first-run + reopened from Help menu).
+- **Focus trap accessibility.** Screen readers need clean semantics. Card is `role="dialog" aria-labelledby=…`; the highlighted target is described via `aria-describedby` pointing at the tour card. `Escape` skips. Reduced-motion disables the arrow-jitter animations.
+
+**Depends on:** `data-tour="…"` attributes need to be sprinkled on the 6 target elements before the tour runtime lands. That's a mechanical pre-req PR, safe to ship in v1.5 or as the tour's first commit.
+
 ---
 
 ## P3 - Small cleanup

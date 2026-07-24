@@ -22,10 +22,6 @@ function fmtFull(d: Date): string {
   });
 }
 
-// Defense-in-depth: emails are Zod-validated at lead-capture time, but a
-// future schema drift or direct-DB write must not let a malformed value
-// flow into a mailto: href that a screen reader announces or a click
-// follows. The regex matches the same plain shape Zod uses.
 const SAFE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function safeMailtoHref(email: string | null | undefined): string | null {
   if (!email || !SAFE_EMAIL.test(email)) return null;

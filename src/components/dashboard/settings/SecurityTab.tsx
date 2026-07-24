@@ -1,21 +1,39 @@
-import {
-  MAX_CHARS_DEFAULT,
-  PER_DAY_DEFAULT,
-  PER_MINUTE_DEFAULT,
-} from "@/lib/ai/rate-limit";
-
+import { DataActions } from "./DataActions";
 import { SecurityActions } from "./SecurityActions";
-
-// Security & privacy tab. Rate-limit values come straight
-// from the live rate limiter so the display reflects whatever env
-// overrides the deployment uses. Export and Delete-account are now live;
-// the conversation-retention row is still a display-only value (operator
-// configures via env when self-hosting).
 
 interface Props {
   username: string;
   pendingDeletion: { scheduledPurgeAt: string } | null;
 }
+
+interface ExportChoice {
+  scope: "bots" | "knowledge" | "conversations" | "leads" | "all";
+  label: string;
+  description: string;
+}
+
+const EXPORTS: ExportChoice[] = [
+  {
+    scope: "bots",
+    label: "Bots",
+    description: "Bot config: name, persona, theme, custom instructions.",
+  },
+  {
+    scope: "knowledge",
+    label: "Knowledge",
+    description: "Every knowledge base chunk grouped by bot.",
+  },
+  {
+    scope: "conversations",
+    label: "Conversations",
+    description: "Full conversation transcripts (users + assistant turns).",
+  },
+  {
+    scope: "leads",
+    label: "Leads",
+    description: "Every recruiter lead captured across all bots.",
+  },
+];
 
 export function SecurityTab({ username, pendingDeletion }: Props) {
   return (
@@ -29,22 +47,48 @@ export function SecurityTab({ username, pendingDeletion }: Props) {
           self-hosting.
         </p>
         <div className="divide-y divide-border-base">
-          <div className="flex items-center justify-between gap-4 py-3">
-            <div>
-              <p className="text-sm font-medium">Export my data</p>
-              <p className="text-xs text-muted">
-                Download a JSON of every row associated with your account (bots,
-                knowledge, conversations, leads).
-              </p>
+          <div className="py-3">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Export my data</p>
+                <p className="text-xs text-muted">
+                  Download a JSON of a single category, or the whole account.
+                </p>
+              </div>
+              <a
+                href="/api/users/me/export?scope=all"
+                download
+                className="btn btn-primary !py-2 text-xs"
+              >
+                Export all
+              </a>
             </div>
-            <a
-              href="/api/users/me/export"
-              download
-              className="btn btn-secondary !py-2 text-xs"
-            >
-              Export
-            </a>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {EXPORTS.map((choice) => (
+                <div
+                  key={choice.scope}
+                  className="flex items-start justify-between gap-3 rounded-xl border border-border-base bg-bg-app p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">{choice.label}</p>
+                    <p className="text-[11px] text-muted">
+                      {choice.description}
+                    </p>
+                  </div>
+                  <a
+                    href={`/api/users/me/export?scope=${choice.scope}`}
+                    download
+                    className="shrink-0 rounded-lg border border-border-base bg-white px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-neutral-50"
+                  >
+                    Export
+                  </a>
+                </div>
+              ))}
+            </div>
           </div>
+
+          <DataActions username={username} />
+
           <div className="flex items-center justify-between gap-4 py-3">
             <div>
               <p className="text-sm font-medium">Conversation retention</p>
@@ -60,26 +104,6 @@ export function SecurityTab({ username, pendingDeletion }: Props) {
       </section>
 
       <SecurityActions username={username} pendingDeletion={pendingDeletion} />
-    </div>
-  );
-}
-
-function LimitCard({
-  value,
-  suffix,
-  label,
-}: {
-  value: number | string;
-  suffix: string;
-  label: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border-base bg-bg-app p-4">
-      <p className="font-display text-2xl font-extrabold">
-        {value}
-        <span className="text-sm text-muted">{suffix}</span>
-      </p>
-      <p className="mt-1 text-xs text-muted">{label}</p>
     </div>
   );
 }

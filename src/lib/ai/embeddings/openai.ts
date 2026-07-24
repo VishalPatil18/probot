@@ -3,16 +3,9 @@ import OpenAI, { APIError } from "openai";
 import type { EmbedParams, EmbeddingProvider } from "./types";
 import { EmbeddingError } from "./types";
 
-// `text-embedding-3-large` truncated to 1536 dims via the API's `dimensions`
-// parameter (Matryoshka representation). Per OpenAI's MTEB benchmark, this
-// scores ~63.3 vs the same model at full 3072 dims (~64.6) and beats
-// `text-embedding-3-small` at 1536 dims (~62.3). Cuts pgvector column storage
-// and HNSW build cost in half versus the full-dim variant.
 export const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large";
 export const DEFAULT_EMBEDDING_DIMENSIONS = 1536;
 
-// OpenAI's embeddings API accepts up to 2048 inputs per request. We stay well
-// below that for predictable latency and to keep memory bounded.
 const BATCH_SIZE = 96;
 
 export const openaiEmbedder: EmbeddingProvider = {

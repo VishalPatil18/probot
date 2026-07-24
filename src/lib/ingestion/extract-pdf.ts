@@ -1,15 +1,10 @@
 import { MAX_PDF_BYTES, MAX_PDF_FILES, PDF_MIME_TYPE } from "./constants";
 import { IngestionError } from "./errors";
 
-// Re-export so existing server-side callers keep working.
 export { MAX_PDF_BYTES, MAX_PDF_FILES, PDF_MIME_TYPE };
 
-const PDF_MAGIC = "%PDF-"; // first 5 bytes of a valid PDF
+const PDF_MAGIC = "%PDF-";
 
-// Dynamic import path bypasses pdf-parse@1.1.1's package entrypoint, which
-// runs demo code at module load that tries to read a bundled fixture and
-// crashes on Next.js bundling. Importing the lib file directly is the
-// well-documented workaround.
 type PdfParseFn = (
   data: Buffer,
   opts?: { max?: number },
@@ -25,11 +20,6 @@ async function loadPdfParse(): Promise<PdfParseFn> {
   return cachedPdfParse;
 }
 
-// Extracts plain text from a PDF buffer. Throws:
-//   - IngestionError("invalid_file_type") if the buffer is not a PDF (magic check)
-//   - IngestionError("file_too_large") if it exceeds MAX_PDF_BYTES
-//   - IngestionError("pdf_unreadable") if pdf-parse rejects (encrypted, corrupt)
-//   - IngestionError("empty_extract") if extraction yields no text
 export async function extractPdfText(buffer: Buffer): Promise<string> {
   if (buffer.length === 0) {
     throw new IngestionError("invalid_file_type", "Empty buffer");

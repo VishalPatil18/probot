@@ -1,35 +1,3 @@
-// Circuit breaker for provider calls, backed by a pluggable store.
-//
-// State machine (per provider name):
-//
-//   closed ───[N consecutive failures]──> open
-//     ▲                                     │
-//     │                                     │ [resetTimeoutMs elapsed]
-//     │                                     ▼
-//     └────[half-open probe succeeds]──── half-open
-//             [half-open probe fails]
-//                       │
-//                       ▼
-//                     open
-//
-// - `closed`: calls flow through. Consecutive failures get counted; a success
-//   resets the failure count to zero.
-// - `open`: every call rejects immediately with `circuit_open` without touching
-//   the provider. Stays in `open` until `resetTimeoutMs` elapses.
-// - `half-open`: the very next call after the cooldown is allowed through as a
-//   probe. Success closes the circuit; failure re-opens it. Concurrent calls
-//   during `half-open` beyond the probe count are rejected with `circuit_open`.
-//
-// Storage:
-//   - In-memory (default): per-process Map. Vercel/serverless cold starts bound
-//     memory and a fresh process resets the breaker - acceptable for a single
-//     instance whose upstream recovers in minutes.
-//   - Upstash Redis (opt-in): the entry is a JSON blob with a TTL, so an outage
-//     that trips one instance is seen by every other instance. The load/save
-//     cycle is best-effort atomic - a rare interleaving may double-count a
-//     failure, harmless for a fail-fast optimization (not a security control).
-//     Trade-off: ~2 Redis round-trips per call when Redis is enabled.
-
 import { ProviderError } from "@/lib/ai/providers";
 import { getRedisClient, type RedisLike } from "@/lib/store/redis";
 
@@ -39,8 +7,6 @@ export interface CircuitBreakerOptions {
   failureThreshold: number;
   resetTimeoutMs: number;
   halfOpenMaxCalls: number;
-  // Fired once when a failure transitions the circuit into `open`. Used to
-  // raise an operational alert at the start of a provider outage.
   onOpen?: (name: string) => void;
 }
 
@@ -53,7 +19,7 @@ const DEFAULT_OPTIONS: Required<Omit<CircuitBreakerOptions, "onOpen">> = {
 export interface BreakerEntry {
   state: CircuitState;
   failures: number;
-  openedAt: number; // ms epoch, valid only when state === "open" or "half-open"
+  openedAt: number;
   halfOpenInFlight: number;
 }
 
@@ -61,15 +27,11 @@ function freshEntry(): BreakerEntry {
   return { state: "closed", failures: 0, openedAt: 0, halfOpenInFlight: 0 };
 }
 
-// Backing store contract. `load` returns the current entry (or a fresh closed
-// one); `save` persists it with a TTL so idle entries self-expire.
 export interface BreakerStore {
   load(name: string): Promise<BreakerEntry>;
   save(name: string, entry: BreakerEntry, ttlMs: number): Promise<void>;
   reset(name?: string): Promise<void>;
 }
-
-// ---- In-memory store (default) -------------------------------------------
 
 class MemoryBreakerStore implements BreakerStore {
   private readonly entries = new Map<string, BreakerEntry>();
@@ -96,8 +58,6 @@ class MemoryBreakerStore implements BreakerStore {
     return this.entries.get(name)?.state ?? "closed";
   }
 }
-
-// ---- Redis store (opt-in) -------------------------------------------------
 
 class RedisBreakerStore implements BreakerStore {
   constructor(private readonly redis: RedisLike) {}
@@ -129,13 +89,9 @@ class RedisBreakerStore implements BreakerStore {
   }
 
   async reset(name?: string): Promise<void> {
-    // A nameless reset (clear-all) is a test-only affordance; in production we
-    // don't scan and delete every breaker key.
     if (name) await this.redis.del(this.key(name));
   }
 }
-
-// ---- Store selection ------------------------------------------------------
 
 const memoryStore = new MemoryBreakerStore();
 
@@ -145,8 +101,6 @@ function getStore(): BreakerStore {
 }
 
 function ttlFor(options: { resetTimeoutMs: number }): number {
-  // Keep an entry well past one reset cycle so a flapping provider's state
-  // survives between calls, but let it self-expire once truly idle.
   return Math.max(options.resetTimeoutMs * 2, 60_000);
 }
 
@@ -156,8 +110,6 @@ export async function getCircuitState(name: string): Promise<CircuitState> {
   return (await store.load(name)).state;
 }
 
-// Force-reset for tests AND for an operator hotfix path (e.g. a known-bad
-// breaker entry blocking a recovered provider).
 export async function __resetCircuit(name?: string): Promise<void> {
   await getStore().reset(name);
 }
@@ -175,7 +127,6 @@ function closeCircuit(entry: BreakerEntry): void {
   entry.halfOpenInFlight = 0;
 }
 
-// Mutates `entry`; returns true if this failure transitioned it into `open`.
 function recordFailure(
   entry: BreakerEntry,
   options: { failureThreshold: number },
@@ -183,7 +134,6 @@ function recordFailure(
 ): boolean {
   const wasOpen = entry.state === "open";
   entry.failures += 1;
-  // A failure during half-open immediately re-opens the circuit.
   if (entry.state === "half-open") {
     openCircuit(entry, now);
     return !wasOpen;
@@ -207,8 +157,6 @@ export async function callWithBreaker<T>(
   const now = Date.now();
 
   if (entry.state === "open") {
-    // Move into half-open once the cooldown has elapsed. The transition is
-    // lazy (no timer): it's evaluated on the next attempted call.
     if (now - entry.openedAt >= options.resetTimeoutMs) {
       entry.state = "half-open";
       entry.halfOpenInFlight = 0;
@@ -219,8 +167,6 @@ export async function callWithBreaker<T>(
 
   if (entry.state === "half-open") {
     if (entry.halfOpenInFlight >= options.halfOpenMaxCalls) {
-      // Only N probe(s) allowed at a time. The rest fail-fast so the probe
-      // gets to determine the new state cleanly.
       throw new ProviderError(name as never, "unknown", "circuit_open");
     }
     entry.halfOpenInFlight += 1;

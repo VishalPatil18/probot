@@ -1,11 +1,3 @@
-// Server component - renders the bot owner's avatar, name, and headline
-// above the chat window on the public /u/[username]/chat page.
-//
-// The photo is either the OAuth-provided users.image (Google /
-// GitHub avatar) or a Cloudinary-hosted animal icon auto-assigned at signup.
-// No fallback `<img>` element is needed because users.image is always
-// populated by the NextAuth adapter + register route.
-
 type Props = {
   name: string;
   headline: string | null;
@@ -16,10 +8,6 @@ export function OwnerCard({ name, headline, image }: Props) {
   return (
     <header className="flex items-center gap-4 rounded-2xl border border-border-base bg-white p-5 shadow-sm">
       {image ? (
-        // Plain <img> instead of next/image because the remote host is
-        // Cloudinary (allowlist already added to next.config.js) and we want
-        // the chat page to render even if the image CDN is degraded - alt
-        // text + bg color carry the fallback.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={image}

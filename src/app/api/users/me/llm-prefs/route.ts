@@ -7,17 +7,6 @@ import { PROVIDER_NAMES, type ProviderName } from "@/lib/ai/providers";
 import { authOptions } from "@/lib/auth/auth";
 import { db, users } from "@/lib/db";
 
-// PATCH /api/users/me/llm-prefs
-//
-// Backs the dashboard's provider/model switcher. Only
-// non-sensitive preference columns (llmProvider, llmModel) are touched.
-// The actual API key never goes through this endpoint; it lives either in
-// the user's browser (self-host) or in encrypted_llm_keys per bot (managed).
-//
-// Mass-assignment safety: Zod schema explicitly whitelists only the two
-// pref columns, so a hostile client cannot mass-assign email_verified,
-// hashed_password, etc.
-
 const llmPrefsInput = z
   .object({
     llmProvider: z

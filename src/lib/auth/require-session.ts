@@ -3,9 +3,6 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth/auth";
 
-// Parallel to `requireBotOwner` but for session-only routes (notifications,
-// account-scoped operations). Returns a discriminated union so the caller
-// can `return result.response` on failure without exception detour.
 export type RequireSessionResult =
   | { ok: true; userId: string; username: string }
   | { ok: false; response: NextResponse };

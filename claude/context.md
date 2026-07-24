@@ -3529,3 +3529,318 @@ _Tests + types:_
 - No CI. Add `.github/workflows/build.yml` running `npm run build` + `npx tsc --noEmit` per PR before the repo goes public.
 - Lead-capture UI isn't ported (deployed page has a `LeadCaptureCard` triggered by conversation heuristics). The runtime posts leads via `postLead()` but nothing calls it yet. Add if operators start asking.
 - Docs URL in `SetupNeeded` + README points at `https://pro-bot.dev/docs/self-hosted-bot/quickstart` — that path exists under `/docs/self-hosted-bot/`. Verify the specific `/quickstart` slug (or update to `/self-hosted-bot/index`) before the repo goes public.
+
+---
+
+### 2026-07-06 - Embed widget: drop black/white spotlight border animation
+
+**What was asked to do:** Remove the black-and-white rotating border animation from the widget bubble icon.
+
+**What I did:**
+- Deleted the `.probot-bubble::before` rule in `src/widget/widget.css` (the conic-gradient spotlight ring masked with `mask-composite: exclude`).
+- Deleted the `@keyframes probot-spin` block — no other consumer (grep confirmed).
+- Removed `.probot-bubble::before` from the `@media (prefers-reduced-motion: reduce)` selector list since the pseudo-element is gone.
+- Rebuilt `public/widget.js` via `npm run build:widget` (26.18 KB, under budget).
+
+**Files changed:**
+- `src/widget/widget.css` — update — dropped `::before` ring, `probot-spin` keyframes, reduced-motion reference.
+- `public/widget.js` — update — rebuilt bundle.
+
+**Decisions made:**
+- **Kept `probot-glow` and `probot-pulse`.** User only asked to remove the black/white *border* animation — the box-shadow glow on the bubble and SVG scale pulse are separate effects. Left them intact per §3 (surgical changes).
+- **Removed keyframes too, not just the selector.** `probot-spin` was solely used by `::before`. Leaving orphan keyframes would be dead CSS.
+
+**Open questions / follow-ups:**
+- None. Visual verification in browser is on the user (widget is rendered via shadow DOM on the host site).
+
+---
+
+### 2026-07-06 - Embed widget: clearer error copy + owner-side "missing managed key" warning
+
+**What was asked to do:** Debug session traced the CodeSandbox embed's "I can't answer here right now" reply to `POST /api/chat/[botId]` returning `400 {"error":"missing_llm_key"}` — the widget never sends `x-llm-api-key` (by design, embed = managed-key path), and the bot's owner had no row in `encrypted_llm_keys`. Two follow-ups approved: (1) surface a clearer error in the widget, (2) warn the owner in the dashboard when embed is enabled but no managed key is stored.
+
+**What I did:**
+- **Widget (`src/widget/widget.ts`):** in `send()`, replaced the single generic 400/500 message with a `readErrorCode(res)` + `messageForErrorCode(code)` pair. The mapping distinguishes setup problems (`missing_llm_key`, `managed_key_provider_mismatch`) from operational blips (`managed_storage_unavailable`, `provider_unavailable`); anything unrecognized falls back to the prior copy. Both helpers live at module scope right above `wireChat` so they stay unit-testable in isolation later.
+- **Dashboard (`src/app/(dashboard)/dashboard/page.tsx`):** added a parallel read alongside the existing analytics fetches — `db.query.users.findFirst({ columns: { llmProvider: true } })` for the owner's provider + `db.query.encryptedLlmKeys.findFirst({ where: eq(botId, selectedBot.id) })` for the stored managed key. Computes `embedNeedsKeySetup = provider !== "ollama" && !storedKey`. When true, a compact amber banner renders inside the "Share your bot" card above `<EmbedSnippet>`, linking to `/dashboard/bots/[botId]/settings?tab=model` (same route the sidebar's `modelHref` uses).
+- Rebuilt `public/widget.js` — 26.83 KB (up from 26.18 KB, well under the 50 KB budget).
+
+**Files changed:**
+- `src/widget/widget.ts` — update — `readErrorCode` + `messageForErrorCode` helpers; `send()` uses them on non-2xx.
+- `src/app/(dashboard)/dashboard/page.tsx` — update — parallel provider + managed-key lookup, amber warning banner in Share-your-bot card.
+- `public/widget.js` — update — rebuilt bundle.
+
+**Decisions made:**
+- **Kept the generic fallback copy for unknown codes.** Server may add new error codes later; falling back to "I can't answer here right now. Try the full chat linked below." preserves existing UX for anything the widget doesn't yet recognize.
+- **`missing_llm_key` copy names the owner, not the visitor.** The visitor can't fix it, but stating the cause ("its owner needs to save an AI key") is honest — the alternative (silent "try again later") hides a real setup gap that persists across every visit until fixed. Doesn't leak any secret: the bot's failure to answer already telegraphs "something's wrong."
+- **Ollama excluded from the warning.** The chat pipeline treats `provider === "ollama"` as a legitimate "no key needed" path (uses the `"ollama"` placeholder). Warning an Ollama-provider owner would be a false positive.
+- **`llm-key` existence check via a lightweight `findFirst` with `columns: { botId: true }`.** Avoids decrypting or transporting the ciphertext just to test for row presence — the dashboard page is server-rendered on every visit, so keeping this fast matters.
+- **Banner rendered inside the Share card, not sitewide.** The failure mode is scoped to the embed surface; broadcasting it in a topbar toast would be noise for creators who share via the /u/ URL and don't care about the widget.
+
+**Verification:**
+- `npx tsc --noEmit` → 0 errors.
+- `npm run build:widget` → 26.83 KB.
+- Widget test file (`src/widget/widget.test.ts`) has no assertion on the specific error copy in `send()` today (only the mount-time 500 case, which is unaffected), so no test churn needed.
+
+**Open questions / follow-ups:**
+- Could add a `wireChat`-level unit test that stubs `fetch` to return `400 {"error":"missing_llm_key"}` and asserts the visitor-facing string. Skipped for now (§3 surgical) — the current test suite doesn't exercise `wireChat`, so setting it up would grow the scope beyond the bug the user hit.
+- The warning banner assumes the owner's `users.llmProvider` reflects the intended embed provider. If the owner later adds per-bot provider override (currently a single owner-level column), the check needs to shift to that source.
+
+---
+
+### 2026-07-06 - Managed vs self-hosted key: happy-path wiring in Bot Factory + publish guard
+
+**What was asked to do:** Take the "embed can't answer questions" bug all the way to a production-grade happy path. Two acceptable safe options for the LLM key (visitor's browser must never see it): **Managed** — envelope-encrypted in `encrypted_llm_keys`, server unwraps per chat request; **Self-hosted** — key lives as `LLM_API_KEY` on the owner's own `probot-bot` runtime. On Bot Factory publish, if managed mode + non-Ollama + no stored key, refuse rather than let a broken bot go live. Managed is default. **Explicitly pushed back on the user's original ask** to fetch the plaintext key from the DB into the embed / bundle it as an env var into the widget script — both would leak the owner's key to every visitor.
+
+**What I did:**
+- **Bot Factory Step 4 (`StepAIModel.tsx`):** added a "Runtime" section above the provider grid — two pressed-state radio buttons ("Managed by ProBot" default / "Self-hosted"), each with copy explaining where the key ends up. When self-hosted is chosen, the API-key input hides entirely and the info panel copy swaps to point at Settings → Deployment + `LLM_API_KEY`.
+- **`FormState` (`types.ts`) + `initialBot`:** added `deploymentMode: "managed" | "self_hosted"` (optional on `InitialBot`). Wizard defaults to `"managed"`, but honors an existing bot's `bots.deployment_mode` when the user re-enters the wizard on the same row.
+- **Bot creation API (`src/lib/bots/schemas.ts` + `src/app/api/bots/route.ts`):** `botInput` gains an optional `deploymentMode` enum. Both the INSERT and the update-existing branches conditionally set the column; when omitted, the DB default ("managed") stands.
+- **Step-4 validation (`stepIsValid`):** self-hosted branch relaxes the API-key/endpoint requirements — the owner supplies those on their own runtime. Only `llmModel` (or Azure) still needs to be set so the dashboard + embed metadata stay coherent.
+- **Auto-store key on submit (`BotFactoryForm.submit`):** after `POST /api/bots` returns the new `botId`, if `deploymentMode === "managed"` AND provider ≠ ollama AND `apiKey.length >= 8`, the wizard immediately `POST`s to `/api/bots/[botId]/llm-key`. Non-fatal — on failure we set an inline error telling the owner to go to Settings and store the key before publishing, but the draft is preserved so no work is lost.
+- **Publish guard (`src/app/api/bots/[botId]/publish/route.ts`):** before flipping `is_active=true`, look up `bots.deployment_mode`; if not `self_hosted`, look up owner's `users.llm_provider`; if not `ollama`, look up `encrypted_llm_keys` by `bot_id`. If none stored → `400 {"error":"needs_managed_key", "message":"…"}`. `BotFactoryForm.publish()` was updated to surface `body.message` (falls back to `body.error`, then generic copy) so the wizard shows the actionable text inline.
+
+**Files changed:**
+- `src/components/bot-factory/types.ts` — update — added `deploymentMode` to `FormState` and optional `deploymentMode` to `InitialBot`.
+- `src/components/bot-factory/BotFactoryForm.tsx` — update — initial state seeded from `initialBot?.deploymentMode`, `deploymentMode` included in the `POST /api/bots` body, auto-store call to `/llm-key`, `publish()` reads `body.message`.
+- `src/components/bot-factory/steps/StepAIModel.tsx` — update — Runtime radio group + conditional info panel + `!selfHosted` guard on the API-key input.
+- `src/lib/bots/schemas.ts` — update — `botInput` gains optional `deploymentMode` enum.
+- `src/app/api/bots/route.ts` — update — sets `deploymentMode` on both INSERT and UPDATE paths.
+- `src/app/api/bots/[botId]/publish/route.ts` — update — `needs_managed_key` guard before publishing.
+- `src/app/(dashboard)/dashboard/bots/new/page.tsx` — update — passes `existing.deploymentMode` into `initialBot` so the wizard preserves an owner's earlier Deploy-tab choice.
+
+**Decisions made:**
+- **Refused the "widget fetches key from DB" and "env var baked into embed" designs.** Both would send the plaintext key to every visitor. Reframed as: Path A key stays in `encrypted_llm_keys` (never leaves the server); Path B key lives on the owner's *own* server via `LLM_API_KEY`. This preserves the invariant that the visitor's browser never touches the LLM API key.
+- **Publish guard refuses instead of warning.** Alternative was "publish anyway, warn the owner." Refusing prevents the exact bug that started this session — a live embed that 400s every question. The owner sees a specific reason and a next step, so the failure is educational rather than opaque.
+- **Auto-store is non-fatal.** If `POST /llm-key` fails on wizard submit (KEK unavailable, transient network error), the bot still saves as a draft. Alternative: block bot creation. Would strand a creator who paused to fix their key setup — worse UX than "your bot is saved as a draft; store the key before publishing."
+- **Ollama exempt from the guard.** The chat pipeline treats `provider === "ollama"` as "no key needed" (adapter uses a placeholder string). Blocking publish on missing key would false-positive every Ollama bot.
+- **Self-hosted branch only checks `llmModel`.** The endpoint/API-key/base-URL fields become owner-runtime concerns; validating them here would falsely block a self-hoster who plans to fill them in on their own deployment.
+- **Deploy tab (`DeployTab.tsx`) untouched.** It already has a managed/self_hosted toggle and mints bot tokens. Its behavior is orthogonal to the wizard-time picker — the wizard sets the initial value, the Deploy tab lets the owner change it later. Same column, no duplication.
+
+**Verification:**
+- `npx tsc --noEmit` → 0 errors.
+- No existing test files reference the publish endpoint or `deploymentMode` in the Bot Factory paths; existing `POST /api/bots` tests use `validBody` (no `deploymentMode`), which passes because the field is optional.
+- Widget bundle not rebuilt — no changes to `src/widget/`. The visitor-facing `missing_llm_key` copy landed in the previous session and continues to apply.
+
+**Open questions / follow-ups:**
+- No unit test yet for the publish guard's `needs_managed_key` branch. Worth adding when the next batch of API tests lands — mock `db.query.encryptedLlmKeys.findFirst` to return undefined, hit `POST /publish`, assert 400 + code.
+- Self-hosted docs page (`docs/self-hosted-bot/`) doesn't yet mention the wizard-time toggle or the `needs_managed_key` publish error. Update alongside the next docs batch (Mintlify-managed, separate cadence).
+- The "auto-store failed" inline error currently reads as one long line; if the Step 5 layout can't accommodate that string it may want a dedicated warning panel similar to `IngestFailuresPanel`. Punting — the wording is short enough (~2 lines).
+- Dashboard "Share your bot" warning banner from the previous session and this session's publish guard now overlap — both signal "no managed key stored." Kept both intentional: the banner alerts the owner even for an unpublished bot, while the guard is the hard stop at publish time. If it turns noisy in real use, the banner could hide when `!isActive`.
+
+---
+
+### 2026-07-06 - Docs: embed widget styling guide
+
+**What was asked to do:** Add a docs page covering how to customize the embed chatbot's CSS.
+
+**What I did:**
+- Wrote `docs/guides/embed-styling.mdx`. Structure: honest framing of the Shadow-DOM `mode: "closed"` isolation up top → what can be changed today (theme color / avatar / name / suggested questions, all dashboard-driven) → the two script-tag attributes (`data-bot-id`, `data-api-base`) → recipes for the common asks (change color, swap backend, why-you-can't-reposition-from-host-CSS) → escape hatches (self-host the widget bundle, fork `probot-chatbot` on npm) → the `--probot-*` CSS variable list from `widget.css` for anyone who does fork.
+- Added `guides/embed-styling` to the "Guides" group in `docs/docs.json` right after `embed-share`.
+
+**Files changed:**
+- `docs/guides/embed-styling.mdx` — create.
+- `docs/docs.json` — update — one nav entry.
+
+**Decisions made:**
+- **Leaned into the constraint, not around it.** The widget uses `attachShadow({ mode: "closed" })`. Host CSS genuinely cannot reach inside. Rather than invent "override with `!important`" recipes that would silently fail, the guide states this up front and directs would-be customizers to the honest paths (dashboard settings or fork).
+- **Did not invent new script-tag attributes.** Only `data-bot-id` and `data-api-base` exist today (per `readScriptConfig` in `widget.ts`). Documenting a hypothetical `data-position` or `data-theme` would be aspirational vaporware.
+- **Called out the CSS variables from `widget.css`.** Only `--probot-theme` is dashboard-wired; the rest are static defaults. Anyone who forks the CSS knows exactly which tokens re-tint together vs which require a per-selector rewrite.
+- **Cross-linked to `themes-and-avatar`, `embed-share`, `self-hosted-bot`.** Keeps the page short — it points at the existing pages for the dashboard controls and the backend-swap flow.
+
+**Open questions / follow-ups:**
+- If we later expose more script-tag attributes (e.g. `data-position`, `data-launcher-icon`, `data-hide-on-mobile`), extend the "Script-tag attributes" table.
+- If we ever ship a themeable variant (open Shadow DOM with a documented CSS API), rewrite the "What host CSS cannot do" section rather than adding contradictory advice around it.
+- The MDX uses `<CardGroup>` / `<Card>` / `<Info>` / `<Warning>` components — they're already used elsewhere in the docs so no import changes needed. If Mintlify's card grid changes shape, the top block may need re-layout.
+
+### 2026-07-06 — Self-hosted bot rewritten as `probot-self-hosted` npm package (scraps the clone-a-runtime model)
+
+**Prompt.** Kill the "clone `probot-bot/` and deploy a separate Next.js app" story. Replace with an npm package the developer installs in their own webapp; all bot config lives in code; LLM key never touches pro-bot.dev; dashboard is optional and read-only for self-hosted bots (analytics only). Bot Factory becomes managed-only; self-hosted bots are created through a dedicated minimal register flow reachable from the sidebar bot switcher.
+
+**Files touched.**
+- `packages/probot-self-hosted/{package.json, tsconfig.json, build.mjs, README.md, LICENSE, src/index.ts, src/types.ts, src/prompt.ts, src/ProbotBot.tsx, src/vanilla.ts, src/hooks/useProbotChat.ts, src/adapters/openai.ts, src/adapters/dashboard.ts}` — CREATE new npm package. React `<ProbotBot />` component with self-contained styles, headless `useProbotChat` hook, `createOpenAIHandler` server-only helper, `reportConversation` / `reportLead` dashboard adapters, IIFE vanilla mount built via esbuild (ESM + CJS + IIFE + `.d.ts` outputs; React as peer dep for module builds, bundled into the IIFE).
+- `probot-bot/` — DELETE (entire folder: `next.config.mjs`, `app/`, `lib/platform.ts`, `README.md`, `package.json`, `tsconfig.json`, `.env.example`). Cloned-runtime story is gone.
+- `src/app/api/v1/bot/config/` + `src/app/api/v1/bot/knowledge/` — DELETE (routes + tests). Config and knowledge live inside the consumer's webapp now; only `/api/v1/bot/{conversations,leads}` remain, both write-only analytics endpoints.
+- `src/app/api/bots/[botId]/deployment/route.ts` — DELETE. Deployment mode is decided at creation and is not switchable at runtime.
+- `src/app/api/bots/self-hosted/route.ts` — CREATE. Session-gated POST; validates name + optional headline + token label; INSERT a `bots` row with `deployment_mode='self_hosted'` + `isActive=true` + empty context; mints the initial `pbt_…` token via `mintBotToken`; returns `{ bot: { id, name, headline }, token: { id, rawToken } }` with 201. Raw token shown exactly once.
+- `src/app/(dashboard)/dashboard/bots/new-self-hosted/{page.tsx, RegisterSelfHostedForm.tsx}` — CREATE. Server component gates auth then renders the client form. On success shows the raw token once inside a "Copy your token now" panel + Copy + "Open dashboard" button routing to Settings → Deployment.
+- `src/components/bot-factory/{BotFactoryForm,types,steps/StepAIModel}.tsx` — UPDATE. Strip every `deploymentMode` / `self_hosted` branch. Bot Factory is managed-only. Step 4 loses its Runtime picker + self-host copy; the always-shown info panel now links to `/dashboard/bots/new-self-hosted` for people who wanted the self-hosted flow.
+- `src/lib/bots/schemas.ts` — comment refresh on `deploymentMode` (still optional; Bot Factory never sends it, self-hosted endpoint sets it explicitly).
+- `src/app/api/bots/route.ts` — UPDATE. The `existing` upsert lookup scopes to `deployment_mode='managed'` so Bot Factory can never coalesce onto a user's self-hosted row. Removed `deploymentMode` plumbing from both the update and insert paths (DB default handles managed).
+- `src/app/(dashboard)/dashboard/bots/new/page.tsx` — UPDATE. Existing-bot lookup scoped to `managed`, matching the API route's contract.
+- `src/components/dashboard/BotSwitcher.tsx` — UPDATE. `Bot` type gains optional `deploymentMode`; entries with `self_hosted` get an amber pill badge; footer gains an active "+ Register self-hosted bot" link (via `next/link`) alongside the pre-existing coming-soon "Create New Bot".
+- `src/components/dashboard/Sidebar.tsx` + `src/app/(dashboard)/layout.tsx` — UPDATE. `SidebarBot` type + Drizzle select in the layout both gain `deploymentMode`, which flows down to `BotSwitcher`.
+- `src/components/dashboard/settings/DeployTab.tsx` — REWRITE. Signature now `{ botId, botName, ownerUsername, mode }`. No mode toggle. `mode='managed'`: renders a read-only "Managed by pro-bot.dev" card pointing owners at the self-hosted register flow if they want the fully-owned path. `mode='self_hosted'`: renders the `npm i probot-self-hosted` snippet + a live `<ProbotBot />` example with the bot's real name interpolated + the tokens UI (mint / list / revoke) + a MintedTokenModal.
+- `src/components/dashboard/settings/DeployTab.test.tsx` — REWRITE for the new API (three specs: managed card renders, self-hosted panel reveals tokens + npm copy, minting shows the secret once).
+- `src/app/(dashboard)/dashboard/bots/[botId]/settings/page.tsx` — UPDATE. Passes a `visibleTabs` prop to `SettingsTabs`. Self-hosted bots see `['deploy','account','security']`; managed bots see `['bot','kb','model','deploy','account','security']`. New `DeployTab` signature threaded through.
+- `src/app/api/bots/[botId]/publish/route.ts` — UPDATE (error copy: dropped "or switch this bot to self-hosted" — mode isn't switchable).
+- `src/app/api/bots/[botId]/llm-key/route.ts` — UPDATE (error copy: repointed the fallback to "register a self-hosted bot and use the `probot-self-hosted` npm package").
+- `src/lib/bot-tokens/service.ts` — top-of-file comment rewritten (tokens now authenticate the npm-package widget's analytics writes, not a cloned runtime).
+- `src/lib/db/schema.ts` — comment refresh on `bots.deployment_mode` + `bot_tokens` (no schema change).
+- `src/app/(marketing)/self-hosting/page.tsx` — REWRITE around the npm install (steps, "what you'll need", "why an npm package" sections).
+- `src/app/(marketing)/about/page.tsx` — reworded the Self-hosted card.
+- `docs/self-hosted-bot/{index,api-reference}.mdx` — REWRITE. `index.mdx`: full 5-step setup around `npm i` + optional dashboard link. `api-reference.mdx`: trimmed to only `/api/v1/bot/{conversations,leads}` with a "what's not exposed" section.
+- `docs/self-hosted-bot/{nextjs,react,vanilla,dashboard-integration,troubleshooting}.mdx` — CREATE (framework examples + troubleshooting + old-runtime migration section).
+- `docs/docs.json` — nav updated: the "Hosting & deployment" group now lists all seven self-hosted-bot pages in order.
+- `docs/{features,quickstart,faq,about,hosting/managed,guides/{deployment,bot-management,models-and-keys,embed-styling},concepts/{managed-vs-self-hosted,byo-key},blogs/welcome,release-notes/v1,api-reference/introduction}.mdx` — copy sweep. Every "clone `probot-bot`" mention repointed to the npm package. `guides/deployment.mdx` fully rewritten around the two creation paths. `concepts/managed-vs-self-hosted.mdx` fully rewritten with a new comparison table.
+- `README.md` — new "Self-host the whole bot (npm package)" section added below the existing embed section.
+- `CHANGELOG.md` — new 2026-07-06 entry summarising the pivot + explicit breaking-change callout for anyone still running the old cloned runtime.
+- `BYO-KEY.md` — reworded the "self-hosting without managed storage" section around the npm package path.
+- `tsconfig.json` — dropped `probot-bot` from `exclude` (folder no longer exists).
+
+**Decisions.**
+- **Deployment mode is a birth attribute, not a runtime toggle.** Managed = Bot Factory. Self-hosted = the new register flow. Switching would leave stale/misleading state (persona, model key, knowledge) that the widget doesn't consume, so the paths stay disjoint from creation. See `learnings.md` for the full rationale.
+- **LLM key stays in the developer's backend by construction.** The package deliberately does not accept a raw `apiKey` prop; it requires a `sendMessage` function. `createOpenAIHandler` is exported from `probot-self-hosted/adapters/openai` and is server-only. Removes the "someone pushed their key to the browser bundle" foot-gun as an API surface, not just a docs warning.
+- **Two platform endpoints, not four.** `/api/v1/bot/{config,knowledge}` were the "platform in the chat critical path" endpoints. Dropping them means the widget is entirely self-contained and the platform only handles analytics writes. Smaller, auditable surface; platform outages never break self-hosted chats.
+- **`bot_tokens` semantics preserved.** Existing `pbt_…` tokens still authenticate against `/api/v1/bot/{conversations,leads}` — no forced rotation, no migration.
+- **Dashboard tabs for self-hosted bots trimmed** to `deploy | account | security` via the existing `SettingsTabs.tabs` prop. Bot Config / Knowledge / AI Model & Key would map to platform-side state the widget never reads.
+- **Sidebar bot switcher lists both bot types** with an amber "Self-hosted" pill on self-hosted rows. Keeps the multi-bot mental model consistent even though managed-multi-bot creation is still the coming-soon path.
+- **Bot Factory upsert scoped to `managed`.** A user with both bot types could otherwise have Bot Factory silently overwrite their self-hosted row's name / persona / theme.
+
+**Open questions / follow-ups.**
+- Publishing `probot-self-hosted` to npm is a manual `npm publish` from `packages/probot-self-hosted/` after `node build.mjs`. No CI wiring yet.
+- Vue / Svelte / Angular adapters are called out as roadmap in the docs but not built; the vanilla IIFE is the current escape hatch.
+- The Bot Factory "single managed row per user" implicit lookup will need to become an explicit `botId` selector when managed multi-bot ships. The `AND deployment_mode='managed'` scoping stops it silently coalescing onto self-hosted rows today; it doesn't solve the multi-managed case.
+- Any deployment still running the old cloned `probot-bot` runtime will 404 on `/api/v1/bot/{config,knowledge}` after this batch. Migration path in `docs/self-hosted-bot/troubleshooting.mdx#migrating-from-the-old-cloned-runtime`.
+- Typecheck was green after the batch (`npx tsc --noEmit -p tsconfig.json` exits 0). `.next/types/app/api/bots/[botId]/deployment/` had to be cleared once because Next's route-type generator caches the previous route shape.
+
+---
+
+### 2026-07-11 — Self-hosted register UI re-skinned to match Bot Factory
+
+**Prompt.** The self-hosted bot register page (`/dashboard/bots/new-self-hosted`) looked visually distinct from the managed Bot Factory flow (`/dashboard/bots/new`). Bring it into the same design language so the two creation surfaces feel like one product.
+
+**What I did.** Presentational-only restyle. No API, schema, shared component, or behavioral change.
+
+**Files changed.**
+- `src/app/(dashboard)/dashboard/bots/new-self-hosted/page.tsx` — UPDATE. Replaced the ad-hoc `max-w-xl px-6 py-14 lg:px-8` container with the exact wrapper `BotFactoryForm` uses: outer `flex flex-col lg:h-full lg:overflow-hidden` → `max-w-[1280px] mx-auto lg:flex-1 lg:min-h-0` → inner `px-6 lg:px-12 py-10 lg:overflow-y-auto` → `max-w-lg` form column. Moved the eyebrow/title/subtitle out of the page (into the form component) so the "form" and "success" states can share the same `StepHeading`-shaped block.
+- `src/app/(dashboard)/dashboard/bots/new-self-hosted/RegisterSelfHostedForm.tsx` — UPDATE. Both states now wrap in `<section>` matching Bot Factory step convention. Adopted `StepHeading` typography inline (`text-xs font-bold uppercase tracking-[0.2em] text-brand mb-2` eyebrow / `font-display text-3xl font-extrabold tracking-tight mb-2` title / `text-muted text-sm mb-8` subtitle) — inlined rather than imported because `StepHeading` hardcodes "Step X of Y" which isn't truthful for a single-step form. Rebuilt every label/input pair from `<label><span>…</span><input/></label>` to Bot Factory's `<div><label htmlFor>…</label><input id/></div>`. Label class dropped `text-sm` → `text-xs font-semibold mb-1.5`; input class picked up the missing `transition-colors`. Error alert upgraded from a bare `<p>` to the same `mt-6 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3` panel Bot Factory uses. Bottom action row replaced the full-width single button with `flex items-center justify-between mt-10 pt-6 border-t border-border-base` — **Cancel** (secondary, routes to `/dashboard`) left + **Register bot** (primary, `!px-6`) right. Success ("minted") state rebuilt to mirror `StepDeploy`: green status banner (`bg-success/10 border-success/20`), uppercase micro-label (`text-[11px] font-bold text-muted uppercase tracking-wider`) "Bot token", token in the same dark block used for the embed snippet (`rounded-xl bg-neutral-900 p-4 ring-1 ring-white/10`) with an inline Copy button styled to match `<CopyUrlButton>` on that block (added transient "Copied" state for 1.5s). Bottom action row on success: **Copy token** (secondary) + **Open dashboard** (primary).
+
+**Decisions.**
+- **No fake stepper.** Self-hosted really is one step — persona / knowledge / provider / theme all live in the customer's `probot-self-hosted` npm-package config, not in the dashboard. Faking "Step 1 of 5" chrome would misrepresent the flow. "Consistency" means shared design language, not identical layout.
+- **Inlined `StepHeading` classes instead of extending the component.** `StepHeading` hardcodes `Step {step} of {TOTAL_STEPS}` text. Adding a variant prop would touch a shared file for one caller; inlining the same tailwind classes keeps the change surgical (per CLAUDE.md §3).
+- **Wrote a 12-line inline Copy button rather than widening `CopyUrlButton`.** `CopyUrlButton` is scoped to URL copying (used in `StepDeploy`); the token isn't a URL. Reused the exact class set from `StepDeploy.tsx:147` (`shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-neutral-200 hover:bg-white/10`) so the visual is identical.
+- **No new abstraction / no `PageShell` extraction.** Only two callers of this wrapper shape exist (Bot Factory and this page); per CLAUDE.md §2 that's not enough to justify a shared component. Revisit if a third caller appears.
+
+**Verification.**
+- `npx tsc --noEmit -p tsconfig.json` → 0 errors.
+- All className strings trace to Bot Factory source lines (`StepIdentity.tsx:76`, `StepDeploy.tsx:53–147`, `BotFactoryForm.tsx:455,461,473`). No behavior touched; no test updates needed.
+
+**Open questions / follow-ups.**
+- The new success screen shares almost every className with `StepDeploy`'s embed-code block. If a third "show a copyable secret" surface appears (rotate-token modal in Settings → Deployment could be one), consider extracting a shared `<SecretBlock>` component then. Not yet.
+- The Bot Factory bottom-nav pattern (`flex items-center justify-between mt-10 pt-6 border-t border-border-base` + Cancel/Primary) is now used in three places (BotFactoryForm, this form, this form's success view). Same "wait for a third distinct caller" rule.
+
+---
+
+### 2026-07-11 — Multi-provider adapters + Shadow DOM isolation for `probot-self-hosted`, plus polish batch
+
+Consolidated entry covering a stack of small changes on top of the self-hosted-register UI restyle.
+
+#### Package-side: model choice parity + isolation
+
+**Prompt.** Give the self-hosted npm package the same "any provider, any model, switch at any time" flexibility that pro-bot.dev's managed widget has (Anthropic/OpenAI/Google/Grok/Azure/Ollama), and make the widget's visual language consistent across managed and self-hosted regardless of which package renders it.
+
+**What I did.**
+- Added two new server-side adapters to `probot-self-hosted`, symmetric with the existing `createOpenAIHandler`:
+  - `packages/probot-self-hosted/src/adapters/anthropic.ts` — CREATE. `createAnthropicHandler({ apiKey, model, maxTokens?, temperature?, baseUrl?, fetchImpl? }) → SendMessage` using `@anthropic-ai/sdk`. Signal is threaded through for abort semantics.
+  - `packages/probot-self-hosted/src/adapters/google.ts` — CREATE. `createGoogleHandler(...)` using `@google/generative-ai`. Handles Gemini's "systemInstruction on model config, not messages" quirk and remaps the `"assistant"` role to `"model"` for chat history (Gemini's role vocabulary).
+- `packages/probot-self-hosted/src/index.ts` — exports both new adapters.
+- `packages/probot-self-hosted/package.json` — new `exports` subpaths (`./adapters/anthropic`, `./adapters/google`) + **optional** peer deps `@anthropic-ai/sdk` (>=0.30) and `@google/generative-ai` (>=0.20). Consumers only install what they use; zero bundle cost for OpenAI-only setups.
+- `packages/probot-self-hosted/build.mjs` — added the two new entry points; added both SDK names to `shared.external` so the adapter bundles stay unbundled at the SDK boundary.
+- Wrapped the React widget in a **Shadow DOM** (open mode) via a new `ShadowContainer` component in `ProbotBot.tsx`. Uses `useLayoutEffect` + `createPortal` (React 18 pattern). Matches the isolation model of the managed embed widget (which uses `attachShadow({ mode: "closed" })` in `src/widget/widget.ts`).
+- `packages/probot-self-hosted/src/widget.css` — verbatim copy of `src/widget/widget.css` (source of truth stays in the app, this copy exists so the npm package builds standalone). Added a "kept in sync" comment at the top of both files.
+
+**Why the Shadow DOM change was necessary.** `widget.css` starts with `* { box-sizing: border-box; margin: 0; padding: 0 }` — designed to zero out defaults inside the managed widget's shadow. Without a shadow boundary in the npm package, that universal selector leaked to the entire host page (collapsed h1/p margins in the vanilla test). Shadow DOM restores per-widget isolation identical to the managed widget.
+
+**Files touched (recent chain of small tasks, not just the adapters):**
+- `src/components/bot-factory/BotFactoryForm.tsx` — Step 5 "Open chat" button now routes to `/u/{username}/chat?preview={token}` when the bot is unpublished (previously always the public URL, which would render "Bot not found" for drafts).
+- `src/components/CookieConsent.tsx` — CREATE. Site-wide bottom-fixed consent banner (`bg-ink`, `bg-brand` Accept), persists dismissal in `localStorage["probot.cookie-consent"] = "accepted"`. Mounts in root `layout.tsx` so `/`, `/login`, `/dashboard`, `/u/[username]/chat` all show it once.
+- `src/app/layout.tsx` — imports and renders `<CookieConsent />`.
+- `src/components/marketing/DemoVideoModal.tsx` — restyled from a floating close-X into a **macOS window frame**: rounded shell, gradient title bar (`from-neutral-700 to-neutral-800`), three traffic-light dots on the left. Red dot is the functional close (`aria-label="Close"`), yellow + green are decorative `aria-hidden` spans. Title "ProBot Demo" centered. Native video controls (including unmute) inside the video body untouched.
+- `src/app/globals.css` + `src/components/marketing/LandingScrollbarBehavior.tsx` + `src/app/page.tsx` — landing-page-only auto-hiding scrollbar. Client component toggles `.landing-scrollbar` on `<html>` on mount and `.is-scrolling` on scroll (700 ms debounce). CSS scoped to `html.landing-scrollbar` overrides the global `:hover` reveal so the thumb only appears during actual scroll activity.
+- `manual-testing/` — 3 mini-projects: `chatbot-script-tag/` (script-tag widget test), `self-hosted-vanilla/` (IIFE `window.ProbotSelfHosted.mount` test with echo `sendMessage`), `self-hosted-react/` (Vite React harness with Echo / OpenAI / Dashboard-linked mode toggle; OpenAI mode runs `createOpenAIHandler` inside a Vite dev middleware — same-process, no CORS, no second terminal). Top-level `manual-testing/README.md` indexes all three.
+- `manual-testing/self-hosted-vanilla/package.json` — added a `prestart` npm script that copies the freshly-built IIFE from `packages/probot-self-hosted/dist/` into the test folder before `serve` boots. Fixes a static-server parent-directory-traversal 404: `serve` blocks `../../packages/...` paths.
+- `tsconfig.json` — added `manual-testing` to the `exclude` array. Root tsc was globbing into `manual-testing/self-hosted-react/vite.config.ts` and hitting a duplicate-vite-types conflict (nested `node_modules`). Should have been added when the harness was first created.
+
+**Docs.**
+- `packages/probot-self-hosted/README.md` — new **Choose a model** section with a provider matrix, OpenAI-compatible examples (Grok/Ollama/Azure), and an env-var-driven `resolveHandler()` factory.
+- `packages/probot-chatbot/README.md` — new short **Choose a model** paragraph pointing owners at the pro-bot.dev dashboard (Settings → AI Model & Key). Cross-links `probot-self-hosted` for developers who want to own the transport.
+- `docs/self-hosted-bot/models-and-keys.mdx` — CREATE. Full provider guide: per-provider key-provisioning links, suggested first model per provider (highlights Gemini free tier + Ollama as $0 paths), OpenAI-compatible-endpoint recipes, runtime-switch factory pattern, and a "where does the key live" security callout.
+- `docs/docs.json` — registered `self-hosted-bot/models-and-keys` in the **Self-hosted bot → Overview** nav group.
+
+**Decisions.**
+- **Symmetric factory shape** for every adapter (`create<Provider>Handler(opts) → SendMessage`). Reason: developers just need a `SendMessage`; keeping the surface uniform makes the `resolveHandler()` switch factory clean and readable.
+- **Optional peer deps** for the Anthropic and Google SDKs. Reason: the "just OpenAI" case is by far the most common; nobody who only ships OpenAI should carry either SDK. Same pattern react/react-dom already use.
+- **Gemini role-remap inside the adapter, not in the widget.** Reason: keeps `ChatMessage` (`role: "user" | "assistant"`) stable across providers. If a future adapter (Cohere, Mistral) needs its own role vocabulary, translation stays local to that adapter.
+- **`probot-chatbot` unchanged for model choice.** Rejected: exposing a `data-model` attribute on the `<script>` tag. That would let the embedding page pick which key gets billed — wrong owner. Dashboard is the only correct control surface.
+- **Shadow DOM for the React component, not just the vanilla mount.** Reason: consumers using `<ProbotBot />` inside React apps (with Tailwind preflight, etc.) mostly wouldn't notice the leak — but consumers embedding in a plain HTML page via the IIFE definitely would. Applying the shadow inside `ProbotBot` itself fixes both call sites in one place.
+- **`open` shadow mode**, not `closed`. Reason: dev inspectability via `element.shadowRoot`. The managed widget uses `closed` for defense-in-depth against JS on the host page reaching into it; that's more paranoid than most third-party sites need. Consumer-facing package leans toward friendliness.
+- **Two physical copies of `widget.css`.** Rejected: cross-package `readFileSync(../../src/widget/widget.css)` at build time. Cleaner for the monorepo, but breaks standalone package builds and pins spooky cross-package coupling. The manual sync burden is small (widget.css changes rarely).
+- **Bug fix vs. package fix judgement (vanilla test host page):** the widget rendered correctly (bubble, dialog, chips) — the visible "different styling" the user reported was the widget's `*` reset leaking to the host page. Fix goes in the **package**, not the test, because the same leak would happen in any consumer app. Shadow DOM is the right fix.
+
+**Verification.**
+- `npx tsc --noEmit -p tsconfig.json` clean at repo root and inside the package.
+- `node build.mjs` from the package folder emits all six adapter bundles (`anthropic.{mjs,cjs,d.ts}`, `google.{mjs,cjs,d.ts}`, plus existing `openai.*` + `index.*` + `vanilla.*` + IIFE at 165 KB).
+- Vanilla test: headless-Chrome screenshot before/after the Shadow DOM change confirmed the host page's h1/p regain their default margins while the widget itself renders byte-identical to the pre-fix state (same bubble, ringed avatar, chips, footer).
+- Docs.json parses.
+
+**Open questions / follow-ups.**
+- The React harness (`manual-testing/self-hosted-react/`) still only demos OpenAI. Extending it to Anthropic/Google requires the harness to install the extra SDKs. If we want a "try every provider from one harness" experience, add a checkbox that toggles the middleware's adapter — but only after `npm install @anthropic-ai/sdk @google/generative-ai` runs in the harness folder.
+- The two copies of `widget.css` (source-of-truth in `src/widget/`, checked-in mirror in `packages/probot-self-hosted/src/`) rely on the sync comment at the top of each. If either copy drifts, both `probot-chatbot` and `probot-self-hosted` diverge visually. Consider a CI check that `diff`s the two files and fails on mismatch. Not urgent.
+- Publishing `probot-self-hosted@0.2` (new adapters + shadow DOM + package.json exports changes) is a manual `npm publish` from the package folder. Bump version first.
+- The `manual-testing/` folder is still in root `.gitignore` (line 41). If we want the test harnesses versioned, remove that line — otherwise every collaborator recreates them locally.
+
+### 2026-07-23 — Azure joins the managed-key path (root-cause fix for "embed never answers")
+
+**Prompt.** All three `manual-testing/` harnesses "don't answer even when an API key is fed." Diagnose, grill the user on intent, fix so any third-party user can create + use bots. User confirmed target design: current managed-key architecture, made reliable.
+
+**Root cause (script-tag widget).** The tested bot's owner provider is `azure`. An `encrypted_llm_keys` row EXISTED (stored 2026-07-07), but `resolveProviderAndKey` hard-refused Azure on the managed path (`missing_llm_key` before ever reading the row) because endpoint/apiVersion weren't stored server-side. Meanwhile `POST /llm-key` accepted Azure keys, the publish guard passed (row present), and the dashboard banner stayed quiet (row present). Four surfaces disagreed about one invariant; the owner did everything right and the embed still 400'd every question. The other two harnesses were NOT bugs: `self-hosted-react` needs `OPENAI_API_KEY` in the shell env (key lives in the consumer's backend by design), `self-hosted-vanilla` is a hardcoded echo.
+
+**Fix.**
+- `src/lib/db/schema.ts` — `encrypted_llm_keys` gains nullable `azure_endpoint` (text) + `azure_api_version` (varchar 64). Endpoint/apiVersion are deployment config, not secrets — stored plaintext; only the key stays envelope-encrypted.
+- `src/app/api/bots/[botId]/llm-key/route.ts` — accepts optional `azureEndpoint` (zod: url, https-only, ≤512) + `azureApiVersion` (≤64); REFUSES an azure store without endpoint (`azure_endpoint_required`, 400) so the gap surfaces at save time, not at a recruiter's chat. Non-azure providers null both columns even if supplied.
+- `src/app/api/chat/[botId]/pipeline.ts` — azure hard-refusal deleted; azure follows the same managed lookup (row → provider match → decrypt). A legacy azure row with NULL endpoint returns `missing_llm_key` (same UX class). `resolveProviderAndKey` now returns `managedAzure {endpoint, apiVersion} | null`; `resolveAzureExtras(request, providerName, managedAzure)` prefers header creds, falls back to stored.
+- `src/app/api/chat/[botId]/route.ts` — threads `managedAzure` into `resolveAzureExtras`.
+- `src/components/bot-factory/BotFactoryForm.tsx` — wizard auto-store POST now includes `azureEndpoint`/`azureApiVersion` when provider is azure.
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` — the Azure credentials panel now ALSO posts to `/llm-key` (mirror into managed storage; blank key falls back to the browser-stored one). Stale "Azure isn't supported by managed storage" copy replaced. Review-pass fix: when the provider/model selection is dirty, PATCH `/api/users/me/llm-prefs` FIRST — the managed store stamps `users.llmProvider` server-side, so saving azure creds before the provider switch would stamp the row with the old provider and silently null the endpoint. Unused `Link` import removed.
+- `src/app/api/bots/[botId]/publish/route.ts` — guard extended: azure row without endpoint → `needs_managed_key` with re-save message.
+- `src/app/(dashboard)/dashboard/page.tsx` — "Share your bot" banner also fires for azure rows missing the endpoint.
+- Tests: `src/app/api/chat/[botId]/route.test.ts` — old "rejects Azure managed fallback" spec REPLACED by four: no-row 400, managed azure serve (decrypted key + stored extras + audit row), header-over-stored precedence, legacy-row-without-endpoint 400. NEW `src/app/api/bots/[botId]/llm-key/route.test.ts` — 4 specs (endpoint required, azure row stored with config + key never raw, non-https rejected, non-azure nulls columns).
+- `MANUAL_TESTING.md` — troubleshooting entries for `missing_llm_key` and "dashboard keys don't affect self-hosted harnesses".
+
+**Migration incident (important).** `.gitignore` line 65 ignored `/drizzle/meta/` — the Drizzle journal was never versioned, so on this machine `db:generate` saw an empty journal and produced a FULL-SNAPSHOT `0000_funny_iron_fist.sql` instead of an incremental migration; `db:migrate` "applied" it against the Supabase DB (harmless — `IF NOT EXISTS` no-ops — but the azure columns silently did NOT land, and a bogus bookkeeping row was appended). Recovery: deleted the rogue file + its `drizzle.__drizzle_migrations` row, regenerated a clean baseline `0000_crazy_kate_bishop.sql` from the pre-change schema (no-op apply), re-added the azure columns, generated `0001_dashing_dreaming_celestial.sql` (pure `ALTER TABLE ADD COLUMN`), applied, verified columns exist. Removed `/drizzle/meta/` from `.gitignore` so the journal versions from now on. NOTE: legacy `drizzle/0000_new_misty_knight.sql`–`0012_melodic_raza.sql` are now orphaned history (the new journal doesn't reference them); left in place as documentation.
+
+**Verification.** `npx tsc --noEmit` clean. Chat route 39/39, llm-key 4/4. Full suite has 36 pre-existing failures (verified identical on clean HEAD via `git stash` runs — jsdom/Node-26 environment issues in `llm-key-store`/`widget` tests plus stale BotFactoryForm specs from the earlier uncommitted masked-key work); none caused by this change.
+
+**Data follow-ups for the owner (not code):**
+- Bot `d6020046` (Vishal Patil, azure): re-save the Azure key WITH endpoint in Settings → AI Model & Key (legacy row has NULL endpoint).
+- Bots `Github bot` + `Aronbot` (openai, active, no key rows — published before the guard existed): store keys via Settings or the embeds stay dead.
+- `.env.local` DATABASE_URL points at the Supabase POOLER (prod) — local testing mutates the hosted DB. Consider a local Postgres for testing.
+
+**Open questions / follow-ups.**
+- 36 pre-existing test failures (env + stale specs) need their own session.
+- `manual-testing/self-hosted-react` still OpenAI-only; Gemini/Anthropic modes would need the optional SDKs installed in the harness.
+- Legacy orphaned migration files could be moved to an `archive/` folder for clarity — cosmetic.
+
+### 2026-07-23 — Ollama removed as a provider (everywhere)
+
+**Prompt.** "Remove ollama from the provider list from everywhere." Approved full plan including docs + package READMEs; consequence accepted: publish guard now requires a stored managed key for ALL managed bots (no more ollama exemption).
+
+**Files changed (app).**
+- DELETED `src/lib/ai/providers/ollama.ts` + `ollama.test.ts`.
+- `src/lib/ai/providers/{types,index}.ts` — `"ollama"` dropped from `ProviderName` union, registry, `PROVIDER_NAMES`.
+- `src/lib/ai/{model-options,provider-labels}.ts` — entries removed.
+- `src/lib/ai/key-transport.ts` — `readOllamaBaseUrl` + loopback-http allowance + header const deleted.
+- `src/lib/client/llm-key-store.ts` — `get/set/clearOllamaBaseUrl` + secret/legacy key names deleted.
+- `src/app/api/chat/[botId]/pipeline.ts` — placeholder-key branch + `resolveOllamaExtras` deleted.
+- `src/app/api/chat/[botId]/route.ts` — extras = azure only.
+- `src/app/api/bots/[botId]/publish/route.ts` + `src/app/(dashboard)/dashboard/page.tsx` — ollama exemptions removed from publish guard and embed banner.
+- `src/components/chat/ChatWindow.tsx` — ollama key-less path + base-url header attach removed; `x-llm-api-key` always the real key.
+- Bot Factory: `types.ts` (`ollamaBaseUrl` field), `constants.ts` (ENABLED_PROVIDERS), `BotFactoryForm.tsx` (state/hydrate/submit/auto-store branches), `StepAIModel.tsx` (base-URL + model UI branch; key input now unconditional).
+- `src/components/dashboard/settings/AIModelKeyTab.tsx` — model placeholder ternary.
+- Tests updated: `providers/index.test.ts`, `key-transport.test.ts`, `bots/schemas.test.ts`.
+
+**Docs/packages.** `MANUAL_TESTING.md`, `docs/guides/models-and-keys.mdx` (table row, $0 note now points at Gemini free tier, "Ollama specifics" section deleted), `docs/self-hosted-bot/{models-and-keys,index,nextjs,react}.mdx`, `docs/blogs/azure-student-credits.mdx`, `packages/probot-chatbot/README.md`, `packages/probot-self-hosted/{README.md,package.json keyword,src/adapters/openai.ts comment}`, `manual-testing/self-hosted-react/README.md`. Self-hosted package dist rebuilt. `createOpenAIHandler` generic `baseUrl` mechanism intentionally KEPT (serves Grok/Azure/LM Studio/any OpenAI-compatible endpoint) — only Ollama name-drops removed.
+
+**Safety checks.** DB scanned: zero users on `llm_provider='ollama'` (openai/azure/google only), so `isProviderName` tightening strands nobody. `probot.md` (user's personal interview KB) + append-only `claude/` logs intentionally untouched.
+
+**Verification.** `npx tsc --noEmit` clean at root and in the package. Affected suites 268/268 green. Full suite: same 36 pre-existing failures, same file set as before the change, zero new.

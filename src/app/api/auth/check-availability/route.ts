@@ -5,13 +5,6 @@ import { z } from "zod";
 import { usernameSchema } from "@/lib/auth/schemas";
 import { db, users } from "@/lib/db";
 
-// Public pre-signup availability check. The register form calls this (debounced)
-// to surface a "username/email already taken" hint before the user submits.
-// Per-field shape so the form can show each error independently:
-//   { username?: { available, reason? }, email?: { available } }
-// User-enumeration exposure here is no greater than the register endpoint's
-// existing 409 response, which already distinguishes taken email vs username.
-
 const emailField = z.string().email().max(255);
 
 interface FieldResult {

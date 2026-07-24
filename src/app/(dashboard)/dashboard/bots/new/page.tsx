@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
@@ -30,7 +30,10 @@ export default async function NewBotPage() {
   if (!userRow) redirect("/login");
 
   const existing = await db.query.bots.findFirst({
-    where: eq(bots.userId, session.user.id),
+    where: and(
+      eq(bots.userId, session.user.id),
+      eq(bots.deploymentMode, "managed"),
+    ),
   });
 
   const initialLlmProvider: ProviderName | undefined = isProviderName(

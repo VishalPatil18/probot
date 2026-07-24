@@ -1,3 +1,4 @@
+import { LandingScrollbarBehavior } from "@/components/marketing/LandingScrollbarBehavior";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { SiteHeader } from "@/components/marketing/SiteHeader";
 import { DocsCtaSection } from "@/components/marketing/sections/DocsCtaSection";
@@ -27,6 +28,7 @@ export default function HomePage() {
           __html: JSON.stringify(softwareApplicationJsonLd()),
         }}
       />
+      <LandingScrollbarBehavior />
       <SiteHeader />
 
       <main>

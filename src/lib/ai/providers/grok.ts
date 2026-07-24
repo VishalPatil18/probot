@@ -3,11 +3,6 @@ import OpenAI, { APIError } from "openai";
 import type { CompleteParams, CompleteResult, LLMProvider } from "./types";
 import { ProviderError } from "./types";
 
-// Grok (xAI) exposes an OpenAI-compatible API, so we reuse the OpenAI SDK and
-// just point it at xAI's base URL. The creator brings their own xAI API key
-// (xAI's API is paid / credit-based - this is "free to operate", not free to
-// the end user). Model names are passed straight through because xAI's catalog
-// changes often; the bot factory lets the user type the model id.
 const BASE_URL = "https://api.x.ai/v1";
 const DEFAULT_MODEL = "grok-4.3";
 const DEFAULT_MAX_TOKENS = 500;

@@ -28,7 +28,6 @@ describe("Sidebar", () => {
     expect(screen.queryByText("Workspace")).not.toBeInTheDocument();
     expect(screen.queryByText("Embed & share")).not.toBeInTheDocument();
     expect(screen.getByText("Create bot")).toBeInTheDocument();
-    // Settings still reachable, pointing at the account route (no bot).
     expect(
       container.querySelector('a[href="/dashboard/settings"]'),
     ).toBeTruthy();

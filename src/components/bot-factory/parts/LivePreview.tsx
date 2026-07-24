@@ -3,16 +3,6 @@
 import type { FormState } from "../types";
 import { BotAvatarPreview } from "./BotAvatarPreview";
 
-// Live preview of the bot's chat surface, styled to match the deployed
-// /u/[username]/chat page pixel-for-pixel: ringed avatar + green online dot,
-// "Name · AI Assistant" title, asymmetric-corner bubble for the greeting,
-// pill-shaped suggested-question chips, and the rounded pill input with an
-// arrow-up send button.
-//
-// The whole card is centered inside its own scroll column - the FormState
-// values flow into CSS custom properties + text so the visitor gets the
-// same chrome the recruiter will eventually see, updating live as the
-// creator types.
 export function LivePreview({ form }: { form: FormState }) {
   const name = form.name.trim() || "Your name";
   const headline = form.headline.trim();
@@ -30,7 +20,6 @@ export function LivePreview({ form }: { form: FormState }) {
       </p>
 
       <div className="w-full max-w-[380px] overflow-hidden rounded-2xl border border-border-base bg-white shadow-floating">
-        {/* ChatHeader: ringed avatar + green online dot + name · AI Assistant */}
         <header className="border-b border-border-base bg-white/90 backdrop-blur">
           <div className="flex items-center gap-3 px-4 py-3">
             <div className="relative shrink-0">
@@ -67,7 +56,6 @@ export function LivePreview({ form }: { form: FormState }) {
           </div>
         </header>
 
-        {/* Message area: assistant greeting bubble with mini avatar */}
         <div className="min-h-[220px] space-y-3 bg-bg-app/50 px-4 py-4">
           <div className="flex gap-2.5">
             <BotAvatarPreview
@@ -83,7 +71,6 @@ export function LivePreview({ form }: { form: FormState }) {
           </div>
         </div>
 
-        {/* Suggested questions + input row */}
         <div className="border-t border-border-base bg-white/90 backdrop-blur">
           <div className="space-y-2.5 px-4 py-3">
             {form.suggestedQuestions.length > 0 ? (

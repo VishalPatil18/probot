@@ -2,10 +2,6 @@ import { desc, eq } from "drizzle-orm";
 
 import { type BotPreset, botPresets, db } from "@/lib/db";
 
-// Saved bot-configuration presets, scoped to a user. A preset is an opaque JSON
-// snapshot of a bot's settings the owner can reuse when creating a future bot.
-// Belongs to the user (not a bot) so it survives the bot it was captured from.
-
 export async function saveBotPreset(
   userId: string,
   name: string,

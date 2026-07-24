@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock state lives at module scope so the per-test reset can wire fresh
-// behavior into each closure. The chained Drizzle builders (`.where()`
-// `.returning()`) are stubbed by returning thenables / chainables.
 const findUserMock = vi.fn();
 const findDeletionMock = vi.fn();
 const findManyDeletionMock = vi.fn();
@@ -16,9 +13,6 @@ vi.mock("@/lib/db", () => ({
   db: {
     query: {
       users: { findFirst: (...args: unknown[]) => findUserMock(...args) },
-      // Single shared mock - tests configure findDeletionMock per-case
-      // since both initiate (where: user_id) and undo (where: token_hash)
-      // call this with one resolved value at a time.
       deletionRequests: {
         findFirst: (...args: unknown[]) => findDeletionMock(...args),
         findMany: (...args: unknown[]) => findManyDeletionMock(...args),
@@ -38,7 +32,6 @@ vi.mock("@/lib/db", () => ({
         return {
           returning: (...rArgs: unknown[]) =>
             deleteDeletionByConditionReturningMock(...rArgs),
-          // chain for the by-id delete (no `.returning()`):
           then: (resolve: (v: unknown) => unknown) =>
             resolve(deleteDeletionByIdWhereMock(...args)),
         };
@@ -126,7 +119,6 @@ describe("initiateAccountDeletion", () => {
     );
     expect(result.emailSnapshot).toBe("jane@example.com");
 
-    // 7-day grace ± some clock slop.
     const expectedMin = beforeTs + 7 * 24 * 60 * 60 * 1000;
     const expectedMax = afterTs + 7 * 24 * 60 * 60 * 1000;
     expect(result.scheduledPurgeAt.getTime()).toBeGreaterThanOrEqual(
@@ -148,7 +140,6 @@ describe("initiateAccountDeletion", () => {
     expect(row.emailSnapshot).toBe("jane@example.com");
     expect(row.usernameSnapshot).toBe("jane-doe");
     expect(row.confirmationUsername).toBe("jane-doe");
-    // The undo token in the row must be the HASH, never the raw value.
     expect(row.undoTokenHash).toBe(
       "hash(raw-token-fixture-1234567890abcdef-fixture)",
     );
@@ -303,7 +294,6 @@ describe("runPurgeJob", () => {
     });
     expect(result.purgedCount).toBe(1);
     expect(result.completionEmailsSent).toBe(0);
-    // The user delete still ran.
     expect(deleteUsersWhereMock).toHaveBeenCalledTimes(1);
   });
 });

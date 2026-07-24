@@ -1,0 +1,117 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family:
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #18181b;
+  background: #fafafa;
+  line-height: 1.55;
+}
+
+.wrap {
+  max-width: 760px;
+  margin: 2.5rem auto;
+  padding: 0 1rem 6rem;
+}
+
+h1 {
+  font-size: 26px;
+  margin-bottom: 0.25rem;
+}
+
+.lede {
+  color: #52525b;
+  margin: 0 0 1.5rem;
+}
+
+code {
+  background: #f4f4f5;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 90%;
+}
+
+fieldset {
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  background: #fff;
+  margin: 0 0 1rem;
+  padding: 1rem 1.25rem;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 0.5rem;
+}
+
+.modes label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.modes label:hover {
+  background: #fafafa;
+}
+
+.modes label.on {
+  border-color: #7c5cff;
+  background: #f5f2ff;
+}
+
+.modes label strong {
+  grid-column: 2;
+}
+
+.modes label span {
+  grid-column: 2;
+  font-size: 13px;
+  color: #71717a;
+}
+
+.modes input[type="radio"] {
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0.5rem 0;
+  font-size: 14px;
+}
+
+.row input[type="text"] {
+  padding: 6px 10px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.hint {
+  color: #71717a;
+  font-size: 12.5px;
+  margin: 0.5rem 0 0;
+  line-height: 1.5;
+}
+
+.fired {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  font-size: 13px;
+}

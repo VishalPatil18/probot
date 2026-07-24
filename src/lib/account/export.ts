@@ -10,20 +10,6 @@ import {
   users,
 } from "@/lib/db";
 
-// GDPR data portability: portable JSON dump of every row the system holds about
-// one user. Includes nested bot data (knowledge chunks, conversations,
-// messages, leads). Deliberately excludes:
-//   - `hashedPassword` (a hash isn't useful to export, and shipping it
-//     even hashed feels like inviting offline cracking)
-//   - `encrypted_llm_keys` (per-bot envelope payload; meaningful only to
-//     the operator's KEK, useless to a user export)
-//   - NextAuth session/account rows beyond a redacted shape (OAuth tokens
-//     are tied to provider-side state and can be reissued)
-//
-// Shape is intentionally JSON (not zip / not CSV) for two reasons: it's
-// trivially diff-able by users and tools; and there's no archive format
-// that doesn't pull in a dep we don't want.
-
 export interface ExportBundle {
   exportedAt: string;
   user: Record<string, unknown>;
@@ -88,10 +74,6 @@ export async function buildExportBundle(userId: string): Promise<ExportBundle> {
         })
       : [];
 
-  // Bucket every child row by its owning bot once (O(n)) instead of re-scanning
-  // the full arrays for each bot - the old join was O(bots × rows) and, for
-  // messages, re-scanned every conversation per message. `conversationToBot`
-  // routes a message to its bot via its conversation in one hop.
   const conversationToBot = new Map(
     allConversations.map((c) => [c.id, c.botId]),
   );
@@ -115,9 +97,6 @@ export async function buildExportBundle(userId: string): Promise<ExportBundle> {
   };
 }
 
-// Group rows by a key derived from each row, skipping rows whose key is
-// undefined (e.g. a message whose conversation isn't in scope). Exported for
-// direct unit testing of the grouping/routing behavior.
 export function groupBy<T>(
   rows: readonly T[],
   keyOf: (row: T) => string | undefined,
@@ -133,8 +112,6 @@ export function groupBy<T>(
   return out;
 }
 
-// `bots` rows hold `preview_token` which is a server-controlled credential
-// (a leaked export shouldn't grant access to anyone else). Strip it.
 function stripBotForExport(
   bot: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -145,10 +122,6 @@ function stripBotForExport(
   return safe;
 }
 
-// `knowledge_base` rows include the raw `embedding` vector (1536 floats).
-// Including it would bloat the export by ~6KB per chunk for no user value
-// (vectors are model-specific and can't be replayed against other models).
-// Keep the text + metadata; drop the vector.
 function stripKnowledgeForExport(
   chunk: Record<string, unknown>,
 ): Record<string, unknown> {

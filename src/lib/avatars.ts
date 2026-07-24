@@ -1,11 +1,3 @@
-// Default animal-icon avatars for users without a
-// profile photo (OAuth providers that don't return one, credentials users,
-// magic-link users). Hosted on Cloudinary; the operator pays nothing.
-//
-// Auto-assigned at signup (NextAuth adapter override + credentials register
-// route). Users can change their selection in the onboarding flow when their
-// username is still a placeholder; a general profile editor ships later.
-
 export const ANIMAL_AVATARS = [
   "https://res.cloudinary.com/dbjdu0hvl/image/upload/v1777587321/Portfolio4.0/1_kf7bud.webp",
   "https://res.cloudinary.com/dbjdu0hvl/image/upload/v1777587322/Portfolio4.0/2_ydovee.webp",
@@ -26,15 +18,8 @@ export const AVATAR_HOSTNAME = "res.cloudinary.com";
 
 const AVATAR_SET: ReadonlySet<string> = new Set(ANIMAL_AVATARS);
 
-// First avatar is the documented fallback - pulled out as a const so the
-// signature of pickDefaultAvatar is `string` (not `string | undefined`)
-// under `noUncheckedIndexedAccess`. The runtime modulo math always lands
-// in-bounds; the `?? FALLBACK_AVATAR` branch is purely for the type system.
 const FALLBACK_AVATAR: string = ANIMAL_AVATARS[0];
 
-// Deterministic per-user default. The same seed (user id) always returns the
-// same animal so re-renders and re-derivations match. The distribution is
-// good enough for an aesthetic default - not a security primitive.
 export function pickDefaultAvatar(seed: string): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) {
@@ -44,10 +29,6 @@ export function pickDefaultAvatar(seed: string): string {
   return ANIMAL_AVATARS[index] ?? FALLBACK_AVATAR;
 }
 
-// True when `url` is one of the curated animal-icon URLs. Used by the
-// onboarding PATCH to allowlist what users can submit as their avatar.
-// External URLs (e.g. OAuth-provided photos) must be retained via the
-// "current value" branch of the validator, not by passing this check.
 export function isAllowedAvatar(url: string): boolean {
   return AVATAR_SET.has(url);
 }

@@ -1,15 +1,4 @@
 // @vitest-environment jsdom
-//
-// Tests for the embeddable widget. Two layers:
-//   1. Pure functions (escapeHtml, parseConfig, safeThemeColor, renderers)
-//      - straight calls, no DOM, no globals.
-//   2. mount() integration - exercise the full DOM flow via jsdom: a mock
-//      <script> tag, a stubbed fetch, then assert the shadow root markup.
-//
-// Build-time defines (__WIDGET_CSS__, __API_BASE_DEFAULT__) are declared in
-// widget.ts. The test runner does NOT replace them, so vitest will fail to
-// import widget.ts unless we provide a stub. We use vi.stubGlobal in a
-// shared setup block below.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -60,9 +49,6 @@ describe("escapeHtml", () => {
   });
 
   it("escapes ampersand first so double-encoding does not happen", () => {
-    // If `&` were escaped after `<`, the `&lt;` would itself get its `&`
-    // escaped to `&amp;lt;`. The implementation order matters; this test
-    // pins it.
     expect(escapeHtml("&<")).toBe("&amp;&lt;");
   });
 });
@@ -283,10 +269,6 @@ describe("renderDialogInner", () => {
   });
 
   it("escapes the CTA href so a quoted apiBase cannot break out of the attribute", () => {
-    // Regression: previously chatUrl was interpolated unescaped into the
-    // href, so a malicious data-api-base like `https://x" onerror="alert(1)`
-    // would inject an attribute. After fix the embedded quote is escaped to
-    // &quot; and the attribute boundary is preserved.
     const html = renderDialogInner(FULL_CONFIG, 'https://x" onerror="alert(1)');
     expect(html).not.toContain('href="https://x" onerror="');
     expect(html).toContain("&quot;");
@@ -302,9 +284,6 @@ describe("renderDialogInner", () => {
   });
 
   it("caps the chip row at 5 but includes every question in the toggle dropdown", () => {
-    // Chips live in the pre-conversation body and are real-estate constrained,
-    // so they're sliced to 5. The input-bar toggle opens a scrollable list
-    // (parity with the deployed page) that must include everything.
     const config: WidgetConfig = {
       ...FULL_CONFIG,
       bot: {
@@ -352,7 +331,6 @@ describe("renderDialogInner", () => {
       owner: { ...FULL_CONFIG.owner, image: null },
     };
     const html = renderDialogInner(config, "https://pro-bot.dev");
-    // No <img> tag - the placeholder is the theme-tinted fallback circle.
     expect(html).not.toContain('<img class="probot-avatar"');
     expect(html).toContain("probot-avatar-fallback");
   });
@@ -426,9 +404,6 @@ describe("mount (DOM integration)", () => {
   });
 
   it("still mounts the bubble when fetch fails", async () => {
-    // Behavior change: previously the widget bailed silently on any fetch
-    // failure. The bubble now renders first (with the fallback dialog) so
-    // visitors always see the entry point.
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(null, { status: 500 })),
@@ -465,7 +440,6 @@ describe("mount (DOM integration)", () => {
     await mount(makeScript());
     const host = document.querySelector("[data-probot-widget]");
     expect(host).not.toBeNull();
-    // mode: "closed" → host.shadowRoot is null even though one exists
     expect((host as HTMLElement).shadowRoot).toBeNull();
   });
 

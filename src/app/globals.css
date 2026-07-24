@@ -64,6 +64,34 @@
   *::-webkit-scrollbar-corner {
     background: transparent;
   }
+
+  /* Landing-page scrollbar override. `LandingScrollbarBehavior` mounts on
+     `/` only, toggling `.landing-scrollbar` on <html> and adding
+     `.is-scrolling` for a short window each time the viewport scrolls.
+     The default global rules above reveal the thumb on any :hover of the
+     scrollable element — on the landing page (where the mouse is over the
+     page the whole time) that reads as "always on". These overrides pin
+     the viewport thumb invisible except during actual scroll activity.
+     Only the html scrollbar is affected; nested scrollable regions keep
+     the default hover-reveal behavior. */
+  html.landing-scrollbar,
+  html.landing-scrollbar:hover,
+  html.landing-scrollbar:focus-within {
+    scrollbar-color: transparent transparent;
+  }
+  html.landing-scrollbar::-webkit-scrollbar-thumb,
+  html.landing-scrollbar:hover::-webkit-scrollbar-thumb,
+  html.landing-scrollbar:focus-within::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+  html.landing-scrollbar.is-scrolling,
+  html.landing-scrollbar.is-scrolling:hover,
+  html.landing-scrollbar.is-scrolling:focus-within {
+    scrollbar-color: oklch(0.75 0.01 264 / 0.55) transparent;
+  }
+  html.landing-scrollbar.is-scrolling::-webkit-scrollbar-thumb {
+    background: oklch(0.75 0.01 264 / 0.55);
+  }
 }
 
 @layer components {

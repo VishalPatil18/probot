@@ -5,17 +5,10 @@ import remarkGfm from "remark-gfm";
 import { BotAvatarIcon } from "./BotAvatarIcon";
 import type { ChatMessage } from "./types";
 
-// MessageBubble renders the recruiter+assistant bubble variants only.
-// The `system+lead_capture` variant is dispatched to its own
-// component (LeadCaptureCard) by the ChatWindow render loop, so we
-// narrow this prop to the bubble-shaped variants and let TypeScript
-// reject any accidental routing of system messages here.
 type BubbleMessage = Exclude<ChatMessage, { role: "system" }>;
 
 type Props = {
   message: BubbleMessage;
-  // The bot's avatar (uploaded image) shown on assistant replies; falls back to
-  // the ProBot icon. Optional so non-chat callers (e.g. transcript view) work.
   botImage?: string | null;
 };
 
@@ -79,4 +72,3 @@ export function MessageBubble({ message, botImage }: Props) {
     </div>
   );
 }
-

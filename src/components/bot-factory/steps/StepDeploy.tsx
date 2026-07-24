@@ -19,8 +19,6 @@ export function StepDeploy({
   publishing: boolean;
   onPublish: () => void;
 }) {
-  // Build the real public URL from the current origin so localhost
-  // dev, preview deploys, and prod all show the right share link.
   const origin =
     typeof window !== "undefined" && window.location.origin
       ? window.location.origin
@@ -30,9 +28,6 @@ export function StepDeploy({
     ? `${publicUrl}?preview=${encodeURIComponent(previewToken)}`
     : null;
   const scriptSrc = `${origin}/widget.js`;
-  // Multi-line snippet copied verbatim so the user pastes exactly what they see.
-  // HTML ignores the whitespace between attrs, so this behaves identically to
-  // the compact one-line form.
   const embedSnippet = `<script
   src="${scriptSrc}"
   data-bot-id="${createdBotId ?? ""}"

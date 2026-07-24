@@ -7,24 +7,14 @@ import type { Personality } from "@/lib/bots/schemas";
 import {
   CUSTOM_INSTRUCTIONS_MAX,
   PERSONALITY_PRESETS,
-  RATE_LIMIT_MAX_CHARS_MAX,
-  RATE_LIMIT_PER_DAY_MAX,
-  RATE_LIMIT_PER_MINUTE_MAX,
 } from "@/lib/bots/schemas";
-import {
-  MAX_CHARS_DEFAULT,
-  PER_DAY_DEFAULT,
-  PER_MINUTE_DEFAULT,
-} from "@/lib/ai/rate-limit";
 
 import { AvatarUploader } from "./AvatarUploader";
 import { LabeledInput } from "./fields/LabeledInput";
-import { RateLimitField } from "./fields/RateLimitField";
 import { SaveButton } from "./fields/SaveButton";
 import { Toggle } from "./fields/Toggle";
 import { ThemeColorField } from "./ThemeColorField";
 
-import { DeleteBotModal } from "../DeleteBotModal";
 import { SuggestedQuestionsEditor } from "../SuggestedQuestionsEditor";
 
 type Props = {
@@ -38,14 +28,10 @@ type Props = {
   initialIsActive: boolean;
   initialThemeColor: string;
   initialCustomInstructions: string;
-  initialRateLimitPerMinute: number | null;
-  initialRateLimitPerDay: number | null;
-  initialRateLimitMaxChars: number | null;
   previewToken: string | null;
 };
 
-// Each editable card saves on its own; this keys the per-section save state.
-type SectionKey = "identity" | "personality" | "limits" | "questions";
+type SectionKey = "identity" | "personality" | "questions";
 
 const PERSONALITY_CARDS: Record<
   Personality,
@@ -72,7 +58,6 @@ const PERSONALITY_CARDS: Record<
   },
 };
 
-// Default bot mark shown when no custom picture is set (the two-dot ProBot eye).
 function ProBotMark() {
   return (
     <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true">
@@ -82,11 +67,6 @@ function ProBotMark() {
   );
 }
 
-// Bot Configuration tab. Single PATCH per save, diffed against
-// initial values so only changed fields are sent. A future change enables the
-// previously-disabled custom-instructions textarea, adds a per-bot rate-
-// limit panel, and (for draft bots) surfaces a Publish button alongside
-// the preview link.
 export function BotConfigTab({
   botId,
   ownerUsername,
@@ -98,18 +78,10 @@ export function BotConfigTab({
   initialIsActive,
   initialThemeColor,
   initialCustomInstructions,
-  initialRateLimitPerMinute,
-  initialRateLimitPerDay,
-  initialRateLimitMaxChars,
   previewToken,
 }: Props) {
   const router = useRouter();
-  // State seeded from props once; subsequent prop changes do NOT clobber
-  // in-progress user edits.
   const [isActive, setIsActive] = useState(initialIsActive);
-  // The status toggle auto-saves on click (independent of "Save bot settings"),
-  // so we track its own committed baseline. The main dirty/patch diff uses this
-  // baseline, so a status flip never leaves the Save button stuck "dirty".
   const [activeBaseline, setActiveBaseline] = useState(initialIsActive);
   const [statusSaving, setStatusSaving] = useState(false);
   const [name, setName] = useState(initialName);
@@ -123,15 +95,6 @@ export function BotConfigTab({
   const [customInstructions, setCustomInstructions] = useState(
     initialCustomInstructions,
   );
-  const [rateLimitPerMinute, setRateLimitPerMinute] = useState<string>(
-    initialRateLimitPerMinute === null ? "" : String(initialRateLimitPerMinute),
-  );
-  const [rateLimitPerDay, setRateLimitPerDay] = useState<string>(
-    initialRateLimitPerDay === null ? "" : String(initialRateLimitPerDay),
-  );
-  const [rateLimitMaxChars, setRateLimitMaxChars] = useState<string>(
-    initialRateLimitMaxChars === null ? "" : String(initialRateLimitMaxChars),
-  );
   const [savingSection, setSavingSection] = useState<SectionKey | null>(null);
   const [savedSection, setSavedSection] = useState<SectionKey | null>(null);
   const [sectionError, setSectionError] = useState<{
@@ -141,13 +104,6 @@ export function BotConfigTab({
   const [statusError, setStatusError] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [presetName, setPresetName] = useState(initialName);
-  const [presetStatus, setPresetStatus] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
 
   useEffect(() => {
     if (savedSection === null) return;
@@ -155,88 +111,17 @@ export function BotConfigTab({
     return () => clearTimeout(t);
   }, [savedSection]);
 
-  // Snapshot the current configuration into a reusable preset (no secrets).
-  async function handleSaveAsPreset() {
-    const trimmed = presetName.trim();
-    if (trimmed.length === 0 || presetStatus === "saving") return;
-    setPresetStatus("saving");
-    try {
-      const res = await fetch("/api/bot-presets", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: trimmed,
-          settings: {
-            name,
-            headline,
-            personality,
-            suggestedQuestions,
-            themeColor,
-            customInstructions,
-            rateLimitPerMinute,
-            rateLimitPerDay,
-            rateLimitMaxChars,
-          },
-        }),
-      });
-      setPresetStatus(res.ok ? "saved" : "error");
-    } catch {
-      setPresetStatus("error");
-    }
-  }
-
-  // Each card tracks its own unsaved-changes state so its Save button only
-  // enables for edits in that section. The status toggle auto-saves and is
-  // excluded here.
   const identityDirty =
     name !== initialName || headline !== initialHeadline;
   const personalityDirty =
     personality !== initialPersonality ||
     customInstructions !== initialCustomInstructions ||
     themeColor !== initialThemeColor;
-  const limitsDirty =
-    rateLimitPerMinute !==
-      (initialRateLimitPerMinute === null
-        ? ""
-        : String(initialRateLimitPerMinute)) ||
-    rateLimitPerDay !==
-      (initialRateLimitPerDay === null
-        ? ""
-        : String(initialRateLimitPerDay)) ||
-    rateLimitMaxChars !==
-      (initialRateLimitMaxChars === null
-        ? ""
-        : String(initialRateLimitMaxChars));
   const questionsDirty = !arraysEqual(
     suggestedQuestions,
     initialSuggestedQuestions,
   );
 
-  function parseLimitField(
-    raw: string,
-    max: number,
-  ): { ok: true; value: number | null } | { ok: false; reason: string } {
-    const trimmed = raw.trim();
-    if (trimmed.length === 0) return { ok: true, value: null };
-    const n = Number(trimmed);
-    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1) {
-      return {
-        ok: false,
-        reason: "Rate limits must be positive whole numbers (or blank).",
-      };
-    }
-    if (n > max) {
-      return {
-        ok: false,
-        reason: `Rate limits cap at ${max.toLocaleString()}.`,
-      };
-    }
-    return { ok: true, value: n };
-  }
-
-  // Shared PATCH for one section. Sends only the fields that changed; the
-  // endpoint is the same per-bot PATCH used by every section. An empty patch
-  // (e.g. only whitespace changed) is treated as an immediate no-op success.
   async function commit(
     key: SectionKey,
     patch: Record<string, unknown>,
@@ -301,72 +186,15 @@ export function BotConfigTab({
     void commit("personality", patch);
   }
 
-  function saveLimits() {
-    if (!limitsDirty || savingSection) return;
-    const perMinute = parseLimitField(
-      rateLimitPerMinute,
-      RATE_LIMIT_PER_MINUTE_MAX,
-    );
-    const perDay = parseLimitField(rateLimitPerDay, RATE_LIMIT_PER_DAY_MAX);
-    const maxChars = parseLimitField(
-      rateLimitMaxChars,
-      RATE_LIMIT_MAX_CHARS_MAX,
-    );
-    if (!perMinute.ok) {
-      setSectionError({ key: "limits", msg: perMinute.reason });
-      return;
-    }
-    if (!perDay.ok) {
-      setSectionError({ key: "limits", msg: perDay.reason });
-      return;
-    }
-    if (!maxChars.ok) {
-      setSectionError({ key: "limits", msg: maxChars.reason });
-      return;
-    }
-    const patch: Record<string, unknown> = {};
-    if (perMinute.value !== initialRateLimitPerMinute) {
-      patch.rateLimitPerMinute = perMinute.value;
-    }
-    if (perDay.value !== initialRateLimitPerDay) {
-      patch.rateLimitPerDay = perDay.value;
-    }
-    if (maxChars.value !== initialRateLimitMaxChars) {
-      patch.rateLimitMaxChars = maxChars.value;
-    }
-    void commit("limits", patch);
-  }
-
   function saveQuestions() {
     if (!questionsDirty || savingSection) return;
     void commit("questions", { suggestedQuestions });
   }
 
-  async function handleDeleteBot() {
-    if (deleting) return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      const res = await fetch(`/api/bots/${botId}`, { method: "DELETE" });
-      if (!res.ok) {
-        setDeleteError("Couldn't delete this bot. Please try again.");
-        return;
-      }
-      setDeleteOpen(false);
-      router.push("/dashboard/bots/new");
-      router.refresh();
-    } catch {
-      setDeleteError("Network error. Please try again.");
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  // Auto-save the live/off status immediately on toggle - no "Save" needed.
   async function handleToggleStatus(next: boolean) {
     if (statusSaving) return;
     const prev = isActive;
-    setIsActive(next); // optimistic
+    setIsActive(next);
     setStatusSaving(true);
     setStatusError(null);
     try {
@@ -376,7 +204,7 @@ export function BotConfigTab({
         body: JSON.stringify({ isActive: next }),
       });
       if (!res.ok) {
-        setIsActive(prev); // revert
+        setIsActive(prev);
         setStatusError("Couldn't update status. Please try again.");
         return;
       }
@@ -466,10 +294,6 @@ export function BotConfigTab({
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="font-bold">Bot status</h3>
-          {/* Plain <div>, not <label> - the Toggle button is its own
-              labelled control via aria-label. Wrapping it in a <label>
-              creates a redundant-click hazard on some AT configurations
-              (the label fires a synthetic click on the inner button). */}
           <div className="flex items-center gap-2 text-sm">
             <span className={isActive ? "text-success" : "text-muted"}>
               {isActive ? "Live" : "Off"}
@@ -616,44 +440,6 @@ export function BotConfigTab({
       </section>
 
       <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
-        <h3 className="mb-1 font-bold">Rate limits</h3>
-        <p className="mb-5 text-xs text-muted">
-          Protect your LLM credits. Blank = use the server default. Limits
-          apply per bot, not per recruiter.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <RateLimitField
-            label="Per minute"
-            placeholderDefault={PER_MINUTE_DEFAULT}
-            value={rateLimitPerMinute}
-            onChange={setRateLimitPerMinute}
-            max={RATE_LIMIT_PER_MINUTE_MAX}
-          />
-          <RateLimitField
-            label="Per day"
-            placeholderDefault={PER_DAY_DEFAULT}
-            value={rateLimitPerDay}
-            onChange={setRateLimitPerDay}
-            max={RATE_LIMIT_PER_DAY_MAX}
-          />
-          <RateLimitField
-            label="Max chars / message"
-            placeholderDefault={MAX_CHARS_DEFAULT}
-            value={rateLimitMaxChars}
-            onChange={setRateLimitMaxChars}
-            max={RATE_LIMIT_MAX_CHARS_MAX}
-          />
-        </div>
-        <SaveButton
-          dirty={limitsDirty}
-          saving={savingSection === "limits"}
-          saved={savedSection === "limits"}
-          error={sectionError?.key === "limits" ? sectionError.msg : null}
-          onClick={saveLimits}
-        />
-      </section>
-
-      <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
         <h3 className="mb-1 font-bold">Suggested questions</h3>
         <p className="mb-4 text-xs text-muted">
           These appear under the chat intro to help recruiters get started.
@@ -670,70 +456,6 @@ export function BotConfigTab({
           onClick={saveQuestions}
         />
       </section>
-
-      <section className="rounded-2xl border border-border-base bg-white p-6 shadow-soft">
-        <h3 className="mb-1 font-bold">Save as a preset</h3>
-        <p className="mb-4 text-xs text-muted">
-          Save this bot&apos;s configuration as a reusable preset (no keys or
-          secrets are stored). Reuse it when creating a new bot.
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            value={presetName}
-            onChange={(e) => {
-              setPresetName(e.target.value);
-              setPresetStatus("idle");
-            }}
-            maxLength={80}
-            placeholder="Preset name"
-            className="min-w-[200px] flex-1 rounded-lg border border-border-base px-3 py-2 text-sm"
-          />
-          <button
-            type="button"
-            onClick={handleSaveAsPreset}
-            disabled={presetStatus === "saving" || presetName.trim().length === 0}
-            className="btn btn-secondary disabled:opacity-60"
-          >
-            {presetStatus === "saving" ? "Saving…" : "Save as preset"}
-          </button>
-          {presetStatus === "saved" ? (
-            <span className="text-sm font-medium text-emerald-700">Saved!</span>
-          ) : null}
-          {presetStatus === "error" ? (
-            <span className="text-sm font-medium text-rose-700">
-              Couldn&apos;t save
-            </span>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-rose-200 bg-white p-6 shadow-soft">
-        <h3 className="mb-1 font-bold text-rose-600">Danger zone</h3>
-        <p className="mb-4 text-xs text-muted">
-          Permanently deletes this bot, its knowledge base, conversations,
-          leads, and any stored encrypted key. You can create a new bot
-          afterwards. This cannot be undone.
-        </p>
-        <button
-          type="button"
-          onClick={() => setDeleteOpen(true)}
-          className="btn border border-rose-200 !bg-rose-50 !text-rose-600 hover:!bg-rose-100"
-        >
-          Delete this bot
-        </button>
-      </section>
-
-      <DeleteBotModal
-        botName={initialName}
-        open={deleteOpen}
-        busy={deleting}
-        error={deleteError}
-        onClose={() => {
-          setDeleteOpen(false);
-          setDeleteError(null);
-        }}
-        onConfirm={handleDeleteBot}
-      />
     </div>
   );
 }

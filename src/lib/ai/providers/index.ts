@@ -2,7 +2,6 @@ import { anthropicProvider } from "./anthropic";
 import { azureProvider } from "./azure";
 import { googleProvider } from "./google";
 import { grokProvider } from "./grok";
-import { ollamaProvider } from "./ollama";
 import { openaiProvider } from "./openai";
 import type { LLMProvider, ProviderName } from "./types";
 
@@ -12,7 +11,6 @@ const PROVIDERS: Record<ProviderName, LLMProvider> = {
   google: googleProvider,
   azure: azureProvider,
   grok: grokProvider,
-  ollama: ollamaProvider,
 };
 
 export const PROVIDER_NAMES: readonly ProviderName[] = [
@@ -21,7 +19,6 @@ export const PROVIDER_NAMES: readonly ProviderName[] = [
   "google",
   "azure",
   "grok",
-  "ollama",
 ];
 
 export function getProvider(name: ProviderName): LLMProvider {

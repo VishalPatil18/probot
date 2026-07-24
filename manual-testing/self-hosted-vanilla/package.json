@@ -1,0 +1,9 @@
+{
+  "name": "self-hosted-vanilla",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "prestart": "cp ../../packages/probot-self-hosted/dist/probot-self-hosted.iife.js ./probot-self-hosted.iife.js",
+    "start": "npx --yes serve@14 -p 5501 ."
+  }
+}

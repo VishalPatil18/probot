@@ -9,9 +9,6 @@ export type RequireBotOwnerResult =
   | { ok: true; bot: Bot; userId: string }
   | { ok: false; response: NextResponse };
 
-// Resolves the session + bot row and confirms the session user owns the bot.
-// Returns a structured discriminated union so the caller can `return result.response`
-// on failure without an exception detour.
 export async function requireBotOwner(
   botId: string,
 ): Promise<RequireBotOwnerResult> {

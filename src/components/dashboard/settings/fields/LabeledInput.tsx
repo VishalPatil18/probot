@@ -15,10 +15,6 @@ export function LabeledInput({
   maxLength: number;
   placeholder?: string;
 }) {
-  // `useId` gives us a stable, unique id per LabeledInput instance so the
-  // `<label htmlFor>` and `<input id>` pair correctly under React Strict
-  // Mode + SSR. Without this pairing, screen readers and testing-library
-  // queries (`getByLabelText`) can't associate the two.
   const inputId = useId();
   return (
     <div>

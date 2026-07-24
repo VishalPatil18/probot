@@ -6,10 +6,6 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth/auth";
 import { db, users } from "@/lib/db";
 
-// GET / PATCH /api/users/me/notification-prefs - the signed-in user's
-// notification preferences. Currently a single flag: email me when a new lead
-// is captured (off by default). Backs the toggle in the notification dropdown.
-
 const prefsInput = z.object({
   notifyLeadsEmail: z.boolean(),
 });

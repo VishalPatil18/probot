@@ -88,8 +88,6 @@ describe("POST /api/bots", () => {
   const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
 
   beforeEach(() => {
-    // mintPreviewToken (called in the route after a successful INSERT) needs
-    // a signing secret. Set a stable value for the test suite.
     process.env.NEXTAUTH_SECRET = "test-secret-for-bots-route-suite";
     getServerSessionMock.mockReset();
     txUpdateUsersSetMock.mockReset();
@@ -99,9 +97,6 @@ describe("POST /api/bots", () => {
     txInsertReturningMock.mockReset();
     txUpdateBotsSetMock.mockReset();
     txUpdateBotsWhereMock.mockReset();
-    // The create path also UPDATEs the just-inserted row with the
-    // minted previewToken. Default the mock so the destructure doesn't blow
-    // up; individual tests can override.
     txUpdateBotsReturningMock
       .mockReset()
       .mockResolvedValue([
@@ -177,10 +172,7 @@ describe("POST /api/bots", () => {
     expect(inserted.contextText).toBe(
       "I am an ML engineer with 5 years experience.",
     );
-    // New bots are created as drafts.
     expect(inserted.isActive).toBe(false);
-    // The route follows the INSERT with an UPDATE that sets the
-    // previewToken on the newly-created bot row.
     expect(txUpdateBotsSetMock).toHaveBeenCalledTimes(1);
     const updatedSet = txUpdateBotsSetMock.mock.calls[0]?.[0] as Record<
       string,

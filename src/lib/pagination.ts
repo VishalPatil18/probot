@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
 
-// Shared `?page=N&limit=M` parser for all paginated dashboard endpoints
-// (conversations, leads, notifications). Centralized so the input contract
-// is identical everywhere and bounded - a hostile client cannot request a
-// 1,000,000-row page.
-
 export const DEFAULT_PAGE = 1;
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 100;

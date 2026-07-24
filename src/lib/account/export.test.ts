@@ -2,9 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { groupBy } from "./export";
 
-// `groupBy` is the core of the O(n) export-bundling refactor: it buckets child
-// rows by their owning bot in one pass (replacing the old O(bots × rows) join).
-
 describe("groupBy", () => {
   it("buckets rows by their key in a single pass", () => {
     const rows = [
@@ -19,8 +16,6 @@ describe("groupBy", () => {
   });
 
   it("skips rows whose derived key is undefined", () => {
-    // Mirrors a message whose conversation isn't in scope: the conversation→bot
-    // lookup returns undefined, so the message must be dropped, not grouped.
     const messages = [
       { id: "m1", conversationId: "c1" },
       { id: "m2", conversationId: "missing" },

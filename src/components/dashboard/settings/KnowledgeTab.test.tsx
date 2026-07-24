@@ -94,7 +94,6 @@ describe("KnowledgeTab", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    // Only the initial GET fired
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

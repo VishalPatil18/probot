@@ -34,11 +34,11 @@ export type FormState = {
   llmProvider: ProviderName;
   llmModel: string;
   apiKey: string;
+  apiKeyStoredMask: string | null;
   azureEndpoint: string;
   azureApiVersion: string;
-  // Ollama-only: base URL of the local model server (ignored for other providers).
-  ollamaBaseUrl: string;
   embeddingApiKey: string;
+  embeddingApiKeyStoredMask: string | null;
 };
 
 export type PatchFn = <K extends keyof FormState>(

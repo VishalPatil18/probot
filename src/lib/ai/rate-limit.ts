@@ -1,24 +1,3 @@
-// Two-tier (per-minute + per-day) rate limiter, scoped per botId.
-//
-// Sliding window: a request's timestamp counts toward both the minute and the
-// day window. Each window prunes entries outside it, then tests the count
-// against the cap. The same orchestration runs regardless of backing store:
-//
-//   - In-memory (default): per-process Maps of timestamps. Vercel/serverless
-//     cold-starts naturally bound memory; the limiter resets on a fresh
-//     process. Fine for a single instance.
-//   - Upstash Redis (opt-in via UPSTASH_REDIS_REST_URL/TOKEN): a sorted set
-//     per window key, mutated atomically with a Lua script so that several
-//     simultaneously-warm instances share one accurate count.
-//
-// The store is selected per call by whether Redis is configured, so the
-// default deployment stays zero-config and behaves exactly as before.
-//
-// Per-bot overrides are accepted at call time. A bot row can store its own
-// perMinute / perDay / maxChars; the route passes them in, NULL means the
-// env-var default wins. Env vars are the floor so self-host operators tune the
-// baseline without touching every bot row.
-
 import { getRedisClient, type RedisLike } from "@/lib/store/redis";
 
 const MINUTE_MS = 60_000;
@@ -32,10 +11,6 @@ export const MAX_CHARS_DEFAULT = Number(
   process.env.PROBOT_RATE_MAX_CHARS ?? 8000,
 );
 
-// Sanity caps so a creator with a fat-finger can't set perMinute=999999 and
-// effectively disable the limiter. Self-host operators can raise these by
-// editing the constants; managed ProBot.dev keeps them tight to protect
-// every recruiter-facing chat from runaway costs on the creator's BYO key.
 export const PER_MINUTE_MAX = 100;
 export const PER_DAY_MAX = 5_000;
 export const MAX_CHARS_MAX = 32_000;
@@ -51,14 +26,10 @@ export interface RateLimitOverrides {
   perDay?: number | null;
 }
 
-// One recorded request carries a `token` so a later tier failure can roll the
-// slot back without removing an unrelated concurrent request's entry.
 export type RateHit =
   | { allowed: true; token: string }
   | { allowed: false; resetAt: number };
 
-// Backing store contract. `hit` records a request in the window if under cap;
-// `rollback` removes a previously recorded hit by its token.
 export interface RateLimitStore {
   hit(
     key: string,
@@ -97,13 +68,9 @@ export function resolveMaxChars(maxChars: number | null | undefined): number {
   return clampPositive(maxChars, MAX_CHARS_DEFAULT, MAX_CHARS_MAX);
 }
 
-// A request's unique member within a window's sorted set. The score is `now`;
-// the suffix disambiguates two requests landing on the same millisecond.
 function makeToken(now: number): string {
   return `${now}-${Math.random().toString(36).slice(2, 10)}`;
 }
-
-// ---- In-memory store (default) -------------------------------------------
 
 class MemoryRateLimitStore implements RateLimitStore {
   private readonly buckets = new Map<string, Array<{ ts: number; token: string }>>();
@@ -116,7 +83,6 @@ class MemoryRateLimitStore implements RateLimitStore {
   ): Promise<RateHit> {
     const entries = this.buckets.get(key) ?? [];
     const cutoff = now - windowMs;
-    // Strictly older than the window - boundary entries are still live.
     const live = entries.filter((e) => e.ts >= cutoff);
 
     if (live.length >= cap) {
@@ -142,11 +108,6 @@ class MemoryRateLimitStore implements RateLimitStore {
   }
 }
 
-// ---- Redis store (opt-in) -------------------------------------------------
-
-// Atomic sliding-window consume. Prunes entries strictly older than the
-// window, rejects if at/over cap (returning the soonest reset), else records
-// the member and refreshes the TTL.
 const HIT_SCRIPT = `
 local cutoff = tonumber(ARGV[1]) - tonumber(ARGV[2])
 redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, cutoff - 1)
@@ -185,8 +146,6 @@ class RedisRateLimitStore implements RateLimitStore {
   }
 }
 
-// ---- Store selection ------------------------------------------------------
-
 const memoryStore = new MemoryRateLimitStore();
 
 function getStore(): RateLimitStore {
@@ -207,9 +166,6 @@ export async function checkRateLimit(
   overridesOrNow?: RateLimitOverrides | number,
   maybeNow?: number,
 ): Promise<RateLimitResult> {
-  // Backwards-compatible call shape: checkRateLimit(botId) and
-  // checkRateLimit(botId, now) both still work. The current signature is
-  // checkRateLimit(botId, overrides, now?).
   let overrides: RateLimitOverrides | undefined;
   let now: number;
   if (typeof overridesOrNow === "number") {
@@ -223,7 +179,6 @@ export async function checkRateLimit(
   const { perMinute, perDay } = resolveLimits(overrides);
   const store = getStore();
 
-  // Check per-minute first; if that fails we don't consume a per-day slot.
   const minute = await store.hit(minuteKey(botId), MINUTE_MS, perMinute, now);
   if (!minute.allowed) {
     return { ok: false, scope: "per_minute", resetAt: minute.resetAt };
@@ -231,8 +186,6 @@ export async function checkRateLimit(
 
   const day = await store.hit(dayKey(botId), DAY_MS, perDay, now);
   if (!day.allowed) {
-    // Roll back the per-minute slot we just consumed so the minute counter
-    // doesn't double-charge a request we ultimately rejected.
     await store.rollback(minuteKey(botId), minute.token);
     return { ok: false, scope: "per_day", resetAt: day.resetAt };
   }
@@ -240,12 +193,9 @@ export async function checkRateLimit(
   return { ok: true };
 }
 
-// Legacy alias kept so existing imports of PER_MINUTE / PER_DAY don't break.
-// The dashboard "current limits" panel imports these.
 export const PER_MINUTE = PER_MINUTE_DEFAULT;
 export const PER_DAY = PER_DAY_DEFAULT;
 
-// Test helper. Only clears the in-memory store (Redis state is external).
 export function __resetRateLimitState(): void {
   memoryStore.clear();
 }

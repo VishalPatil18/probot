@@ -1,0 +1,315 @@
+---
+title: React + Vite (or CRA) example
+description: "Use probot-self-hosted from any plain React SPA - Vite, Create React App, Remix islands, Astro islands - with a small Express, Fastify, or Hono backend for the chat proxy."
+---
+
+`probot-self-hosted` works in any React app. Because the browser can't
+safely hold your LLM key, the important part is the tiny backend that
+proxies the chat call. This page shows Vite + Express as the reference
+stack; the same pattern maps to Fastify, Hono, Next.js Pages Router, or
+any other Node backend you prefer.
+
+## What you'll build
+
+- A Vite React SPA at `http://localhost:5173`.
+- An Express backend at `http://localhost:3001` that handles
+  `POST /api/probot-chat`.
+- Vite's dev-server proxy forwards `/api/*` to Express so the SPA calls
+  `/api/probot-chat` same-origin.
+
+## 1. Install
+
+In your React app:
+
+```bash
+npm i probot-self-hosted
+```
+
+In your backend (may be the same package.json for a monorepo, or a
+separate one):
+
+```bash
+npm i express cors probot-self-hosted
+npm i -D @types/express @types/node tsx
+```
+
+## 2. Backend - Express proxy
+
+Create `server/index.ts`:
+
+```ts
+// server/index.ts
+import express from "express";
+import cors from "cors";
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+const send = createOpenAIHandler({
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: "gpt-4o-mini",
+});
+
+const app = express();
+
+// In dev the Vite proxy forwards /api/* here, so requests are same-origin
+// from the browser's perspective. In production, only allow your web
+// origin (or nothing, if you serve the SPA + API from one host).
+app.use(
+  cors({
+    origin: process.env.NODE_ENV === "production"
+      ? [process.env.SITE_ORIGIN!]
+      : true,
+  }),
+);
+app.use(express.json({ limit: "1mb" }));
+
+app.post("/api/probot-chat", async (req, res) => {
+  const { system, messages } = req.body ?? {};
+  if (typeof system !== "string" || !Array.isArray(messages)) {
+    return res.status(400).json({ error: "invalid_shape" });
+  }
+  try {
+    const reply = await send({ system, messages });
+    res.json({ reply });
+  } catch (err) {
+    console.error("[probot-chat]", err);
+    res.status(500).json({ error: "chat_failed" });
+  }
+});
+
+const port = Number(process.env.PORT ?? 3001);
+app.listen(port, () => {
+  console.log(`chat proxy listening on :${port}`);
+});
+```
+
+Run it with `tsx`:
+
+```bash
+OPENAI_API_KEY=sk-… npx tsx server/index.ts
+```
+
+## 3. Vite dev proxy
+
+In `vite.config.ts`, forward `/api/*` to the Express server so the browser
+calls same-origin `/api/probot-chat` and Vite forwards it to
+`http://localhost:3001`:
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
+    },
+  },
+});
+```
+
+## 4. React widget
+
+`src/BotWidget.tsx`:
+
+```tsx
+import { ProbotBot } from "probot-self-hosted";
+
+const CONTEXT = `
+I'm Ada Lovelace…
+`.trim();
+
+export function BotWidget() {
+  return (
+    <ProbotBot
+      name="Ada"
+      headline="Ask me about my work"
+      themeColor="#7c5cff"
+      suggestedQuestions={["What are you working on?"]}
+      context={CONTEXT}
+      captureLead
+      sendMessage={async ({ system, messages, signal }) => {
+        const res = await fetch("/api/probot-chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ system, messages }),
+          signal,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "chat_failed");
+        return data.reply;
+      }}
+      dashboard={{ token: import.meta.env.VITE_PROBOT_TOKEN }}
+    />
+  );
+}
+```
+
+Mount it in `src/App.tsx`:
+
+```tsx
+import { BotWidget } from "./BotWidget";
+
+export function App() {
+  return (
+    <>
+      {/* your app content */}
+      <BotWidget />
+    </>
+  );
+}
+```
+
+## 5. Env vars in Vite
+
+`.env.local` at the SPA root:
+
+```bash
+# Only the VITE_-prefixed vars ship to the client bundle.
+# The LLM key must NOT be VITE_-prefixed - it lives on the server only.
+VITE_PROBOT_TOKEN=pbt_xxxxxxxx…
+```
+
+The backend's `.env` (or your shell env) holds `OPENAI_API_KEY`. Never mix
+the two files: putting `OPENAI_API_KEY` in the Vite env leaks the key.
+
+## Headless usage
+
+Skip `<ProbotBot />` if you want to build your own UI. The
+`useProbotChat` hook exposes everything you need:
+
+```tsx
+import { useProbotChat } from "probot-self-hosted";
+
+function CustomChat() {
+  const chat = useProbotChat({
+    name: "Ada",
+    context: "…",
+    sendMessage: async ({ system, messages }) => {
+      const res = await fetch("/api/probot-chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ system, messages }),
+      });
+      return (await res.json()).reply;
+    },
+    dashboard: { token: import.meta.env.VITE_PROBOT_TOKEN },
+  });
+
+  return (
+    <div>
+      <ul>
+        {chat.messages.map((m, i) => (
+          <li key={i}><b>{m.role}:</b> {m.content}</li>
+        ))}
+        {chat.busy ? <li>Thinking…</li> : null}
+      </ul>
+      {chat.error ? <p style={{color: "crimson"}}>{chat.error}</p> : null}
+      <input
+        value={chat.input}
+        onChange={(e) => chat.setInput(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && void chat.send()}
+        disabled={chat.busy}
+      />
+      <button onClick={() => void chat.send()} disabled={chat.busy}>
+        Send
+      </button>
+    </div>
+  );
+}
+```
+
+Hook return values:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `messages` | `ChatMessage[]` | Full transcript, updated on each turn. |
+| `input` | `string` | Current composer text. Controlled via `setInput`. |
+| `setInput` | `(v) => void` | Setter for `input`. |
+| `send(text?)` | `Promise<void>` | Sends `text` or the current `input`. No-op when `busy` or empty. |
+| `busy` | `boolean` | True while a `sendMessage` call is in flight. |
+| `error` | `string \| null` | Set when the last `send` threw. Cleared on next successful send. |
+| `sessionId` | `string` | Auto-generated once per hook mount. Used as the dashboard `sessionId`. |
+
+## Non-Express backends
+
+Same pattern with any Node backend. Two examples:
+
+### Fastify
+
+```ts
+import Fastify from "fastify";
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+const send = createOpenAIHandler({
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: "gpt-4o-mini",
+});
+
+const app = Fastify();
+
+app.post("/api/probot-chat", async (req, reply) => {
+  const { system, messages } = req.body as {
+    system: string;
+    messages: { role: "user" | "assistant"; content: string }[];
+  };
+  try {
+    return { reply: await send({ system, messages }) };
+  } catch (err) {
+    reply.code(500);
+    return { error: "chat_failed" };
+  }
+});
+
+app.listen({ port: 3001 });
+```
+
+### Hono (works on Cloudflare Workers, Bun, Deno)
+
+```ts
+import { Hono } from "hono";
+import { createOpenAIHandler } from "probot-self-hosted/adapters/openai";
+
+const app = new Hono();
+
+app.post("/api/probot-chat", async (c) => {
+  const send = createOpenAIHandler({
+    apiKey: c.env.OPENAI_API_KEY,
+    model: "gpt-4o-mini",
+  });
+  const { system, messages } = await c.req.json();
+  try {
+    return c.json({ reply: await send({ system, messages }) });
+  } catch {
+    return c.json({ error: "chat_failed" }, 500);
+  }
+});
+
+export default app;
+```
+
+## Deploying
+
+- **SPA + backend on the same host** (recommended): serve Vite's built
+  `dist/` from Express's static middleware, so `/` and `/api/*` come from
+  one origin. No CORS needed.
+- **SPA on a static host (Netlify, Vercel) + backend elsewhere**: set the
+  backend URL as `VITE_API_ORIGIN` and prefix every fetch. Add CORS on the
+  backend to accept the SPA origin only.
+
+## Testing
+
+Same recipe as Next.js: curl the proxy first, then check the widget.
+
+```bash
+# Backend running on :3001
+curl -s http://localhost:3001/api/probot-chat \
+  -H "content-type: application/json" \
+  -d '{"system":"Reply with the word OK.","messages":[{"role":"user","content":"hi"}]}' | jq
+```
+
+If curl returns `{ "reply": "OK" }`, the React widget will just work.

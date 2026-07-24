@@ -9,6 +9,14 @@ type NotificationPayload = {
   botId?: string;
   botName?: string;
   contextSummary?: string | null;
+  sessionId?: string;
+  conversationId?: string;
+  origin?: "self_hosted" | "managed";
+  sourcesTouched?: number;
+  filesAdded?: number;
+  includesManualText?: boolean;
+  totalTokens?: number;
+  truncated?: boolean;
 };
 
 type NotificationItem = {
@@ -33,6 +41,38 @@ type Props = {
   onItemRead: (id: string) => void;
 };
 
+function describe(n: NotificationItem): { title: string; body: string } {
+  const bot = n.payload.botName ?? "your bot";
+  if (n.kind === "lead_captured") {
+    return {
+      title: n.payload.email ?? "New lead",
+      body: n.payload.contextSummary ?? "",
+    };
+  }
+  if (n.kind === "conversation_started") {
+    return {
+      title: `New conversation on ${bot}`,
+      body:
+        n.payload.origin === "self_hosted"
+          ? "A visitor started chatting from a self-hosted embed."
+          : "A visitor started chatting from the public chat.",
+    };
+  }
+  if (n.kind === "knowledge_updated") {
+    const files = n.payload.filesAdded ?? 0;
+    return {
+      title: `Knowledge updated on ${bot}`,
+      body:
+        files > 0
+          ? `${files} file${files === 1 ? "" : "s"} ingested.`
+          : n.payload.includesManualText
+            ? "Pasted text ingested."
+            : "Knowledge base changed.",
+    };
+  }
+  return { title: n.kind, body: "" };
+}
+
 function relTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const sec = Math.floor(diffMs / 1000);
@@ -45,11 +85,6 @@ function relTime(iso: string): string {
   return `${day}d ago`;
 }
 
-// Dropdown panel that mounts inside <NotificationBell>. Fetches
-// the most recent 10 notifications on open, supports per-item mark-read +
-// navigate, and a "Mark all read" footer. Items are rendered with a
-// pre-denormalized payload (botName, email, contextSummary, etc.) so no
-// follow-up join queries are needed.
 export function NotificationDropdown({
   onClose,
   onAllRead,
@@ -59,8 +94,6 @@ export function NotificationDropdown({
   const [items, setItems] = useState<NotificationItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // null until loaded so the toggle stays hidden rather than flashing a
-  // possibly-wrong default.
   const [emailLeads, setEmailLeads] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -70,8 +103,6 @@ export function NotificationDropdown({
       .then((body: ListResponse) => {
         if (!alive) return;
         setItems(body.items);
-        // The lead-email pref rides the same response; keep it null (toggle
-        // hidden) when absent rather than flashing a wrong default.
         if (typeof body.notifyLeadsEmail === "boolean") {
           setEmailLeads(body.notifyLeadsEmail);
         }
@@ -85,7 +116,7 @@ export function NotificationDropdown({
   }, []);
 
   async function toggleEmailLeads(next: boolean) {
-    setEmailLeads(next); // optimistic
+    setEmailLeads(next);
     try {
       const res = await fetch("/api/users/me/notification-prefs", {
         method: "PATCH",
@@ -99,17 +130,17 @@ export function NotificationDropdown({
   }
 
   async function handleItemClick(item: NotificationItem) {
-    // Mark read first; the navigation can fire in parallel since the
-    // mark-read endpoint is idempotent (404 on already-read returns
-    // safely). We don't await before navigating.
     if (!item.readAt) {
       void fetch(`/api/notifications/${item.id}/read`, { method: "POST" });
       onItemRead(item.id);
     }
     const botId = item.botId ?? item.payload.botId;
-    const leadId = item.payload.leadId;
-    if (item.kind === "lead_captured" && botId && leadId) {
+    if (item.kind === "lead_captured" && botId) {
       router.push(`/dashboard/bots/${botId}/leads`);
+    } else if (item.kind === "conversation_started" && botId) {
+      router.push(`/dashboard/bots/${botId}/conversations`);
+    } else if (item.kind === "knowledge_updated" && botId) {
+      router.push(`/dashboard/bots/${botId}/configuration?tab=kb`);
     }
     onClose();
   }
@@ -120,8 +151,6 @@ export function NotificationDropdown({
         method: "POST",
       });
       if (!res.ok) {
-        // Don't flip the local unread state on server failure - the next
-        // poll will reconcile. A flicker is worse than no-op here.
         setError("Couldn't clear notifications.");
         return;
       }
@@ -168,44 +197,44 @@ export function NotificationDropdown({
           </p>
         ) : (
           <ul className="divide-y divide-border-base">
-            {items?.map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => handleItemClick(item)}
-                  className={`w-full px-4 py-3 text-left transition hover:bg-gray-50 ${
-                    item.readAt ? "" : "bg-brand/5"
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {!item.readAt ? (
-                      <span
-                        aria-label="unread"
-                        className="mt-1.5 inline-block size-2 shrink-0 rounded-full bg-brand"
-                      />
-                    ) : (
-                      <span className="mt-1.5 inline-block size-2 shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-text-base">
-                        {item.payload.email ?? "New lead"}
-                      </p>
-                      {item.payload.contextSummary ? (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-muted">
-                          {item.payload.contextSummary}
+            {items?.map((item) => {
+              const { title, body } = describe(item);
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleItemClick(item)}
+                    className={`w-full px-4 py-3 text-left transition hover:bg-gray-50 ${
+                      item.readAt ? "" : "bg-brand/5"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {!item.readAt ? (
+                        <span
+                          aria-label="unread"
+                          className="mt-1.5 inline-block size-2 shrink-0 rounded-full bg-brand"
+                        />
+                      ) : (
+                        <span className="mt-1.5 inline-block size-2 shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-text-base">
+                          {title}
                         </p>
-                      ) : null}
-                      <p className="mt-1 text-xs text-muted">
-                        {item.payload.botName
-                          ? `${item.payload.botName} · `
-                          : ""}
-                        {relTime(item.createdAt)}
-                      </p>
+                        {body ? (
+                          <p className="mt-0.5 line-clamp-2 text-xs text-muted">
+                            {body}
+                          </p>
+                        ) : null}
+                        <p className="mt-1 text-xs text-muted">
+                          {relTime(item.createdAt)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              </li>
-            ))}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

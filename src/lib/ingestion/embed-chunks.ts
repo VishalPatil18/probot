@@ -19,18 +19,10 @@ export interface EmbedChunksParams {
   embedder?: EmbeddingProvider;
 }
 
-// Format a JS number[] as a pgvector literal string.
-// Matches `src/lib/rag/retrieve.ts#toVectorLiteral`. Kept local to avoid a
-// circular dependency between the ingestion and rag modules.
 function toVectorLiteral(values: number[]): string {
   return `[${values.map((v) => v.toString()).join(",")}]`;
 }
 
-// Embeds every chunk under (botId, sourceName) that currently has no
-// embedding and UPDATEs the rows in place. Idempotent: re-running on a fully
-// embedded source skips everything. Throws if the embedder throws - the
-// caller decides whether to surface the error (route handler logs + falls
-// back to the legacy full-context path).
 export async function embedChunks(
   params: EmbedChunksParams,
 ): Promise<EmbedChunksResult> {

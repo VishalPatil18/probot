@@ -15,7 +15,6 @@ export function FeaturesSection() {
           </h2>
         </div>
         <div className="grid md:grid-cols-12 gap-6">
-          {/* RAG (big) */}
           <div className="md:col-span-7 bg-white rounded-2xl border border-border-base overflow-hidden shadow-soft flex flex-col">
             <div className="p-8 pb-0">
               <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
@@ -45,7 +44,6 @@ export function FeaturesSection() {
               </p>
             </div>
           </div>
-          {/* Security */}
           <div className="md:col-span-5 brand-deep-gradient dot-pattern-light rounded-2xl border border-brand-deep/30 overflow-hidden text-white p-8 flex flex-col">
             <div className="size-11 rounded-xl bg-white/10 grid place-items-center mb-4 border border-white/10">
               <Icon name="shield_lock" />
@@ -74,7 +72,6 @@ export function FeaturesSection() {
               ))}
             </div>
           </div>
-          {/* Widget */}
           <div className="md:col-span-4 bg-white rounded-2xl border border-border-base p-8 shadow-soft">
             <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
               <Icon name="code" />
@@ -90,7 +87,6 @@ export function FeaturesSection() {
               {EMBED_SNIPPET}
             </code>
           </div>
-          {/* Leads */}
           <div className="md:col-span-4 bg-white rounded-2xl border border-border-base p-8 shadow-soft">
             <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
               <Icon name="contact_mail" />
@@ -103,7 +99,6 @@ export function FeaturesSection() {
               email - and notifies you, with full context.
             </p>
           </div>
-          {/* BYO model */}
           <div className="md:col-span-4 bg-white rounded-2xl border border-border-base p-8 shadow-soft">
             <div className="size-11 rounded-xl bg-blue-50 grid place-items-center text-brand mb-4">
               <Icon name="hub" />

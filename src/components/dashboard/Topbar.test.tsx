@@ -8,9 +8,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-// MobileSidebar's Toggle needs the provider context; we mount a tiny
-// fake provider so the Topbar can render without us pulling in the
-// real provider's path-change side effects.
 vi.mock("./MobileSidebar", () => ({
   MobileSidebarToggle: () => (
     <button type="button" aria-label="Open navigation menu">
@@ -24,9 +21,6 @@ vi.mock("./NotificationBell", () => ({
 }));
 
 vi.mock("./CopyUrlButton", () => ({
-  // Match the real `{ url, label?, className? }` interface so future
-  // test additions on this file don't silently lose `label` text or
-  // `className` styling assertions.
   CopyUrlButton: ({
     url,
     label = "Copy link",
@@ -113,7 +107,6 @@ describe("Topbar - URL pill + View live bot", () => {
         liveBotUrl="https://pro-bot.dev/u/jane/chat"
       />,
     );
-    // Scheme stripped for display
     expect(screen.getByText("pro-bot.dev/u/jane/chat")).toBeInTheDocument();
   });
 

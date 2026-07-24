@@ -8,10 +8,6 @@ interface ForgotPasswordModalProps {
   initialEmail?: string;
 }
 
-// Forgot-password flow as an in-place modal, opened from the login form's
-// "Forgot?" link. Same POST /api/auth/forgot-password call as the standalone
-// /forgot-password page (kept as a deep-link fallback). Closes on backdrop
-// click, the × button, or Escape; resets its internal state each time it opens.
 export function ForgotPasswordModal({
   open,
   onClose,
@@ -22,8 +18,6 @@ export function ForgotPasswordModal({
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // Reset to a clean form whenever the modal is (re)opened, seeding the email
-  // the user already typed on the login form.
   useEffect(() => {
     if (open) {
       setEmail(initialEmail);

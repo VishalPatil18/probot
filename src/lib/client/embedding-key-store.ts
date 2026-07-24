@@ -1,11 +1,3 @@
-// Browser-only store for the user's OpenAI embedding API key (used for RAG).
-//
-// Same IndexedDB + Web Crypto upgrade as the chat-key
-// store. Public API is async; localStorage is consulted as a one-time
-// migration so creators don't have to re-enter the key after the
-// upgrade. Attached to upload + chat requests via the
-// `x-embedding-api-key` header.
-
 import { getSecureKeyStore } from "./secure-key-store";
 
 const LEGACY_STORAGE_KEY = "probot.embedding.key.v1";
@@ -33,7 +25,6 @@ async function migrate(): Promise<string | null> {
     await store.setSecret(SECRET_NAME, trimmed);
     ls.removeItem(LEGACY_STORAGE_KEY);
   } catch {
-    // see llm-key-store.ts for the migration-failure rationale
   }
   return trimmed;
 }

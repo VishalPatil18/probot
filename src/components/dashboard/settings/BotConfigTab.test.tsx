@@ -27,9 +27,6 @@ const baseProps = {
   initialIsActive: true,
   initialThemeColor: "#7c5cff",
   initialCustomInstructions: "",
-  initialRateLimitPerMinute: null,
-  initialRateLimitPerDay: null,
-  initialRateLimitMaxChars: null,
   previewToken: null,
 };
 
@@ -40,8 +37,6 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-// Each editable card now has its own subtle "Save" button. Scope queries to a
-// section by its heading so the right per-section button is targeted.
 function sectionByHeading(re: RegExp): HTMLElement {
   const heading = screen.getByRole("heading", { name: re });
   const section = heading.closest("section");
@@ -99,7 +94,6 @@ describe("BotConfigTab", () => {
   });
 
   it("auto-saves isActive=false immediately when the status toggle is clicked off", async () => {
-    // The status toggle saves on its own - no Save button needed.
     fetchMock.mockResolvedValueOnce(jsonResponse(200, {}));
     render(<BotConfigTab {...baseProps} />);
     fireEvent.click(screen.getByRole("switch", { name: /bot status/i }));
@@ -173,21 +167,6 @@ describe("BotConfigTab", () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toEqual({ customInstructions: "Always reply in lowercase." });
-  });
-
-  it("rate-limit field sends a numeric override; blank means revert to default (null)", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, { bot: {} }));
-    render(<BotConfigTab {...baseProps} initialRateLimitPerMinute={20} />);
-    const perMinute = screen.getByLabelText(/per minute/i);
-    fireEvent.change(perMinute, { target: { value: "" } });
-    fireEvent.click(saveButtonIn(/rate limits/i));
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-    });
-    const body = JSON.parse(
-      (fetchMock.mock.calls[0]?.[1] as RequestInit).body as string,
-    ) as Record<string, unknown>;
-    expect(body).toEqual({ rateLimitPerMinute: null });
   });
 
   it("draft bot with previewToken shows the Publish banner", () => {

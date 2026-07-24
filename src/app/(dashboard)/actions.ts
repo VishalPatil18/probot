@@ -8,14 +8,6 @@ import { authOptions } from "@/lib/auth/auth";
 import { bots, db } from "@/lib/db";
 import { writeSelectedBotCookie } from "@/lib/server/selected-bot";
 
-// Server action target for the bot switcher dropdown. Validates the
-// session AND the bot's ownership before writing the cookie - a forged
-// form payload pointing at another user's bot is rejected silently and
-// the cookie is not updated.
-//
-// Returns `void` (matches the form-action signature). On success we
-// `revalidatePath('/')` so every cached dashboard page re-renders with
-// the new selected bot context.
 export async function selectBotAction(formData: FormData): Promise<void> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return;

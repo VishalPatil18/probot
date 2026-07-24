@@ -4,15 +4,6 @@ import { requireBotOwner } from "@/lib/bots/require-bot-owner";
 import { listConversations } from "@/lib/conversations/queries";
 import { parsePagination } from "@/lib/pagination";
 
-// GET /api/bots/[botId]/conversations?page=1&limit=20&q=<search>
-//
-// Paginated conversation list for the dashboard. Each row
-// includes a 200-char preview of the first user message so the dashboard
-// can render "list with preview" without a second round-trip. Search via
-// optional `?q=` is case-insensitive on email + preview.
-//
-// Delegates to `listConversations` (shared with the dashboard list pages).
-
 export async function GET(
   request: Request,
   { params }: { params: { botId: string } },

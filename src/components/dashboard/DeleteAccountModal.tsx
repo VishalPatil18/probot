@@ -2,17 +2,6 @@
 
 import { useEffect, useId, useState } from "react";
 
-// GitHub-style "type your username to confirm" account-deletion modal.
-// Two text inputs: the user must type their username AND the literal
-// phrase "delete my account" before the destructive button enables.
-// Both safeguards together make accidental tap-and-confirm essentially
-// impossible.
-//
-// The component is presentational - it doesn't fire the API call itself.
-// The parent passes `onConfirm(username)` and renders status from there.
-// Keeps this modal reusable for the bot-delete flow (which uses a sister
-// modal with different copy + a different action).
-
 const CONFIRM_PHRASE = "delete my account";
 
 interface Props {
@@ -37,9 +26,6 @@ export function DeleteAccountModal({
   const [typedUsername, setTypedUsername] = useState("");
   const [typedPhrase, setTypedPhrase] = useState("");
 
-  // Reset the inputs every time the modal opens. Lingering text from a
-  // previous open would let a user click Confirm without actually typing
-  // anything in the new session.
   useEffect(() => {
     if (open) {
       setTypedUsername("");
@@ -47,9 +33,6 @@ export function DeleteAccountModal({
     }
   }, [open]);
 
-  // Allow Esc to close while not busy. We deliberately do NOT close on
-  // backdrop click; deletion confirmations should require an explicit
-  // exit because an off-click is too easy to do by accident.
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {

@@ -13,11 +13,6 @@ type Props = {
   onCancel: () => void;
 };
 
-// Design-system styled confirmation modal - replaces the
-// browser-native `window.confirm` so destructive actions (delete a
-// knowledge source, etc.) match the rest of the dashboard. ESC + outside-
-// click both fire `onCancel`. The confirm button auto-focuses for keyboard
-// flow.
 export function ConfirmDialog({
   open,
   title,
@@ -52,11 +47,6 @@ export function ConfirmDialog({
       aria-labelledby="confirm-dialog-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
       onClick={(e) => {
-        // Fire cancel only when both press and release happen on the
-        // backdrop (the click event requires this by spec). Using
-        // `mousedown` instead would close the dialog if a user
-        // accidentally drag-released from inside the panel onto the
-        // backdrop - a real usability hazard.
         if (e.target === e.currentTarget) onCancel();
       }}
     >

@@ -113,7 +113,6 @@ describe("POST /api/bots/[botId]/knowledge", () => {
     dbCountMock.mockReset().mockResolvedValue(0);
     dbInsertMock.mockClear();
     dbInsertValuesMock.mockReset().mockResolvedValue(undefined);
-    // GET-style select used by summarizeSources
     dbSelectMock.mockReset().mockReturnValue({
       from: () => ({
         where: () => ({
@@ -184,7 +183,6 @@ describe("POST /api/bots/[botId]/knowledge", () => {
       PARAMS,
     );
     expect(res.status).toBe(200);
-    // both sources got their delete-then-insert
     expect(deleteSourceMock).toHaveBeenCalledWith(BOT_ID, "cv.pdf");
     expect(deleteSourceMock).toHaveBeenCalledWith(BOT_ID, "manual_text");
     expect(chunkTextMock).toHaveBeenCalledTimes(2);
@@ -204,7 +202,6 @@ describe("POST /api/bots/[botId]/knowledge", () => {
       PARAMS,
     );
     expect(res.status).toBe(200);
-    // seed: chunkText called for "legacy stage 1 text" before processing the PDF
     expect(chunkTextMock).toHaveBeenCalledWith("legacy stage 1 text");
   });
 
@@ -214,7 +211,7 @@ describe("POST /api/bots/[botId]/knowledge", () => {
       bot: { ...OWNER_BOT, contextText: "legacy text" },
       userId: "user-1",
     });
-    dbCountMock.mockResolvedValueOnce(3); // already has chunks
+    dbCountMock.mockResolvedValueOnce(3);
     extractPdfTextMock.mockResolvedValueOnce("pdf body");
 
     const res = await POST(
@@ -222,7 +219,6 @@ describe("POST /api/bots/[botId]/knowledge", () => {
       PARAMS,
     );
     expect(res.status).toBe(200);
-    // chunkText only called for the pdf body, never for the legacy text
     expect(chunkTextMock).toHaveBeenCalledTimes(1);
     expect(chunkTextMock).toHaveBeenCalledWith("pdf body");
   });
@@ -327,8 +323,6 @@ describe("POST /api/bots/[botId]/knowledge", () => {
     });
 
     it("does NOT fail the request when embedChunks throws - returns 200 with bounded embeddingError category", async () => {
-      // Use a plain Error to test the worst-case fallback path. The route
-      // must NOT echo raw error messages (which could carry the BYO key).
       embedChunksMock.mockRejectedValueOnce(
         new Error("OpenAI rejected key sk-openai-leak-canary-9999"),
       );
@@ -339,12 +333,9 @@ describe("POST /api/bots/[botId]/knowledge", () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as Record<string, unknown>;
       expect(body.embedded).toBe(false);
-      // Generic bounded label - no raw error message
       expect(body.embeddingError).toBe("embedding_failed");
-      // Body must NEVER contain the key fragment
       const raw = JSON.stringify(body);
       expect(raw).not.toContain("sk-openai-leak-canary");
-      // legacy assemble still ran - bot falls back to full-context
       expect(assembleAndSaveBotContextMock).toHaveBeenCalledWith(BOT_ID);
     });
 

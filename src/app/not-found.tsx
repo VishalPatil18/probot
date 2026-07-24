@@ -2,11 +2,6 @@ import Link from "next/link";
 
 import { Icon } from "@/components/ui/Icon";
 
-// Global 404 page. Renders inside the root layout (no marketing chrome), so it's
-// fully self-contained: a centered, animated chatbot illustration, the
-// not-found message, and a button back to the homepage. All motion reuses the
-// shared `il-*` illustration classes from globals.css, which are already
-// disabled under `prefers-reduced-motion`.
 export default function NotFound() {
   return (
     <main className="grid min-h-screen place-items-center px-6 py-16">
@@ -33,9 +28,6 @@ export default function NotFound() {
   );
 }
 
-// Friendly, animated chatbot mark: pulsing halo rings, a softly glowing aura, a
-// gently floating robot head with blinking eyes, and a chat bubble with typing
-// dots. Pure SVG + shared CSS animation classes - no client JS.
 function ChatbotIllustration() {
   return (
     <svg
@@ -46,11 +38,9 @@ function ChatbotIllustration() {
       aria-label="A confused chatbot"
       className="max-w-full"
     >
-      {/* expanding halo rings behind the bot */}
       <circle className="il-ring" cx="120" cy="122" />
       <circle className="il-ring r2" cx="120" cy="122" />
 
-      {/* soft glowing aura */}
       <ellipse
         className="il-orb-glow"
         cx="120"
@@ -60,9 +50,7 @@ function ChatbotIllustration() {
         fill="#bfdbfe"
       />
 
-      {/* the floating robot */}
       <g className="il-float">
-        {/* antenna */}
         <line
           x1="120"
           y1="66"
@@ -74,23 +62,18 @@ function ChatbotIllustration() {
         />
         <circle cx="120" cy="46" r="6" fill="#60a5fa" />
 
-        {/* ears */}
         <rect x="66" y="104" width="10" height="26" rx="5" fill="#1d4ed8" />
         <rect x="164" y="104" width="10" height="26" rx="5" fill="#1d4ed8" />
 
-        {/* head */}
         <rect x="74" y="70" width="92" height="86" rx="26" fill="#2563eb" />
 
-        {/* face plate */}
         <rect x="86" y="84" width="68" height="58" rx="20" fill="#eff6ff" />
 
-        {/* eyes (blink) */}
         <g className="il-eyes">
           <circle cx="106" cy="108" r="7" fill="#2563eb" />
           <circle cx="134" cy="108" r="7" fill="#2563eb" />
         </g>
 
-        {/* puzzled little mouth */}
         <path
           d="M108 126 q12 -8 24 0"
           fill="none"
@@ -100,7 +83,6 @@ function ChatbotIllustration() {
         />
       </g>
 
-      {/* chat bubble with typing dots */}
       <g className="il-float d1">
         <rect x="150" y="150" width="58" height="34" rx="14" fill="#2563eb" />
         <path d="M162 182 l-2 12 l14 -10 z" fill="#2563eb" />

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { MODEL_OPTIONS } from "@/lib/ai/model-options";
 import { PROVIDER_LABELS } from "@/lib/ai/provider-labels";
 import { PROVIDER_NAMES, type ProviderName } from "@/lib/ai/providers";
@@ -20,18 +22,19 @@ export function StepAIModel({
   const models = MODEL_OPTIONS[form.llmProvider];
   const providerLabel = PROVIDER_LABELS[form.llmProvider].name;
 
+  const hasStoredKey = form.apiKeyStoredMask !== null;
+  const [editingKey, setEditingKey] = useState(true);
+  useEffect(() => {
+    if (hasStoredKey && form.apiKey.length === 0) setEditingKey(false);
+  }, [hasStoredKey, form.apiKey.length]);
+
   return (
     <section>
       <StepHeading
         step={4}
         title="Choose your AI model."
-        subtitle="ProBot runs on your own model. Pick a provider and connect it - credentials stay on this device and are never tracked by ProBot."
+        subtitle="Pick a provider and paste the key. Your key is envelope-encrypted on pro-bot.dev and only decrypted inside a chat request."
       />
-      <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 mb-6 text-[13px] leading-relaxed">
-        Your credentials stay on this device, used only to call the model
-        directly - <strong>never</strong> sent to or logged by ProBot. Ollama
-        runs locally and needs no key at all.
-      </div>
 
       <div className="space-y-5">
         <div>
@@ -130,54 +133,6 @@ export function StepAIModel({
               />
             </div>
           </>
-        ) : form.llmProvider === "ollama" ? (
-          <>
-            <div>
-              <label
-                htmlFor="bf-ollama-url"
-                className="block text-xs font-semibold mb-1.5"
-              >
-                Ollama base URL
-              </label>
-              <input
-                id="bf-ollama-url"
-                type="url"
-                value={form.ollamaBaseUrl}
-                onChange={(e) => patch("ollamaBaseUrl", e.target.value)}
-                maxLength={512}
-                placeholder="http://localhost:11434"
-                className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
-                autoComplete="off"
-              />
-              <p className="text-[11px] text-muted mt-1.5">
-                Where your Ollama server runs. localhost works when you
-                self-host the bot; on the managed site it must be a public
-                https:// URL the server can reach.
-              </p>
-            </div>
-            <div>
-              <label
-                htmlFor="bf-model"
-                className="block text-xs font-semibold mb-1.5"
-              >
-                Model
-              </label>
-              <input
-                id="bf-model"
-                type="text"
-                value={form.llmModel}
-                onChange={(e) => patch("llmModel", e.target.value)}
-                maxLength={60}
-                placeholder="llama3.2"
-                className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
-                autoComplete="off"
-              />
-              <p className="text-[11px] text-muted mt-1.5">
-                The model you&apos;ve pulled in Ollama (e.g. llama3.2,
-                qwen2.5). No API key needed - it runs on your machine.
-              </p>
-            </div>
-          </>
         ) : models.length > 0 ? (
           <div>
             <label
@@ -223,7 +178,7 @@ export function StepAIModel({
           </div>
         )}
 
-        {form.llmProvider !== "ollama" && (
+        {
           <div>
             <label
               htmlFor="bf-key"
@@ -231,27 +186,69 @@ export function StepAIModel({
             >
               {providerLabel} API key
             </label>
-            <input
-              id="bf-key"
-              type="password"
-              value={form.apiKey}
-              onChange={(e) => patch("apiKey", e.target.value)}
-              maxLength={256}
-              placeholder={
-                form.llmProvider === "azure"
-                  ? "your azure key"
-                  : form.llmProvider === "grok"
-                    ? "xai-…"
-                    : "sk-…"
-              }
-              className="w-full py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
-              autoComplete="off"
-            />
-            <p className="text-[11px] text-muted mt-1.5">
-              Stored locally · never tracked by ProBot
-            </p>
+            {hasStoredKey && !editingKey ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="bf-key"
+                    type="text"
+                    value={form.apiKeyStoredMask ?? ""}
+                    readOnly
+                    aria-label={`${providerLabel} API key (stored)`}
+                    className="flex-1 py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none bg-neutral-50 text-muted font-mono cursor-default"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditingKey(true)}
+                    className="text-xs font-semibold text-brand hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted mt-1.5">
+                  Stored on this device · click Edit to replace
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="bf-key"
+                    type="password"
+                    value={form.apiKey}
+                    onChange={(e) => patch("apiKey", e.target.value)}
+                    maxLength={256}
+                    placeholder={
+                      form.llmProvider === "azure"
+                        ? "your azure key"
+                        : form.llmProvider === "grok"
+                          ? "xai-…"
+                          : "sk-…"
+                    }
+                    className="flex-1 py-2.5 px-3 text-sm border border-border-base rounded-xl outline-none focus:border-brand font-mono"
+                    autoComplete="off"
+                    autoFocus={hasStoredKey}
+                  />
+                  {hasStoredKey ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        patch("apiKey", "");
+                        setEditingKey(false);
+                      }}
+                      className="text-xs font-semibold text-muted hover:text-neutral-900 hover:underline"
+                    >
+                      Cancel
+                    </button>
+                  ) : null}
+                </div>
+                <p className="text-[11px] text-muted mt-1.5">
+                  Stored locally · never tracked by ProBot
+                </p>
+              </>
+            )}
           </div>
-        )}
+        }
       </div>
     </section>
   );

@@ -18,10 +18,6 @@ vi.mock("@/lib/client/session-id-store", () => ({
   getOrCreateSessionId: () => getSessionIdMock(),
 }));
 
-// Stateful mock so writeLeadCaptureState("dismissed") flows through to the
-// next readLeadCaptureState call - matches the real sessionStorage
-// semantics that ChatWindow relies on for "card stays dismissed after the
-// next reply" behavior.
 const leadCaptureState = new Map<string, string>();
 vi.mock("@/lib/client/lead-capture-state", () => ({
   readLeadCaptureState: (botId: string, sessionId: string) =>
@@ -112,9 +108,6 @@ describe("ChatWindow", () => {
     await user.click(screen.getByRole("button", { name: /send message/i }));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    // SessionId is memoized in a ref at mount, so the store
-    // helper is called exactly once per ChatWindow instance. The same
-    // sessionId then rides every request.
     expect(getSessionIdMock).toHaveBeenCalledTimes(1);
     const bodies = fetchMock.mock.calls.map((call) => {
       const [, init] = call as [string, RequestInit];
@@ -213,7 +206,6 @@ describe("ChatWindow", () => {
       "https://example.cognitiveservices.azure.com",
     );
     expect(headers["x-llm-azure-api-version"]).toBe("2025-01-01-preview");
-    // Neither the key nor the endpoint should appear in the JSON body.
     expect(init.body).not.toContain("azure-leak-canary");
     expect(init.body).not.toContain("cognitiveservices.azure.com");
   });
@@ -231,7 +223,6 @@ describe("ChatWindow", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  // Lead-capture card appears after the 3rd assistant reply.
   describe("lead capture card (Stage 6)", () => {
     async function sendN(turns: number) {
       const user = userEvent.setup();
@@ -274,9 +265,6 @@ describe("ChatWindow", () => {
       expect(
         screen.queryByText(/want jane doe to get back to you/i),
       ).toBeNull();
-      // Subsequent reply must NOT bring the card back (handled by the
-      // `messages.some(role === "system")` guard in shouldShowLeadCard,
-      // but defense-in-depth via writeLeadCaptureState("dismissed").)
       fetchMock.mockResolvedValueOnce(
         jsonResponse(200, { reply: "reply 4", conversationId: "conv-xyz" }),
       );

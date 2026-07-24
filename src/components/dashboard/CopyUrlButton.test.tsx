@@ -15,9 +15,6 @@ const writeTextMock = vi.fn();
 describe("CopyUrlButton", () => {
   beforeEach(() => {
     writeTextMock.mockReset();
-    // jsdom does not implement navigator.clipboard. Install our spy by
-    // re-defining the property on the global navigator. `configurable: true`
-    // is required so subsequent tests can re-define it.
     Object.defineProperty(globalThis.navigator, "clipboard", {
       value: { writeText: writeTextMock },
       writable: true,
@@ -26,7 +23,6 @@ describe("CopyUrlButton", () => {
   });
 
   afterEach(() => {
-    // Clean the stub so other test files do not see a leaked clipboard impl.
     Object.defineProperty(globalThis.navigator, "clipboard", {
       value: undefined,
       writable: true,

@@ -6,10 +6,6 @@ import { authOptions } from "@/lib/auth/auth";
 import { db, users } from "@/lib/db";
 import { profileUpdateInput } from "@/lib/users/profile-schemas";
 
-// PATCH /api/users/me/profile - update the signed-in user's full name and
-// username. Email is intentionally not editable here. Username uniqueness is
-// pre-checked and backstopped by the UNIQUE constraint (23505 -> 409).
-
 function isUniqueViolation(err: unknown): boolean {
   return (
     typeof err === "object" &&

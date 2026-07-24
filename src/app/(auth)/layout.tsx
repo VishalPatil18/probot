@@ -2,9 +2,6 @@ import Link from "next/link";
 
 import { BrandPanel } from "@/components/auth/BrandPanel";
 
-// Shared layout for /login and /register. Renders the lg:grid-cols-2 split:
-// brand panel on the left (lg+), form on the right. Mobile gets a stacked
-// view with just the logo above the form.
 export default function AuthLayout({
   children,
 }: {

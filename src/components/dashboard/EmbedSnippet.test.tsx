@@ -19,11 +19,6 @@ describe("EmbedSnippet", () => {
     expect(screen.getByText("Email signature")).toBeInTheDocument();
   });
 
-  // Each snippet is displayed via tokenized <span> children (one span per
-  // syntactic piece for the HTML-highlighted look), so we assert against the
-  // reassembled textContent of the panel's <pre> block rather than a single
-  // text node. Whitespace is normalised because the pretty-printed markup
-  // introduces newlines + indent that the raw snippet doesn't have.
   function normalize(s: string): string {
     return s.replace(/\s+/g, "");
   }
@@ -54,8 +49,6 @@ describe("EmbedSnippet", () => {
       "#embed-panel-signature pre",
     );
     expect(signaturePanel).not.toBeNull();
-    // The panel keeps whitespace for legibility; assert on the reassembled
-    // textContent instead of a single text node.
     expect(signaturePanel?.textContent ?? "").toContain(
       "Chat with my AI · pro-bot.dev/u/jane-doe",
     );
@@ -80,8 +73,6 @@ describe("signatureBadgeHtml", () => {
       origin: "https://pro-bot.dev",
     });
     expect(html).toContain("pro-bot.dev/u/jane");
-    // The visible body should NOT show the leading https:// - only the
-    // href attribute carries it. Anchor text is the user-facing slug.
     const innerText = html.replace(/<a [^>]+>/, "").replace(/<\/a>/, "");
     expect(innerText).not.toContain("https://");
   });

@@ -2,10 +2,6 @@ import { ImageResponse } from "next/og";
 
 import { SITE_DESCRIPTION } from "./site";
 
-// Shared 1200x630 social card rendered at request time via next/og (built into
-// Next, zero external deps, no custom fonts). Both the opengraph-image and
-// twitter-image routes call this so the card stays identical across platforms.
-
 export const OG_SIZE = { width: 1200, height: 630 } as const;
 export const OG_CONTENT_TYPE = "image/png";
 export const OG_ALT = "ProBot - AI assistant for job seekers";

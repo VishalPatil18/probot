@@ -1,43 +1,6 @@
-/*
- * ProBot embeddable widget
- *
- * Usage:
- *   <script src="https://pro-bot.dev/widget.js" data-bot-id="<uuid>"></script>
- *
- * Optional:
- *   data-api-base="https://staging.pro-bot.dev"
- *
- * The script reads its config from its own <script> tag, fetches the bot's
- * public config from /api/bots/[botId]/config, attaches a Shadow DOM to the
- * host page (so host CSS cannot leak in), and renders a floating bubble
- * with a chat dialog. Messages are POSTed to /api/chat/[botId] with no
- * BYO-key header - the widget relies on the bot owner having stored a
- * managed key server-side (see BYO-KEY.md path 2). When the API returns
- * an error (missing managed key, rate limit, ...) the widget shows an
- * inline error and a fallback link to the full /u/[username]/chat page.
- */
-
-// Build-time defines (esbuild --define).
-// At runtime these are inlined as string literals.
 declare const __WIDGET_CSS__: string;
 declare const __API_BASE_DEFAULT__: string;
 
-// Minimal markdown → HTML for bot replies. Covers the subset LLMs actually
-// emit (bold, italic, inline code, code fences, links, headings, ordered
-// and unordered lists, blockquotes, horizontal rules, hard breaks). Full
-// libraries like `marked` (~40 KB) or `micromark` (~50 KB) blow the widget
-// bundle budget, so we hand-roll the parser.
-//
-// SAFETY: every branch calls `escapeHtml` on user-controlled input *before*
-// inserting markdown-generated tags, so LLM output can't inject <script>
-// or attribute payloads. Link `href` is scheme-whitelisted (http/https/
-// mailto only) — anything else collapses to `#` so a `javascript:` URL
-// can't execute even if the LLM was tricked into emitting one.
-//
-// Trade-offs vs the deployed `react-markdown` + `remark-gfm` renderer:
-//   - No tables, no autolinking, no strikethrough (adds parser complexity).
-//   - Italic `*x*` inside math-like "5*3*7" gets false-positive matched;
-//     LLM replies rarely mix the two so it's an acceptable edge case.
 export function renderMarkdown(md: string): string {
   const lines = md.replace(/\r\n?/g, "\n").split("\n");
   const blocks: string[] = [];
@@ -45,7 +8,6 @@ export function renderMarkdown(md: string): string {
   while (i < lines.length) {
     const line = lines[i] ?? "";
 
-    // Fenced code block.
     if (/^```/.test(line)) {
       const codeLines: string[] = [];
       i++;
@@ -60,7 +22,6 @@ export function renderMarkdown(md: string): string {
       continue;
     }
 
-    // Heading (# .. ######).
     const h = line.match(/^(#{1,6})\s+(.+)$/);
     if (h) {
       const level = h[1]!.length;
@@ -69,14 +30,12 @@ export function renderMarkdown(md: string): string {
       continue;
     }
 
-    // Horizontal rule (---, ***, ___).
     if (/^([-*_])\1{2,}\s*$/.test(line)) {
       blocks.push("<hr>");
       i++;
       continue;
     }
 
-    // Blockquote (contiguous > ... lines).
     if (/^>/.test(line)) {
       const parts: string[] = [];
       while (i < lines.length && /^>/.test(lines[i] ?? "")) {
@@ -89,7 +48,6 @@ export function renderMarkdown(md: string): string {
       continue;
     }
 
-    // Unordered list (contiguous - or * items).
     if (/^[-*]\s+/.test(line)) {
       const items: string[] = [];
       while (i < lines.length && /^[-*]\s+/.test(lines[i] ?? "")) {
@@ -101,7 +59,6 @@ export function renderMarkdown(md: string): string {
       continue;
     }
 
-    // Ordered list (contiguous "N. " items).
     if (/^\d+\.\s+/.test(line)) {
       const items: string[] = [];
       while (i < lines.length && /^\d+\.\s+/.test(lines[i] ?? "")) {
@@ -113,15 +70,11 @@ export function renderMarkdown(md: string): string {
       continue;
     }
 
-    // Blank line — flush any pending paragraph and continue.
     if (line.trim() === "") {
       i++;
       continue;
     }
 
-    // Paragraph: consume consecutive non-empty, non-block-starter lines.
-    // Single-newline is a hard break within a paragraph (matches the
-    // deployed page's `breaks: true` behaviour).
     const paragraph: string[] = [];
     while (
       i < lines.length &&
@@ -138,39 +91,25 @@ export function renderMarkdown(md: string): string {
   return blocks.join("");
 }
 
-// Inline transforms applied inside every block: HTML-escape first, then
-// pull inline code out with placeholders so its contents don't get mis-
-// parsed by the emphasis / link passes, run the transforms, restore.
 function renderInline(text: string): string {
   let s = escapeHtml(text);
 
-  // Reserve inline code with sentinel placeholders. \x00 can't appear in
-  // normal text and won't collide with the emphasis/link regexes below.
   const codes: string[] = [];
   s = s.replace(/`([^`\n]+)`/g, (_m, c: string) => {
     const idx = codes.push(`<code>${c}</code>`) - 1;
     return `\x00C${idx}\x00`;
   });
 
-  // Links [text](url). URL scheme-whitelisted — anything unusual collapses
-  // to `#` so a `javascript:` href can't execute even if the LLM emits one.
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, t: string, u: string) => {
     const safe = /^(https?:|mailto:)/i.test(u) ? u : "#";
     return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${t}</a>`;
   });
 
-  // Bold (**text**) first — after this, no `**` remain, so the italic pass
-  // won't accidentally match inside a bold span.
   s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 
-  // Italic (*text* / _text_). Underscore variant guards word-internal
-  // `foo_bar_baz` from matching by requiring non-word neighbours; the
-  // asterisk variant is lax on purpose because LLM output rarely emits
-  // `5*3*` style math.
   s = s.replace(/(^|\W)_(.+?)_(\W|$)/g, "$1<em>$2</em>$3");
   s = s.replace(/\*(.+?)\*/g, "<em>$1</em>");
 
-  // Restore inline code.
   s = s.replace(/\x00C(\d+)\x00/g, (_m, i: string) => codes[Number(i)] ?? "");
   return s;
 }
@@ -191,10 +130,6 @@ export interface WidgetConfig {
   };
 }
 
-// Escape user-controlled strings before interpolating into HTML. We render
-// `bot.name`, `owner.name`, `bot.headline`, and `suggestedQuestions[]` -
-// all of which come from the bot owner's free-text input. Owners can be
-// adversarial vs. the visitors browsing the embed surface.
 export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -204,8 +139,6 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-// Hex-color validator mirrors the server-side regex (#RRGGBB only).
-// Falls back to the brand purple if the config has been tampered with.
 const THEME_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const FALLBACK_THEME = "#7c5cff";
 
@@ -215,9 +148,6 @@ export function safeThemeColor(value: unknown): string {
     : FALLBACK_THEME;
 }
 
-// Narrow the GET /api/bots/[botId]/config response into our WidgetConfig.
-// Returns null if any required field is missing so the caller can bail
-// cleanly without rendering a half-broken widget.
 export function parseConfig(raw: unknown): WidgetConfig | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
@@ -259,10 +189,6 @@ export function parseConfig(raw: unknown): WidgetConfig | null {
   };
 }
 
-// Pure renderer for the bubble's inner SVG icon. Extracted so tests can
-// snapshot the markup without spinning up the full Shadow DOM. Sparkles
-// glyph (Lucide-style) - the ring + glow animations live in widget.css so
-// this stays a tiny inline SVG.
 export function renderBubbleInner(): string {
   return `
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -274,9 +200,6 @@ export function renderBubbleInner(): string {
   `;
 }
 
-// Minimal dialog shown before the bot config has loaded (or when the fetch
-// fails). We render the bubble immediately so the widget is always visible;
-// this fallback keeps the dialog usable even without a live config.
 export function renderFallbackDialogInner(apiBase: string): string {
   return `
     <header class="probot-header">
@@ -303,10 +226,6 @@ export function renderFallbackDialogInner(apiBase: string): string {
   `;
 }
 
-// Bot avatar HTML for the header (large) and per-message (small). Mirrors
-// `src/components/chat/BotAvatarIcon.tsx` so the widget looks like the
-// deployed /u/[username]/chat page: real image when available, otherwise
-// a theme-tinted circle with two ProBot-mark dots.
 export function renderBotAvatar(
   avatarSrc: string | null,
   variant: "header" | "mini",
@@ -323,14 +242,6 @@ export function renderBotAvatar(
     </div>`;
 }
 
-// Pure renderer for the dialog's inner markup. Tests assert escaping +
-// theme color application without depending on the DOM. The layout mirrors
-// the deployed /u/[username]/chat page (see src/components/chat/*):
-//   header (ringed avatar + online dot + "Name · AI Assistant" + close)
-//   messages list (bot row = mini-avatar + bubble; user row = right-aligned)
-//   suggested-question pill chips (hidden once the visitor sends a message)
-//   input pill (text field + circular send with arrow-up)
-//   footer (Open full chat · Powered by ProBot)
 export function renderDialogInner(
   config: WidgetConfig,
   apiBase: string,
@@ -338,8 +249,6 @@ export function renderDialogInner(
   const { bot, owner } = config;
   const displayName = owner.name ?? owner.username;
   const chatUrl = `${apiBase}/u/${encodeURIComponent(owner.username)}/chat`;
-  // Prefer the bot's own picture; fall back to the owner's photo, then a
-  // theme-tinted ProBot placeholder. Same precedence as ChatWindow.
   const avatarSrc = bot.image ?? owner.image;
   const headerAvatarHtml = renderBotAvatar(avatarSrc, "header");
   const miniAvatarHtml = renderBotAvatar(avatarSrc, "mini");
@@ -357,10 +266,6 @@ export function renderDialogInner(
        </div>`
     : "";
 
-  // Dropdown panel + toggle button mirror the deployed /u/[username]/chat
-  // page (see src/components/chat/ChatWindow.tsx). Both start hidden; once
-  // the visitor sends their first message the chips disappear and the
-  // toggle button is revealed by wireChat().
   const suggestedListHtml = hasSuggestions
     ? `<div class="probot-suggest-list" data-role="suggest-list" hidden>
          <p class="probot-suggest-list-heading">Suggested questions</p>
@@ -443,8 +348,6 @@ export function renderDialogInner(
   `;
 }
 
-// Read configuration from the script tag's data attributes. Exported so
-// tests can build a fake `currentScript` and assert the contract.
 export function readScriptConfig(
   script: HTMLScriptElement | null,
 ): { botId: string; apiBase: string } | null {
@@ -459,17 +362,9 @@ export function readScriptConfig(
   return { botId, apiBase };
 }
 
-// The server validates sessionId as a strict RFC 4122 UUID (Zod .uuid() in
-// src/app/api/chat/[botId]/pipeline.ts). Any other shape 400s, so both the
-// generator and the localStorage-cache path must guarantee UUID output.
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// v4 UUID, preferring crypto.randomUUID and falling back to
-// crypto.getRandomValues (universally available where any Crypto namespace
-// exists). Mirrors src/lib/client/session-id-store.ts. Throws only in the
-// extreme-legacy runtime with no Crypto at all — callers catch and let the
-// chat request degrade gracefully.
 function newUuid(): string {
   const c: Crypto | undefined =
     typeof crypto !== "undefined" ? crypto : undefined;
@@ -481,7 +376,6 @@ function newUuid(): string {
   }
   const bytes = new Uint8Array(16);
   c.getRandomValues(bytes);
-  // RFC 4122 §4.4: set version (4) and variant (10xx) bits.
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
@@ -490,12 +384,6 @@ function newUuid(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-// Per-tab conversation ID persisted in localStorage so back-to-back turns
-// on the same host page get coalesced into one conversation server-side.
-// The key is namespaced by botId because a page could embed multiple bots.
-// Revalidates the stored value against UUID_RE on every read so a stale
-// non-UUID (from an older widget build's fallback path) gets replaced
-// instead of pinning the visitor to a permanent 400.
 function getOrCreateSessionId(botId: string): string {
   const key = `probot.session.${botId}`;
   try {
@@ -505,15 +393,10 @@ function getOrCreateSessionId(botId: string): string {
     window.localStorage.setItem(key, created);
     return created;
   } catch {
-    // Private-mode / blocked storage - fall back to a per-load UUID. Still
-    // a valid UUID so the chat request goes through; conversation
-    // coalescence is lost for this pageview only.
     return newUuid();
   }
 }
 
-// Mount the widget into the host page. Exposed for tests; the IIFE wrapper
-// below calls it once when the script tag executes.
 export async function mount(
   script: HTMLScriptElement | null,
   doc: Document = document,
@@ -521,10 +404,6 @@ export async function mount(
   const config = readScriptConfig(script);
   if (!config) return;
 
-  // Render the bubble + a fallback dialog immediately so the widget is
-  // always visible on the host page - even before the config fetch resolves
-  // and even if it fails. The dialog is then upgraded once the real config
-  // arrives.
   const host = doc.createElement("div");
   host.setAttribute("data-probot-widget", "");
   doc.body.appendChild(host);
@@ -534,12 +413,6 @@ export async function mount(
   style.textContent = __WIDGET_CSS__;
   shadow.appendChild(style);
 
-  // Defensive avatar-load guard. Any bot/owner avatar `<img>` that 404s (stale
-  // localhost URL still cached upstream, deleted uploads, network flake, etc.)
-  // gets swapped for the theme-tinted ProBot placeholder so a visitor never
-  // sees the browser's default broken-image icon. `error` doesn't bubble in
-  // the composed tree, so the listener uses the capture phase to catch it at
-  // the shadow root regardless of where the failing img lives.
   shadow.addEventListener(
     "error",
     (event) => {
@@ -585,8 +458,6 @@ export async function mount(
   root.appendChild(dialog);
   shadow.appendChild(root);
 
-  // Hydrate: fetch the bot config and upgrade the dialog once it's ready.
-  // Any failure leaves the fallback in place - the bubble stays clickable.
   let raw: unknown;
   try {
     const res = await fetch(
@@ -609,9 +480,30 @@ export async function mount(
   wireChat(dialog, doc, config.apiBase, config.botId);
 }
 
-// Wire up the chat surface inside the (already-rendered) dialog. Kept
-// separate from `mount` so the pure-HTML renderer can be unit-tested
-// without exercising fetch/event plumbing.
+async function readErrorCode(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { error?: unknown };
+    return typeof body.error === "string" ? body.error : null;
+  } catch {
+    return null;
+  }
+}
+
+function messageForErrorCode(code: string | null): string {
+  switch (code) {
+    case "missing_llm_key":
+      return "This bot isn't set up yet — its owner needs to save an AI key before it can answer.";
+    case "managed_key_provider_mismatch":
+      return "This bot's saved key doesn't match its selected AI provider. The owner needs to re-save it.";
+    case "managed_storage_unavailable":
+      return "The AI key service is temporarily unavailable. Please try again shortly.";
+    case "provider_unavailable":
+      return "This bot's AI provider isn't available right now. Try the full chat linked below.";
+    default:
+      return "I can't answer here right now. Try the full chat linked below.";
+  }
+}
+
 function wireChat(
   dialog: HTMLElement,
   doc: Document,
@@ -642,9 +534,6 @@ function wireChat(
   }
 
   const sessionId = getOrCreateSessionId(botId);
-  // Read the avatar url the renderer stashed on the body node so appended bot
-  // messages get the same mini-avatar as the seed greeting. Empty string ↔ null
-  // (renderer stringifies null).
   const avatarSrc = body?.dataset.avatarSrc || null;
   let inFlight = false;
 
@@ -656,7 +545,6 @@ function wireChat(
     const row = doc.createElement("div");
     row.className = `probot-msg-row probot-msg-row-${role}`;
     if (role === "bot") {
-      // Inject a copy of the mini avatar to the left of the bubble.
       const wrapper = doc.createElement("div");
       wrapper.innerHTML = renderBotAvatar(avatarSrc, "mini");
       const avatarEl = wrapper.firstElementChild;
@@ -665,9 +553,6 @@ function wireChat(
     const bubble = doc.createElement("div");
     bubble.className = `probot-msg probot-msg-${role}`;
     if (role === "bot") {
-      // marked escapes raw HTML by default, so LLM output can't inject scripts.
-      // User input stays as textContent - no need to parse markdown a visitor
-      // typed, and it keeps that path zero-risk.
       bubble.innerHTML = renderMarkdown(text);
     } else {
       bubble.textContent = text;
@@ -705,10 +590,6 @@ function wireChat(
     const trimmed = question.trim();
     if (!trimmed || inFlight) return;
 
-    // Once the visitor engages, hide the suggestion chips so the message
-    // list is the sole focus. Reveal the input-bar toggle so they can
-    // still reopen the list from inside the conversation, and collapse
-    // any open dropdown so it doesn't linger over the new message.
     if (suggestions) suggestions.hidden = true;
     if (suggestToggle) suggestToggle.hidden = false;
     setSuggestListOpen(false);
@@ -738,10 +619,8 @@ function wireChat(
         return;
       }
       if (!res.ok) {
-        appendMessage(
-          "bot",
-          "I can't answer here right now. Try the full chat linked below.",
-        );
+        const code = await readErrorCode(res);
+        appendMessage("bot", messageForErrorCode(code));
         return;
       }
 
@@ -771,8 +650,6 @@ function wireChat(
   dialog.addEventListener("click", (event) => {
     const target = event.target as HTMLElement | null;
     if (!target) return;
-    // The button lives inside the input pill; walk up to it so a click
-    // on the inner <svg>/<path> still counts as a toggle click.
     const toggleEl = target.closest<HTMLElement>(
       '[data-role="suggest-toggle"]',
     );
@@ -788,9 +665,6 @@ function wireChat(
   });
 }
 
-// Auto-mount on script execution. `document.currentScript` is the script
-// tag the browser is currently executing - only present for sync,
-// non-module scripts (which is exactly how we ship widget.js).
 if (typeof document !== "undefined") {
   void mount(document.currentScript as HTMLScriptElement | null);
 }
