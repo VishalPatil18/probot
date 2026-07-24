@@ -3900,3 +3900,64 @@ Consolidated entry covering a stack of small changes on top of the self-hosted-r
 - Token revoke/rotate UI for self-hosted bots is still unbuilt (the other half of the "manage from bot settings" promise). Out of scope here.
 
 **Verification:** `npx tsc --noEmit` clean. `SelfHostedDangerZone.test.tsx` 2/2 pass. Sidebar.test.tsx has 1 pre-existing failure (stale "Embed & share" assertion, identical on stashed baseline — not introduced here).
+
+---
+
+### 2026-07-24 11:29 - Self-hosted token management (list/revoke/rotate) + de-stale Sidebar test
+
+**What was asked to do:** (1) Fix the stale Sidebar test asserting removed "Embed & share" text. (2) Build the missing token revoke/rotate UI for self-hosted bots (the other half of the register screen's "manage from bot settings" promise).
+
+**What I did:**
+- **Sidebar test:** "Embed & share" was removed from the sidebar (the public URL now lives in `BotSwitcher`). Replaced the two dead-text assertions with "Conversations" (the real Workspace-section marker) in both tests. 2/2 pass.
+- **Token management:** the `bot_tokens` service (`mintBotToken`/`listBotTokens`/`revokeBotToken`) existed but only *mint* was wired (at registration) - no dashboard routes. Added them and a UI panel on the self-hosted management page:
+  - `GET /api/bots/[botId]/tokens` (list) + `POST` (mint new / rotate); `DELETE /api/bots/[botId]/tokens/[tokenId]` (revoke). All guarded by `requireBotOwner` **and** `deploymentMode === "self_hosted"` (managed bots can't mint tokens). The list endpoint returns only metadata (id/name/createdAt/lastSeenAt/revokedAt) - never token material; the raw token is returned once, at mint.
+  - `SelfHostedTokens` client panel: lists tokens (name, created, last-used, Active/Revoked badge), per-token Revoke (window.confirm), and "Generate new token" with a show-once reveal + copy (mirrors RegisterSelfHostedForm's token box). Rotate = generate-new + revoke-old separately, so the owner can install the new token before killing the old (no downtime).
+  - Reused `formatTimestamp` / `formatRelative` from `settings/audit.ts` for the dates.
+- Restructured the self-hosted configuration view: the page now renders an identity header + `SelfHostedTokens` + `SelfHostedDangerZone` (identity moved out of the danger-zone component so order reads identity → tokens → danger).
+
+**Files changed:**
+- `src/components/dashboard/Sidebar.test.tsx` - update - dead "Embed & share" → "Conversations".
+- `src/app/api/bots/[botId]/tokens/route.ts` - create - GET (list) + POST (mint), owner + self_hosted guarded.
+- `src/app/api/bots/[botId]/tokens/[tokenId]/route.ts` - create - DELETE (revoke), 404 when not found/already revoked.
+- `src/components/dashboard/settings/SelfHostedTokens.tsx` - create - token list/revoke/generate panel with show-once reveal.
+- `src/app/(dashboard)/dashboard/bots/[botId]/configuration/page.tsx` - update - self-hosted branch renders identity header + SelfHostedTokens + SelfHostedDangerZone.
+- `src/components/dashboard/settings/SelfHostedDangerZone.tsx` - update - removed identity section (moved to page); dropped `botHeadline` prop.
+- `src/components/dashboard/settings/SelfHostedTokens.test.tsx` - create - list/generate/revoke/decline tests.
+- `src/components/dashboard/settings/SelfHostedDangerZone.test.tsx` - update - dropped `botHeadline` from props.
+
+**Decisions made:**
+- Rotate does NOT auto-revoke the old token - self-hosted tokens live in the owner's running app config, so forcing a simultaneous revoke would cause an outage. Owner revokes the old one once the new is deployed.
+- List endpoint deliberately exposes zero token material (no hash, no raw) - only metadata. Raw token is shown once at creation, matching the registration flow.
+- Guarded token routes to `self_hosted` bots only; managed bots use the browser/managed-key path and have no tokens.
+- No schema change - `bot_tokens` + service already existed; this only exposed them via routes + UI.
+
+**Open questions / follow-ups:**
+- None outstanding for self-hosted management. (Token count limits / auto-expiry intentionally skipped - YAGNI.)
+
+**Verification:** `npx tsc --noEmit` clean. SelfHostedTokens 4/4, SelfHostedDangerZone 2/2, Sidebar 2/2 pass.
+
+---
+
+### 2026-07-24 12:00 - Bot factory: sidebar-on-publish, step-5 Dashboard button, full draft prefill + force-select
+
+**What was asked to do:** (1) After publishing in the bot factory, the sidebar's bot options should appear immediately. (2) Add a "Dashboard" button left of "Open chat" on step 5, shown even when unpublished. (3) Re-entering the factory for an unpublished draft should prefill all prior values so the user can click through to step 5's Publish button. (4) Force-select the newly published bot.
+
+**What I did:**
+- **Sidebar-on-publish + force-select:** `publish()` now, on success, calls the existing `selectBotAction` server action (sets the `probot.selectedBot.v1` cookie + `revalidatePath("/")`) with the new bot id, then `router.refresh()`. The server-rendered dashboard layout (which owns the sidebar) re-renders, so its bot options appear immediately and the freshly-published bot is the selected one. Client state (step 5, `published`) is preserved across the refresh.
+- **Step-5 Dashboard button:** the step-5 footer left button was `invisible`; it's now a visible "Dashboard" button, and `back()` routes to `/dashboard` on step 5 (previously only step 1). Right button stays "Open chat".
+- **Full draft prefill:** `new/page.tsx` already loaded the existing managed draft as `initialBot` and `POST /api/bots` upserts it (no duplicate), but the `initialBot` object omitted `themeColor` and `customInstructions` (both already in the `InitialBot` type and read by the form's initial state). Added both fields, so re-entering prefills every persisted value; the user clicks Continue → … → "Save as draft" (idempotent upsert) → step 5 → Publish.
+
+**Files changed:**
+- `src/app/(dashboard)/dashboard/bots/new/page.tsx` - update - pass `themeColor` + `customInstructions` in `initialBot`.
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - import `selectBotAction`; `publish()` selects new bot + `router.refresh()`; `back()` → `/dashboard` on step 5; footer left button visible as "Dashboard" on step 5.
+- `src/components/bot-factory/BotFactoryForm.test.tsx` - update - mock `@/app/(dashboard)/actions` (the new server-action import pulls db/auth into jsdom); add `refresh` to the `next/navigation` router mock.
+
+**Decisions made:**
+- Reused `selectBotAction` (already used by BotSwitcher) rather than adding a new selection endpoint - it already does ownership check + cookie + `revalidatePath`. Tied both the sidebar-refresh and force-select to publish, matching the "once published" wording.
+- Prefill needed no type/form change - the gap was purely the fields omitted at the `new/page.tsx` call site; the `InitialBot` type and form-init already supported them.
+- Did not init `createdBotId`/`previewToken` from `initialBot` - steps are sequential and step-4 "Save as draft" upserts and yields the preview token, so step 5 + Publish are reachable by clicking through.
+
+**Open questions / follow-ups:**
+- None. (Pre-existing: BotFactoryForm.test.tsx has 5 failing tests unrelated to this change - identical set before and after.)
+
+**Verification:** `npx tsc --noEmit` clean. `BotFactoryForm.test.tsx` unchanged from baseline (same 5 pre-existing failures, 8 pass) - the new server-action import loads cleanly under the added mock.

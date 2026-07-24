@@ -17,6 +17,8 @@ import {
   setAzureCreds,
 } from "@/lib/client/llm-key-store";
 
+import { selectBotAction } from "@/app/(dashboard)/actions";
+
 import {
   DEFAULT_AZURE_API_VERSION,
   ENABLED_PROVIDERS,
@@ -361,7 +363,7 @@ export function BotFactoryForm({
   }
 
   function back() {
-    if (step === 1) {
+    if (step === 1 || step === 5) {
       router.push("/dashboard");
       return;
     }
@@ -389,6 +391,12 @@ export function BotFactoryForm({
         return;
       }
       setPublished(true);
+      // Make the freshly-published bot the selected one and re-render the
+      // server layout so its sidebar options appear immediately.
+      const fd = new FormData();
+      fd.set("botId", createdBotId);
+      await selectBotAction(fd).catch(() => undefined);
+      router.refresh();
     } catch {
       setError("Network error. Check your connection and try again.");
     } finally {
@@ -456,9 +464,9 @@ export function BotFactoryForm({
               <button
                 type="button"
                 onClick={back}
-                className={`btn btn-secondary ${step === 5 ? "invisible" : ""}`}
+                className="btn btn-secondary"
               >
-                {step === 1 ? "Cancel" : "Back"}
+                {step === 1 ? "Cancel" : step === 5 ? "Dashboard" : "Back"}
               </button>
               <button
                 type="button"

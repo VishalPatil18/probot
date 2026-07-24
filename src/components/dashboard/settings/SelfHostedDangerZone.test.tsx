@@ -14,7 +14,6 @@ const BOT_ID = "11111111-1111-1111-1111-111111111111";
 const baseProps = {
   botId: BOT_ID,
   botName: "Jane Doe",
-  botHeadline: "ML Engineer",
 };
 
 function jsonResponse(status: number, body: unknown): Response {

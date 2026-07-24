@@ -7,6 +7,7 @@ import { BotAdvancedTab } from "@/components/dashboard/settings/BotAdvancedTab";
 import { BotConfigTab } from "@/components/dashboard/settings/BotConfigTab";
 import { KnowledgeTab } from "@/components/dashboard/settings/KnowledgeTab";
 import { SelfHostedDangerZone } from "@/components/dashboard/settings/SelfHostedDangerZone";
+import { SelfHostedTokens } from "@/components/dashboard/settings/SelfHostedTokens";
 import {
   SettingsTabPanel,
   SettingsTabs,
@@ -65,12 +66,27 @@ export default async function BotConfigurationPage({
   const mode = (bot.deploymentMode as "managed" | "self_hosted") ?? "managed";
   if (mode === "self_hosted") {
     return (
-      <div className="max-w-[900px] px-6 py-8 lg:px-8">
-        <SelfHostedDangerZone
-          botId={bot.id}
-          botName={bot.name}
-          botHeadline={bot.headline ?? ""}
-        />
+      <div className="max-w-[900px] space-y-6 px-6 py-8 lg:px-8">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-display text-xl font-extrabold tracking-tight">
+              {bot.name}
+            </h2>
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+              Self-hosted
+            </span>
+          </div>
+          {bot.headline ? (
+            <p className="mt-1 text-sm text-muted">{bot.headline}</p>
+          ) : null}
+          <p className="mt-2 text-xs text-muted">
+            This bot runs on your own infrastructure. Its persona, knowledge,
+            and API key live in your app - ProBot stores the dashboard entry and
+            its access tokens.
+          </p>
+        </div>
+        <SelfHostedTokens botId={bot.id} />
+        <SelfHostedDangerZone botId={bot.id} botName={bot.name} />
       </div>
     );
   }
