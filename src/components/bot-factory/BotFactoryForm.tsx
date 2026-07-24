@@ -126,6 +126,8 @@ export function BotFactoryForm({
       ...prev,
       llmProvider: provider,
       llmModel: provider === "azure" ? "" : (MODEL_OPTIONS[provider][0] ?? ""),
+      apiKey: "",
+      apiKeyStoredMask: null,
     }));
   }
 

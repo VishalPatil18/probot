@@ -115,22 +115,13 @@ export function ChatWindow({
     if (trimmed.length === 0 || loading) return;
     setShowSuggestionList(false);
 
-    const apiKey = await getApiKey();
-    if (!apiKey) {
-      setMissingKey(true);
-      return;
-    }
-
-    let azureCreds: Awaited<ReturnType<typeof getAzureCreds>> = null;
-    if (llmProvider === "azure") {
-      azureCreds = await getAzureCreds();
-      if (!azureCreds) {
-        setMissingKey(true);
-        return;
-      }
-    }
-
     setMissingKey(false);
+
+    // Send the browser-held key only if present; otherwise the server falls
+    // back to the managed encrypted key so recruiters can chat without one.
+    const apiKey = await getApiKey();
+    const azureCreds =
+      llmProvider === "azure" ? await getAzureCreds() : null;
 
     setMessages((prev) => [
       ...prev,
@@ -141,8 +132,10 @@ export function ChatWindow({
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "x-llm-api-key": apiKey,
     };
+    if (apiKey) {
+      headers["x-llm-api-key"] = apiKey;
+    }
     if (azureCreds) {
       headers["x-llm-azure-endpoint"] = azureCreds.endpoint;
       headers["x-llm-azure-api-version"] = azureCreds.apiVersion;
@@ -176,6 +169,17 @@ export function ChatWindow({
       }
 
       if (!res.ok) {
+        const errBody = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (
+          errBody.error === "missing_llm_key" ||
+          errBody.error === "managed_key_provider_mismatch" ||
+          errBody.error === "managed_storage_unavailable"
+        ) {
+          setMissingKey(true);
+          return;
+        }
         setMessages((prev) => [
           ...prev,
           {
@@ -308,14 +312,20 @@ export function ChatWindow({
               role="alert"
               className="mb-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2"
             >
-              No API key found.{" "}
-              <Link
-                href="/dashboard/bots/new"
-                className="underline font-semibold"
-              >
-                Add your API key in bot settings
-              </Link>{" "}
-              to start chatting.
+              {previewToken ? (
+                <>
+                  No API key found.{" "}
+                  <Link
+                    href="/dashboard/bots/new"
+                    className="underline font-semibold"
+                  >
+                    Add your API key in bot settings
+                  </Link>{" "}
+                  to start chatting.
+                </>
+              ) : (
+                "Bot is currently not working! Please try again later."
+              )}
             </div>
           )}
           {hasSuggestions && !conversationStarted && (

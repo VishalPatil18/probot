@@ -147,16 +147,37 @@ describe("ChatWindow", () => {
     expect(await screen.findByText(/slow down/i)).toBeInTheDocument();
   });
 
-  it("shows the missing-key alert and does NOT call fetch when no key is set", async () => {
+  it("with no browser key, still fetches (no x-llm-api-key header) so the server can use the managed key; shows a generic error on a published bot if none is stored", async () => {
     getApiKeyMock.mockReturnValue(null);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(400, { error: "missing_llm_key" }),
+    );
     const user = userEvent.setup();
     render(<ChatWindow {...defaultProps} />);
 
     await user.type(screen.getByRole("textbox"), "go");
     await user.click(screen.getByRole("button", { name: /send message/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/no api key/i);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /currently not working/i,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)["x-llm-api-key"]).toBeUndefined();
+  });
+
+  it("shows the owner setup link (not the generic error) when a key is missing in preview mode", async () => {
+    getApiKeyMock.mockReturnValue(null);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(400, { error: "missing_llm_key" }),
+    );
+    const user = userEvent.setup();
+    render(<ChatWindow {...defaultProps} previewToken="preview-tok" />);
+
+    await user.type(screen.getByRole("textbox"), "go");
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/api key in bot settings/i);
   });
 
   it("falls back to a generic error message on a non-2xx / non-429 response", async () => {
@@ -210,17 +231,21 @@ describe("ChatWindow", () => {
     expect(init.body).not.toContain("cognitiveservices.azure.com");
   });
 
-  it("Azure: shows missing-key alert and does NOT fetch when Azure creds are absent", async () => {
+  it("Azure: still fetches (omitting azure headers) when browser azure creds are absent, deferring to the managed key", async () => {
     getApiKeyMock.mockReturnValue("sk-some-key-1234567890");
     getAzureCredsMock.mockReturnValue(null);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { reply: "ok" }));
     const user = userEvent.setup();
     render(<ChatWindow {...defaultProps} llmProvider="azure" />);
 
     await user.type(screen.getByRole("textbox"), "hi");
     await user.click(screen.getByRole("button", { name: /send message/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/no api key/i);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(
+      (init.headers as Record<string, string>)["x-llm-azure-endpoint"],
+    ).toBeUndefined();
   });
 
   describe("lead capture card (Stage 6)", () => {

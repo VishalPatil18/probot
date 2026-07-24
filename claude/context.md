@@ -3844,3 +3844,31 @@ Consolidated entry covering a stack of small changes on top of the self-hosted-r
 **Safety checks.** DB scanned: zero users on `llm_provider='ollama'` (openai/azure/google only), so `isProviderName` tightening strands nobody. `probot.md` (user's personal interview KB) + append-only `claude/` logs intentionally untouched.
 
 **Verification.** `npx tsc --noEmit` clean at root and in the package. Affected suites 268/268 green. Full suite: same 36 pre-existing failures, same file set as before the change, zero new.
+
+---
+
+### 2026-07-23 23:56 - Prod key-save failure diagnosis + bot-factory key-input UX + managed-key chat for recruiters
+
+**What was asked to do:** Fix production errors when saving provider/model API keys from both Bot Factory and Bot Configuration ("storing the encrypted copy on the server failed" / "Store an encrypted API key… before publishing" / private-window "No API key found"). Reset the Bot Factory key input to empty on provider change; remove the Edit button and instead show a masked key (first4+stars+last4) that clears to blank on focus for paste. Make published bots show a generic "Bot is currently not working! Please try again later." instead of the owner-facing key-setup link.
+
+**What I did:**
+- **Issue #1 (root cause, no code fix needed):** All three symptoms trace to `POST /api/bots/[botId]/llm-key` never persisting a row. Diagnosed two prod-only candidates — (A) `PROBOT_KEY_ENCRYPTION_KEY` unset → `encryptKey` throws `KekUnavailableError` → 503 `managed_storage_unavailable`; (B) migration `0014` (azure_endpoint/azure_api_version columns) unapplied → INSERT 500. User confirmed **(A)** and set the KEK in prod. No code change.
+- **Issue #2 (Bot Factory key input):** `selectProvider` now also clears `apiKey` + `apiKeyStoredMask` so a switched provider starts empty (was carrying the prior provider's key). Replaced the Edit/Cancel two-mode block in `StepAIModel` with a single input: when a key is stored and the field is unfocused, it shows the mask (reusing `maskSecret` → `abcd••••••••wxyz`, first4+stars+last4) as read-only text; focusing flips to an empty editable password field for paste. Removed `editingKey` state + its `useEffect` (and the now-unused `useEffect` import).
+- **Issue #3 (published-bot chat):** Root cause was `ChatWindow.send()` refusing to call the server unless the *browser* held a key, always sending `x-llm-api-key` — so recruiters/private-window viewers never reached the server's managed-key fallback (`resolveProviderAndKey` decrypts the stored key when no header). Dropped the pre-send gate; now sends `x-llm-api-key` only when a browser key exists and azure headers only when browser azure creds exist, deferring to the managed key otherwise. On a server key error (`missing_llm_key`/`managed_key_provider_mismatch`/`managed_storage_unavailable`) the missing-key state shows a message keyed off `previewToken`: published (null) → "Bot is currently not working! Please try again later." (no link); preview (owner) → the existing "Add your API key in bot settings" link.
+
+**Files changed:**
+- `src/components/bot-factory/BotFactoryForm.tsx` - update - reset apiKey + apiKeyStoredMask on provider switch.
+- `src/components/bot-factory/steps/StepAIModel.tsx` - update - single mask-on-blur key input; removed Edit/Cancel + editingKey state + useEffect import.
+- `src/components/chat/ChatWindow.tsx` - update - drop client-side browser-key gate; conditional headers; detect server key errors; preview-vs-published missing-key message.
+- `src/components/chat/ChatWindow.test.tsx` - update - rewrote the two tests that asserted the old client gate to the new "defer to managed key" contract; added a preview-message test (14 pass).
+
+**Decisions made:**
+- Issue #1 fix is operational (set env var), per KEY-STORAGE.md — no band-aid in code. Did NOT add error-surfacing to the client handlers this round since the KEK fix resolves the reported failures (candidate follow-up below).
+- Issue #3 fixed at the shared choke point (ChatWindow.send) rather than only swapping the message — the message alone would leave managed-key chat dead for every recruiter, which is the whole point of managed storage.
+- Kept AIModelKeyTab (Bot Configuration) key input as-is; the UX change was scoped to Bot Factory only.
+
+**Open questions / follow-ups:**
+- Optional: surface the server's real status/error in `AIModelKeyTab.saveAzureCreds` (line ~164) and `BotFactoryForm.submit` (line ~249) instead of generic copy, so the next storage failure is self-diagnosing. Not done — ask before implementing.
+- Pre-existing: `BotFactoryForm.test.tsx` has 5 failing / 8 passing tests unrelated to this change (identical on stashed baseline).
+
+**Verification:** `npx tsc --noEmit` clean. `ChatWindow.test.tsx` 14/14 pass. `BotFactoryForm.test.tsx` unchanged from baseline (5 pre-existing fails, not introduced here).
